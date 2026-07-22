@@ -5,9 +5,6 @@ const TOKEN_KEY = 'spicyhome_token';
 const ME_KEY = 'spicyhome_me';
 
 function getBaseUrl(): string {
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:3000';
-  }
   return window.location.origin;
 }
 
