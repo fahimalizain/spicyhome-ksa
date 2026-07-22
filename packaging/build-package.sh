@@ -251,8 +251,6 @@ echo "=== Package ready: $DIST_DIR/spicyhome-pos-win7.zip ==="
 echo ""
 echo "Package size: $(du -sh spicyhome-pos-win7.zip | cut -f1)"
 echo ""
-echo "Contents:"
-unzip -l spicyhome-pos-win7.zip | head -60
 
 # Clean temp
 rm -rf "$TEMP_DIR"
