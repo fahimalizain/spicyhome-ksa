@@ -29,7 +29,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3742;
   await app.listen(port);
   console.log(`SpicyHome server listening on port ${port}`);
   console.log(`Swagger UI: http://localhost:${port}/api/docs`);

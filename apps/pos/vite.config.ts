@@ -16,15 +16,15 @@ export default defineConfig(({ mode }) => {
     },
     server: isDev
       ? {
-          port: 5173,
+          port: 6124,
           proxy: {
-            '/auth': 'http://localhost:3000',
-            '/menu': 'http://localhost:3000',
-            '/orders': 'http://localhost:3000',
-            '/tables': 'http://localhost:3000',
-            '/printers': 'http://localhost:3000',
-            '/day': 'http://localhost:3000',
-            '/reports': 'http://localhost:3000',
+            '/auth': 'http://localhost:3742',
+            '/menu': 'http://localhost:3742',
+            '/orders': 'http://localhost:3742',
+            '/tables': 'http://localhost:3742',
+            '/printers': 'http://localhost:3742',
+            '/day': 'http://localhost:3742',
+            '/reports': 'http://localhost:3742',
           },
         }
       : undefined,
