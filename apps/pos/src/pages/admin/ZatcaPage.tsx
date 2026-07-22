@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { ZatcaConfigDto, ZatcaOnboardingState, ZatcaInvoice } from '@spicyhome/client-ts';
 
+const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal';
+const ZATCA_PRODUCTION_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core';
+
 export function ZatcaPage() {
   // ── Seller Config state ──
   const [config, setConfig] = useState<ZatcaConfigDto>({
@@ -19,6 +22,7 @@ export function ZatcaPage() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState('');
+  const [zatcaEnv, setZatcaEnv] = useState<'sandbox' | 'production'>('sandbox');
 
   // ── Onboarding state ──
   const [onboarding, setOnboarding] = useState<ZatcaOnboardingState | null>(null);
@@ -54,6 +58,11 @@ export function ZatcaPage() {
     try {
       const data = await client.zatca.getConfig();
       setConfig(data);
+      if (data.apiBaseUrl?.includes('/e-invoicing/core')) {
+        setZatcaEnv('production');
+      } else {
+        setZatcaEnv('sandbox');
+      }
     } catch (e: any) {
       setConfigError(e.message || 'Failed to load config');
     } finally {
@@ -66,7 +75,8 @@ export function ZatcaPage() {
     setConfigSaving(true);
     setConfigError('');
     try {
-      const data = await client.zatca.updateConfig(config);
+      const url = zatcaEnv === 'sandbox' ? ZATCA_SANDBOX_URL : ZATCA_PRODUCTION_URL;
+      const data = await client.zatca.updateConfig({ ...config, apiBaseUrl: url });
       setConfig(data);
     } catch (e: any) {
       // Extract validation error message from the server response
@@ -303,13 +313,36 @@ export function ZatcaPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">API Base URL</label>
-                <input
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
-                  value={config.apiBaseUrl || ''}
-                  onChange={(e) => setConfig((f) => ({ ...f, apiBaseUrl: e.target.value }))}
-                  placeholder="https://gw-fatoora.zatca.gov.sa/..."
-                />
+                <label className="block text-xs text-gray-500 mb-1">Environment</label>
+                <div className="inline-flex rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setZatcaEnv('sandbox')}
+                    className={
+                      'touch-target px-4 py-2 text-sm rounded-l-md ' +
+                      (zatcaEnv === 'sandbox'
+                        ? 'bg-brand-600 text-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
+                        : 'bg-gray-700 text-gray-400 hover:text-white')
+                    }
+                  >
+                    Sandbox
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZatcaEnv('production')}
+                    className={
+                      'touch-target px-4 py-2 text-sm rounded-r-md ' +
+                      (zatcaEnv === 'production'
+                        ? 'bg-brand-600 text-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
+                        : 'bg-gray-700 text-gray-400 hover:text-white')
+                    }
+                  >
+                    Production
+                  </button>
+                </div>
+                <div className="text-xs text-gray-500 mt-1 truncate">
+                  {zatcaEnv === 'sandbox' ? ZATCA_SANDBOX_URL : ZATCA_PRODUCTION_URL}
+                </div>
               </div>
             </div>
             <button
