@@ -1,6 +1,7 @@
 load("@npm//:defs.bzl", "npm_link_all_packages")
 load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@aspect_rules_js//js:defs.bzl", "js_library")
 load("@aspect_rules_jest//jest:defs.bzl", "jest_test")
 
 npm_link_all_packages(name = "node_modules")
@@ -53,9 +54,10 @@ ts_project(
     ],
 )
 
-filegroup(
+js_library(
     name = "migrations",
     srcs = glob(["drizzle/*.sql"]),
+    visibility = ["//visibility:public"],
 )
 
 jest_test(

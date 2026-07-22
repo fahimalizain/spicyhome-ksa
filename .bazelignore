@@ -1,3 +1,4 @@
 node_modules
+apps/server/node_modules
 packages/db/node_modules
 packages/shared/node_modules

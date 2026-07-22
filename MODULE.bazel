@@ -3,7 +3,7 @@ module(
     version = "0.0.0",
 )
 
-bazel_dep(name = "aspect_rules_js", version = "2.7.0")
+bazel_dep(name = "aspect_rules_js", version = "2.9.2")
 bazel_dep(name = "aspect_rules_ts", version = "3.9.2")
 bazel_dep(name = "aspect_rules_jest", version = "0.25.2")
 bazel_dep(name = "rules_nodejs", version = "6.3.0")
@@ -36,6 +36,7 @@ npm.npm_translate_lock(
     verify_node_modules_ignored = "//:.bazelignore",
     data = [
         "//:package.json",
+        "//apps/server:package.json",
         "//packages/db:package.json",
         "//packages/shared:package.json",
     ],
