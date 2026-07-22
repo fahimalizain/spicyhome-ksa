@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.spicyhome.pos.data.repository.AuthRepositoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-07-22T06:34:49" hostname="Fahims-MacBook-Pro.local" time="0.899">
+  <properties/>
+  <testcase name="getMe delegates to authApi" classname="com.spicyhome.pos.data.repository.AuthRepositoryTest" time="0.78"/>
+  <testcase name="getMe returns user info" classname="com.spicyhome.pos.data.repository.AuthRepositoryTest" time="0.105"/>
+  <testcase name="login delegates to authApi with correct DTO" classname="com.spicyhome.pos.data.repository.AuthRepositoryTest" time="0.01"/>
+  <testcase name="login success returns token" classname="com.spicyhome.pos.data.repository.AuthRepositoryTest" time="0.002"/>
+  <testcase name="login failure returns error" classname="com.spicyhome.pos.data.repository.AuthRepositoryTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[WARNING: A Java agent has been loaded dynamically (/Users/fahimalizain/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.14.17/e3c251a39dc90badaf71c83427ba46840f219d8d/byte-buddy-agent-1.14.17.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

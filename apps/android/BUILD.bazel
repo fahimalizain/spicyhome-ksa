@@ -1,0 +1,67 @@
+# Android app built via Gradle (Jetpack Compose is not well-supported by
+# rules_kotlin/rules_android). The Bazel targets shell out to the Gradle wrapper.
+# Prerequisites: ANDROID_HOME and JAVA_HOME must be passed via --action_env.
+#
+#   bazel build //apps/android:apk \
+#     --action_env=ANDROID_HOME=/path/to/sdk \
+#     --action_env=JAVA_HOME=/path/to/jdk
+#
+# Or set them in a local (uncommitted) user.bazelrc:
+#   build --action_env=ANDROID_HOME=/path/to/sdk
+#   build --action_env=JAVA_HOME=/path/to/jdk
+
+genrule(
+    name = "assemble_debug",
+    srcs = [
+        "build_apk.sh",
+    ] + glob([
+        "**/*.kt",
+        "**/*.kts",
+        "**/*.xml",
+        "**/*.properties",
+        "gradlew",
+        "gradlew.bat",
+        "gradle/wrapper/**",
+        "app/proguard-rules.pro",
+    ]) + [
+        "//packages/client-kt:sources",
+    ],
+    tools = [
+        "//:MODULE.bazel",
+    ],
+    outs = ["spicyhome-pos-debug.apk"],
+    cmd = "export WORKSPACE=$$(dirname $$(readlink -f $(execpath //:MODULE.bazel))) && bash $(execpath build_apk.sh) $@",
+    local = True,
+    tags = ["no-sandbox", "requires-network"],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "apk",
+    actual = ":assemble_debug",
+)
+
+sh_test(
+    name = "unit_tests",
+    srcs = ["run_tests.sh"],
+    data = glob([
+        "**/*.kt",
+        "**/*.kts",
+        "**/*.xml",
+        "**/*.properties",
+        "gradlew",
+        "gradlew.bat",
+        "gradle/wrapper/**",
+        "app/proguard-rules.pro",
+    ]) + [
+        "//packages/client-kt:sources",
+        "//:MODULE.bazel",
+    ],
+    args = ["$(rootpath //:MODULE.bazel)"],
+    env = {
+        "ANDROID_HOME": "/Users/fahimalizain/Library/Android/sdk",
+        "JAVA_HOME": "/opt/homebrew/Cellar/openjdk@21/21.0.11/libexec/openjdk.jdk/Contents/Home",
+    },
+    size = "large",
+    tags = ["no-sandbox", "local", "requires-network"],
+)

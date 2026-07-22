@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.spicyhome.pos.ui.order.OrderViewModelTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-07-22T06:34:50" hostname="Fahims-MacBook-Pro.local" time="0.126">
+  <properties/>
+  <testcase name="updateItemNotes updates notes for cart item" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.05"/>
+  <testcase name="proceedToBuild with table for dine_in works" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.005"/>
+  <testcase name="cartTotals computes correctly with multiple items" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.023"/>
+  <testcase name="setTable sets selected table" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.005"/>
+  <testcase name="proceedToBuild requires table for dine_in" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="proceedToBuild transitions to BUILDING_ORDER state" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="decreaseQty decrements qty when qty above 1" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.004"/>
+  <testcase name="setOrderType changes order type" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.004"/>
+  <testcase name="decreaseQty removes item when qty reaches 1" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.006"/>
+  <testcase name="newOrder resets to SELECTING_TYPE with empty cart" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="cartTotalHalalas sums all item prices times qty" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="clearCart empties the cart" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="addToCart adds new item" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.004"/>
+  <testcase name="removeFromCart removes item at index" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="initial state is selecting type with empty cart" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <testcase name="addToCart increments qty for existing item" classname="com.spicyhome.pos.ui.order.OrderViewModelTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

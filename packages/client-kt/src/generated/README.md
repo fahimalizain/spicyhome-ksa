@@ -54,6 +54,11 @@ All URIs are relative to *http://localhost*
 | *AuthApi* | [**authControllerLogin**](docs/AuthApi.md#authcontrollerlogin) | **POST** auth/login | Login with username and PIN |
 | *AuthApi* | [**authControllerUpdateRole**](docs/AuthApi.md#authcontrollerupdaterole) | **PUT** auth/roles/{id} | Update a role |
 | *AuthApi* | [**authControllerUpdateUser**](docs/AuthApi.md#authcontrollerupdateuser) | **PUT** auth/users/{id} | Update a user |
+| *DayApi* | [**businessDayControllerCloseDay**](docs/DayApi.md#businessdaycontrollercloseday) | **POST** day/close | Close the current open business day |
+| *DayApi* | [**businessDayControllerGetCurrent**](docs/DayApi.md#businessdaycontrollergetcurrent) | **GET** day/current | Get current open day with live X-report totals |
+| *DayApi* | [**businessDayControllerGetDay**](docs/DayApi.md#businessdaycontrollergetday) | **GET** day/{id} | Get a business day by ID |
+| *DayApi* | [**businessDayControllerList**](docs/DayApi.md#businessdaycontrollerlist) | **GET** day | List past business days (paged) |
+| *DayApi* | [**businessDayControllerOpenDay**](docs/DayApi.md#businessdaycontrolleropenday) | **POST** day/open | Open a new business day |
 | *MenuApi* | [**menuControllerCreateCategory**](docs/MenuApi.md#menucontrollercreatecategory) | **POST** menu/categories | Create a category |
 | *MenuApi* | [**menuControllerCreateItem**](docs/MenuApi.md#menucontrollercreateitem) | **POST** menu/items | Create an item |
 | *MenuApi* | [**menuControllerGetCategory**](docs/MenuApi.md#menucontrollergetcategory) | **GET** menu/categories/{id} | Get category by ID |
@@ -79,12 +84,25 @@ All URIs are relative to *http://localhost*
 | *PrintersApi* | [**printersControllerList**](docs/PrintersApi.md#printerscontrollerlist) | **GET** printers | List all printers |
 | *PrintersApi* | [**printersControllerTestPrint**](docs/PrintersApi.md#printerscontrollertestprint) | **POST** printers/{id}/test | Print a test ticket |
 | *PrintersApi* | [**printersControllerUpdate**](docs/PrintersApi.md#printerscontrollerupdate) | **PUT** printers/{id} | Update a printer |
+| *ReportsApi* | [**reportsControllerGetSales**](docs/ReportsApi.md#reportscontrollergetsales) | **GET** reports/sales | Daily sales totals over a date range |
+| *ReportsApi* | [**reportsControllerGetVat**](docs/ReportsApi.md#reportscontrollergetvat) | **GET** reports/vat | VAT summary over a date range (for VAT return) |
+| *ReportsApi* | [**reportsControllerGetXReport**](docs/ReportsApi.md#reportscontrollergetxreport) | **GET** reports/x | Live X-report for the current open day |
+| *ReportsApi* | [**reportsControllerGetZReport**](docs/ReportsApi.md#reportscontrollergetzreport) | **GET** reports/z/{dayId} | Z-report for a closed day |
+| *ReportsApi* | [**reportsControllerPrintXReport**](docs/ReportsApi.md#reportscontrollerprintxreport) | **POST** reports/x/print | Print X-report on receipt printer |
+| *ReportsApi* | [**reportsControllerPrintZReport**](docs/ReportsApi.md#reportscontrollerprintzreport) | **POST** reports/z/{dayId}/print | Print Z-report on receipt printer |
 | *SettingsApi* | [**settingsControllerGetAll**](docs/SettingsApi.md#settingscontrollergetall) | **GET** settings | Get all settings |
 | *SettingsApi* | [**settingsControllerSet**](docs/SettingsApi.md#settingscontrollerset) | **PUT** settings | Set a setting value |
 | *TablesApi* | [**tablesControllerCreate**](docs/TablesApi.md#tablescontrollercreate) | **POST** tables | Create a table |
 | *TablesApi* | [**tablesControllerGet**](docs/TablesApi.md#tablescontrollerget) | **GET** tables/{id} | Get table by ID |
 | *TablesApi* | [**tablesControllerList**](docs/TablesApi.md#tablescontrollerlist) | **GET** tables | List all tables |
 | *TablesApi* | [**tablesControllerUpdate**](docs/TablesApi.md#tablescontrollerupdate) | **PUT** tables/{id} | Update a table |
+| *ZatcaApi* | [**zatcaControllerGenerateCSR**](docs/ZatcaApi.md#zatcacontrollergeneratecsr) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
+| *ZatcaApi* | [**zatcaControllerGetInvoice**](docs/ZatcaApi.md#zatcacontrollergetinvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
+| *ZatcaApi* | [**zatcaControllerGetStatus**](docs/ZatcaApi.md#zatcacontrollergetstatus) | **GET** zatca/status | Get ZATCA onboarding and status |
+| *ZatcaApi* | [**zatcaControllerListInvoices**](docs/ZatcaApi.md#zatcacontrollerlistinvoices) | **GET** zatca/invoices | List ZATCA invoices |
+| *ZatcaApi* | [**zatcaControllerOnboardCompliance**](docs/ZatcaApi.md#zatcacontrolleronboardcompliance) | **POST** zatca/onboard/compliance | Submit CSR with OTP to ZATCA compliance CSID endpoint |
+| *ZatcaApi* | [**zatcaControllerOnboardProduction**](docs/ZatcaApi.md#zatcacontrolleronboardproduction) | **POST** zatca/onboard/production | Exchange compliance CSID for production CSID |
+| *ZatcaApi* | [**zatcaControllerRetryReporting**](docs/ZatcaApi.md#zatcacontrollerretryreporting) | **POST** zatca/reporting/retry | Retry reporting for all pending or a specific invoice |
 
 
 <a id="documentation-for-models"></a>
@@ -94,6 +112,8 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.AuditLogEntry](docs/AuditLogEntry.md)
  - [com.spicyhome.client.models.AuditVerifyResponse](docs/AuditVerifyResponse.md)
  - [com.spicyhome.client.models.CategoryResponse](docs/CategoryResponse.md)
+ - [com.spicyhome.client.models.CloseDayDto](docs/CloseDayDto.md)
+ - [com.spicyhome.client.models.CloseDayResponse](docs/CloseDayResponse.md)
  - [com.spicyhome.client.models.CreateCategoryDto](docs/CreateCategoryDto.md)
  - [com.spicyhome.client.models.CreateItemDto](docs/CreateItemDto.md)
  - [com.spicyhome.client.models.CreateOrderDto](docs/CreateOrderDto.md)
@@ -102,10 +122,12 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
  - [com.spicyhome.client.models.CreateTableDto](docs/CreateTableDto.md)
  - [com.spicyhome.client.models.CreateUserDto](docs/CreateUserDto.md)
+ - [com.spicyhome.client.models.DayOpeningResponse](docs/DayOpeningResponse.md)
  - [com.spicyhome.client.models.ItemResponse](docs/ItemResponse.md)
  - [com.spicyhome.client.models.LoginDto](docs/LoginDto.md)
  - [com.spicyhome.client.models.LoginResponse](docs/LoginResponse.md)
  - [com.spicyhome.client.models.MeResponse](docs/MeResponse.md)
+ - [com.spicyhome.client.models.OpenDayDto](docs/OpenDayDto.md)
  - [com.spicyhome.client.models.OrderItemResponse](docs/OrderItemResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
  - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
