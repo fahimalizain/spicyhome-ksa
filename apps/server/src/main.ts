@@ -3,11 +3,13 @@ import 'reflect-metadata';
 process.env.TZ = 'Asia/Riyadh';
 
 import { NestFactory } from '@nestjs/core';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new WsAdapter(app));
   app.enableCors();
 
   const swaggerConfig = new DocumentBuilder()

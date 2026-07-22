@@ -175,3 +175,23 @@ export interface Setting {
   key: string;
   value: string;
 }
+
+export interface WsMessage {
+  type: string;
+  payload: Record<string, unknown>;
+  at: number;
+}
+
+export const WS_EVENTS = {
+  ORDER_CREATED: 'order.created',
+  ORDER_UPDATED: 'order.updated',
+  ORDER_SENT: 'order.sent',
+  ORDER_PAID: 'order.paid',
+  ORDER_VOIDED: 'order.voided',
+  ORDER_ITEM_ADDED: 'order.item.added',
+  ORDER_ITEM_UPDATED: 'order.item.updated',
+  ORDER_ITEM_REMOVED: 'order.item.removed',
+  TABLE_CREATED: 'table.created',
+  TABLE_UPDATED: 'table.updated',
+} as const;
+export type WsEventType = (typeof WS_EVENTS)[keyof typeof WS_EVENTS];

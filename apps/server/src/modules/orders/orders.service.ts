@@ -134,7 +134,21 @@ export class OrdersService {
       return { id: orderId, uuid: orderUuid, orderNo };
     });
 
+    this.emitDomainEvent('order.created', result.id, userId);
     return result;
+  }
+
+  private emitDomainEvent(
+    event: string,
+    orderId: number,
+    userId: number,
+    extra?: Record<string, unknown>,
+  ): void {
+    try {
+      this.eventEmitter.emit(event, { orderId, userId, ...extra });
+    } catch {
+      // Swallow — domain events never fail the operation
+    }
   }
 
   private getNextOrderNo(tx: any, now: number): number {
@@ -217,6 +231,8 @@ export class OrdersService {
 
       return { success: true };
     });
+
+    this.emitDomainEvent('order.item.added', orderId, userId, { itemId: dto.itemId, qty: dto.qty });
   }
 
   async updateItem(
@@ -261,6 +277,8 @@ export class OrdersService {
 
       return { success: true };
     });
+
+    this.emitDomainEvent('order.item.updated', orderId, userId, { orderItemId });
   }
 
   async removeItem(orderId: number, orderItemId: number, userId: number) {
@@ -293,6 +311,8 @@ export class OrdersService {
 
       return { success: true };
     });
+
+    this.emitDomainEvent('order.item.removed', orderId, userId, { orderItemId });
   }
 
   async sendOrder(orderId: number, userId: number) {
@@ -310,7 +330,9 @@ export class OrdersService {
   }
 
   async voidOrder(orderId: number, userId: number) {
-    return this.transitionStatus(orderId, 'voided', 'voided', userId);
+    const result = await this.transitionStatus(orderId, 'voided', 'voided', userId);
+    this.emitDomainEvent('order.voided', orderId, userId);
+    return result;
   }
 
   async reprintOrder(orderId: number, target: string, userId: number) {

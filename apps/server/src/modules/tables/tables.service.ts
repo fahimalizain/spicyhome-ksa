@@ -1,4 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import { tables } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
@@ -8,7 +9,10 @@ import type * as schema from '@spicyhome/db';
 
 @Injectable()
 export class TablesService {
-  constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {}
+  constructor(
+    @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   list(): any[] {
     return this.db.select().from(tables).all();
@@ -32,7 +36,9 @@ export class TablesService {
       .insert(tables)
       .values(row as any)
       .run();
-    return { id: Number(result.lastInsertRowid), ...row };
+    const id = Number(result.lastInsertRowid);
+    this.emitTableEvent('table.created', id, userId);
+    return { id, ...row };
   }
 
   update(id: number, dto: any, userId: number): any {
@@ -45,6 +51,15 @@ export class TablesService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(tables).set(updates).where(eq(tables.id, id)).run();
+    this.emitTableEvent('table.updated', id, userId);
     return this.db.select().from(tables).where(eq(tables.id, id)).get();
+  }
+
+  private emitTableEvent(event: string, tableId: number, userId: number): void {
+    try {
+      this.eventEmitter.emit(event, { tableId, userId });
+    } catch {
+      // Swallow — events never fail the operation
+    }
   }
 }

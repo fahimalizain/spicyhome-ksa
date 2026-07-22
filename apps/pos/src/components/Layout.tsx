@@ -1,12 +1,26 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { clearToken, getMe } from '../api';
+import { useEffect } from 'react';
+import { clearToken, getMe, getToken } from '../api';
+import { realtime } from '../realtime';
 import type { MeResponse } from '@spicyhome/client-ts';
 
 export function Layout() {
   const navigate = useNavigate();
   const me = getMe();
 
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      realtime.setToken(token);
+      realtime.connect();
+    }
+    return () => {
+      realtime.disconnect();
+    };
+  }, []);
+
   function handleLogout() {
+    realtime.disconnect();
     clearToken();
     navigate('/login');
   }

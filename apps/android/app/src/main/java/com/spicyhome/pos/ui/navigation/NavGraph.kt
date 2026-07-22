@@ -1,10 +1,12 @@
 package com.spicyhome.pos.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.spicyhome.pos.SpicyHomeApp
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.ui.login.LoginScreen
@@ -29,6 +31,7 @@ fun NavGraph(
     apiClientProvider: ApiClientProvider,
 ) {
     val navController = rememberNavController()
+    val app = LocalContext.current.applicationContext as SpicyHomeApp
 
     NavHost(
         navController = navController,
@@ -77,7 +80,7 @@ fun NavGraph(
         }
 
         composable(NavRoutes.ORDERS) {
-            val vm: OrdersViewModel = viewModel(factory = OrdersViewModel.Factory(preferencesManager, apiClientProvider))
+            val vm: OrdersViewModel = viewModel(factory = OrdersViewModel.Factory(preferencesManager, apiClientProvider, app.realtimeClient))
             OrdersScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() }

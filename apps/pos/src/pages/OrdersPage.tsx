@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
+import { realtime } from '../realtime';
 import type { OrderResponse } from '@spicyhome/client-ts';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -21,6 +22,25 @@ export function OrdersPage() {
 
   useEffect(() => {
     loadOrders();
+  }, []);
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    const refresh = () => {
+      loadOrders();
+    };
+    unsubs.push(realtime.subscribe('order.created', refresh));
+    unsubs.push(realtime.subscribe('order.sent', refresh));
+    unsubs.push(realtime.subscribe('order.paid', refresh));
+    unsubs.push(realtime.subscribe('order.voided', refresh));
+    unsubs.push(realtime.subscribe('order.item.added', refresh));
+    unsubs.push(realtime.subscribe('order.item.updated', refresh));
+    unsubs.push(realtime.subscribe('order.item.removed', refresh));
+    realtime.onReconnect(refresh);
+    return () => {
+      for (const unsub of unsubs) unsub();
+      realtime.offReconnect();
+    };
   }, []);
 
   async function loadOrders() {

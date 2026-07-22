@@ -13,6 +13,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { ZatcaModule } from './modules/zatca/zatca.module';
 import { BusinessDayModule } from './modules/business-day/business-day.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -29,6 +30,7 @@ const imports: any[] = [
   ZatcaModule,
   BusinessDayModule,
   ReportsModule,
+  RealtimeModule,
 ];
 
 if (spaDist) {

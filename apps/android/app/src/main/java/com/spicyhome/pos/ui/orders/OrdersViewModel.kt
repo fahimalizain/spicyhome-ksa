@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
+import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.data.repository.OrderRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ data class OrdersUiState(
 class OrdersViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
+    private val realtimeClient: RealtimeClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrdersUiState())
@@ -38,6 +40,18 @@ class OrdersViewModel(
             val url = preferencesManager.serverUrl.first() ?: ""
             orderRepo = OrderRepository(apiClientProvider.createOrdersApi(url, token))
             loadOrders()
+        }
+        viewModelScope.launch {
+            realtimeClient.events.collect { event ->
+                if (event.type.startsWith("order.")) {
+                    loadOrders()
+                }
+            }
+        }
+        viewModelScope.launch {
+            realtimeClient.reconnected.collect {
+                loadOrders()
+            }
         }
     }
 
@@ -85,10 +99,11 @@ class OrdersViewModel(
     class Factory(
         private val preferencesManager: PreferencesManager,
         private val apiClientProvider: ApiClientProvider,
+        private val realtimeClient: RealtimeClient,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return OrdersViewModel(preferencesManager, apiClientProvider) as T
+            return OrdersViewModel(preferencesManager, apiClientProvider, realtimeClient) as T
         }
     }
 }
