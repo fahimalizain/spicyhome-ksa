@@ -10,6 +10,7 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerListOrders**](OrdersApi.md#ordersControllerListOrders) | **GET** orders | List orders with optional filters |
 | [**ordersControllerPayOrder**](OrdersApi.md#ordersControllerPayOrder) | **POST** orders/{id}/pay | Mark order as paid (sent → paid) |
 | [**ordersControllerRemoveItem**](OrdersApi.md#ordersControllerRemoveItem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
+| [**ordersControllerReprintOrder**](OrdersApi.md#ordersControllerReprintOrder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
 | [**ordersControllerSendOrder**](OrdersApi.md#ordersControllerSendOrder) | **POST** orders/{id}/send | Send order to kitchen (open → sent) |
 | [**ordersControllerUpdateItem**](OrdersApi.md#ordersControllerUpdateItem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
 | [**ordersControllerVerifyAuditChain**](OrdersApi.md#ordersControllerVerifyAuditChain) | **GET** orders/{id}/audit/verify | Verify audit log hash chain for an order |
@@ -248,6 +249,46 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+Reprint receipt or kitchen ticket for an order
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(OrdersApi::class.java)
+val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val reprintOrderDto : ReprintOrderDto =  // ReprintOrderDto | 
+
+val result : PrintResponse = webService.ordersControllerReprintOrder(id, reprintOrderDto)
+```
+
+### Parameters
+| **id** | **java.math.BigDecimal**|  | |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **reprintOrderDto** | [**ReprintOrderDto**](ReprintOrderDto.md)|  | |
+
+### Return type
+
+[**PrintResponse**](PrintResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
  - **Accept**: application/json
 
 

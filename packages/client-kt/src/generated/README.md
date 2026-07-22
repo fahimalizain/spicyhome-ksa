@@ -47,6 +47,7 @@ All URIs are relative to *http://localhost*
 | ------------ | ------------- | ------------- | ------------- |
 | *AuthApi* | [**authControllerCreateRole**](docs/AuthApi.md#authcontrollercreaterole) | **POST** auth/roles | Create a new role |
 | *AuthApi* | [**authControllerCreateUser**](docs/AuthApi.md#authcontrollercreateuser) | **POST** auth/users | Create a new user |
+| *AuthApi* | [**authControllerGetMe**](docs/AuthApi.md#authcontrollergetme) | **GET** auth/me | Get current user info with role permissions |
 | *AuthApi* | [**authControllerGetUser**](docs/AuthApi.md#authcontrollergetuser) | **GET** auth/users/{id} | Get user by ID |
 | *AuthApi* | [**authControllerListRoles**](docs/AuthApi.md#authcontrollerlistroles) | **GET** auth/roles | List all roles |
 | *AuthApi* | [**authControllerListUsers**](docs/AuthApi.md#authcontrollerlistusers) | **GET** auth/users | List all users |
@@ -67,14 +68,19 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
 | *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid (sent → paid) |
 | *OrdersApi* | [**ordersControllerRemoveItem**](docs/OrdersApi.md#orderscontrollerremoveitem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
+| *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
 | *OrdersApi* | [**ordersControllerSendOrder**](docs/OrdersApi.md#orderscontrollersendorder) | **POST** orders/{id}/send | Send order to kitchen (open → sent) |
 | *OrdersApi* | [**ordersControllerUpdateItem**](docs/OrdersApi.md#orderscontrollerupdateitem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
 | *OrdersApi* | [**ordersControllerVerifyAuditChain**](docs/OrdersApi.md#orderscontrollerverifyauditchain) | **GET** orders/{id}/audit/verify | Verify audit log hash chain for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open|sent → voided) |
+| *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer TCP reachability |
 | *PrintersApi* | [**printersControllerCreate**](docs/PrintersApi.md#printerscontrollercreate) | **POST** printers | Create a printer |
 | *PrintersApi* | [**printersControllerGet**](docs/PrintersApi.md#printerscontrollerget) | **GET** printers/{id} | Get printer by ID |
 | *PrintersApi* | [**printersControllerList**](docs/PrintersApi.md#printerscontrollerlist) | **GET** printers | List all printers |
+| *PrintersApi* | [**printersControllerTestPrint**](docs/PrintersApi.md#printerscontrollertestprint) | **POST** printers/{id}/test | Print a test ticket |
 | *PrintersApi* | [**printersControllerUpdate**](docs/PrintersApi.md#printerscontrollerupdate) | **PUT** printers/{id} | Update a printer |
+| *SettingsApi* | [**settingsControllerGetAll**](docs/SettingsApi.md#settingscontrollergetall) | **GET** settings | Get all settings |
+| *SettingsApi* | [**settingsControllerSet**](docs/SettingsApi.md#settingscontrollerset) | **PUT** settings | Set a setting value |
 | *TablesApi* | [**tablesControllerCreate**](docs/TablesApi.md#tablescontrollercreate) | **POST** tables | Create a table |
 | *TablesApi* | [**tablesControllerGet**](docs/TablesApi.md#tablescontrollerget) | **GET** tables/{id} | Get table by ID |
 | *TablesApi* | [**tablesControllerList**](docs/TablesApi.md#tablescontrollerlist) | **GET** tables | List all tables |
@@ -99,10 +105,16 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.ItemResponse](docs/ItemResponse.md)
  - [com.spicyhome.client.models.LoginDto](docs/LoginDto.md)
  - [com.spicyhome.client.models.LoginResponse](docs/LoginResponse.md)
+ - [com.spicyhome.client.models.MeResponse](docs/MeResponse.md)
  - [com.spicyhome.client.models.OrderItemResponse](docs/OrderItemResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
+ - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
  - [com.spicyhome.client.models.PrinterResponse](docs/PrinterResponse.md)
+ - [com.spicyhome.client.models.PrinterStatusResponse](docs/PrinterStatusResponse.md)
+ - [com.spicyhome.client.models.ReprintOrderDto](docs/ReprintOrderDto.md)
  - [com.spicyhome.client.models.RoleResponse](docs/RoleResponse.md)
+ - [com.spicyhome.client.models.SetSettingDto](docs/SetSettingDto.md)
+ - [com.spicyhome.client.models.SettingResponse](docs/SettingResponse.md)
  - [com.spicyhome.client.models.StatusResponse](docs/StatusResponse.md)
  - [com.spicyhome.client.models.SuccessResponse](docs/SuccessResponse.md)
  - [com.spicyhome.client.models.TableResponse](docs/TableResponse.md)

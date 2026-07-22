@@ -20,6 +20,7 @@ ts_project(
         "//:node_modules/@types/node",
         ":node_modules/@nestjs/common",
         ":node_modules/@nestjs/core",
+        ":node_modules/@nestjs/event-emitter",
         ":node_modules/@nestjs/jwt",
         ":node_modules/@nestjs/platform-express",
         ":node_modules/@nestjs/serve-static",

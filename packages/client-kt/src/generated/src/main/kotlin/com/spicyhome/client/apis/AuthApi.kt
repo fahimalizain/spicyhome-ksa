@@ -10,6 +10,7 @@ import com.spicyhome.client.models.CreateRoleDto
 import com.spicyhome.client.models.CreateUserDto
 import com.spicyhome.client.models.LoginDto
 import com.spicyhome.client.models.LoginResponse
+import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
@@ -41,6 +42,18 @@ interface AuthApi {
      */
     @POST("auth/users")
     fun authControllerCreateUser(@Body createUserDto: CreateUserDto): Call<UserResponse>
+
+    /**
+     * GET auth/me
+     * Get current user info with role permissions
+     * 
+     * Responses:
+     *  - 200: Current user details
+     *
+     * @return [Call]<[MeResponse]>
+     */
+    @GET("auth/me")
+    fun authControllerGetMe(): Call<MeResponse>
 
     /**
      * GET auth/users/{id}

@@ -253,6 +253,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/printers/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check printer TCP reachability */
+        get: operations["PrintersController_checkStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/printers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Print a test ticket */
+        post: operations["PrintersController_testPrint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders": {
         parameters: {
             query?: never;
@@ -385,6 +419,41 @@ export interface paths {
         put?: never;
         /** Void an order (open|sent → voided) */
         post: operations["OrdersController_voidOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orders/{id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reprint receipt or kitchen ticket for an order */
+        post: operations["OrdersController_reprintOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get all settings */
+        get: operations["SettingsController_getAll"];
+        /** Set a setting value */
+        put: operations["SettingsController_set"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -734,6 +803,10 @@ export interface components {
             role?: "receipt" | "kitchen";
             isActive?: boolean;
         };
+        SuccessResponse: {
+            /** @example true */
+            success: boolean;
+        };
         OrderItemResponse: {
             /** @example 1 */
             id: number;
@@ -846,10 +919,6 @@ export interface components {
             /** @example no onion */
             notes?: string;
         };
-        SuccessResponse: {
-            /** @example true */
-            success: boolean;
-        };
         UpdateOrderItemDto: {
             /** @example 3 */
             qty?: number;
@@ -861,6 +930,31 @@ export interface components {
             success: boolean;
             /** @example sent */
             status: string;
+        };
+        ReprintOrderDto: {
+            /**
+             * @example receipt
+             * @enum {string}
+             */
+            target: "receipt" | "kitchen";
+        };
+        PrintResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example [] */
+            errors: string[];
+        };
+        SettingResponse: {
+            /** @example restaurant_name */
+            key: string;
+            /** @example SpicyHome */
+            value: string;
+        };
+        SetSettingDto: {
+            /** @example restaurant_name */
+            key: string;
+            /** @example SpicyHome */
+            value: string;
         };
     };
     responses: never;
@@ -1447,6 +1541,48 @@ export interface operations {
             };
         };
     };
+    PrintersController_checkStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Printer reachability status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrintersController_testPrint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test ticket sent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"];
+                };
+            };
+        };
+    };
     OrdersController_listOrders: {
         parameters: {
             query: {
@@ -1676,6 +1812,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    OrdersController_reprintOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReprintOrderDto"];
+            };
+        };
+        responses: {
+            /** @description Print result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrintResponse"];
+                };
+            };
+        };
+    };
+    SettingsController_getAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key-value settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingResponse"][];
+                };
+            };
+        };
+    };
+    SettingsController_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSettingDto"];
+            };
+        };
+        responses: {
+            /** @description Setting updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingResponse"];
                 };
             };
         };

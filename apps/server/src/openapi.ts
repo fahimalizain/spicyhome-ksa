@@ -22,6 +22,7 @@ async function generate(): Promise<void> {
     .addTag('orders', 'Order management')
     .addTag('tables', 'Table management')
     .addTag('printers', 'Printer configuration')
+    .addTag('settings', 'Application settings')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

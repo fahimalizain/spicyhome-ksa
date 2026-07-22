@@ -6,6 +6,7 @@ All URIs are relative to *http://localhost*
 | ------------- | ------------- | ------------- |
 | [**authControllerCreateRole**](AuthApi.md#authControllerCreateRole) | **POST** auth/roles | Create a new role |
 | [**authControllerCreateUser**](AuthApi.md#authControllerCreateUser) | **POST** auth/users | Create a new user |
+| [**authControllerGetMe**](AuthApi.md#authControllerGetMe) | **GET** auth/me | Get current user info with role permissions |
 | [**authControllerGetUser**](AuthApi.md#authControllerGetUser) | **GET** auth/users/{id} | Get user by ID |
 | [**authControllerListRoles**](AuthApi.md#authControllerListRoles) | **GET** auth/roles | List all roles |
 | [**authControllerListUsers**](AuthApi.md#authControllerListUsers) | **GET** auth/users | List all users |
@@ -88,6 +89,41 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
+Get current user info with role permissions
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(AuthApi::class.java)
+
+val result : MeResponse = webService.authControllerGetMe()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**MeResponse**](MeResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 

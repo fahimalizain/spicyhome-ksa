@@ -8,9 +8,24 @@ import com.squareup.moshi.Json
 
 import com.spicyhome.client.models.CreatePrinterDto
 import com.spicyhome.client.models.PrinterResponse
+import com.spicyhome.client.models.PrinterStatusResponse
+import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdatePrinterDto
 
 interface PrintersApi {
+    /**
+     * GET printers/{id}/status
+     * Check printer TCP reachability
+     * 
+     * Responses:
+     *  - 200: Printer reachability status
+     *
+     * @param id 
+     * @return [Call]<[PrinterStatusResponse]>
+     */
+    @GET("printers/{id}/status")
+    fun printersControllerCheckStatus(@Path("id") id: java.math.BigDecimal): Call<PrinterStatusResponse>
+
     /**
      * POST printers
      * Create a printer
@@ -48,6 +63,19 @@ interface PrintersApi {
      */
     @GET("printers")
     fun printersControllerList(): Call<kotlin.collections.List<PrinterResponse>>
+
+    /**
+     * POST printers/{id}/test
+     * Print a test ticket
+     * 
+     * Responses:
+     *  - 200: Test ticket sent
+     *
+     * @param id 
+     * @return [Call]<[SuccessResponse]>
+     */
+    @POST("printers/{id}/test")
+    fun printersControllerTestPrint(@Path("id") id: java.math.BigDecimal): Call<SuccessResponse>
 
     /**
      * PUT printers/{id}

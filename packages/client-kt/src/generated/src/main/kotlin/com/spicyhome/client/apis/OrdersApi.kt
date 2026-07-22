@@ -11,6 +11,8 @@ import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.PrintResponse
+import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdateOrderItemDto
@@ -96,6 +98,20 @@ interface OrdersApi {
      */
     @DELETE("orders/{orderId}/items/{itemId}")
     fun ordersControllerRemoveItem(@Path("orderId") orderId: java.math.BigDecimal, @Path("itemId") itemId: java.math.BigDecimal): Call<SuccessResponse>
+
+    /**
+     * POST orders/{id}/print
+     * Reprint receipt or kitchen ticket for an order
+     * 
+     * Responses:
+     *  - 201: Print result
+     *
+     * @param id 
+     * @param reprintOrderDto 
+     * @return [Call]<[PrintResponse]>
+     */
+    @POST("orders/{id}/print")
+    fun ordersControllerReprintOrder(@Path("id") id: java.math.BigDecimal, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
 
     /**
      * POST orders/{id}/send

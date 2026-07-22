@@ -23,6 +23,7 @@ import com.spicyhome.client.models.CreateRoleDto
 import com.spicyhome.client.models.CreateUserDto
 import com.spicyhome.client.models.LoginDto
 import com.spicyhome.client.models.LoginResponse
+import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
@@ -46,6 +47,13 @@ class AuthApiTest : ShouldSpec() {
             // uncomment below to test authControllerCreateUser
             //val createUserDto : CreateUserDto =  // CreateUserDto | 
             //val result : UserResponse = apiInstance.authControllerCreateUser(createUserDto)
+            //result shouldBe ("TODO")
+        }
+
+        // to test authControllerGetMe
+        should("test authControllerGetMe") {
+            // uncomment below to test authControllerGetMe
+            //val result : MeResponse = apiInstance.authControllerGetMe()
             //result shouldBe ("TODO")
         }
 

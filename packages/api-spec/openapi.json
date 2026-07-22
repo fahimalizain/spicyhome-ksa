@@ -905,6 +905,78 @@
         ]
       }
     },
+    "/printers/{id}/status": {
+      "get": {
+        "operationId": "PrintersController_checkStatus",
+        "summary": "Check printer TCP reachability",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Printer reachability status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/printers/{id}/test": {
+      "post": {
+        "operationId": "PrintersController_testPrint",
+        "summary": "Print a test ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test ticket sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders": {
       "get": {
         "operationId": "OrdersController_listOrders",
@@ -1308,6 +1380,117 @@
           }
         ]
       }
+    },
+    "/orders/{id}/print": {
+      "post": {
+        "operationId": "OrdersController_reprintOrder",
+        "summary": "Reprint receipt or kitchen ticket for an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprintOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Print result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "SettingsController_getAll",
+        "summary": "Get all settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Key-value settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettingResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "SettingsController_set",
+        "summary": "Set a setting value",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSettingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Setting updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -1336,6 +1519,10 @@
     {
       "name": "printers",
       "description": "Printer configuration"
+    },
+    {
+      "name": "settings",
+      "description": "Application settings"
     }
   ],
   "servers": [],
@@ -2184,6 +2371,30 @@
           }
         }
       },
+      "PrinterStatusResponse": {
+        "type": "object",
+        "properties": {
+          "reachable": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "reachable"
+        ]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "OrderItemResponse": {
         "type": "object",
         "properties": {
@@ -2482,18 +2693,6 @@
           "qty"
         ]
       },
-      "SuccessResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "example": true
-          }
-        },
-        "required": [
-          "success"
-        ]
-      },
       "UpdateOrderItemDto": {
         "type": "object",
         "properties": {
@@ -2522,6 +2721,76 @@
         "required": [
           "success",
           "status"
+        ]
+      },
+      "ReprintOrderDto": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "receipt",
+              "kitchen"
+            ],
+            "example": "receipt"
+          }
+        },
+        "required": [
+          "target"
+        ]
+      },
+      "PrintResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "errors": {
+            "example": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "errors"
+        ]
+      },
+      "SettingResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "restaurant_name"
+          },
+          "value": {
+            "type": "string",
+            "example": "SpicyHome"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "SetSettingDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "restaurant_name"
+          },
+          "value": {
+            "type": "string",
+            "example": "SpicyHome"
+          }
+        },
+        "required": [
+          "key",
+          "value"
         ]
       }
     }

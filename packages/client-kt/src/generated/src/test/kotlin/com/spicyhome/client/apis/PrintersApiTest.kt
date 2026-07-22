@@ -21,12 +21,22 @@ import io.kotlintest.specs.ShouldSpec
 import com.spicyhome.client.apis.PrintersApi
 import com.spicyhome.client.models.CreatePrinterDto
 import com.spicyhome.client.models.PrinterResponse
+import com.spicyhome.client.models.PrinterStatusResponse
+import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdatePrinterDto
 
 class PrintersApiTest : ShouldSpec() {
     init {
         // uncomment below to create an instance of PrintersApi
         //val apiInstance = PrintersApi()
+
+        // to test printersControllerCheckStatus
+        should("test printersControllerCheckStatus") {
+            // uncomment below to test printersControllerCheckStatus
+            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val result : PrinterStatusResponse = apiInstance.printersControllerCheckStatus(id)
+            //result shouldBe ("TODO")
+        }
 
         // to test printersControllerCreate
         should("test printersControllerCreate") {
@@ -48,6 +58,14 @@ class PrintersApiTest : ShouldSpec() {
         should("test printersControllerList") {
             // uncomment below to test printersControllerList
             //val result : kotlin.collections.List<PrinterResponse> = apiInstance.printersControllerList()
+            //result shouldBe ("TODO")
+        }
+
+        // to test printersControllerTestPrint
+        should("test printersControllerTestPrint") {
+            // uncomment below to test printersControllerTestPrint
+            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val result : SuccessResponse = apiInstance.printersControllerTestPrint(id)
             //result shouldBe ("TODO")
         }
 

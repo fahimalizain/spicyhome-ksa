@@ -42,3 +42,10 @@ export class UpdateOrderItemDto {
   @IsString()
   notes?: string;
 }
+
+export class ReprintOrderDto {
+  @ApiProperty({ enum: ['receipt', 'kitchen'], example: 'receipt' })
+  @IsString()
+  @IsIn(['receipt', 'kitchen'])
+  target!: string;
+}

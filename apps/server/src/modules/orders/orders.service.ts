@@ -1,11 +1,13 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { orders, orderItems, orderAuditLog, tables, dayOpenings, settings, items } from '@spicyhome/db';
 import { decomposeVat } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { AuditLogService } from './audit-log.service';
+import { PrintJobService } from '../printers/print-job.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -36,7 +38,11 @@ function recomputeOrderTotals(
 export class OrdersService {
   private readonly auditLog: AuditLogService;
 
-  constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {
+  constructor(
+    @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
+    private eventEmitter: EventEmitter2,
+    private printJobService: PrintJobService,
+  ) {
     this.auditLog = new AuditLogService();
   }
 
@@ -218,15 +224,34 @@ export class OrdersService {
   }
 
   async sendOrder(orderId: number, userId: number) {
-    return this.transitionStatus(orderId, 'sent', 'sent_to_kitchen', userId);
+    const result = await this.transitionStatus(orderId, 'sent', 'sent_to_kitchen', userId);
+    // Non-blocking print — failure must NOT fail the order
+    this.emitPrintEvent('order.sent', orderId, userId);
+    return result;
   }
 
   async payOrder(orderId: number, userId: number) {
-    return this.transitionStatus(orderId, 'paid', 'paid', userId);
+    const result = await this.transitionStatus(orderId, 'paid', 'paid', userId);
+    // Non-blocking print
+    this.emitPrintEvent('order.paid', orderId, userId);
+    return result;
   }
 
   async voidOrder(orderId: number, userId: number) {
     return this.transitionStatus(orderId, 'voided', 'voided', userId);
+  }
+
+  async reprintOrder(orderId: number, target: string, userId: number) {
+    // Direct call — reprint needs sync result
+    return this.printJobService.reprintOrder(orderId, target, userId);
+  }
+
+  private emitPrintEvent(event: string, orderId: number, userId: number): void {
+    try {
+      this.eventEmitter.emit(event, { orderId, userId });
+    } catch (err: any) {
+      // Swallow — print events never fail the order operation
+    }
   }
 
   private transitionStatus(orderId: number, newStatus: string, auditAction: string, userId: number) {
@@ -283,9 +308,9 @@ export class OrdersService {
   getOrder(id: number): any {
     const order = this.db.select().from(orders).where(eq(orders.id, id)).get();
     if (!order) throw new NotFoundException('Order not found');
-    const items = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
+    const itemsList = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
     const logs = this.db.select().from(orderAuditLog).where(eq(orderAuditLog.orderId, id)).orderBy(orderAuditLog.id).all();
-    return { ...order, items, auditLog: logs };
+    return { ...order, items: itemsList, auditLog: logs };
   }
 
   verifyAuditChain(orderId: number): any {

@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, AddOrderItemDto, UpdateOrderItemDto } from './dto/create-order.dto';
+import { CreateOrderDto, AddOrderItemDto, UpdateOrderItemDto, ReprintOrderDto } from './dto/create-order.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { SuccessResponse, StatusResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
+import { PrintResponse } from './dto/print-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -103,5 +104,17 @@ export class OrdersController {
   @ApiCreatedResponse({ description: 'Order voided', type: StatusResponse })
   voidOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
     return this.ordersService.voidOrder(orderId, user.sub);
+  }
+
+  @Post(':id/print')
+  @RequiresPermission('update_order')
+  @ApiOperation({ summary: 'Reprint receipt or kitchen ticket for an order' })
+  @ApiCreatedResponse({ description: 'Print result', type: PrintResponse })
+  reprintOrder(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: ReprintOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.reprintOrder(orderId, dto.target, user.sub);
   }
 }

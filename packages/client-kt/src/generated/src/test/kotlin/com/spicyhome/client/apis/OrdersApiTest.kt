@@ -24,6 +24,8 @@ import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.PrintResponse
+import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdateOrderItemDto
@@ -81,6 +83,15 @@ class OrdersApiTest : ShouldSpec() {
             //val orderId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
             //val itemId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
             //val result : SuccessResponse = apiInstance.ordersControllerRemoveItem(orderId, itemId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerReprintOrder
+        should("test ordersControllerReprintOrder") {
+            // uncomment below to test ordersControllerReprintOrder
+            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val reprintOrderDto : ReprintOrderDto =  // ReprintOrderDto | 
+            //val result : PrintResponse = apiInstance.ordersControllerReprintOrder(id, reprintOrderDto)
             //result shouldBe ("TODO")
         }
 
