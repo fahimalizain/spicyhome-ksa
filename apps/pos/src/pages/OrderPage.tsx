@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useCart } from '../hooks/useCart';
@@ -26,6 +27,32 @@ export function OrderPage() {
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
   const [dayLoading, setDayLoading] = useState(false);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tableParamApplied = useRef(false);
+
+  useEffect(() => {
+    if (tableParamApplied.current) return;
+    tableParamApplied.current = true;
+
+    const tableIdParam = searchParams.get('tableId');
+    const orderIdParam = searchParams.get('orderId');
+
+    if (orderIdParam) {
+      const orderId = Number(orderIdParam);
+      client.orders
+        .get(orderId)
+        .then((order) => {
+          cart.loadOrder(order);
+          setCurrentOrder({ id: order.id, status: order.status, orderNo: order.orderNo });
+        })
+        .catch(() => {
+          setError('Failed to load order');
+        });
+    } else if (tableIdParam) {
+      cart.setOrderType('dine_in', Number(tableIdParam));
+    }
+  }, []);
 
   useEffect(() => {
     checkDay();
@@ -91,6 +118,7 @@ export function OrderPage() {
     cart.clear();
     setCurrentOrder(null);
     setShowTablePicker(false);
+    setSearchParams({}, { replace: true });
   }
 
   async function handleCreateOrder() {

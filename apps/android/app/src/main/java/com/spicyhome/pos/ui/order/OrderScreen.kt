@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
 import java.math.BigDecimal
@@ -34,13 +35,14 @@ import java.math.BigDecimal
 fun OrderScreen(
     viewModel: OrderViewModel,
     onViewOrders: () -> Unit,
+    onViewTables: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
     when (state.screenState) {
         OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state)
-        OrderScreenState.BUILDING_ORDER -> OrderBuildingPanel(viewModel, state, onViewOrders)
+        OrderScreenState.BUILDING_ORDER -> OrderBuildingPanel(viewModel, state, onViewOrders, onViewTables)
         OrderScreenState.ORDER_CREATED -> OrderCreatedPanel(viewModel, state)
         OrderScreenState.ORDER_SENT -> OrderSentPanel(viewModel, state)
         OrderScreenState.ORDER_PAID -> OrderPaidPanel(viewModel, state)
@@ -52,6 +54,7 @@ fun OrderScreen(
 private fun TopBar(
     title: String,
     onViewOrders: (() -> Unit)? = null,
+    onViewTables: (() -> Unit)? = null,
     onLogout: (() -> Unit)? = null,
 ) {
     Row(
@@ -72,6 +75,11 @@ private fun TopBar(
             onViewOrders?.let {
                 TextButton(onClick = it) {
                     Text("Orders", color = Accent, fontSize = 16.sp)
+                }
+            }
+            onViewTables?.let {
+                TextButton(onClick = it) {
+                    Text("Tables", color = Accent, fontSize = 16.sp)
                 }
             }
             onLogout?.let {
@@ -180,11 +188,11 @@ private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState) {
 }
 
 @Composable
-private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, onViewOrders: () -> Unit) {
+private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, onViewOrders: () -> Unit, onViewTables: () -> Unit) {
     Row(modifier = Modifier.fillMaxSize()) {
         // Left: categories + items
         Column(modifier = Modifier.weight(0.65f)) {
-            TopBar(title = "New Order", onViewOrders = onViewOrders)
+            TopBar(title = "New Order", onViewOrders = onViewOrders, onViewTables = onViewTables)
 
             // Category tabs
             if (state.categories.isNotEmpty()) {
@@ -472,17 +480,64 @@ private fun CartItemRow(
 
 @Composable
 private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
+    val items = state.currentOrder?.items ?: emptyList()
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(title = "Order #${state.currentOrder?.orderNo ?: state.currentOrderId ?: "?"}")
+
+        if (items.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(items, key = { it.id }) { item ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.itemName,
+                                    fontSize = 15.sp,
+                                    color = OnDark,
+                                )
+                                Text(
+                                    text = "Qty: ${item.qty}",
+                                    fontSize = 12.sp,
+                                    color = OnDarkSecondary,
+                                )
+                            }
+                            Text(
+                                text = MoneyFormatter.halalasToSar(item.totalHalalas),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Accent,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            Text("Order Created", fontSize = 28.sp, color = OnDark)
+            Divider(color = DarkSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
+            Text("Order Created", fontSize = 20.sp, color = OnDark)
+            Spacer(modifier = Modifier.height(4.dp))
             state.currentOrder?.let {
                 Text(
                     "Total: ${MoneyFormatter.halalasToSar(it.totalHalalas)}",
@@ -491,7 +546,7 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
                     color = Accent,
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(

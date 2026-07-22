@@ -89,6 +89,8 @@ data class OrderUiState(
 class OrderViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
+    private val initialTableId: Long? = null,
+    private val initialOrderId: Long? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrderUiState())
@@ -108,6 +110,7 @@ class OrderViewModel(
             initRepos()
             loadCategories()
             loadTables()
+            applyInitialTableContext()
         }
     }
 
@@ -115,6 +118,35 @@ class OrderViewModel(
         menuRepo = MenuRepository(apiClientProvider.createMenuApi(baseUrl, bearerToken))
         orderRepo = OrderRepository(apiClientProvider.createOrdersApi(baseUrl, bearerToken))
         tableRepo = TableRepository(apiClientProvider.createTablesApi(baseUrl, bearerToken))
+    }
+
+    private fun applyInitialTableContext() {
+        if (initialOrderId != null) {
+            viewModelScope.launch {
+                try {
+                    val response = withContext(Dispatchers.IO) {
+                        orderRepo!!.getOrder(initialOrderId).execute()
+                    }
+                    if (response.isSuccessful) {
+                        val order = response.body()!!
+                        _uiState.value = _uiState.value.copy(
+                            currentOrderId = order.id.toLong(),
+                            currentOrder = order,
+                            orderType = if (order.type == "dine_in") OrderType.DINE_IN else OrderType.TAKEAWAY,
+                            selectedTableId = (order.tableId as? BigDecimal)?.toLong(),
+                            screenState = OrderScreenState.ORDER_CREATED,
+                        )
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        } else if (initialTableId != null) {
+            _uiState.value = _uiState.value.copy(
+                orderType = OrderType.DINE_IN,
+                selectedTableId = initialTableId,
+                screenState = OrderScreenState.BUILDING_ORDER,
+            )
+        }
     }
 
     private fun loadCategories() {
@@ -432,10 +464,12 @@ class OrderViewModel(
     class Factory(
         private val preferencesManager: PreferencesManager,
         private val apiClientProvider: ApiClientProvider,
+        private val initialTableId: Long? = null,
+        private val initialOrderId: Long? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return OrderViewModel(preferencesManager, apiClientProvider) as T
+            return OrderViewModel(preferencesManager, apiClientProvider, initialTableId, initialOrderId) as T
         }
     }
 }

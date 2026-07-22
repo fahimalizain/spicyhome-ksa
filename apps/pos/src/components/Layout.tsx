@@ -51,6 +51,9 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
         <Link to="/orders" className="text-sm text-gray-300 hover:text-white touch-target">
           Orders
         </Link>
+        <Link to="/tables" className="text-sm text-gray-300 hover:text-white touch-target">
+          Tables
+        </Link>
         {me?.manageMenu && (
           <Link to="/admin" className="text-sm text-gray-300 hover:text-white touch-target">
             Admin

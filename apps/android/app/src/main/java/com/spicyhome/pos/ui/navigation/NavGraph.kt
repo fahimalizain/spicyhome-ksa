@@ -3,9 +3,11 @@ package com.spicyhome.pos.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.spicyhome.pos.SpicyHomeApp
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
@@ -15,6 +17,8 @@ import com.spicyhome.pos.ui.order.OrderScreen
 import com.spicyhome.pos.ui.order.OrderViewModel
 import com.spicyhome.pos.ui.orders.OrdersScreen
 import com.spicyhome.pos.ui.orders.OrdersViewModel
+import com.spicyhome.pos.ui.tables.TablesScreen
+import com.spicyhome.pos.ui.tables.TablesViewModel
 import com.spicyhome.pos.ui.setup.SetupScreen
 import com.spicyhome.pos.ui.setup.SetupViewModel
 
@@ -23,6 +27,7 @@ object NavRoutes {
     const val LOGIN = "login"
     const val ORDER = "order"
     const val ORDERS = "orders"
+    const val TABLES = "tables"
 }
 
 @Composable
@@ -66,11 +71,21 @@ fun NavGraph(
             )
         }
 
-        composable(NavRoutes.ORDER) {
-            val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider))
+        composable(
+            route = "order?tableId={tableId}&orderId={orderId}",
+            arguments = listOf(
+                navArgument("tableId") { type = NavType.LongType; nullable = true; defaultValue = null },
+                navArgument("orderId") { type = NavType.LongType; nullable = true; defaultValue = null },
+            ),
+        ) { backStackEntry ->
+            val args = backStackEntry.arguments
+            val initialTableId: Long? = args?.getLong("tableId")?.takeIf { args.containsKey("tableId") && !args.isNull("tableId") }
+            val initialOrderId: Long? = args?.getLong("orderId")?.takeIf { args.containsKey("orderId") && !args.isNull("orderId") }
+            val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider, initialTableId, initialOrderId))
             OrderScreen(
                 viewModel = vm,
                 onViewOrders = { navController.navigate(NavRoutes.ORDERS) },
+                onViewTables = { navController.navigate(NavRoutes.TABLES) },
                 onLogout = {
                     navController.navigate(NavRoutes.SETUP) {
                         popUpTo(0) { inclusive = true }
@@ -84,6 +99,20 @@ fun NavGraph(
             OrdersScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoutes.TABLES) {
+            val vm: TablesViewModel = viewModel(factory = TablesViewModel.Factory(preferencesManager, apiClientProvider, app.realtimeClient))
+            TablesScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onOpenTable = { tableId, orderId ->
+                    val route = if (orderId != null) "order?tableId=$tableId&orderId=$orderId" else "order?tableId=$tableId"
+                    navController.navigate(route) {
+                        popUpTo("order") { inclusive = true }
+                    }
+                },
             )
         }
     }
