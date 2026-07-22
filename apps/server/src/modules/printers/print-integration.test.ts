@@ -109,6 +109,12 @@ beforeAll(async () => {
     .post('/auth/login')
     .send({ username: 'admin', pin: '1234' });
   jwtToken = loginRes.body.accessToken;
+
+  // Open business day (required for order creation)
+  await request(app.getHttpServer())
+    .post('/day/open')
+    .set('Authorization', `Bearer ${jwtToken}`)
+    .send({ openingCashHalalas: 50000 });
 });
 
 afterAll(async () => {

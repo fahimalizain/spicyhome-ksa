@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { OrderPage } from './pages/OrderPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { DayPage } from './pages/DayPage';
 import { AdminPage } from './pages/AdminPage';
 import { ItemsPage } from './pages/admin/ItemsPage';
 import { CategoriesPage } from './pages/admin/CategoriesPage';
@@ -19,6 +20,7 @@ export function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<OrderPage />} />
+            <Route path="/day" element={<DayPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/items" element={<ItemsPage />} />

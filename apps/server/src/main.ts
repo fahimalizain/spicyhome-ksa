@@ -22,6 +22,8 @@ async function bootstrap() {
     .addTag('printers', 'Printer configuration')
     .addTag('settings', 'Application settings')
     .addTag('zatca', 'ZATCA e-invoicing')
+    .addTag('day', 'Business day open/close')
+    .addTag('reports', 'X/Z reports and sales summaries')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

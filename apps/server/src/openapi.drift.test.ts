@@ -60,6 +60,8 @@ describe('OpenAPI spec drift check', () => {
       .addTag('tables', 'Table management')
       .addTag('printers', 'Printer configuration')
       .addTag('settings', 'Application settings')
+      .addTag('day', 'Business day open/close')
+      .addTag('reports', 'X/Z reports and sales summaries')
       .build();
 
     const generated = SwaggerModule.createDocument(app, config);

@@ -27,6 +27,7 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
       <div className="flex items-center gap-4">
         <Link to="/" className="text-lg font-bold text-brand-500 touch-target">SpicyHome</Link>
         <Link to="/" className="text-sm text-gray-300 hover:text-white touch-target">Order</Link>
+        <Link to="/day" className="text-sm text-gray-300 hover:text-white touch-target">Day</Link>
         <Link to="/orders" className="text-sm text-gray-300 hover:text-white touch-target">Orders</Link>
         {me?.manageMenu && (
           <Link to="/admin" className="text-sm text-gray-300 hover:text-white touch-target">Admin</Link>

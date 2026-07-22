@@ -76,20 +76,5 @@ export class DatabaseModule implements OnModuleInit {
     if (userCount.cnt === 0) {
       seed(rawDb);
     }
-
-    const dayCount = rawDb
-      .prepare('SELECT COUNT(*) as cnt FROM day_openings')
-      .get() as { cnt: number };
-
-    if (dayCount.cnt === 0) {
-      const now = Math.floor(Date.now() / 1000);
-      const today = new Date().toISOString().slice(0, 10);
-      rawDb
-        .prepare(
-          `INSERT INTO day_openings (business_date, status, opening_cash_halalas, opened_at, opened_by, created_at, updated_at)
-           VALUES (?, 'open', 0, ?, 1, ?, ?)`,
-        )
-        .run(today, now, now, now);
-    }
   }
 }

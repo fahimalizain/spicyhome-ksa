@@ -100,8 +100,38 @@ describe('Auth (e2e)', () => {
   });
 });
 
+describe('Business Day (e2e)', () => {
+  it('POST /day/open opens a business day', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/day/open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ openingCashHalalas: 50000 })
+      .expect(201);
+    expect(res.body.status).toBe('open');
+    expect(res.body.businessDate).toBeDefined();
+  });
+
+  it('POST /orders fails with no day open (double-open before close)', async () => {
+    await request(app.getHttpServer())
+      .post('/day/open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ openingCashHalalas: 10000 })
+      .expect(409);
+  });
+
+  it('GET /day/current returns open day with live totals', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/day/current')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(res.body.status).toBe('open');
+    expect(res.body.liveSalesHalalas).toBe(0);
+  });
+});
+
 describe('Orders (e2e)', () => {
   let orderId: number;
+  let secondOrderId: number;
 
   it('POST /orders creates an order', async () => {
     const res = await request(app.getHttpServer())
@@ -160,5 +190,66 @@ describe('Orders (e2e)', () => {
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(201);
     expect(res.body.status).toBe('paid');
+  });
+
+  it('GET /reports/x returns live X-report', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/reports/x')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect('error' in res.body).toBe(false);
+    expect(res.body.paidOrderCount).toBeGreaterThanOrEqual(1);
+    expect(res.body.totalSalesHalalas).toBeGreaterThanOrEqual(4600);
+  });
+
+  it('POST /day/close fails when open/sent orders exist', async () => {
+    // Create a sent order that blocks close
+    const createRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    secondOrderId = createRes.body.id;
+
+    await request(app.getHttpServer())
+      .post(`/orders/${secondOrderId}/send`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/day/close')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ closingCashHalalas: 50000 })
+      .expect(409);
+  });
+
+  it('pay the blocking order then close succeeds', async () => {
+    await request(app.getHttpServer())
+      .post(`/orders/${secondOrderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post('/day/close')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ closingCashHalalas: 55000 })
+      .expect(201);
+    expect(res.body.status).toBe('closed');
+    expect(res.body.totalSalesHalalas).toBeGreaterThan(0);
+  });
+
+  it('GET /reports/z/:dayId returns Z-report', async () => {
+    const days = await request(app.getHttpServer())
+      .get('/day?page=1&limit=1')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const dayId = days.body.data[0].id;
+
+    const res = await request(app.getHttpServer())
+      .get(`/reports/z/${dayId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(res.body.status).toBe('closed');
+    expect(res.body.totalSalesHalalas).toBeGreaterThan(0);
   });
 });

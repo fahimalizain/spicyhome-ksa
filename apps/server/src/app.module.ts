@@ -11,6 +11,8 @@ import { PrintersModule } from './modules/printers/printers.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { ZatcaModule } from './modules/zatca/zatca.module';
+import { BusinessDayModule } from './modules/business-day/business-day.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -22,10 +24,12 @@ const imports: any[] = [
   MenuModule,
   TablesModule,
   PrintersModule,
-  OrdersModule,
-  SettingsModule,
-  ZatcaModule,
-];
+    OrdersModule,
+    SettingsModule,
+    ZatcaModule,
+    BusinessDayModule,
+    ReportsModule,
+  ];
 
 if (spaDist) {
   imports.push(
@@ -40,6 +44,8 @@ if (spaDist) {
         '/printers/(.*)',
         '/settings/(.*)',
         '/zatca/(.*)',
+        '/day/(.*)',
+        '/reports/(.*)',
       ],
     }),
   );

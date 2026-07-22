@@ -13,6 +13,7 @@ let sqlite: Database.Database;
 let server: http.Server;
 let client: SpicyHomeClient;
 let token: string;
+let baseUrl: string;
 
 function getPort(): Promise<number> {
   return new Promise((resolve) => {
@@ -48,8 +49,10 @@ beforeAll(async () => {
   await app.listen(port);
   const httpServer = app.getHttpServer();
 
+  baseUrl = `http://127.0.0.1:${port}`;
+
   client = new SpicyHomeClient({
-    baseUrl: `http://127.0.0.1:${port}`,
+    baseUrl,
     getToken: () => token,
   });
 });
@@ -158,6 +161,20 @@ describe('Client contract test', () => {
     const res: any = await client.menu.getItem(itemId);
     expect(res.id).toBe(itemId);
     expect(res.priceHalalas).toBe(2300);
+  });
+
+  it('opens a business day', async () => {
+    const res = await fetch(`${baseUrl}/day/open`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ openingCashHalalas: 50000 }),
+    });
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.status).toBe('open');
   });
 
   it('creates a table', async () => {

@@ -1622,6 +1622,357 @@
           "zatca"
         ]
       }
+    },
+    "/day/open": {
+      "post": {
+        "operationId": "BusinessDayController_openDay",
+        "summary": "Open a new business day",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Business day opened",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOpeningResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A business day is already open"
+          }
+        },
+        "tags": [
+          "day"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/day/close": {
+      "post": {
+        "operationId": "BusinessDayController_closeDay",
+        "summary": "Close the current open business day",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseDayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Business day closed with frozen totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseDayResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open business day to close"
+          },
+          "409": {
+            "description": "Open/sent orders exist — cannot close"
+          }
+        },
+        "tags": [
+          "day"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/day/current": {
+      "get": {
+        "operationId": "BusinessDayController_getCurrent",
+        "summary": "Get current open day with live X-report totals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current open day or null"
+          }
+        },
+        "tags": [
+          "day"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/day": {
+      "get": {
+        "operationId": "BusinessDayController_list",
+        "summary": "List past business days (paged)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paged list of business days"
+          }
+        },
+        "tags": [
+          "day"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/day/{id}": {
+      "get": {
+        "operationId": "BusinessDayController_getDay",
+        "summary": "Get a business day by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOpeningResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Business day not found"
+          }
+        },
+        "tags": [
+          "day"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/x": {
+      "get": {
+        "operationId": "ReportsController_getXReport",
+        "summary": "Live X-report for the current open day",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "X-report snapshot"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/z/{dayId}": {
+      "get": {
+        "operationId": "ReportsController_getZReport",
+        "summary": "Z-report for a closed day",
+        "parameters": [
+          {
+            "name": "dayId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Z-report detail"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/sales": {
+      "get": {
+        "operationId": "ReportsController_getSales",
+        "summary": "Daily sales totals over a date range",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily sales totals"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/vat": {
+      "get": {
+        "operationId": "ReportsController_getVat",
+        "summary": "VAT summary over a date range (for VAT return)",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VAT summary with grand total"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/z/{dayId}/print": {
+      "post": {
+        "operationId": "ReportsController_printZReport",
+        "summary": "Print Z-report on receipt printer",
+        "parameters": [
+          {
+            "name": "dayId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Print result"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reports/x/print": {
+      "post": {
+        "operationId": "ReportsController_printXReport",
+        "summary": "Print X-report on receipt printer",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Print result"
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -1654,6 +2005,14 @@
     {
       "name": "settings",
       "description": "Application settings"
+    },
+    {
+      "name": "day",
+      "description": "Business day open/close"
+    },
+    {
+      "name": "reports",
+      "description": "X/Z reports and sales summaries"
     }
   ],
   "servers": [],
@@ -2922,6 +3281,170 @@
         "required": [
           "key",
           "value"
+        ]
+      },
+      "OpenDayDto": {
+        "type": "object",
+        "properties": {
+          "openingCashHalalas": {
+            "type": "number",
+            "description": "Opening cash counted in halalas",
+            "example": 50000
+          }
+        },
+        "required": [
+          "openingCashHalalas"
+        ]
+      },
+      "DayOpeningResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "businessDate": {
+            "type": "string",
+            "example": "2026-07-22"
+          },
+          "status": {
+            "type": "string",
+            "example": "open"
+          },
+          "openingCashHalalas": {
+            "type": "number",
+            "example": 50000
+          },
+          "openedAt": {
+            "type": "number"
+          },
+          "openedBy": {
+            "type": "number"
+          },
+          "closedAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "closedBy": {
+            "type": "object",
+            "nullable": true
+          },
+          "closingCashHalalas": {
+            "type": "object",
+            "nullable": true
+          },
+          "totalSalesHalalas": {
+            "type": "object",
+            "nullable": true
+          },
+          "totalVatHalalas": {
+            "type": "object",
+            "nullable": true
+          },
+          "orderCount": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "number"
+          },
+          "createdBy": {
+            "type": "object",
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "businessDate",
+          "status",
+          "openingCashHalalas",
+          "openedAt",
+          "openedBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CloseDayDto": {
+        "type": "object",
+        "properties": {
+          "closingCashHalalas": {
+            "type": "number",
+            "description": "Closing cash counted in halalas",
+            "example": 125000
+          }
+        },
+        "required": [
+          "closingCashHalalas"
+        ]
+      },
+      "CloseDayResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "businessDate": {
+            "type": "string",
+            "example": "2026-07-22"
+          },
+          "status": {
+            "type": "string",
+            "example": "closed"
+          },
+          "openingCashHalalas": {
+            "type": "number",
+            "example": 50000
+          },
+          "openedAt": {
+            "type": "number"
+          },
+          "openedBy": {
+            "type": "number"
+          },
+          "closedAt": {
+            "type": "number"
+          },
+          "closedBy": {
+            "type": "number"
+          },
+          "closingCashHalalas": {
+            "type": "number",
+            "example": 125000
+          },
+          "totalSalesHalalas": {
+            "type": "number",
+            "example": 46000
+          },
+          "totalVatHalalas": {
+            "type": "number",
+            "example": 6000
+          },
+          "orderCount": {
+            "type": "number",
+            "example": 5
+          }
+        },
+        "required": [
+          "id",
+          "businessDate",
+          "status",
+          "openingCashHalalas",
+          "openedAt",
+          "openedBy",
+          "closedAt",
+          "closedBy",
+          "closingCashHalalas",
+          "totalSalesHalalas",
+          "totalVatHalalas",
+          "orderCount"
         ]
       }
     }

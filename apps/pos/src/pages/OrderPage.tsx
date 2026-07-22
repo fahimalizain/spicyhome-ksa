@@ -14,11 +14,43 @@ export function OrderPage() {
   const [currentOrder, setCurrentOrder] = useState<{ id: number; status: string; orderNo: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [dayOpen, setDayOpen] = useState<boolean | null>(null);
+  const [openingCash, setOpeningCash] = useState('');
+  const [dayLoading, setDayLoading] = useState(false);
 
   useEffect(() => {
+    checkDay();
     loadMenu();
     loadTables();
   }, []);
+
+  async function checkDay() {
+    try {
+      const res = await client.day.current();
+      if (res.open === false || !res.status || res.status !== 'open') {
+        setDayOpen(false);
+      } else {
+        setDayOpen(true);
+      }
+    } catch {
+      setDayOpen(false);
+    }
+  }
+
+  async function handleOpenDay() {
+    if (!openingCash || isNaN(Number(openingCash))) return;
+    setDayLoading(true);
+    setError('');
+    try {
+      const cashHalalas = Math.round(parseFloat(openingCash) * 100);
+      await client.day.open({ openingCashHalalas: cashHalalas });
+      setDayOpen(true);
+    } catch (e: any) {
+      setError(e.message || 'Failed to open day');
+    } finally {
+      setDayLoading(false);
+    }
+  }
 
   async function loadMenu() {
     try {
@@ -123,6 +155,49 @@ export function OrderPage() {
   }
 
   const orderReadonly = currentOrder && currentOrder.status !== 'open';
+
+  if (dayOpen === null) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-400 text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!dayOpen) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="bg-gray-800 rounded-xl p-8 w-96 text-center">
+          <h2 className="text-xl font-bold text-white mb-4">Open Business Day</h2>
+          <p className="text-sm text-gray-400 mb-6">No business day is currently open. Enter the opening cash to start the day.</p>
+
+          <div className="mb-4">
+            <label className="block text-sm text-gray-300 mb-2">Opening Cash (SAR)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={openingCash}
+              onChange={(e) => setOpeningCash(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl"
+            />
+          </div>
+
+          {error && (
+            <div className="text-red-400 text-sm mb-4">{error}</div>
+          )}
+
+          <button
+            onClick={handleOpenDay}
+            disabled={dayLoading || !openingCash}
+            className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+          >
+            {dayLoading ? 'Opening Day...' : 'Open Day'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex">

@@ -216,4 +216,53 @@ export class SpicyHomeClient {
     update: (id: number, dto: UpdatePrinterDto) =>
       request<PrinterResponse>(this.config, 'PUT', `/printers/${id}`, dto),
   };
+
+  day = {
+    open: (dto: { openingCashHalalas: number }) =>
+      request<any>(this.config, 'POST', '/day/open', dto),
+
+    close: (dto: { closingCashHalalas: number }) =>
+      request<any>(this.config, 'POST', '/day/close', dto),
+
+    current: () =>
+      request<any>(this.config, 'GET', '/day/current'),
+
+    list: (page = 1, limit = 20) =>
+      request<any>(
+        this.config, 'GET', '/day',
+        undefined,
+        { page: String(page), limit: String(limit) },
+      ),
+
+    get: (id: number) =>
+      request<any>(this.config, 'GET', `/day/${id}`),
+  };
+
+  reports = {
+    x: () =>
+      request<any>(this.config, 'GET', '/reports/x'),
+
+    z: (dayId: number) =>
+      request<any>(this.config, 'GET', `/reports/z/${dayId}`),
+
+    sales: (from: string, to: string) =>
+      request<any>(
+        this.config, 'GET', '/reports/sales',
+        undefined,
+        { from, to },
+      ),
+
+    vat: (from: string, to: string) =>
+      request<any>(
+        this.config, 'GET', '/reports/vat',
+        undefined,
+        { from, to },
+      ),
+
+    printZ: (dayId: number) =>
+      request<any>(this.config, 'POST', `/reports/z/${dayId}/print`),
+
+    printX: () =>
+      request<any>(this.config, 'POST', '/reports/x/print'),
+  };
 }

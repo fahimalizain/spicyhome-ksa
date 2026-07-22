@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
             '/orders': 'http://localhost:3000',
             '/tables': 'http://localhost:3000',
             '/printers': 'http://localhost:3000',
+            '/day': 'http://localhost:3000',
+            '/reports': 'http://localhost:3000',
           },
         }
       : undefined,

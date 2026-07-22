@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,6 +34,11 @@ function recomputeOrderTotals(
   return { subtotalHalalas: subtotal, vatHalalas: vat, totalHalalas: total };
 }
 
+function todayInRiyadh(): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
+  return fmt.format(new Date());
+}
+
 @Injectable()
 export class OrdersService {
   private readonly auditLog: AuditLogService;
@@ -56,7 +61,14 @@ export class OrdersService {
     }
 
     const dayOpening = this.db.select().from(dayOpenings).where(eq(dayOpenings.status, 'open')).get();
-    if (!dayOpening) throw new BadRequestException('No open business day');
+    if (!dayOpening) throw new ConflictException('No open business day. Open a business day before creating orders.');
+
+    const today = todayInRiyadh();
+    if (dayOpening.businessDate !== today) {
+      throw new ConflictException(
+        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${today}).`,
+      );
+    }
 
     const orderUuid = uuidv4();
 
