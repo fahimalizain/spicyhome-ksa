@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { compareSync, hashSync } from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { users, userRoles } from '@spicyhome/db';
+import { MeResponse } from './dto/me-response.dto';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -39,6 +40,33 @@ export class AuthService {
     const payload = { sub: user.id, username: user.username, roleId: user.roleId };
     const accessToken = this.jwtService.sign(payload);
     return { accessToken };
+  }
+
+  async getMe(userId: number): Promise<MeResponse> {
+    const user = this.db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) throw new NotFoundException('User not found');
+
+    const role = this.db.select().from(userRoles).where(eq(userRoles.id, user.roleId)).get();
+    if (!role) throw new NotFoundException('Role not found');
+
+    return {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      roleId: user.roleId,
+      isActive: user.isActive === 1,
+      roleName: role.name,
+      createOrder: role.createOrder === 1,
+      updateOrder: role.updateOrder === 1,
+      deleteOrderItem: role.deleteOrderItem === 1,
+      voidOrder: role.voidOrder === 1,
+      refundOrder: role.refundOrder === 1,
+      manageMenu: role.manageMenu === 1,
+      manageTables: role.manageTables === 1,
+      managePrinters: role.managePrinters === 1,
+      manageUsers: role.manageUsers === 1,
+      manageSettings: role.manageSettings === 1,
+    };
   }
 
   listUsers(): any[] {

@@ -1,0 +1,116 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_run_binary", "js_run_devserver", "js_test")
+
+npm_link_all_packages(name = "node_modules")
+
+DEPS = [
+    ":node_modules/vite",
+    ":node_modules/@vitejs/plugin-react",
+    ":node_modules/@spicyhome/client-ts",
+    ":node_modules/@spicyhome/shared",
+    ":node_modules/react",
+    ":node_modules/react-dom",
+    ":node_modules/react-router-dom",
+    ":node_modules/tailwindcss",
+    ":node_modules/autoprefixer",
+    ":node_modules/postcss",
+]
+
+# Vite binary wrapper (avoids node_modules path conflict)
+js_binary(
+    name = "vite_bin",
+    entry_point = "vite-wrapper.mjs",
+    data = DEPS,
+)
+
+# Build: vite build
+js_run_binary(
+    name = "build",
+    srcs = glob([
+        "index.html",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.css",
+    ]) + [
+        "package.json",
+        "vite.config.ts",
+        "tailwind.config.js",
+        "postcss.config.js",
+        "tsconfig.json",
+        "tsconfig.node.json",
+    ] + DEPS,
+    args = ["build"],
+    chdir = package_name(),
+    out_dirs = ["dist"],
+    tool = ":vite_bin",
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "dist",
+    srcs = [":build"],
+    visibility = ["//visibility:public"],
+)
+
+# Dev server
+js_run_devserver(
+    name = "dev",
+    data = glob([
+        "index.html",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.css",
+    ]) + [
+        "package.json",
+        "vite.config.ts",
+        "tailwind.config.js",
+        "postcss.config.js",
+        "tsconfig.json",
+        "tsconfig.node.json",
+    ] + DEPS,
+    args = ["dev"],
+    chdir = package_name(),
+    tool = ":vite_bin",
+    tags = ["no-sandbox"],
+    visibility = ["//visibility:public"],
+)
+
+# Vitest binary wrapper (avoids node_modules path conflict)
+js_binary(
+    name = "vitest_bin",
+    entry_point = "vitest-wrapper.mjs",
+    data = DEPS + [
+        ":node_modules/vitest",
+        ":node_modules/@testing-library/jest-dom",
+        ":node_modules/@testing-library/react",
+        ":node_modules/@testing-library/user-event",
+        ":node_modules/jsdom",
+    ],
+)
+
+# Tests
+js_test(
+    name = "test",
+    data = glob([
+        "index.html",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.css",
+    ]) + [
+        "package.json",
+        "vite.config.ts",
+        "tailwind.config.js",
+        "postcss.config.js",
+        "tsconfig.json",
+        "tsconfig.node.json",
+    ] + DEPS + [
+        ":node_modules/vitest",
+        ":node_modules/@testing-library/jest-dom",
+        ":node_modules/@testing-library/react",
+        ":node_modules/@testing-library/user-event",
+        ":node_modules/jsdom",
+    ],
+    chdir = package_name(),
+    entry_point = "vitest-wrapper.mjs",
+    tags = ["no-sandbox"],
+)

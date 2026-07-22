@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user info with role permissions */
+        get: operations["AuthController_getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/users": {
         parameters: {
             query?: never;
@@ -387,6 +404,40 @@ export interface components {
         LoginResponse: {
             /** @example eyJhbGciOiJIUzI1NiIs... */
             accessToken: string;
+        };
+        MeResponse: {
+            /** @example 1 */
+            id: number;
+            /** @example cashier1 */
+            username: string;
+            /** @example Ahmed */
+            name: string;
+            /** @example 2 */
+            roleId: number;
+            /** @example true */
+            isActive: boolean;
+            /** @example staff */
+            roleName: string;
+            /** @example true */
+            createOrder: boolean;
+            /** @example true */
+            updateOrder: boolean;
+            /** @example false */
+            deleteOrderItem: boolean;
+            /** @example false */
+            voidOrder: boolean;
+            /** @example false */
+            refundOrder: boolean;
+            /** @example false */
+            manageMenu: boolean;
+            /** @example false */
+            manageTables: boolean;
+            /** @example false */
+            managePrinters: boolean;
+            /** @example false */
+            manageUsers: boolean;
+            /** @example false */
+            manageSettings: boolean;
         };
         UserResponse: {
             /** @example 1 */
@@ -840,6 +891,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    AuthController_getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
                 };
             };
         };

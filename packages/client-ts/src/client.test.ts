@@ -29,6 +29,7 @@ describe('SpicyHomeClient', () => {
     });
 
     expect(typeof client.auth.login).toBe('function');
+    expect(typeof client.auth.me).toBe('function');
     expect(typeof client.auth.listUsers).toBe('function');
     expect(typeof client.auth.getUser).toBe('function');
     expect(typeof client.auth.createUser).toBe('function');

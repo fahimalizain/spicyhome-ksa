@@ -1,4 +1,5 @@
 node_modules
+apps/pos/node_modules
 apps/server/node_modules
 packages/api-spec/node_modules
 packages/client-ts/node_modules

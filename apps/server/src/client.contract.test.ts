@@ -71,6 +71,16 @@ describe('Client contract test', () => {
     token = res.accessToken;
   });
 
+  it('me returns current user with role permissions', async () => {
+    const res: any = await client.auth.me();
+    expect(res.id).toBeDefined();
+    expect(res.username).toBe('admin');
+    expect(res.name).toBe('Administrator');
+    expect(res.roleName).toBe('admin');
+    expect(res.manageMenu).toBe(true);
+    expect(res.manageUsers).toBe(true);
+  });
+
   it('login fails with wrong credentials', async () => {
     await expect(
       client.auth.login({ username: 'admin', pin: '0000' }),

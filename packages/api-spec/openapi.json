@@ -33,6 +33,33 @@
         ]
       }
     },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_getMe",
+        "summary": "Get current user info with role permissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current user details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/auth/users": {
       "get": {
         "operationId": "AuthController_listUsers",
@@ -1348,6 +1375,93 @@
         },
         "required": [
           "accessToken"
+        ]
+      },
+      "MeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "username": {
+            "type": "string",
+            "example": "cashier1"
+          },
+          "name": {
+            "type": "string",
+            "example": "Ahmed"
+          },
+          "roleId": {
+            "type": "number",
+            "example": 2
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "roleName": {
+            "type": "string",
+            "example": "staff"
+          },
+          "createOrder": {
+            "type": "boolean",
+            "example": true
+          },
+          "updateOrder": {
+            "type": "boolean",
+            "example": true
+          },
+          "deleteOrderItem": {
+            "type": "boolean",
+            "example": false
+          },
+          "voidOrder": {
+            "type": "boolean",
+            "example": false
+          },
+          "refundOrder": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageMenu": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageTables": {
+            "type": "boolean",
+            "example": false
+          },
+          "managePrinters": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageUsers": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageSettings": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "roleId",
+          "isActive",
+          "roleName",
+          "createOrder",
+          "updateOrder",
+          "deleteOrderItem",
+          "voidOrder",
+          "refundOrder",
+          "manageMenu",
+          "manageTables",
+          "managePrinters",
+          "manageUsers",
+          "manageSettings"
         ]
       },
       "UserResponse": {

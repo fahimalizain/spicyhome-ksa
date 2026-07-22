@@ -3,6 +3,7 @@ export type {
   SpicyHomeClientConfig,
   LoginDto,
   LoginResponse,
+  MeResponse,
   CreateUserDto,
   UpdateUserDto,
   UserResponse,

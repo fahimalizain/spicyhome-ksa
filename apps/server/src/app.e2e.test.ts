@@ -6,6 +6,9 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from './app.module';
 import { DRIZZLE } from './modules/database/database.module';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 let app: INestApplication;
 let sqlite: any;
@@ -81,6 +84,19 @@ describe('Auth (e2e)', () => {
       .expect(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  it('GET /auth/me returns current user with role permissions', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(res.body.id).toBeDefined();
+    expect(res.body.username).toBe('admin');
+    expect(res.body.name).toBe('Administrator');
+    expect(res.body.roleName).toBe('admin');
+    expect(res.body.manageMenu).toBe(true);
+    expect(res.body.manageUsers).toBe(true);
   });
 });
 

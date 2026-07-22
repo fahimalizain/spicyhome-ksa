@@ -6,6 +6,7 @@ import { LoginResponse } from './dto/login-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponse } from './dto/user-response.dto';
+import { MeResponse } from './dto/me-response.dto';
 import { CreateRoleDto, UpdateRoleDto } from './dto/create-role.dto';
 import { RoleResponse } from './dto/role-response.dto';
 import { Public } from '../../common/decorators/public.decorator';
@@ -23,6 +24,14 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'JWT access token', type: LoginResponse })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.username, dto.pin);
+  }
+
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user info with role permissions' })
+  @ApiOkResponse({ description: 'Current user details', type: MeResponse })
+  getMe(@CurrentUser() user: any) {
+    return this.authService.getMe(user.sub);
   }
 
   @Get('users')

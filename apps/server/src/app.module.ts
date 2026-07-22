@@ -1,5 +1,7 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_PIPE, APP_GUARD } from '@nestjs/core';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { DatabaseModule } from './modules/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MenuModule } from './modules/menu/menu.module';
@@ -9,15 +11,34 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
+const spaDist = process.env.SPA_DIST;
+const imports: any[] = [
+  DatabaseModule,
+  AuthModule,
+  MenuModule,
+  TablesModule,
+  PrintersModule,
+  OrdersModule,
+];
+
+if (spaDist) {
+  imports.push(
+    ServeStaticModule.forRoot({
+      rootPath: spaDist,
+      exclude: [
+        '/api/(.*)',
+        '/auth/(.*)',
+        '/menu/(.*)',
+        '/orders/(.*)',
+        '/tables/(.*)',
+        '/printers/(.*)',
+      ],
+    }),
+  );
+}
+
 @Module({
-  imports: [
-    DatabaseModule,
-    AuthModule,
-    MenuModule,
-    TablesModule,
-    PrintersModule,
-    OrdersModule,
-  ],
+  imports,
   providers: [
     { provide: APP_PIPE, useClass: ValidationPipe },
     { provide: APP_GUARD, useClass: AuthGuard },

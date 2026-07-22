@@ -36,6 +36,7 @@ npm.npm_translate_lock(
     verify_node_modules_ignored = "//:.bazelignore",
     data = [
         "//:package.json",
+        "//apps/pos:package.json",
         "//apps/server:package.json",
         "//packages/api-spec:package.json",
         "//packages/client-ts:package.json",
