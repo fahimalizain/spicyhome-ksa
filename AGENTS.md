@@ -91,6 +91,22 @@ All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
 - Bazel disk cache at `~/.cache/bazel`, pnpm store cache — cached per-runner
   via `actions/cache`.
 
+## Versioning & Releases
+
+- **Date-based versioning**: releases use `YYYYMMDD[.N]` where `YYYYMMDD` is the
+  release date in Asia/Riyadh and `.N` is an optional same-day increment
+  (starting at `.1`). Examples: `20260722`, `20260722.1`, `20260722.2`.
+- **`VERSION`** at the repository root is the single source of truth.
+- `scripts/bump-version.sh` updates `VERSION`, `MODULE.bazel`, and all workspace
+  `package.json` files to a new version. Run `scripts/bump-version.sh date` for
+  an auto bump or `scripts/bump-version.sh 20260722.1` for an explicit version.
+- **Releases** are created manually via the `Release SpicyHome POS` GitHub
+  Actions workflow (`.github/workflows/release.yml`). It bumps the version,
+  runs tests, builds the Windows 7 package and the Android APK, commits and tags
+  the version bump, and creates a GitHub release with both
+  `spicyhome-pos-win7-vYYYYMMDD[.N].zip` and
+  `spicyhome-pos-android-vYYYYMMDD[.N].apk`.
+
 ## Packaging
 
 ```sh
@@ -98,4 +114,5 @@ pnpm package:win7   # runs packaging/build-package.sh
 ```
 
 Produces `dist/spicyhome-pos-win7.zip` — portable Node.js v18.20.5 (win-x64) +
-compiled server JS + SPA dist + startup scripts.
+compiled server JS + SPA dist + startup scripts. The generated server
+`package.json` uses the version from the `VERSION` file.

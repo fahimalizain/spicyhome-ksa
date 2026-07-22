@@ -28,6 +28,9 @@ TEMP_DIR="$DIST_DIR/.tmp"
 echo "=== SpicyHome POS Windows 7 Package Builder ==="
 echo "Root: $ROOT_DIR"
 
+PACKAGE_VERSION=$(cat "$ROOT_DIR/VERSION" | tr -d '[:space:]')
+echo "Package version: $PACKAGE_VERSION"
+
 # Clean
 rm -rf "$PACKAGE_DIR" "$TEMP_DIR"
 mkdir -p "$PACKAGE_DIR" "$TEMP_DIR"
@@ -124,10 +127,10 @@ if [ -d "$ROOT_DIR/packages/db/drizzle" ]; then
 fi
 
 # Create a workspace package.json for the server so npm install resolves deps
-cat > "$PACKAGE_DIR/server/package.json" << 'PKGJSON'
+cat > "$PACKAGE_DIR/server/package.json" << PKGJSON
 {
   "name": "@spicyhome/server",
-  "version": "1.0.0",
+  "version": "$PACKAGE_VERSION",
   "private": true,
   "type": "commonjs",
   "main": "main.js",
@@ -177,7 +180,7 @@ setlocal enabledelayedexpansion
 set "TZ=Asia/Riyadh"
 set "SPA_DIST=%~dp0pos"
 set "SPICYHOME_DB=%~dp0data\spicyhome.db"
-set "PORT=3000"
+set "PORT=3742"
 
 echo ==========================================
 echo   SpicyHome POS Server

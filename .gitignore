@@ -2,6 +2,7 @@ node_modules/
 bazel-*
 .bazelrc.user
 dist/
+release/
 /data/
 *.db
 *.db-journal

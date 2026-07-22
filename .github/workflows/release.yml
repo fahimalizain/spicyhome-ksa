@@ -1,0 +1,138 @@
+name: Release SpicyHome POS
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not commit, tag, or create release)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release Windows 7 package + Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TZ: Asia/Riyadh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-release-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-release-${{ runner.os }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-
+
+      - name: Install dependencies
+        run: pnpm install --ignore-scripts
+
+      - name: Bump version
+        id: bump
+        run: |
+          NEXT_VERSION=$(bash scripts/bump-version.sh date)
+          echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        run: |
+          bazel test //apps/server:test \
+            //apps/pos:test \
+            //packages/shared:test \
+            //packages/db:test \
+            //packages/client-ts:test \
+            //packages/client-kt:test \
+            //apps/android:unit_tests \
+            --test_output=errors \
+            --action_env=ANDROID_HOME=$ANDROID_HOME \
+            --action_env=JAVA_HOME=$JAVA_HOME
+
+      - name: Build Android APK
+        run: |
+          bazel build //apps/android:apk \
+            --action_env=ANDROID_HOME=$ANDROID_HOME \
+            --action_env=JAVA_HOME=$JAVA_HOME
+
+      - name: Build package
+        run: pnpm package:win7
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release
+          cp dist/spicyhome-pos-win7.zip "release/spicyhome-pos-win7-v${{ steps.bump.outputs.next_version }}.zip"
+          cp bazel-bin/apps/android/spicyhome-pos-debug.apk "release/spicyhome-pos-android-v${{ steps.bump.outputs.next_version }}.apk"
+
+      - name: Commit and tag version bump
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git add \
+            VERSION \
+            MODULE.bazel \
+            apps/server/package.json \
+            apps/pos/package.json \
+            packages/shared/package.json \
+            packages/db/package.json \
+            packages/api-spec/package.json \
+            packages/client-ts/package.json \
+            packages/client-kt/package.json
+          git commit -m "chore(release): bump version to ${{ steps.bump.outputs.next_version }}"
+          git tag -a "v${{ steps.bump.outputs.next_version }}" -m "Release v${{ steps.bump.outputs.next_version }}"
+          git push origin HEAD
+          git push origin "v${{ steps.bump.outputs.next_version }}"
+
+      - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump.outputs.next_version }}
+          name: SpicyHome POS v${{ steps.bump.outputs.next_version }}
+          files: |
+            release/spicyhome-pos-win7-v${{ steps.bump.outputs.next_version }}.zip
+            release/spicyhome-pos-android-v${{ steps.bump.outputs.next_version }}.apk
+          generate_release_notes: true
