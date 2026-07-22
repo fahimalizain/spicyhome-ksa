@@ -1,5 +1,11 @@
 import { Controller, Get, Post, Put, Param, Body, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+} from '@nestjs/swagger';
 import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
 import { CreatePrinterDto, UpdatePrinterDto } from './dto/create-printer.dto';

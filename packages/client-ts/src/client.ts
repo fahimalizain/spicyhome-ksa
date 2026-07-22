@@ -93,17 +93,13 @@ export class SpicyHomeClient {
   }
 
   auth = {
-    login: (dto: LoginDto) =>
-      request<LoginResponse>(this.config, 'POST', '/auth/login', dto),
+    login: (dto: LoginDto) => request<LoginResponse>(this.config, 'POST', '/auth/login', dto),
 
-    me: () =>
-      request<MeResponse>(this.config, 'GET', '/auth/me'),
+    me: () => request<MeResponse>(this.config, 'GET', '/auth/me'),
 
-    listUsers: () =>
-      request<UserResponse[]>(this.config, 'GET', '/auth/users'),
+    listUsers: () => request<UserResponse[]>(this.config, 'GET', '/auth/users'),
 
-    getUser: (id: number) =>
-      request<UserResponse>(this.config, 'GET', `/auth/users/${id}`),
+    getUser: (id: number) => request<UserResponse>(this.config, 'GET', `/auth/users/${id}`),
 
     createUser: (dto: CreateUserDto) =>
       request<UserResponse>(this.config, 'POST', '/auth/users', dto),
@@ -111,8 +107,7 @@ export class SpicyHomeClient {
     updateUser: (id: number, dto: UpdateUserDto) =>
       request<UserResponse>(this.config, 'PUT', `/auth/users/${id}`, dto),
 
-    listRoles: () =>
-      request<RoleResponse[]>(this.config, 'GET', '/auth/roles'),
+    listRoles: () => request<RoleResponse[]>(this.config, 'GET', '/auth/roles'),
 
     createRole: (dto: CreateRoleDto) =>
       request<RoleResponse>(this.config, 'POST', '/auth/roles', dto),
@@ -122,8 +117,7 @@ export class SpicyHomeClient {
   };
 
   menu = {
-    listCategories: () =>
-      request<CategoryResponse[]>(this.config, 'GET', '/menu/categories'),
+    listCategories: () => request<CategoryResponse[]>(this.config, 'GET', '/menu/categories'),
 
     getCategory: (id: number) =>
       request<CategoryResponse>(this.config, 'GET', `/menu/categories/${id}`),
@@ -135,14 +129,11 @@ export class SpicyHomeClient {
       request<CategoryResponse>(this.config, 'PUT', `/menu/categories/${id}`, dto),
 
     listItems: (categoryId?: number) =>
-      request<ItemResponse[]>(
-        this.config, 'GET', '/menu/items',
-        undefined,
-        { categoryId: categoryId?.toString() },
-      ),
+      request<ItemResponse[]>(this.config, 'GET', '/menu/items', undefined, {
+        categoryId: categoryId?.toString(),
+      }),
 
-    getItem: (id: number) =>
-      request<ItemResponse>(this.config, 'GET', `/menu/items/${id}`),
+    getItem: (id: number) => request<ItemResponse>(this.config, 'GET', `/menu/items/${id}`),
 
     createItem: (dto: CreateItemDto) =>
       request<ItemResponse>(this.config, 'POST', '/menu/items', dto),
@@ -153,14 +144,9 @@ export class SpicyHomeClient {
 
   orders = {
     list: (status?: string, date?: string) =>
-      request<OrderResponse[]>(
-        this.config, 'GET', '/orders',
-        undefined,
-        { status, date },
-      ),
+      request<OrderResponse[]>(this.config, 'GET', '/orders', undefined, { status, date }),
 
-    get: (id: number) =>
-      request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
+    get: (id: number) => request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
 
     verifyAuditChain: (id: number) =>
       request<AuditVerifyResponse>(this.config, 'GET', `/orders/${id}/audit/verify`),
@@ -172,9 +158,7 @@ export class SpicyHomeClient {
       request<SuccessResponse>(this.config, 'POST', `/orders/${orderId}/items`, dto),
 
     updateItem: (orderId: number, itemId: number, dto: UpdateOrderItemDto) =>
-      request<SuccessResponse>(
-        this.config, 'PATCH', `/orders/${orderId}/items/${itemId}`, dto,
-      ),
+      request<SuccessResponse>(this.config, 'PATCH', `/orders/${orderId}/items/${itemId}`, dto),
 
     removeItem: (orderId: number, itemId: number) =>
       request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
@@ -190,25 +174,20 @@ export class SpicyHomeClient {
   };
 
   tables = {
-    list: () =>
-      request<TableResponse[]>(this.config, 'GET', '/tables'),
+    list: () => request<TableResponse[]>(this.config, 'GET', '/tables'),
 
-    get: (id: number) =>
-      request<TableResponse>(this.config, 'GET', `/tables/${id}`),
+    get: (id: number) => request<TableResponse>(this.config, 'GET', `/tables/${id}`),
 
-    create: (dto: CreateTableDto) =>
-      request<TableResponse>(this.config, 'POST', '/tables', dto),
+    create: (dto: CreateTableDto) => request<TableResponse>(this.config, 'POST', '/tables', dto),
 
     update: (id: number, dto: UpdateTableDto) =>
       request<TableResponse>(this.config, 'PUT', `/tables/${id}`, dto),
   };
 
   printers = {
-    list: () =>
-      request<PrinterResponse[]>(this.config, 'GET', '/printers'),
+    list: () => request<PrinterResponse[]>(this.config, 'GET', '/printers'),
 
-    get: (id: number) =>
-      request<PrinterResponse>(this.config, 'GET', `/printers/${id}`),
+    get: (id: number) => request<PrinterResponse>(this.config, 'GET', `/printers/${id}`),
 
     create: (dto: CreatePrinterDto) =>
       request<PrinterResponse>(this.config, 'POST', '/printers', dto),
@@ -224,45 +203,30 @@ export class SpicyHomeClient {
     close: (dto: { closingCashHalalas: number }) =>
       request<any>(this.config, 'POST', '/day/close', dto),
 
-    current: () =>
-      request<any>(this.config, 'GET', '/day/current'),
+    current: () => request<any>(this.config, 'GET', '/day/current'),
 
     list: (page = 1, limit = 20) =>
-      request<any>(
-        this.config, 'GET', '/day',
-        undefined,
-        { page: String(page), limit: String(limit) },
-      ),
+      request<any>(this.config, 'GET', '/day', undefined, {
+        page: String(page),
+        limit: String(limit),
+      }),
 
-    get: (id: number) =>
-      request<any>(this.config, 'GET', `/day/${id}`),
+    get: (id: number) => request<any>(this.config, 'GET', `/day/${id}`),
   };
 
   reports = {
-    x: () =>
-      request<any>(this.config, 'GET', '/reports/x'),
+    x: () => request<any>(this.config, 'GET', '/reports/x'),
 
-    z: (dayId: number) =>
-      request<any>(this.config, 'GET', `/reports/z/${dayId}`),
+    z: (dayId: number) => request<any>(this.config, 'GET', `/reports/z/${dayId}`),
 
     sales: (from: string, to: string) =>
-      request<any>(
-        this.config, 'GET', '/reports/sales',
-        undefined,
-        { from, to },
-      ),
+      request<any>(this.config, 'GET', '/reports/sales', undefined, { from, to }),
 
     vat: (from: string, to: string) =>
-      request<any>(
-        this.config, 'GET', '/reports/vat',
-        undefined,
-        { from, to },
-      ),
+      request<any>(this.config, 'GET', '/reports/vat', undefined, { from, to }),
 
-    printZ: (dayId: number) =>
-      request<any>(this.config, 'POST', `/reports/z/${dayId}/print`),
+    printZ: (dayId: number) => request<any>(this.config, 'POST', `/reports/z/${dayId}/print`),
 
-    printX: () =>
-      request<any>(this.config, 'POST', '/reports/x/print'),
+    printX: () => request<any>(this.config, 'POST', '/reports/x/print'),
   };
 }

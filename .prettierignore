@@ -1,0 +1,13 @@
+node_modules/
+bazel-*
+dist/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+pnpm-lock.yaml
+MODULE.bazel.lock
+packages/client-kt/src/generated/
+packages/api-spec/openapi.json
+apps/android/**/build/

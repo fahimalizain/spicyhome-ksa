@@ -218,8 +218,8 @@ describe('EscPosBuilder', () => {
       expect(buf[0]).toBe(0x1b);
       expect(buf[1]).toBe(0x70);
       expect(buf[2]).toBe(0x00); // pin 2
-      expect(buf[3]).toBe(60);   // on time
-      expect(buf[4]).toBe(240);  // off time
+      expect(buf[3]).toBe(60); // on time
+      expect(buf[4]).toBe(240); // off time
     });
   });
 

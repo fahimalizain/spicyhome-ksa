@@ -80,9 +80,7 @@ describe('schema — invariants', () => {
       expect(user.role_id).toBe(roleId);
 
       // Delete role — should fail due to FK (unless CASCADE)
-      expect(() =>
-        sqlite.exec(`DELETE FROM user_roles WHERE id = ${roleId}`),
-      ).toThrow();
+      expect(() => sqlite.exec(`DELETE FROM user_roles WHERE id = ${roleId}`)).toThrow();
     });
 
     it('orders.day_opening_id references day_openings.id', () => {

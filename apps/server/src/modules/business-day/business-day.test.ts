@@ -138,9 +138,9 @@ describe('BusinessDayService', () => {
 
     it('throws conflict when day already open', async () => {
       await service.openDay({ openingCashHalalas: 50000 }, 1);
-      await expect(
-        service.openDay({ openingCashHalalas: 10000 }, 1),
-      ).rejects.toThrow('already open');
+      await expect(service.openDay({ openingCashHalalas: 10000 }, 1)).rejects.toThrow(
+        'already open',
+      );
     });
 
     it('business_date is today in YYYY-MM-DD format', async () => {
@@ -170,9 +170,9 @@ describe('BusinessDayService', () => {
     });
 
     it('throws not found when no day is open', async () => {
-      await expect(
-        service.closeDay({ closingCashHalalas: 0 }, 1),
-      ).rejects.toThrow('No open business day');
+      await expect(service.closeDay({ closingCashHalalas: 0 }, 1)).rejects.toThrow(
+        'No open business day',
+      );
     });
 
     it('throws conflict when open/sent orders exist', async () => {
@@ -184,9 +184,9 @@ describe('BusinessDayService', () => {
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'sent', 2000, 300, 2300, ${now}, ${now});
       `);
 
-      await expect(
-        service.closeDay({ closingCashHalalas: 0 }, 1),
-      ).rejects.toThrow('Cannot close day');
+      await expect(service.closeDay({ closingCashHalalas: 0 }, 1)).rejects.toThrow(
+        'Cannot close day',
+      );
     });
 
     it('excludes voided orders from sales but counts them separately', async () => {

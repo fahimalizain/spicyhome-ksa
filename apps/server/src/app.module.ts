@@ -24,12 +24,12 @@ const imports: any[] = [
   MenuModule,
   TablesModule,
   PrintersModule,
-    OrdersModule,
-    SettingsModule,
-    ZatcaModule,
-    BusinessDayModule,
-    ReportsModule,
-  ];
+  OrdersModule,
+  SettingsModule,
+  ZatcaModule,
+  BusinessDayModule,
+  ReportsModule,
+];
 
 if (spaDist) {
   imports.push(

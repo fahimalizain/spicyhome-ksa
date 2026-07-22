@@ -11,19 +11,8 @@ import { DRIZZLE } from './modules/database/database.module';
 function findCheckedInSpec(): string {
   const candidates = [
     path.join(process.cwd(), 'packages', 'api-spec', 'openapi.json'),
-    path.join(
-      process.env.BUILD_WORKSPACE_DIRECTORY || '',
-      'packages',
-      'api-spec',
-      'openapi.json',
-    ),
-    path.join(
-      process.env.RUNFILES_DIR || '',
-      '_main',
-      'packages',
-      'api-spec',
-      'openapi.json',
-    ),
+    path.join(process.env.BUILD_WORKSPACE_DIRECTORY || '', 'packages', 'api-spec', 'openapi.json'),
+    path.join(process.env.RUNFILES_DIR || '', '_main', 'packages', 'api-spec', 'openapi.json'),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;

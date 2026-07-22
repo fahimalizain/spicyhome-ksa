@@ -7,9 +7,17 @@ export function PrintersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', ip: '', port: 9100, role: 'kitchen' as 'kitchen' | 'receipt', isActive: true });
+  const [form, setForm] = useState({
+    name: '',
+    ip: '',
+    port: 9100,
+    role: 'kitchen' as 'kitchen' | 'receipt',
+    isActive: true,
+  });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
   async function loadData() {
     setLoading(true);
@@ -29,7 +37,13 @@ export function PrintersPage() {
   }
 
   function editPrinter(p: PrinterResponse) {
-    setForm({ name: p.name, ip: p.ip, port: p.port, role: p.role as 'kitchen' | 'receipt', isActive: p.isActive });
+    setForm({
+      name: p.name,
+      ip: p.ip,
+      port: p.port,
+      role: p.role as 'kitchen' | 'receipt',
+      isActive: p.isActive,
+    });
     setEditId(p.id);
   }
 
@@ -57,34 +71,65 @@ export function PrintersPage() {
       {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
 
       <form onSubmit={handleSave} className="bg-gray-800 rounded-xl p-4 mb-4 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-300">{editId ? 'Edit Printer' : 'New Printer'}</h2>
+        <h2 className="text-sm font-semibold text-gray-300">
+          {editId ? 'Edit Printer' : 'New Printer'}
+        </h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Name</label>
-            <input className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+            <input
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Role</label>
-            <select className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as 'kitchen' | 'receipt' }))}>
+            <select
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              value={form.role}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, role: e.target.value as 'kitchen' | 'receipt' }))
+              }
+            >
               <option value="kitchen">Kitchen</option>
               <option value="receipt">Receipt</option>
             </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">IP Address</label>
-            <input className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.ip} onChange={(e) => setForm((f) => ({ ...f, ip: e.target.value }))} required />
+            <input
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              value={form.ip}
+              onChange={(e) => setForm((f) => ({ ...f, ip: e.target.value }))}
+              required
+            />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Port</label>
-            <input type="number" className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.port} onChange={(e) => setForm((f) => ({ ...f, port: Number(e.target.value) }))} required />
+            <input
+              type="number"
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              value={form.port}
+              onChange={(e) => setForm((f) => ({ ...f, port: Number(e.target.value) }))}
+              required
+            />
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="submit" className="touch-target bg-brand-600 hover:bg-brand-700 rounded px-4 py-2 text-sm text-white">
+          <button
+            type="submit"
+            className="touch-target bg-brand-600 hover:bg-brand-700 rounded px-4 py-2 text-sm text-white"
+          >
             {editId ? 'Update' : 'Create'}
           </button>
           {editId && (
-            <button type="button" onClick={resetForm} className="touch-target bg-gray-700 hover:bg-gray-600 rounded px-4 py-2 text-sm text-gray-300">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="touch-target bg-gray-700 hover:bg-gray-600 rounded px-4 py-2 text-sm text-gray-300"
+            >
               Cancel
             </button>
           )}
@@ -93,13 +138,27 @@ export function PrintersPage() {
 
       <div className="space-y-1">
         {printers.map((p) => (
-          <div key={p.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+          <div
+            key={p.id}
+            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+          >
             <div>
               <span className="text-sm text-white">{p.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{p.ip}:{p.port}</span>
-              <span className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}>{p.role}</span>
+              <span className="text-xs text-gray-500 ml-2">
+                {p.ip}:{p.port}
+              </span>
+              <span
+                className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}
+              >
+                {p.role}
+              </span>
             </div>
-            <button onClick={() => editPrinter(p)} className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1">Edit</button>
+            <button
+              onClick={() => editPrinter(p)}
+              className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
+            >
+              Edit
+            </button>
           </div>
         ))}
       </div>

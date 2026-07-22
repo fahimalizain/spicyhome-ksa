@@ -51,10 +51,12 @@ describe('AuditLogService', () => {
   });
 
   function insertOrder(id: number, uuidSuffix: string = '1') {
-    sqlite.prepare(
-      `INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, created_at, updated_at)
-       VALUES (?, 1, 'uuid-${uuidSuffix}', 'dine_in', 1, 'open', 1000, 1000)`
-    ).run(id);
+    sqlite
+      .prepare(
+        `INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+       VALUES (?, 1, 'uuid-${uuidSuffix}', 'dine_in', 1, 'open', 1000, 1000)`,
+      )
+      .run(id);
   }
 
   describe('hash chain', () => {

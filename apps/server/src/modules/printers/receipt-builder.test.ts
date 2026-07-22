@@ -154,7 +154,10 @@ describe('ReceiptBuilder', () => {
       const str = buf.toString('ascii');
 
       // Strip all control chars, keep LF
-      const clean = str.split('\n').map(l => l.replace(/[\x00-\x1f\x7f-\xff]/g, '')).join('\n');
+      const clean = str
+        .split('\n')
+        .map((l) => l.replace(/[\x00-\x1f\x7f-\xff]/g, ''))
+        .join('\n');
       // After stripping, the TOTAL line should still exist and end with the price
       expect(clean).toContain('TOTAL');
       expect(clean).toContain('51.75');

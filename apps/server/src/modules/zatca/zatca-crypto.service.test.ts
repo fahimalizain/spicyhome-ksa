@@ -194,7 +194,8 @@ describe('Invoice Hashing', () => {
   });
 
   it('canonicalizeForHash collapses inter-tag whitespace', () => {
-    const xml = '<Invoice xmlns="...">\n  <cbc:ID>1</cbc:ID>\n  <cbc:UUID>abc</cbc:UUID>\n</Invoice>';
+    const xml =
+      '<Invoice xmlns="...">\n  <cbc:ID>1</cbc:ID>\n  <cbc:UUID>abc</cbc:UUID>\n</Invoice>';
     const canonical = canonicalizeForHash(xml);
     expect(canonical).not.toContain('\n');
     expect(canonical).toContain('><');
@@ -208,7 +209,8 @@ describe('Invoice Hashing', () => {
   });
 
   it('computeInvoiceHash produces base64 string', () => {
-    const xml = '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
+    const xml =
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
     const hash = computeInvoiceHash(xml);
     expect(hash).toBeTruthy();
     expect(() => Buffer.from(hash, 'base64')).not.toThrow();
@@ -217,7 +219,8 @@ describe('Invoice Hashing', () => {
   });
 
   it('computeInvoiceHashHex produces 64-char hex', () => {
-    const xml = '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>2</cbc:ID></Invoice>';
+    const xml =
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>2</cbc:ID></Invoice>';
     const hashHex = computeInvoiceHashHex(xml);
     expect(hashHex).toBeTruthy();
     expect(hashHex.length).toBe(64);
@@ -239,10 +242,10 @@ describe('Invoice Hashing', () => {
   it('hashing matches node:crypto sha256', () => {
     const xml = '<Invoice><cbc:ID>test123</cbc:ID></Invoice>';
     const canonical = canonicalizeForHash(xml);
-    
+
     const nobleHash = computeInvoiceHash(xml);
     const nodeHash = createHash('sha256').update(canonical, 'utf8').digest('base64');
-    
+
     expect(nobleHash).toBe(nodeHash);
   });
 });
@@ -251,7 +254,8 @@ describe('Invoice Hashing', () => {
 
 describe('Signature Embedding', () => {
   it('embeds signature block into XML', () => {
-    const unsignedXml = '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
+    const unsignedXml =
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
     const hashB64 = 'dGVzdGhhc2g=';
     const sigB64 = 'dGVzdHNpZw==';
     const certB64 = 'dGVzdGNlcnQ=';
@@ -271,7 +275,8 @@ describe('Signature Embedding', () => {
   });
 
   it('signature block is inserted after root element opening', () => {
-    const unsignedXml = '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
+    const unsignedXml =
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
     const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', 'c');
 
     // UBLExtensions should appear before the first child element

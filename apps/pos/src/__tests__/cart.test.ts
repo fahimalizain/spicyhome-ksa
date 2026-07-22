@@ -35,7 +35,9 @@ describe('useCart', () => {
 
   it('adds item to cart', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].name).toBe('Zinger Burger');
     expect(result.current.items[0].qty).toBe(1);
@@ -44,67 +46,101 @@ describe('useCart', () => {
 
   it('increases qty when adding same item', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.addItem(mockItem); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].qty).toBe(2);
   });
 
   it('adds multiple different items', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.addItem(mockItem2); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.addItem(mockItem2);
+    });
     expect(result.current.items).toHaveLength(2);
   });
 
   it('removes item from cart', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.addItem(mockItem2); });
-    act(() => { result.current.removeItem(1); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.addItem(mockItem2);
+    });
+    act(() => {
+      result.current.removeItem(1);
+    });
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].name).toBe('Fries');
   });
 
   it('updates qty', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.updateQty(1, 3); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.updateQty(1, 3);
+    });
     expect(result.current.items[0].qty).toBe(3);
   });
 
   it('removes item when qty set to 0', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.updateQty(1, 0); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.updateQty(1, 0);
+    });
     expect(result.current.items).toHaveLength(0);
   });
 
   it('updates notes', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.updateNotes(1, 'no onion'); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.updateNotes(1, 'no onion');
+    });
     expect(result.current.items[0].notes).toBe('no onion');
   });
 
   it('sets order type to takeaway', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.setOrderType('takeaway', null); });
+    act(() => {
+      result.current.setOrderType('takeaway', null);
+    });
     expect(result.current.orderType).toBe('takeaway');
     expect(result.current.tableId).toBeNull();
   });
 
   it('sets order type to dine_in with table', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.setOrderType('dine_in', 3); });
+    act(() => {
+      result.current.setOrderType('dine_in', 3);
+    });
     expect(result.current.orderType).toBe('dine_in');
     expect(result.current.tableId).toBe(3);
   });
 
   it('clears cart', () => {
     const { result } = renderHook(() => useCart());
-    act(() => { result.current.addItem(mockItem); });
-    act(() => { result.current.clear(); });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.clear();
+    });
     expect(result.current.items).toHaveLength(0);
   });
 });

@@ -115,18 +115,35 @@ Full schema: see [DB_PLAN.md](./DB_PLAN.md).
 
 ## Build order
 
-1. Bazel workspace + pnpm scaffolding, shared types package
-2. Drizzle schema (users, menu, orders, order_audit_log with audit fields) +
-   NestJS skeleton (auth, menu, orders) with dev run target
-3. OpenAPI spec generation target + TS/Kotlin client generation wired in Bazel
-4. POS SPA (order flow first, admin screens second)
-5. Printer module + ESC/POS
-6. ZATCA Phase 2 module
-7. Android app
-8. Windows 7 packaging script + smoke test on target machine
+1. [x] Bazel workspace + pnpm scaffolding, shared types package
+2. [x] Drizzle schema (users, menu, orders, order_audit_log with audit fields) +
+       NestJS skeleton (auth, menu, orders) with dev run target
+3. [x] OpenAPI spec generation target + TS/Kotlin client generation wired in Bazel
+4. [x] POS SPA (order flow first, admin screens second)
+5. [x] Printer module + ESC/POS
+6. [x] ZATCA Phase 2 module
+7. [x] Android app
+8. [x] Windows 7 packaging script (`packaging/build-package.sh` → `dist/spicyhome-pos-win7.zip`)
+9. [x] CI (GitHub Actions: `.github/workflows/ci.yml`) + lint config (ESLint flat config, Prettier, tsc --noEmit)
 
 Every step above includes its tests before the step is considered done
 (see Testing section).
+
+## Remaining TODOs
+
+- **Playwright e2e**: end-to-end tests for core flows (login → create order →
+  send → pay). Run against Chromium 109 for Win7 parity.
+- **Real-printer testing**: ESC/POS printing tested with mock TCP transport only.
+  Test against actual thermal printers on the target hardware.
+- **ZATCA sandbox certification**: Production CSID onboarding and compliance
+  testing against ZATCA's fatoora sandbox environment.
+- **Modifiers**: Item modifiers (size, extras, toppings) — schema is ready but
+  the UI and API endpoints are not yet implemented.
+- **Payments table**: Currently payments are tracked via order status
+  (`paid_at`). A dedicated `payments` table (with payment method, amount,
+  reference) is planned for v1.
+- **Windows 7 smoke test**: Test the packaged zip on real Windows 7 hardware
+  with Chrome 109.
 
 ## Testing (mandatory)
 
@@ -150,13 +167,23 @@ Tests are **super mandatory for everything** — no module ships without them.
 
 ## CI (GitHub Actions)
 
-- `test` — `bazel test //...` (server, packages, SPA unit tests)
-- `lint` — ESLint + Prettier check + `tsc --noEmit` across TS projects,
-  ktlint for Android
-- `e2e` — Playwright against Chromium 109 (Win7 parity)
-- `android` — `bazel build //apps/android:spicyhome.apk` (build-only; unit
-  tests run in `test`)
-- All jobs required to pass before merge
+Implemented in `.github/workflows/ci.yml`:
+
+- **`test`** — `bazel test` for 6 non-Android targets (server, pos, 4 packages).
+  Uses `TZ=Asia/Riyadh`. Cache: `~/.cache/bazel` + pnpm store.
+- **`android`** — `bazel test //apps/android:unit_tests` with `--action_env`
+  flags for ANDROID_HOME + JAVA_HOME. Separate cache key. Uses Gradle wrapper.
+  `setup-java@v4` with temurin 21.
+- **`lint`** — ESLint (`pnpm lint`), Prettier check (`pnpm format`),
+  `tsc --noEmit` across all TS packages (`pnpm typecheck`).
+- **Concurrency**: cancel-in-progress for same ref.
+
+Not yet implemented:
+
+- **Playwright e2e** — will run against Chromium 109 (Win7 parity).
+- **ktlint** — Kotlin linting for Android sources.
+
+All jobs required to pass before merge.
 
 ## Notes / risks
 

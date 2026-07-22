@@ -45,13 +45,17 @@ export function OrdersPage() {
   }
 
   if (loading) {
-    return <div className="h-full flex items-center justify-center text-gray-400">Loading orders...</div>;
+    return (
+      <div className="h-full flex items-center justify-center text-gray-400">Loading orders...</div>
+    );
   }
 
   return (
     <div className="h-full flex">
       {/* Order list */}
-      <div className={`${selectedOrder ? 'w-1/2' : 'w-full'} overflow-y-auto border-r border-gray-700`}>
+      <div
+        className={`${selectedOrder ? 'w-1/2' : 'w-full'} overflow-y-auto border-r border-gray-700`}
+      >
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-white">Orders</h1>
@@ -81,12 +85,18 @@ export function OrdersPage() {
                       {STATUS_LABELS[order.status] || order.status}
                     </span>
                   </div>
-                  <span className="text-sm text-brand-400">{halalasToSar(order.totalHalalas)} SAR</span>
+                  <span className="text-sm text-brand-400">
+                    {halalasToSar(order.totalHalalas)} SAR
+                  </span>
                 </div>
                 <div className="flex gap-3 mt-1 text-xs text-gray-400">
                   <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
-                  {order.tableId != null && <span>Table #{order.tableId as unknown as number}</span>}
-                  <span>{new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}</span>
+                  {order.tableId != null && (
+                    <span>Table #{order.tableId as unknown as number}</span>
+                  )}
+                  <span>
+                    {new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}
+                  </span>
                 </div>
               </button>
             ))}
@@ -118,11 +128,19 @@ export function OrdersPage() {
               <div key={oi.id} className="bg-gray-800 rounded-lg p-2 flex justify-between">
                 <div>
                   <span className="text-sm text-white">{oi.itemName}</span>
-                  {oi.notes && <span className="text-xs text-gray-400 block">{oi.notes as unknown as string}</span>}
+                  {oi.notes && (
+                    <span className="text-xs text-gray-400 block">
+                      {oi.notes as unknown as string}
+                    </span>
+                  )}
                 </div>
                 <div className="text-right">
-                  <span className="text-sm text-gray-300">{oi.qty} × {halalasToSar(oi.unitPriceHalalas)}</span>
-                  <span className="text-sm text-brand-400 ml-2">{halalasToSar(oi.totalHalalas)}</span>
+                  <span className="text-sm text-gray-300">
+                    {oi.qty} × {halalasToSar(oi.unitPriceHalalas)}
+                  </span>
+                  <span className="text-sm text-brand-400 ml-2">
+                    {halalasToSar(oi.totalHalalas)}
+                  </span>
                 </div>
               </div>
             ))}

@@ -1,9 +1,18 @@
-import { Injectable, CanActivate, ExecutionContext, Inject, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { eq } from 'drizzle-orm';
 import { userRoles } from '@spicyhome/db';
 import { DRIZZLE } from '../../modules/database/database.module';
-import { REQUIRED_PERMISSION_KEY, PermissionName } from '../decorators/requires-permission.decorator';
+import {
+  REQUIRED_PERMISSION_KEY,
+  PermissionName,
+} from '../decorators/requires-permission.decorator';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -38,11 +47,7 @@ export class RolesGuard implements CanActivate {
     const user = (request as any).user;
     if (!user) throw new ForbiddenException('Access denied');
 
-    const role = this.db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, user.roleId))
-      .get();
+    const role = this.db.select().from(userRoles).where(eq(userRoles.id, user.roleId)).get();
 
     if (!role) throw new ForbiddenException('Role not found');
 

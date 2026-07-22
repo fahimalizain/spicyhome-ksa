@@ -69,3 +69,33 @@ Codebase conventions and constraints for all contributors and AI agents.
 - Bundle with portable Node 18. `start-server.bat` / NSSM service.
 - SQLite data in `data/` directory. `data/` is gitignored.
 - Test on real Windows 7 hardware early.
+
+## CI & Linting
+
+All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
+
+- **`bazel test //...`** (6 non-Android targets) — run on every push/PR to master.
+- **Android** (APK build + unit tests) runs in a separate job — requires
+  `ANDROID_HOME` and `JAVA_HOME` passed via `--action_env` flags.
+- **Lint**: ESLint (flat config) + Prettier check + `tsc --noEmit` across all
+  TS packages. Run locally:
+  ```sh
+  pnpm lint          # ESLint
+  pnpm format        # Prettier check
+  pnpm format:fix    # Prettier write
+  pnpm typecheck     # tsc --noEmit in all packages
+  pnpm check         # lint + format + typecheck
+  ```
+- **Playwright e2e**: planned, not yet implemented (see PLAN.md).
+- Concurrency is cancel-in-progress for same ref.
+- Bazel disk cache at `~/.cache/bazel`, pnpm store cache — cached per-runner
+  via `actions/cache`.
+
+## Packaging
+
+```sh
+pnpm package:win7   # runs packaging/build-package.sh
+```
+
+Produces `dist/spicyhome-pos-win7.zip` — portable Node.js v18.20.5 (win-x64) +
+compiled server JS + SPA dist + startup scripts.

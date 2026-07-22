@@ -66,9 +66,7 @@ export class ZatcaOnboardingService {
   async generateCSR(): Promise<{ csr: string; publicKeyPem: string }> {
     const vatNumber = this.printersService.getSetting('vat_number', '');
     if (!vatNumber) {
-      throw new BadRequestException(
-        'VAT number not configured. Set vat_number in settings first.',
-      );
+      throw new BadRequestException('VAT number not configured. Set vat_number in settings first.');
     }
 
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
@@ -140,7 +138,7 @@ export class ZatcaOnboardingService {
     const response = await this.httpClient.post(url, {
       body,
       headers: {
-        'OTP': otp,
+        OTP: otp,
         'Accept-Version': 'V2',
       },
       timeoutMs: 30000,
@@ -148,9 +146,7 @@ export class ZatcaOnboardingService {
 
     if (response.status !== 200) {
       this.logger.error(`Compliance onboarding failed: ${response.status} — ${response.body}`);
-      throw new Error(
-        `ZATCA compliance onboarding failed (${response.status}): ${response.body}`,
-      );
+      throw new Error(`ZATCA compliance onboarding failed (${response.status}): ${response.body}`);
     }
 
     const result = JSON.parse(response.body);
@@ -160,18 +156,14 @@ export class ZatcaOnboardingService {
     const secret = result.secret || '';
 
     if (!certBase64 || !secret) {
-      throw new Error(
-        `ZATCA compliance response missing certificate or secret: ${response.body}`,
-      );
+      throw new Error(`ZATCA compliance response missing certificate or secret: ${response.body}`);
     }
 
     this.printersService.setSetting('zatca_compliance_cert', certBase64);
     this.printersService.setSetting('zatca_compliance_secret', secret);
     this.invoiceService.setOnboardingState('compliance');
 
-    this.logger.log(
-      `Compliance CSID obtained: requestID=${result.requestID || 'unknown'}`,
-    );
+    this.logger.log(`Compliance CSID obtained: requestID=${result.requestID || 'unknown'}`);
 
     return { success: true, requestId: result.requestID || 'unknown' };
   }
@@ -227,18 +219,14 @@ export class ZatcaOnboardingService {
     const secret = result.secret || '';
 
     if (!certBase64 || !secret) {
-      throw new Error(
-        `ZATCA production response missing certificate or secret: ${response.body}`,
-      );
+      throw new Error(`ZATCA production response missing certificate or secret: ${response.body}`);
     }
 
     this.printersService.setSetting('zatca_production_cert', certBase64);
     this.printersService.setSetting('zatca_production_secret', secret);
     this.invoiceService.setOnboardingState('production');
 
-    this.logger.log(
-      `Production CSID obtained: requestID=${result.requestID || 'unknown'}`,
-    );
+    this.logger.log(`Production CSID obtained: requestID=${result.requestID || 'unknown'}`);
 
     return { success: true, requestId: result.requestID || 'unknown' };
   }

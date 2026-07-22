@@ -5,7 +5,9 @@
   "type": "commonjs",
   "main": "src/main.ts",
   "scripts": {
-    "test": "jest --config jest.config.cjs"
+    "test": "jest --config jest.config.cjs",
+    "lint": "pnpm exec eslint src",
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -42,6 +44,7 @@
     "jest-cli": "^29.7.0",
     "jest-junit": "^16.0.0",
     "supertest": "^6.3.0",
-    "ts-jest": "^29.2.0"
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.4.0"
   }
 }

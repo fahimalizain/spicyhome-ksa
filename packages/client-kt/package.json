@@ -5,6 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "test": "jest --config jest.config.cjs",
+    "lint": "pnpm exec eslint src",
+    "typecheck": "pnpm exec tsc --noEmit",
     "generate": "openapi-generator-cli generate -i ../api-spec/openapi.json -g kotlin -o src/generated --additional-properties=packageName=com.spicyhome.client,library=jvm-retrofit2,collectionFormat=csv,dateLibrary=string"
   },
   "devDependencies": {

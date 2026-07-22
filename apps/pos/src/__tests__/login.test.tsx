@@ -77,11 +77,22 @@ describe('LoginPage', () => {
   it('calls login with correct credentials', async () => {
     mockLogin.mockResolvedValue({ accessToken: 'test-token' });
     mockMe.mockResolvedValue({
-      id: 1, username: 'admin', name: 'Admin', roleName: 'admin',
-      manageMenu: true, manageUsers: true, createOrder: true, updateOrder: true,
-      deleteOrderItem: false, voidOrder: false, refundOrder: false,
-      manageTables: false, managePrinters: false, manageSettings: false,
-      roleId: 1, isActive: true,
+      id: 1,
+      username: 'admin',
+      name: 'Admin',
+      roleName: 'admin',
+      manageMenu: true,
+      manageUsers: true,
+      createOrder: true,
+      updateOrder: true,
+      deleteOrderItem: false,
+      voidOrder: false,
+      refundOrder: false,
+      manageTables: false,
+      managePrinters: false,
+      manageSettings: false,
+      roleId: 1,
+      isActive: true,
     });
 
     renderLogin();
@@ -118,9 +129,7 @@ describe('LoginPage', () => {
   });
 
   it('disables digits during loading', async () => {
-    mockLogin.mockImplementation(
-      () => new Promise(() => {}),
-    );
+    mockLogin.mockImplementation(() => new Promise(() => {}));
 
     renderLogin();
     const usernameInput = screen.getByPlaceholderText('Enter username');

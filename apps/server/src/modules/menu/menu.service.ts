@@ -29,7 +29,10 @@ export class MenuService {
       isActive: dto.isActive !== undefined ? (dto.isActive ? 1 : 0) : 1,
       ...createAuditFields(userId, now),
     };
-    const result = this.db.insert(itemCategories).values(row as any).run();
+    const result = this.db
+      .insert(itemCategories)
+      .values(row as any)
+      .run();
     return { id: Number(result.lastInsertRowid), ...row };
   }
 
@@ -72,7 +75,10 @@ export class MenuService {
       isActive: dto.isActive !== undefined ? (dto.isActive ? 1 : 0) : 1,
       ...createAuditFields(userId, now),
     };
-    const result = this.db.insert(items).values(row as any).run();
+    const result = this.db
+      .insert(items)
+      .values(row as any)
+      .run();
     return { id: Number(result.lastInsertRowid), ...row };
   }
 

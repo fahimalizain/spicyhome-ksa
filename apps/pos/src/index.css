@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   overflow: hidden;
@@ -16,8 +18,18 @@ html, body, #root {
   @apply min-h-touch min-w-touch flex items-center justify-center select-none;
 }
 
-.status-open { @apply bg-yellow-700 text-yellow-100; }
-.status-sent { @apply bg-blue-700 text-blue-100; }
-.status-paid { @apply bg-green-700 text-green-100; }
-.status-voided { @apply bg-red-700 text-red-100; }
-.status-refunded { @apply bg-purple-700 text-purple-100; }
+.status-open {
+  @apply bg-yellow-700 text-yellow-100;
+}
+.status-sent {
+  @apply bg-blue-700 text-blue-100;
+}
+.status-paid {
+  @apply bg-green-700 text-green-100;
+}
+.status-voided {
+  @apply bg-red-700 text-red-100;
+}
+.status-refunded {
+  @apply bg-purple-700 text-purple-100;
+}

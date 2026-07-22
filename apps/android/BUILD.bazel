@@ -58,10 +58,6 @@ sh_test(
         "//:MODULE.bazel",
     ],
     args = ["$(rootpath //:MODULE.bazel)"],
-    env = {
-        "ANDROID_HOME": "/Users/fahimalizain/Library/Android/sdk",
-        "JAVA_HOME": "/opt/homebrew/Cellar/openjdk@21/21.0.11/libexec/openjdk.jdk/Contents/Home",
-    },
     size = "large",
     tags = ["no-sandbox", "local", "requires-network"],
 )

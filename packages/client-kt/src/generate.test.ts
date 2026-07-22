@@ -14,10 +14,7 @@ import * as os from 'os';
 function findSpec(): string {
   const candidates = [
     path.join(process.cwd(), 'packages', 'api-spec', 'openapi.json'),
-    path.join(
-      process.env.RUNFILES_DIR || '',
-      '_main', 'packages', 'api-spec', 'openapi.json',
-    ),
+    path.join(process.env.RUNFILES_DIR || '', '_main', 'packages', 'api-spec', 'openapi.json'),
     path.resolve(__dirname, '..', '..', '..', 'api-spec', 'openapi.json'),
   ];
   for (const c of candidates) {
@@ -27,9 +24,7 @@ function findSpec(): string {
 }
 
 function findCli(): string {
-  const candidates = [
-    path.join(__dirname, '..', 'node_modules', '.bin', 'openapi-generator-cli'),
-  ];
+  const candidates = [path.join(__dirname, '..', 'node_modules', '.bin', 'openapi-generator-cli')];
   for (const c of candidates) {
     if (fs.existsSync(c) || fs.existsSync(c + '.cmd')) return c;
   }
@@ -96,9 +91,12 @@ describe('Kotlin client drift check', () => {
       const cmd = [
         `"${cli}"`,
         'generate',
-        '-i', `"${specPath}"`,
-        '-g', 'kotlin',
-        '-o', `"${outDir}"`,
+        '-i',
+        `"${specPath}"`,
+        '-g',
+        'kotlin',
+        '-o',
+        `"${outDir}"`,
         '--additional-properties',
         'packageName=com.spicyhome.client,library=jvm-retrofit2,collectionFormat=csv,dateLibrary=string',
       ].join(' ');
@@ -106,10 +104,23 @@ describe('Kotlin client drift check', () => {
       execSync(cmd, { stdio: 'pipe', cwd: path.join(__dirname, '..'), timeout: 120000 });
 
       const generatedRoot = path.join(
-        outDir, 'src', 'main', 'kotlin', 'com', 'spicyhome', 'client',
+        outDir,
+        'src',
+        'main',
+        'kotlin',
+        'com',
+        'spicyhome',
+        'client',
       );
       const checkedInRoot = path.join(
-        __dirname, 'generated', 'src', 'main', 'kotlin', 'com', 'spicyhome', 'client',
+        __dirname,
+        'generated',
+        'src',
+        'main',
+        'kotlin',
+        'com',
+        'spicyhome',
+        'client',
       );
 
       const generated = collectKtFiles(generatedRoot);
@@ -117,8 +128,12 @@ describe('Kotlin client drift check', () => {
 
       // Compare file lists (relative paths)
       const stripRoot = (f: string, r: string) => path.relative(r, f);
-      const genRel = Object.keys(generated).map((f) => stripRoot(f, generatedRoot)).sort();
-      const chkRel = Object.keys(checkedIn).map((f) => stripRoot(f, checkedInRoot)).sort();
+      const genRel = Object.keys(generated)
+        .map((f) => stripRoot(f, generatedRoot))
+        .sort();
+      const chkRel = Object.keys(checkedIn)
+        .map((f) => stripRoot(f, checkedInRoot))
+        .sort();
 
       expect(genRel).toEqual(chkRel);
 

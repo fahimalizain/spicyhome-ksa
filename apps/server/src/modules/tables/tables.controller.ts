@@ -1,5 +1,11 @@
 import { Controller, Get, Post, Put, Param, Body, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+} from '@nestjs/swagger';
 import { TablesService } from './tables.service';
 import { CreateTableDto, UpdateTableDto } from './dto/create-table.dto';
 import { TableResponse } from './dto/table-response.dto';

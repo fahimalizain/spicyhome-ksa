@@ -1,5 +1,11 @@
 import { Controller, Get, Post, Param, ParseIntPipe, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiCreatedResponse,
+} from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 
@@ -26,20 +32,14 @@ export class ReportsController {
   @Get('sales')
   @ApiOperation({ summary: 'Daily sales totals over a date range' })
   @ApiOkResponse({ description: 'Daily sales totals' })
-  getSales(
-    @Query('from') from: string,
-    @Query('to') to: string,
-  ) {
+  getSales(@Query('from') from: string, @Query('to') to: string) {
     return this.reportsService.getSalesRange(from, to);
   }
 
   @Get('vat')
   @ApiOperation({ summary: 'VAT summary over a date range (for VAT return)' })
   @ApiOkResponse({ description: 'VAT summary with grand total' })
-  getVat(
-    @Query('from') from: string,
-    @Query('to') to: string,
-  ) {
+  getVat(@Query('from') from: string, @Query('to') to: string) {
     return this.reportsService.getVatSummary(from, to);
   }
 

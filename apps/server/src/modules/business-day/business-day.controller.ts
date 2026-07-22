@@ -1,5 +1,14 @@
 import { Controller, Get, Post, Body, Query, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiConflictResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiQuery,
+  ApiConflictResponse,
+  ApiNotFoundResponse,
+} from '@nestjs/swagger';
 import { BusinessDayService } from './business-day.service';
 import { OpenDayDto, DayOpeningResponse } from './dto/open-day.dto';
 import { CloseDayDto, CloseDayResponse } from './dto/close-day.dto';
@@ -24,7 +33,10 @@ export class BusinessDayController {
   @Post('close')
   @RequiresPermission('create_order')
   @ApiOperation({ summary: 'Close the current open business day' })
-  @ApiCreatedResponse({ description: 'Business day closed with frozen totals', type: CloseDayResponse })
+  @ApiCreatedResponse({
+    description: 'Business day closed with frozen totals',
+    type: CloseDayResponse,
+  })
   @ApiNotFoundResponse({ description: 'No open business day to close' })
   @ApiConflictResponse({ description: 'Open/sent orders exist — cannot close' })
   closeDay(@Body() dto: CloseDayDto, @CurrentUser() user: any) {

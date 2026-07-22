@@ -79,10 +79,8 @@ export interface InvoiceXMLInput {
  * consistent indentation, no extraneous whitespace around values.
  */
 export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
-  const {
-    icv, uuid, issueDate, issueTime,
-    seller, items, discountHalalas, prevInvoiceHash,
-  } = input;
+  const { icv, uuid, issueDate, issueTime, seller, items, discountHalalas, prevInvoiceHash } =
+    input;
 
   // Compute line totals and tax breakdown
   const lines = items.map((item, idx) => {
@@ -123,9 +121,9 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   // ── Root opening ──
   parts.push(
     '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"' +
-    ' xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"' +
-    ' xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"' +
-    ' xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">',
+      ' xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"' +
+      ' xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"' +
+      ' xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">',
   );
 
   // ── Profile & IDs ──
@@ -158,7 +156,9 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`  <cac:AdditionalDocumentReference>`);
   parts.push(`    <cbc:ID>PIH</cbc:ID>`);
   parts.push(`    <cac:Attachment>`);
-  parts.push(`      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${prevInvoiceHash || 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg=='}</cbc:EmbeddedDocumentBinaryObject>`);
+  parts.push(
+    `      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${prevInvoiceHash || 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg=='}</cbc:EmbeddedDocumentBinaryObject>`,
+  );
   parts.push(`    </cac:Attachment>`);
   parts.push(`  </cac:AdditionalDocumentReference>`);
 
@@ -169,14 +169,24 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`        <cbc:ID schemeID="CRN">${escapeXml(seller.vatNumber)}</cbc:ID>`);
   parts.push(`      </cac:PartyIdentification>`);
   parts.push(`      <cac:PostalAddress>`);
-  parts.push(`        <cbc:StreetName>${escapeXml(seller.street || 'Main Street')}</cbc:StreetName>`);
-  parts.push(`        <cbc:BuildingNumber>${escapeXml(seller.buildingNumber || '0000')}</cbc:BuildingNumber>`);
-  parts.push(`        <cbc:CitySubdivisionName>${escapeXml(seller.city || 'Riyadh')}</cbc:CitySubdivisionName>`);
+  parts.push(
+    `        <cbc:StreetName>${escapeXml(seller.street || 'Main Street')}</cbc:StreetName>`,
+  );
+  parts.push(
+    `        <cbc:BuildingNumber>${escapeXml(seller.buildingNumber || '0000')}</cbc:BuildingNumber>`,
+  );
+  parts.push(
+    `        <cbc:CitySubdivisionName>${escapeXml(seller.city || 'Riyadh')}</cbc:CitySubdivisionName>`,
+  );
   parts.push(`        <cbc:CityName>${escapeXml(seller.city || 'Riyadh')}</cbc:CityName>`);
   parts.push(`        <cbc:PostalZone>${escapeXml(seller.postalCode || '12345')}</cbc:PostalZone>`);
-  parts.push(`        <cbc:CountrySubentity>${escapeXml(seller.city || 'Riyadh')}</cbc:CountrySubentity>`);
+  parts.push(
+    `        <cbc:CountrySubentity>${escapeXml(seller.city || 'Riyadh')}</cbc:CountrySubentity>`,
+  );
   parts.push(`        <cac:Country>`);
-  parts.push(`          <cbc:IdentificationCode>${escapeXml(seller.country || 'SA')}</cbc:IdentificationCode>`);
+  parts.push(
+    `          <cbc:IdentificationCode>${escapeXml(seller.country || 'SA')}</cbc:IdentificationCode>`,
+  );
   parts.push(`        </cac:Country>`);
   parts.push(`      </cac:PostalAddress>`);
   parts.push(`      <cac:PartyTaxScheme>`);
@@ -196,12 +206,18 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     parts.push(`  <cac:InvoiceLine>`);
     parts.push(`    <cbc:ID>${line.index}</cbc:ID>`);
     parts.push(`    <cbc:InvoicedQuantity unitCode="PCE">${line.qty}</cbc:InvoicedQuantity>`);
-    parts.push(`    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(line.lineExcl)}</cbc:LineExtensionAmount>`);
+    parts.push(
+      `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(line.lineExcl)}</cbc:LineExtensionAmount>`,
+    );
 
     // Tax total for this line
     parts.push(`    <cac:TaxTotal>`);
-    parts.push(`      <cbc:TaxAmount currencyID="SAR">${halalasToSar(line.lineVat)}</cbc:TaxAmount>`);
-    parts.push(`      <cbc:RoundingAmount currencyID="SAR">${halalasToSar(line.lineTotalIncl)}</cbc:RoundingAmount>`);
+    parts.push(
+      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(line.lineVat)}</cbc:TaxAmount>`,
+    );
+    parts.push(
+      `      <cbc:RoundingAmount currencyID="SAR">${halalasToSar(line.lineTotalIncl)}</cbc:RoundingAmount>`,
+    );
     parts.push(`    </cac:TaxTotal>`);
 
     // Item info
@@ -219,7 +235,9 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
 
     // Price
     parts.push(`    <cac:Price>`);
-    parts.push(`      <cbc:PriceAmount currencyID="SAR">${halalasToSar(line.unitPriceExcl)}</cbc:PriceAmount>`);
+    parts.push(
+      `      <cbc:PriceAmount currencyID="SAR">${halalasToSar(line.unitPriceExcl)}</cbc:PriceAmount>`,
+    );
     parts.push(`      <cac:AllowanceCharge>`);
     parts.push(`        <cbc:ChargeIndicator>false</cbc:ChargeIndicator>`);
     parts.push(`        <cbc:Amount currencyID="SAR">0.00</cbc:Amount>`);
@@ -233,13 +251,21 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   // Standard rate
   if (taxGroups.standard.vatAmount > 0) {
     parts.push(`  <cac:TaxTotal>`);
-    parts.push(`    <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`);
+    parts.push(
+      `    <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`,
+    );
     parts.push(`    <cac:TaxSubtotal>`);
-    parts.push(`      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.standard.taxableAmount)}</cbc:TaxableAmount>`);
-    parts.push(`      <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`);
+    parts.push(
+      `      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.standard.taxableAmount)}</cbc:TaxableAmount>`,
+    );
+    parts.push(
+      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`,
+    );
     parts.push(`      <cac:TaxCategory>`);
     parts.push(`        <cbc:ID>S</cbc:ID>`);
-    parts.push(`        <cbc:Percent>${((taxGroups.standard.rateBp) / 100).toFixed(2)}</cbc:Percent>`);
+    parts.push(
+      `        <cbc:Percent>${(taxGroups.standard.rateBp / 100).toFixed(2)}</cbc:Percent>`,
+    );
     parts.push(`        <cac:TaxScheme>`);
     parts.push(`          <cbc:ID>VAT</cbc:ID>`);
     parts.push(`        </cac:TaxScheme>`);
@@ -253,7 +279,9 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     parts.push(`  <cac:TaxTotal>`);
     parts.push(`    <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>`);
     parts.push(`    <cac:TaxSubtotal>`);
-    parts.push(`      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.zeroRated.taxableAmount)}</cbc:TaxableAmount>`);
+    parts.push(
+      `      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.zeroRated.taxableAmount)}</cbc:TaxableAmount>`,
+    );
     parts.push(`      <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>`);
     parts.push(`      <cac:TaxCategory>`);
     parts.push(`        <cbc:ID>Z</cbc:ID>`);
@@ -268,13 +296,23 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
 
   // ── Legal Monetary Total ──
   parts.push(`  <cac:LegalMonetaryTotal>`);
-  parts.push(`    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:LineExtensionAmount>`);
-  parts.push(`    <cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:TaxExclusiveAmount>`);
-  parts.push(`    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(totalIncl)}</cbc:TaxInclusiveAmount>`);
+  parts.push(
+    `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:LineExtensionAmount>`,
+  );
+  parts.push(
+    `    <cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:TaxExclusiveAmount>`,
+  );
+  parts.push(
+    `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(totalIncl)}</cbc:TaxInclusiveAmount>`,
+  );
   if (allowanceTotal > 0) {
-    parts.push(`    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`);
+    parts.push(
+      `    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`,
+    );
   }
-  parts.push(`    <cbc:PayableAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:PayableAmount>`);
+  parts.push(
+    `    <cbc:PayableAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:PayableAmount>`,
+  );
   parts.push(`  </cac:LegalMonetaryTotal>`);
 
   // ── Root closing ──
@@ -296,7 +334,9 @@ interface TaxGroups {
   zeroRated: TaxGroup;
 }
 
-function groupTaxByRate(lines: Array<{ lineExcl: number; lineVat: number; vatRateBp: number }>): TaxGroups {
+function groupTaxByRate(
+  lines: Array<{ lineExcl: number; lineVat: number; vatRateBp: number }>,
+): TaxGroups {
   const standard: TaxGroup = { taxableAmount: 0, vatAmount: 0, rateBp: 1500 };
   const zeroRated: TaxGroup = { taxableAmount: 0, vatAmount: 0, rateBp: 0 };
 

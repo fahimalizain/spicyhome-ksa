@@ -51,19 +51,14 @@ export function halalasToSar(halalas: number): string {
  * @param priceInclHalalas — VAT-inclusive price in halalas (must be a non-negative integer)
  * @param vatRateBp — VAT rate in basis points (must be a non-negative integer)
  */
-export function decomposeVat(
-  priceInclHalalas: number,
-  vatRateBp: number,
-): VatDecomposition {
+export function decomposeVat(priceInclHalalas: number, vatRateBp: number): VatDecomposition {
   if (!Number.isInteger(priceInclHalalas) || priceInclHalalas < 0) {
     throw new Error(
       `decomposeVat: priceInclHalalas must be a non-negative integer, got ${priceInclHalalas}`,
     );
   }
   if (!Number.isInteger(vatRateBp) || vatRateBp < 0) {
-    throw new Error(
-      `decomposeVat: vatRateBp must be a non-negative integer, got ${vatRateBp}`,
-    );
+    throw new Error(`decomposeVat: vatRateBp must be a non-negative integer, got ${vatRateBp}`);
   }
 
   if (vatRateBp === 0) {
@@ -85,10 +80,7 @@ export function decomposeVat(
  *
  * Formula: round(priceExcl × (10000 + vatRateBp) / 10000)
  */
-export function computeVatInclusive(
-  priceExclHalalas: number,
-  vatRateBp: number,
-): number {
+export function computeVatInclusive(priceExclHalalas: number, vatRateBp: number): number {
   if (!Number.isInteger(priceExclHalalas) || priceExclHalalas < 0) {
     throw new Error(
       `computeVatInclusive: priceExclHalalas must be a non-negative integer, got ${priceExclHalalas}`,
@@ -114,10 +106,7 @@ export function computeVatInclusive(
  * Returns the absolute difference in halalas between the original
  * VAT-inclusive price and the recomposed price. Usually 0 or 1 halala.
  */
-export function vatRoundTripError(
-  priceInclHalalas: number,
-  vatRateBp: number,
-): number {
+export function vatRoundTripError(priceInclHalalas: number, vatRateBp: number): number {
   const { priceExclHalalas } = decomposeVat(priceInclHalalas, vatRateBp);
   const recomposed = computeVatInclusive(priceExclHalalas, vatRateBp);
   return Math.abs(priceInclHalalas - recomposed);

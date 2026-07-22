@@ -22,9 +22,9 @@ import { bytesToHex } from '@noble/hashes/utils';
 // ── Key generation ─────────────────────────────────────────────────────────────
 
 export interface KeyPair {
-  privateKeyHex: string;      // 32-byte private key as hex
-  publicKeyHex: string;       // 65-byte uncompressed public key as hex (04 || x || y)
-  publicKeyBase64: string;    // 65-byte uncompressed public key as base64
+  privateKeyHex: string; // 32-byte private key as hex
+  publicKeyHex: string; // 65-byte uncompressed public key as hex (04 || x || y)
+  publicKeyBase64: string; // 65-byte uncompressed public key as base64
 }
 
 /**
@@ -128,10 +128,7 @@ export function verifySignature(
  * unsigned hash.
  */
 export function canonicalizeForHash(xml: string): string {
-  let canonical = xml.replace(
-    /<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g,
-    '',
-  );
+  let canonical = xml.replace(/<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g, '');
 
   canonical = canonical.replace(/<ext:UBLExtensions\/>/g, '');
 
@@ -421,7 +418,7 @@ export interface CsrSubject {
   organizationName: string;
   organizationalUnit: string;
   country: string;
-  organizationIdentifier?: string;  // OID 2.5.4.97
+  organizationIdentifier?: string; // OID 2.5.4.97
 }
 
 function encodeSubjectDN(subject: CsrSubject): Uint8Array {
@@ -475,12 +472,7 @@ export function buildCSR(
   const subjectName = encodeSubjectDN(subject);
   const attributes = derContextTagged(0, derSequence([]));
 
-  const csrInfo = derSequence([
-    version,
-    subjectName,
-    pubKeyDer,
-    attributes,
-  ]);
+  const csrInfo = derSequence([version, subjectName, pubKeyDer, attributes]);
 
   const sigAlgOid = encodeOid('1.2.840.10045.4.3.2');
   const sigAlgorithm = derSequence([sigAlgOid]);

@@ -1,10 +1,4 @@
-import {
-  sqliteTable,
-  integer,
-  text,
-  uniqueIndex,
-  index,
-} from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
@@ -35,7 +29,9 @@ export const users = sqliteTable('users', {
   username: text('username').unique().notNull(),
   pinHash: text('pin_hash').notNull(),
   name: text('name').notNull(),
-  roleId: integer('role_id').references(() => userRoles.id).notNull(),
+  roleId: integer('role_id')
+    .references(() => userRoles.id)
+    .notNull(),
   isActive: integer('is_active').notNull().default(1),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
@@ -63,7 +59,7 @@ export const printers = sqliteTable('printers', {
   name: text('name').unique().notNull(),
   ip: text('ip').notNull(),
   port: integer('port').notNull().default(9100),
-  role: text('role').notNull(),  // 'receipt' | 'kitchen'
+  role: text('role').notNull(), // 'receipt' | 'kitchen'
   isActive: integer('is_active').notNull().default(1),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
@@ -89,7 +85,9 @@ export const itemCategories = sqliteTable('item_categories', {
 
 export const items = sqliteTable('items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  categoryId: integer('category_id').references(() => itemCategories.id).notNull(),
+  categoryId: integer('category_id')
+    .references(() => itemCategories.id)
+    .notNull(),
   name: text('name').notNull(),
   nameAr: text('name_ar'),
   priceHalalas: integer('price_halalas').notNull(),
@@ -107,10 +105,12 @@ export const items = sqliteTable('items', {
 export const dayOpenings = sqliteTable('day_openings', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   businessDate: text('business_date').notNull(),
-  status: text('status').notNull(),  // 'open' | 'closed'
+  status: text('status').notNull(), // 'open' | 'closed'
   openingCashHalalas: integer('opening_cash_halalas').notNull().default(0),
   openedAt: integer('opened_at').notNull(),
-  openedBy: integer('opened_by').references(() => users.id).notNull(),
+  openedBy: integer('opened_by')
+    .references(() => users.id)
+    .notNull(),
   closedAt: integer('closed_at'),
   closedBy: integer('closed_by').references(() => users.id),
   closingCashHalalas: integer('closing_cash_halalas'),
@@ -131,10 +131,12 @@ export const orders = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     orderNo: integer('order_no').notNull(),
     uuid: text('uuid').unique().notNull(),
-    type: text('type').notNull(),  // 'dine_in' | 'takeaway'
+    type: text('type').notNull(), // 'dine_in' | 'takeaway'
     tableId: integer('table_id').references(() => tables.id),
-    dayOpeningId: integer('day_opening_id').references(() => dayOpenings.id).notNull(),
-    status: text('status').notNull(),  // 'open' | 'sent' | 'paid' | 'voided' | 'refunded'
+    dayOpeningId: integer('day_opening_id')
+      .references(() => dayOpenings.id)
+      .notNull(),
+    status: text('status').notNull(), // 'open' | 'sent' | 'paid' | 'voided' | 'refunded'
     subtotalHalalas: integer('subtotal_halalas').notNull().default(0),
     vatHalalas: integer('vat_halalas').notNull().default(0),
     totalHalalas: integer('total_halalas').notNull().default(0),
@@ -155,9 +157,11 @@ export const orders = sqliteTable(
 
 export const orderItems = sqliteTable('order_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id').references(() => orders.id, {
-    onDelete: 'cascade',
-  }).notNull(),
+  orderId: integer('order_id')
+    .references(() => orders.id, {
+      onDelete: 'cascade',
+    })
+    .notNull(),
   itemId: integer('item_id').references(() => items.id),
   itemName: text('item_name').notNull(),
   unitPriceHalalas: integer('unit_price_halalas').notNull(),
@@ -175,8 +179,12 @@ export const orderItems = sqliteTable('order_items', {
 
 export const orderAuditLog = sqliteTable('order_audit_log', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id').references(() => orders.id).notNull(),
-  userId: integer('user_id').references(() => users.id).notNull(),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  userId: integer('user_id')
+    .references(() => users.id)
+    .notNull(),
   action: text('action').notNull(),
   payload: text('payload').notNull(),
   prevHash: text('prev_hash').notNull(),
@@ -188,14 +196,17 @@ export const orderAuditLog = sqliteTable('order_audit_log', {
 
 export const invoices = sqliteTable('invoices', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id').references(() => orders.id).unique().notNull(),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .unique()
+    .notNull(),
   icv: integer('icv').unique().notNull(),
   uuid: text('uuid').unique().notNull(),
   invoiceHash: text('invoice_hash').notNull(),
   prevInvoiceHash: text('prev_invoice_hash').notNull(),
   xml: text('xml').notNull(),
   qrTlv: text('qr_tlv').notNull(),
-  status: text('status').notNull(),  // 'signed' | 'reported' | 'failed'
+  status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
   reportedAt: integer('reported_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useCart } from '../hooks/useCart';
-import type { CategoryResponse, ItemResponse, TableResponse, OrderResponse } from '@spicyhome/client-ts';
+import type {
+  CategoryResponse,
+  ItemResponse,
+  TableResponse,
+  OrderResponse,
+} from '@spicyhome/client-ts';
 
 export function OrderPage() {
   const cart = useCart();
@@ -11,7 +16,11 @@ export function OrderPage() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<{ id: number; status: string; orderNo: number } | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<{
+    id: number;
+    status: string;
+    orderNo: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
@@ -91,7 +100,7 @@ export function OrderPage() {
     try {
       const res = await client.orders.create({
         type: cart.orderType,
-        tableId: cart.orderType === 'dine_in' ? (cart.tableId || undefined) : undefined,
+        tableId: cart.orderType === 'dine_in' ? cart.tableId || undefined : undefined,
       });
       setCurrentOrder({ id: res.id, status: 'open', orderNo: res.orderNo });
 
@@ -118,7 +127,7 @@ export function OrderPage() {
     setError('');
     try {
       await client.orders.send(currentOrder.id);
-      setCurrentOrder((prev) => prev ? { ...prev, status: 'sent' } : null);
+      setCurrentOrder((prev) => (prev ? { ...prev, status: 'sent' } : null));
     } catch (e: any) {
       setError(e.message || 'Failed to send order');
     } finally {
@@ -132,7 +141,7 @@ export function OrderPage() {
     setError('');
     try {
       await client.orders.pay(currentOrder.id);
-      setCurrentOrder((prev) => prev ? { ...prev, status: 'paid' } : null);
+      setCurrentOrder((prev) => (prev ? { ...prev, status: 'paid' } : null));
     } catch (e: any) {
       setError(e.message || 'Failed to pay order');
     } finally {
@@ -146,7 +155,7 @@ export function OrderPage() {
     setError('');
     try {
       await client.orders.void(currentOrder.id);
-      setCurrentOrder((prev) => prev ? { ...prev, status: 'voided' } : null);
+      setCurrentOrder((prev) => (prev ? { ...prev, status: 'voided' } : null));
     } catch (e: any) {
       setError(e.message || 'Failed to void order');
     } finally {
@@ -154,7 +163,7 @@ export function OrderPage() {
     }
   }
 
-  const orderReadonly = currentOrder && currentOrder.status !== 'open';
+  const orderReadonly = currentOrder ? currentOrder.status !== 'open' : false;
 
   if (dayOpen === null) {
     return (
@@ -169,7 +178,9 @@ export function OrderPage() {
       <div className="h-full flex items-center justify-center">
         <div className="bg-gray-800 rounded-xl p-8 w-96 text-center">
           <h2 className="text-xl font-bold text-white mb-4">Open Business Day</h2>
-          <p className="text-sm text-gray-400 mb-6">No business day is currently open. Enter the opening cash to start the day.</p>
+          <p className="text-sm text-gray-400 mb-6">
+            No business day is currently open. Enter the opening cash to start the day.
+          </p>
 
           <div className="mb-4">
             <label className="block text-sm text-gray-300 mb-2">Opening Cash (SAR)</label>
@@ -183,9 +194,7 @@ export function OrderPage() {
             />
           </div>
 
-          {error && (
-            <div className="text-red-400 text-sm mb-4">{error}</div>
-          )}
+          {error && <div className="text-red-400 text-sm mb-4">{error}</div>}
 
           <button
             onClick={handleOpenDay}
@@ -220,14 +229,18 @@ export function OrderPage() {
           <button
             onClick={() => cart.setOrderType('takeaway', null)}
             className={`touch-target px-4 rounded-lg text-sm font-medium ${
-              cart.orderType === 'takeaway' ? 'bg-brand-600 text-white' : 'bg-gray-700 text-gray-300'
+              cart.orderType === 'takeaway'
+                ? 'bg-brand-600 text-white'
+                : 'bg-gray-700 text-gray-300'
             }`}
             disabled={!!currentOrder}
           >
             Takeaway
           </button>
           {cart.tableId && (
-            <span className="text-sm text-gray-400">Table: {tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}</span>
+            <span className="text-sm text-gray-400">
+              Table: {tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}
+            </span>
           )}
         </div>
 
@@ -282,9 +295,7 @@ export function OrderPage() {
       <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0">
         <div className="flex-1 overflow-y-auto p-3">
           <h2 className="text-sm font-semibold text-gray-300 mb-3">
-            {currentOrder
-              ? `Order #${currentOrder.orderNo}`
-              : 'New Order'}
+            {currentOrder ? `Order #${currentOrder.orderNo}` : 'New Order'}
             {currentOrder && (
               <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${currentOrder.status}`}>
                 {currentOrder.status}
@@ -350,9 +361,7 @@ export function OrderPage() {
             </div>
           </div>
 
-          {error && (
-            <div className="text-red-400 text-xs mb-2">{error}</div>
-          )}
+          {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
 
           <div className="space-y-2">
             {!currentOrder && (
@@ -417,8 +426,14 @@ export function OrderPage() {
 
       {/* Table picker modal */}
       {showTablePicker && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowTablePicker(false)}>
-          <div className="bg-gray-800 rounded-xl p-4 w-80 max-h-96 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setShowTablePicker(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-4 w-80 max-h-96 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-sm font-semibold text-white mb-3">Select Table</h3>
             <div className="grid grid-cols-3 gap-2">
               {tables.map((t) => (

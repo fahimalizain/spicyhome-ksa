@@ -43,7 +43,7 @@ describe('ZATCA TLV Encoder', () => {
     }
 
     expect(byTag.get(4)).toBe('123.45'); // total
-    expect(byTag.get(5)).toBe('16.00');  // vat
+    expect(byTag.get(5)).toBe('16.00'); // vat
   });
 
   it('encodes all 8 tags in order 1-8', () => {
@@ -110,8 +110,8 @@ describe('ZATCA TLV Encoder', () => {
   it('handles amounts with edge-case rounding', () => {
     const input: TLVInput = {
       ...baseInput,
-      totalHalalas: 1,   // 0.01 SAR
-      vatHalalas: 0,     // 0.00 SAR
+      totalHalalas: 1, // 0.01 SAR
+      vatHalalas: 0, // 0.00 SAR
     };
     const tlvBase64 = encodeZatcaTLV(input);
     const tlv = Buffer.from(tlvBase64, 'base64');
@@ -126,7 +126,7 @@ describe('ZATCA TLV Encoder', () => {
     const input: TLVInput = {
       ...baseInput,
       totalHalalas: 9999999, // 99999.99 SAR
-      vatHalalas: 1304347,   // ~13043.47 SAR
+      vatHalalas: 1304347, // ~13043.47 SAR
     };
     const tlvBase64 = encodeZatcaTLV(input);
     const tlv = Buffer.from(tlvBase64, 'base64');

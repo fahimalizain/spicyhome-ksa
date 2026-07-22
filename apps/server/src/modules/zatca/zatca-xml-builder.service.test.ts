@@ -1,4 +1,9 @@
-import { buildUnsignedInvoiceXML, InvoiceXMLInput, InvoiceItemInput, SellerInfo } from './zatca-xml-builder.service';
+import {
+  buildUnsignedInvoiceXML,
+  InvoiceXMLInput,
+  InvoiceItemInput,
+  SellerInfo,
+} from './zatca-xml-builder.service';
 import { decomposeVat, halalasToSar } from '@spicyhome/shared';
 
 describe('UBL XML Builder', () => {
@@ -37,15 +42,23 @@ describe('UBL XML Builder', () => {
 
   it('builds valid XML with root Invoice element', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).toContain('<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"');
+    expect(xml).toContain(
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
+    );
     expect(xml).toContain('</Invoice>');
   });
 
   it('includes all required UBL namespaces', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).toContain('xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"');
-    expect(xml).toContain('xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"');
-    expect(xml).toContain('xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"');
+    expect(xml).toContain(
+      'xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"',
+    );
+    expect(xml).toContain(
+      'xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"',
+    );
+    expect(xml).toContain(
+      'xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"',
+    );
   });
 
   it('includes profile ID reporting:1.0', () => {
@@ -120,9 +133,7 @@ describe('UBL XML Builder', () => {
     const input: InvoiceXMLInput = {
       ...baseInput,
       seller: { ...defaultSeller, name: 'Spicy & Home <Express>' },
-      items: [
-        { name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 },
-      ],
+      items: [{ name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 }],
     };
 
     const xml = buildUnsignedInvoiceXML(input);
@@ -162,25 +173,25 @@ describe('UBL XML Builder', () => {
     // Single item: 23 SAR incl VAT → 20 excl + 3 VAT
     const input: InvoiceXMLInput = {
       ...baseInput,
-      items: [
-        { name: 'Item', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 },
-      ],
+      items: [{ name: 'Item', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 }],
     };
     const xml = buildUnsignedInvoiceXML(input);
     // Check excluded and VAT amounts
     // 2300 => excl = Math.round(2300 * 1500 / 11500) = 300, excl = 2300 - 300 = 2000
-    expect(xml).toContain('<cbc:LineExtensionAmount currencyID="SAR">20.00</cbc:LineExtensionAmount>');
+    expect(xml).toContain(
+      '<cbc:LineExtensionAmount currencyID="SAR">20.00</cbc:LineExtensionAmount>',
+    );
     expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">3.00</cbc:TaxAmount>');
-    expect(xml).toContain('<cbc:TaxInclusiveAmount currencyID="SAR">23.00</cbc:TaxInclusiveAmount>');
+    expect(xml).toContain(
+      '<cbc:TaxInclusiveAmount currencyID="SAR">23.00</cbc:TaxInclusiveAmount>',
+    );
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">23.00</cbc:PayableAmount>');
   });
 
   it('handles zero-rated items correctly', () => {
     const input: InvoiceXMLInput = {
       ...baseInput,
-      items: [
-        { name: 'Bread', unitPriceHalalas: 100, vatRateBp: 0, qty: 5 },
-      ],
+      items: [{ name: 'Bread', unitPriceHalalas: 100, vatRateBp: 0, qty: 5 }],
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>');
@@ -207,7 +218,9 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:ID>Z</cbc:ID>');
 
     // Total incl should be 47.00
-    expect(xml).toContain('<cbc:TaxInclusiveAmount currencyID="SAR">47.00</cbc:TaxInclusiveAmount>');
+    expect(xml).toContain(
+      '<cbc:TaxInclusiveAmount currencyID="SAR">47.00</cbc:TaxInclusiveAmount>',
+    );
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">47.00</cbc:PayableAmount>');
   });
 
@@ -226,7 +239,9 @@ describe('UBL XML Builder', () => {
       discountHalalas: 100,
     };
     const xml = buildUnsignedInvoiceXML(input);
-    expect(xml).toContain('<cbc:AllowanceTotalAmount currencyID="SAR">1.00</cbc:AllowanceTotalAmount>');
+    expect(xml).toContain(
+      '<cbc:AllowanceTotalAmount currencyID="SAR">1.00</cbc:AllowanceTotalAmount>',
+    );
     // Payable should be total - discount
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">50.75</cbc:PayableAmount>');
   });

@@ -7,6 +7,8 @@
   "types": "src/index.d.ts",
   "scripts": {
     "test": "jest --config jest.config.cjs",
+    "lint": "pnpm exec eslint src",
+    "typecheck": "pnpm exec tsc --noEmit",
     "generate-types": "openapi-typescript ../api-spec/openapi.json -o src/generated/types.ts"
   },
   "dependencies": {
@@ -19,6 +21,7 @@
     "jest-cli": "^29.7.0",
     "jest-junit": "^16.0.0",
     "openapi-typescript": "^7.4.0",
-    "ts-jest": "^29.2.0"
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.4.0"
   }
 }

@@ -50,9 +50,7 @@ describe('order_audit_log immutability trigger', () => {
 
     // Attempt UPDATE — should throw due to trigger
     expect(() =>
-      sqlite.exec(
-        `UPDATE order_audit_log SET action = 'paid' WHERE id = ${logId}`,
-      ),
+      sqlite.exec(`UPDATE order_audit_log SET action = 'paid' WHERE id = ${logId}`),
     ).toThrow();
   });
 
@@ -68,9 +66,7 @@ describe('order_audit_log immutability trigger', () => {
     `);
     const logId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-    expect(() =>
-      sqlite.exec(`DELETE FROM order_audit_log WHERE id = ${logId}`),
-    ).toThrow();
+    expect(() => sqlite.exec(`DELETE FROM order_audit_log WHERE id = ${logId}`)).toThrow();
   });
 
   it('allows INSERT on order_audit_log', () => {

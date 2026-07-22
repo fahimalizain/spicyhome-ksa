@@ -69,9 +69,7 @@ export class DatabaseModule implements OnModuleInit {
       console.warn('Could not apply migrations, skipping:', err.message);
     }
 
-    const userCount = rawDb
-      .prepare('SELECT COUNT(*) as cnt FROM users')
-      .get() as { cnt: number };
+    const userCount = rawDb.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
 
     if (userCount.cnt === 0) {
       seed(rawDb);

@@ -105,9 +105,7 @@ export class PrintJobService {
   private async printKitchenTickets(orderId: number, userId: number): Promise<void> {
     const results = await this.printKitchenTicketsInternal(orderId, userId);
     if (results.errors.length > 0) {
-      this.logger.warn(
-        `Kitchen print for order ${orderId} errors: ${results.errors.join('; ')}`,
-      );
+      this.logger.warn(`Kitchen print for order ${orderId} errors: ${results.errors.join('; ')}`);
     }
   }
 
@@ -192,10 +190,17 @@ export class PrintJobService {
         await this.printersService.sendBuffer(printer, ticket);
         printed.push(printer);
 
-        this.auditLog.createEntry(this.db, orderId, userId, 'printed', {
-          target: 'kitchen',
-          printer: printer.name,
-        }, now);
+        this.auditLog.createEntry(
+          this.db,
+          orderId,
+          userId,
+          'printed',
+          {
+            target: 'kitchen',
+            printer: printer.name,
+          },
+          now,
+        );
       } catch (err: any) {
         const msg = err instanceof PrinterUnreachableError ? err.message : err.message;
         errors.push(`${printer.name}: ${msg}`);
@@ -254,9 +259,16 @@ export class PrintJobService {
 
     await this.printersService.sendBuffer(receiptPrinter, receipt);
 
-    this.auditLog.createEntry(this.db, orderId, userId, 'printed', {
-      target: 'receipt',
-      printer: receiptPrinter.name,
-    }, now);
+    this.auditLog.createEntry(
+      this.db,
+      orderId,
+      userId,
+      'printed',
+      {
+        target: 'receipt',
+        printer: receiptPrinter.name,
+      },
+      now,
+    );
   }
 }

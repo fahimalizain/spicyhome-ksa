@@ -1,4 +1,8 @@
-import { FakePrinterTransport, TcpPrinterTransport, PrinterUnreachableError } from './printer-transport';
+import {
+  FakePrinterTransport,
+  TcpPrinterTransport,
+  PrinterUnreachableError,
+} from './printer-transport';
 import * as net from 'net';
 
 describe('FakePrinterTransport', () => {

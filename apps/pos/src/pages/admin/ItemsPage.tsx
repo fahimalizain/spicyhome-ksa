@@ -9,9 +9,18 @@ export function ItemsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', categoryId: 0, priceHalalas: 0, vatRateBp: 1500, sortOrder: 0, isActive: true });
+  const [form, setForm] = useState({
+    name: '',
+    categoryId: 0,
+    priceHalalas: 0,
+    vatRateBp: 1500,
+    sortOrder: 0,
+    isActive: true,
+  });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
   async function loadData() {
     setLoading(true);
@@ -30,7 +39,14 @@ export function ItemsPage() {
   }
 
   function resetForm() {
-    setForm({ name: '', categoryId: categories[0]?.id || 0, priceHalalas: 0, vatRateBp: 1500, sortOrder: 0, isActive: true });
+    setForm({
+      name: '',
+      categoryId: categories[0]?.id || 0,
+      priceHalalas: 0,
+      vatRateBp: 1500,
+      sortOrder: 0,
+      isActive: true,
+    });
     setEditId(null);
   }
 
@@ -90,7 +106,9 @@ export function ItemsPage() {
               onChange={(e) => setForm((f) => ({ ...f, categoryId: Number(e.target.value) }))}
             >
               {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -101,17 +119,29 @@ export function ItemsPage() {
               step="0.01"
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
               value={form.priceHalalas / 100}
-              onChange={(e) => setForm((f) => ({ ...f, priceHalalas: Math.round(parseFloat(e.target.value || '0') * 100) }))}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  priceHalalas: Math.round(parseFloat(e.target.value || '0') * 100),
+                }))
+              }
               required
             />
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="submit" className="touch-target bg-brand-600 hover:bg-brand-700 rounded px-4 py-2 text-sm text-white">
+          <button
+            type="submit"
+            className="touch-target bg-brand-600 hover:bg-brand-700 rounded px-4 py-2 text-sm text-white"
+          >
             {editId ? 'Update' : 'Create'}
           </button>
           {editId && (
-            <button type="button" onClick={resetForm} className="touch-target bg-gray-700 hover:bg-gray-600 rounded px-4 py-2 text-sm text-gray-300">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="touch-target bg-gray-700 hover:bg-gray-600 rounded px-4 py-2 text-sm text-gray-300"
+            >
               Cancel
             </button>
           )}
@@ -120,7 +150,10 @@ export function ItemsPage() {
 
       <div className="space-y-1">
         {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+          <div
+            key={item.id}
+            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+          >
             <div>
               <span className="text-sm text-white">{item.name}</span>
               <span className="text-xs text-gray-500 ml-2">
@@ -128,7 +161,10 @@ export function ItemsPage() {
               </span>
               {!item.isActive && <span className="text-xs text-red-400 ml-2">(inactive)</span>}
             </div>
-            <button onClick={() => editItem(item)} className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1">
+            <button
+              onClick={() => editItem(item)}
+              className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
+            >
               Edit
             </button>
           </div>

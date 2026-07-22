@@ -45,7 +45,8 @@ export class PrintersService {
   }
 
   get(id: number): PrinterRecord {
-    const p = this.db.select().from(printers).where(eq(printers.id, id)).get() as PrinterRecord | undefined;
+    const p = this.db.select().from(printers).where(eq(printers.id, id)).get() as
+      PrinterRecord | undefined;
     if (!p) throw new NotFoundException('Printer not found');
     return p;
   }
@@ -60,7 +61,10 @@ export class PrintersService {
       isActive: dto.isActive !== undefined ? (dto.isActive ? 1 : 0) : 1,
       ...createAuditFields(userId, now),
     };
-    const result = this.db.insert(printers).values(row as any).run();
+    const result = this.db
+      .insert(printers)
+      .values(row as any)
+      .run();
     return { id: Number(result.lastInsertRowid), ...row };
   }
 
@@ -113,11 +117,8 @@ export class PrintersService {
 
   /** Get active printer by printer_id — used for category kitchen routing. */
   getByPrinterId(printerId: number): PrinterRecord | null {
-    const p = this.db
-      .select()
-      .from(printers)
-      .where(eq(printers.id, printerId))
-      .get() as PrinterRecord | undefined;
+    const p = this.db.select().from(printers).where(eq(printers.id, printerId)).get() as
+      PrinterRecord | undefined;
     if (!p || p.isActive !== 1) return null;
     return p;
   }

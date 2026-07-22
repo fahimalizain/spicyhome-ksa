@@ -61,10 +61,7 @@ export class ZatcaController {
 
   @Get('invoices')
   @ApiOperation({ summary: 'List ZATCA invoices' })
-  async listInvoices(
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
-  ) {
+  async listInvoices(@Query('limit') limit?: number, @Query('offset') offset?: number) {
     return this.invoiceService.listInvoices(limit || 50, offset || 0);
   }
 
@@ -81,9 +78,7 @@ export class ZatcaController {
   @Post('reporting/retry')
   @RequiresPermission('manage_settings')
   @ApiOperation({ summary: 'Retry reporting for all pending or a specific invoice' })
-  async retryReporting(
-    @Body('invoiceId') invoiceId?: number,
-  ) {
+  async retryReporting(@Body('invoiceId') invoiceId?: number) {
     return this.reportingService.retryInvoice(invoiceId);
   }
 }

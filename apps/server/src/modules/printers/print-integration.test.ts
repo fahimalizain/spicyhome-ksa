@@ -160,18 +160,20 @@ describe('Print Integration', () => {
       await new Promise((r) => setTimeout(r, 200));
 
       // Should have printed to 2 different kitchen printers
-      const kitchenPrinters = transport.sent.filter(s => s.ip !== '192.168.1.50'); // exclude receipt
+      const kitchenPrinters = transport.sent.filter((s) => s.ip !== '192.168.1.50'); // exclude receipt
       // We expect at least 2 kitchen prints (one per category)
       expect(kitchenPrinters.length).toBeGreaterThanOrEqual(2);
 
       // Verify kitchen ticket content for burger
-      const burgerPrint = kitchenPrinters.find(s => s.data.toString('ascii').includes('Zinger Burger'));
+      const burgerPrint = kitchenPrinters.find((s) =>
+        s.data.toString('ascii').includes('Zinger Burger'),
+      );
       expect(burgerPrint).toBeDefined();
       expect(burgerPrint!.data.toString('ascii')).toContain('2 Zinger Burger');
       expect(burgerPrint!.data.toString('ascii')).toContain(`ORDER #${orderRes.body.orderNo}`);
 
       // Verify kitchen ticket content for pepsi
-      const pepsiPrint = kitchenPrinters.find(s => s.data.toString('ascii').includes('Pepsi'));
+      const pepsiPrint = kitchenPrinters.find((s) => s.data.toString('ascii').includes('Pepsi'));
       expect(pepsiPrint).toBeDefined();
     });
 
@@ -237,7 +239,7 @@ describe('Print Integration', () => {
       await new Promise((r) => setTimeout(r, 200));
 
       // Should have receipt print
-      const receiptPrints = transport.sent.filter(s => s.ip === '192.168.1.50');
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
       expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
 
       const receiptBuf = receiptPrints[0].data;
@@ -294,7 +296,7 @@ describe('Print Integration', () => {
 
       await new Promise((r) => setTimeout(r, 100));
 
-      const receiptPrints = transport.sent.filter(s => s.ip === '192.168.1.50');
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
       expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
       const str = receiptPrints[0].data.toString('ascii');
       expect(str).toContain('Zinger Burger');
@@ -327,7 +329,7 @@ describe('Print Integration', () => {
       await new Promise((r) => setTimeout(r, 100));
 
       const kitchenPrints = transport.sent.filter(
-        s => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+        (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
       );
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
     });

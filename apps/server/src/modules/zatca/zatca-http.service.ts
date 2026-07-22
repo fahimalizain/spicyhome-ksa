@@ -16,38 +16,50 @@ export interface ZatcaHttpResponse {
 }
 
 export interface ZatcaHttpClient {
-  post(url: string, options: {
-    headers?: Record<string, string>;
-    body?: string;
-    auth?: { username: string; password: string };
-    timeoutMs?: number;
-  }): Promise<ZatcaHttpResponse>;
+  post(
+    url: string,
+    options: {
+      headers?: Record<string, string>;
+      body?: string;
+      auth?: { username: string; password: string };
+      timeoutMs?: number;
+    },
+  ): Promise<ZatcaHttpResponse>;
 
-  get(url: string, options: {
-    headers?: Record<string, string>;
-    auth?: { username: string; password: string };
-    timeoutMs?: number;
-  }): Promise<ZatcaHttpResponse>;
+  get(
+    url: string,
+    options: {
+      headers?: Record<string, string>;
+      auth?: { username: string; password: string };
+      timeoutMs?: number;
+    },
+  ): Promise<ZatcaHttpResponse>;
 }
 
 @Injectable()
 export class ZatcaHttpService implements ZatcaHttpClient {
   private readonly logger = new Logger(ZatcaHttpService.name);
 
-  async post(url: string, options: {
-    headers?: Record<string, string>;
-    body?: string;
-    auth?: { username: string; password: string };
-    timeoutMs?: number;
-  }): Promise<ZatcaHttpResponse> {
+  async post(
+    url: string,
+    options: {
+      headers?: Record<string, string>;
+      body?: string;
+      auth?: { username: string; password: string };
+      timeoutMs?: number;
+    },
+  ): Promise<ZatcaHttpResponse> {
     return this.request('POST', url, options);
   }
 
-  async get(url: string, options: {
-    headers?: Record<string, string>;
-    auth?: { username: string; password: string };
-    timeoutMs?: number;
-  }): Promise<ZatcaHttpResponse> {
+  async get(
+    url: string,
+    options: {
+      headers?: Record<string, string>;
+      auth?: { username: string; password: string };
+      timeoutMs?: number;
+    },
+  ): Promise<ZatcaHttpResponse> {
     return this.request('GET', url, options);
   }
 
@@ -69,7 +81,7 @@ export class ZatcaHttpService implements ZatcaHttpClient {
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         ...options.headers,
       };
 

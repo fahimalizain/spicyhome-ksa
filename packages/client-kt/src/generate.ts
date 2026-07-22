@@ -22,26 +22,25 @@ const ADDITIONAL_PROPS = [
 function findSpec(): string {
   const candidates = [
     path.join(process.cwd(), 'packages', 'api-spec', 'openapi.json'),
-    path.join(
-      process.env.BUILD_WORKSPACE_DIRECTORY || '',
-      'packages', 'api-spec', 'openapi.json',
-    ),
-    path.join(
-      process.env.RUNFILES_DIR || '',
-      '_main', 'packages', 'api-spec', 'openapi.json',
-    ),
+    path.join(process.env.BUILD_WORKSPACE_DIRECTORY || '', 'packages', 'api-spec', 'openapi.json'),
+    path.join(process.env.RUNFILES_DIR || '', '_main', 'packages', 'api-spec', 'openapi.json'),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  throw new Error('Cannot find openapi.json. Set BUILD_WORKSPACE_DIRECTORY or run from workspace root.');
+  throw new Error(
+    'Cannot find openapi.json. Set BUILD_WORKSPACE_DIRECTORY or run from workspace root.',
+  );
 }
 
 function findDefaultOutDir(): string {
   const candidates = [
     path.join(
       process.env.BUILD_WORKSPACE_DIRECTORY || process.cwd(),
-      'packages', 'client-kt', 'src', 'generated',
+      'packages',
+      'client-kt',
+      'src',
+      'generated',
     ),
   ];
   for (const c of candidates) {
@@ -54,7 +53,11 @@ function findCli(): string {
   const candidates = [
     path.join(
       process.env.BUILD_WORKSPACE_DIRECTORY || process.cwd(),
-      'packages', 'client-kt', 'node_modules', '.bin', 'openapi-generator-cli',
+      'packages',
+      'client-kt',
+      'node_modules',
+      '.bin',
+      'openapi-generator-cli',
     ),
     path.join(process.cwd(), 'node_modules', '.bin', 'openapi-generator-cli'),
   ];
@@ -81,9 +84,12 @@ function main(): void {
   const cmd = [
     `"${cli}"`,
     'generate',
-    '-i', `"${specPath}"`,
-    '-g', 'kotlin',
-    '-o', `"${outDir}"`,
+    '-i',
+    `"${specPath}"`,
+    '-g',
+    'kotlin',
+    '-o',
+    `"${outDir}"`,
     '--additional-properties',
     `packageName=${PACKAGE_NAME},${ADDITIONAL_PROPS}`,
   ].join(' ');

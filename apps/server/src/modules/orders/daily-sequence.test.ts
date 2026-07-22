@@ -27,17 +27,25 @@ describe('Daily Order Sequence', () => {
     const today = new Date(now * 1000).toISOString().slice(0, 10);
     const row = tx.select().from(settings).where(eq(settings.key, 'daily_order_seq')).get();
     if (!row) {
-      tx.insert(settings).values({ key: 'daily_order_seq', value: `${today}:1` }).run();
+      tx.insert(settings)
+        .values({ key: 'daily_order_seq', value: `${today}:1` })
+        .run();
       return 1;
     }
     const [storedDate, storedSeqStr] = row.value.split(':');
     const storedSeq = parseInt(storedSeqStr, 10);
     if (storedDate === today) {
       const newSeq = storedSeq + 1;
-      tx.update(settings).set({ value: `${today}:${newSeq}` }).where(eq(settings.key, 'daily_order_seq')).run();
+      tx.update(settings)
+        .set({ value: `${today}:${newSeq}` })
+        .where(eq(settings.key, 'daily_order_seq'))
+        .run();
       return newSeq;
     } else {
-      tx.update(settings).set({ value: `${today}:1` }).where(eq(settings.key, 'daily_order_seq')).run();
+      tx.update(settings)
+        .set({ value: `${today}:1` })
+        .where(eq(settings.key, 'daily_order_seq'))
+        .run();
       return 1;
     }
   }

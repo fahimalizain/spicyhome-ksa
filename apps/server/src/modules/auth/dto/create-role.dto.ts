@@ -65,33 +65,53 @@ export class UpdateRoleDto {
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   createOrder?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   updateOrder?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   deleteOrderItem?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   voidOrder?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   refundOrder?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   manageMenu?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   manageTables?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   managePrinters?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   manageUsers?: boolean;
 
-  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   manageSettings?: boolean;
 }

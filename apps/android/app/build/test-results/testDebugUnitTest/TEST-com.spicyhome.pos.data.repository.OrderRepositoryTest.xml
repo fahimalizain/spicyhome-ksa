@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.spicyhome.pos.data.repository.OrderRepositoryTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-07-22T06:34:50" hostname="Fahims-MacBook-Pro.local" time="0.076">
+<testsuite name="com.spicyhome.pos.data.repository.OrderRepositoryTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-07-22T07:06:35" hostname="Fahims-MacBook-Pro.local" time="0.072">
   <properties/>
   <testcase name="createOrder takeaway without table" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.047"/>
-  <testcase name="addItem delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.007"/>
+  <testcase name="addItem delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.006"/>
   <testcase name="getOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
-  <testcase name="order lifecycle create send pay" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.005"/>
-  <testcase name="createOrder returns response" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
-  <testcase name="voidOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
+  <testcase name="order lifecycle create send pay" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.004"/>
+  <testcase name="createOrder returns response" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
+  <testcase name="voidOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
   <testcase name="listOrders with filters" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.003"/>
-  <testcase name="listOrders without filters" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
+  <testcase name="listOrders without filters" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
   <testcase name="createOrder 409 no open day" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
-  <testcase name="createOrder dine-in with table" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
+  <testcase name="createOrder dine-in with table" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
   <testcase name="sendOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
-  <testcase name="payOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.002"/>
+  <testcase name="payOrder delegates correctly" classname="com.spicyhome.pos.data.repository.OrderRepositoryTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

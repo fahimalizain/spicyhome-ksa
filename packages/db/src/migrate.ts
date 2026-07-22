@@ -8,10 +8,7 @@ import path from 'path';
  * Reads .sql files from `migrationsDir` (sorted by name), executes them
  * against the given Database instance.
  */
-export function applyMigrations(
-  sqlite: Database.Database,
-  migrationsDir: string,
-): void {
+export function applyMigrations(sqlite: Database.Database, migrationsDir: string): void {
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
@@ -33,10 +30,7 @@ export function applyMigrations(
  *
  * If `dbPath` is provided, uses a file-based DB; otherwise uses :memory:.
  */
-export function createTestDb(
-  migrationsDir: string,
-  dbPath?: string,
-): Database.Database {
+export function createTestDb(migrationsDir: string, dbPath?: string): Database.Database {
   const sqlite = new Database(dbPath ?? ':memory:');
   applyMigrations(sqlite, migrationsDir);
   return sqlite;

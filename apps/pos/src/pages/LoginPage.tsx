@@ -88,9 +88,7 @@ export function LoginPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="text-red-400 text-sm text-center mb-4">{error}</div>
-        )}
+        {error && <div className="text-red-400 text-sm text-center mb-4">{error}</div>}
 
         <div className="grid grid-cols-3 gap-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
@@ -126,9 +124,7 @@ export function LoginPage() {
           </button>
         </div>
 
-        {loading && (
-          <div className="text-center text-gray-400 text-sm mt-4">Logging in...</div>
-        )}
+        {loading && <div className="text-center text-gray-400 text-sm mt-4">Logging in...</div>}
       </div>
     </div>
   );

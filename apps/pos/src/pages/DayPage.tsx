@@ -99,7 +99,10 @@ export function DayPage() {
           Status
         </button>
         <button
-          onClick={() => { setTab('past'); loadPastDays(); }}
+          onClick={() => {
+            setTab('past');
+            loadPastDays();
+          }}
           className={`touch-target px-4 py-2 rounded-lg text-sm font-medium ${
             tab === 'past' ? 'bg-brand-600 text-white' : 'bg-gray-700 text-gray-300'
           }`}
@@ -130,10 +133,22 @@ export function DayPage() {
                   Day: {day.businessDate} <span className="text-green-400 text-sm ml-2">OPEN</span>
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <StatCard label="Opening Cash" value={`${halalasToSar(day.openingCashHalalas)} SAR`} />
-                  <StatCard label="Live Sales" value={xReport ? `${halalasToSar(xReport.totalSalesHalalas)} SAR` : '—'} />
-                  <StatCard label="Live VAT" value={xReport ? `${halalasToSar(xReport.totalVatHalalas)} SAR` : '—'} />
-                  <StatCard label="Paid Orders" value={xReport ? String(xReport.paidOrderCount) : '—'} />
+                  <StatCard
+                    label="Opening Cash"
+                    value={`${halalasToSar(day.openingCashHalalas)} SAR`}
+                  />
+                  <StatCard
+                    label="Live Sales"
+                    value={xReport ? `${halalasToSar(xReport.totalSalesHalalas)} SAR` : '—'}
+                  />
+                  <StatCard
+                    label="Live VAT"
+                    value={xReport ? `${halalasToSar(xReport.totalVatHalalas)} SAR` : '—'}
+                  />
+                  <StatCard
+                    label="Paid Orders"
+                    value={xReport ? String(xReport.paidOrderCount) : '—'}
+                  />
                 </div>
 
                 <div className="flex gap-3 flex-wrap">
@@ -152,16 +167,20 @@ export function DayPage() {
 
                   <div className="text-sm space-y-2 mb-4">
                     <div className="flex justify-between text-gray-300">
-                      <span>Paid</span><span>{xReport.paidOrderCount}</span>
+                      <span>Paid</span>
+                      <span>{xReport.paidOrderCount}</span>
                     </div>
                     <div className="flex justify-between text-gray-300">
-                      <span>Sent</span><span>{xReport.sentOrderCount}</span>
+                      <span>Sent</span>
+                      <span>{xReport.sentOrderCount}</span>
                     </div>
                     <div className="flex justify-between text-gray-300">
-                      <span>Open</span><span>{xReport.openOrderCount}</span>
+                      <span>Open</span>
+                      <span>{xReport.openOrderCount}</span>
                     </div>
                     <div className="flex justify-between text-gray-300">
-                      <span>Voided</span><span>{xReport.voidedOrderCount}</span>
+                      <span>Voided</span>
+                      <span>{xReport.voidedOrderCount}</span>
                     </div>
                   </div>
 
@@ -169,12 +188,16 @@ export function DayPage() {
                     <>
                       <h4 className="text-sm font-bold text-gray-400 mb-2">Sales by Type</h4>
                       <div className="text-sm space-y-1 mb-4">
-                        {Object.entries(xReport.salesByType as Record<string, any>).map(([type, data]) => (
-                          <div key={type} className="flex justify-between text-gray-300">
-                            <span className="capitalize">{type}</span>
-                            <span>{data.count} ({halalasToSar(data.totalHalalas)} SAR)</span>
-                          </div>
-                        ))}
+                        {Object.entries(xReport.salesByType as Record<string, any>).map(
+                          ([type, data]) => (
+                            <div key={type} className="flex justify-between text-gray-300">
+                              <span className="capitalize">{type}</span>
+                              <span>
+                                {data.count} ({halalasToSar(data.totalHalalas)} SAR)
+                              </span>
+                            </div>
+                          ),
+                        )}
                       </div>
                     </>
                   )}
@@ -186,7 +209,9 @@ export function DayPage() {
                         {xReport.salesByUser.map((u: any) => (
                           <div key={u.userId} className="flex justify-between text-gray-300">
                             <span>{u.userName}</span>
-                            <span>{u.orderCount} ({halalasToSar(u.totalHalalas)} SAR)</span>
+                            <span>
+                              {u.orderCount} ({halalasToSar(u.totalHalalas)} SAR)
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -198,9 +223,14 @@ export function DayPage() {
                       <h4 className="text-sm font-bold text-gray-400 mb-2">Sales by Category</h4>
                       <div className="text-sm space-y-1 mb-4">
                         {xReport.salesByCategory.map((c: any) => (
-                          <div key={c.categoryId ?? 'uncat'} className="flex justify-between text-gray-300">
+                          <div
+                            key={c.categoryId ?? 'uncat'}
+                            className="flex justify-between text-gray-300"
+                          >
                             <span>{c.categoryName}</span>
-                            <span>{c.itemCount} items ({halalasToSar(c.totalHalalas)} SAR)</span>
+                            <span>
+                              {c.itemCount} items ({halalasToSar(c.totalHalalas)} SAR)
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -236,14 +266,30 @@ export function DayPage() {
           {selectedZ && (
             <div className="bg-gray-800 rounded-xl p-6 mt-6">
               <h2 className="text-lg font-bold text-white mb-4">
-                Z-Report: {selectedZ.businessDate} <span className="text-blue-400 text-sm ml-2">CLOSED</span>
+                Z-Report: {selectedZ.businessDate}{' '}
+                <span className="text-blue-400 text-sm ml-2">CLOSED</span>
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <StatCard label="Opening Cash" value={`${halalasToSar(selectedZ.openingCashHalalas)} SAR`} />
-                <StatCard label="Closing Cash" value={`${halalasToSar(selectedZ.closingCashHalalas)} SAR`} />
-                <StatCard label="Total Sales" value={`${halalasToSar(selectedZ.totalSalesHalalas)} SAR`} />
-                <StatCard label="Total VAT" value={`${halalasToSar(selectedZ.totalVatHalalas)} SAR`} />
-                <StatCard label="Paid Orders" value={String(selectedZ.paidOrderCount || selectedZ.orderCount)} />
+                <StatCard
+                  label="Opening Cash"
+                  value={`${halalasToSar(selectedZ.openingCashHalalas)} SAR`}
+                />
+                <StatCard
+                  label="Closing Cash"
+                  value={`${halalasToSar(selectedZ.closingCashHalalas)} SAR`}
+                />
+                <StatCard
+                  label="Total Sales"
+                  value={`${halalasToSar(selectedZ.totalSalesHalalas)} SAR`}
+                />
+                <StatCard
+                  label="Total VAT"
+                  value={`${halalasToSar(selectedZ.totalVatHalalas)} SAR`}
+                />
+                <StatCard
+                  label="Paid Orders"
+                  value={String(selectedZ.paidOrderCount || selectedZ.orderCount)}
+                />
                 <StatCard label="Voided" value={String(selectedZ.voidedOrderCount || 0)} />
               </div>
               <button
@@ -279,9 +325,13 @@ export function DayPage() {
               >
                 <div>
                   <span className="text-white font-medium">{d.businessDate}</span>
-                  <span className={`ml-3 px-2 py-0.5 rounded text-xs ${
-                    d.status === 'closed' ? 'bg-blue-900/50 text-blue-400' : 'bg-green-900/50 text-green-400'
-                  }`}>
+                  <span
+                    className={`ml-3 px-2 py-0.5 rounded text-xs ${
+                      d.status === 'closed'
+                        ? 'bg-blue-900/50 text-blue-400'
+                        : 'bg-green-900/50 text-green-400'
+                    }`}
+                  >
                     {d.status}
                   </span>
                   {d.totalSalesHalalas != null && (
@@ -290,9 +340,7 @@ export function DayPage() {
                     </span>
                   )}
                   {d.orderCount != null && (
-                    <span className="ml-3 text-sm text-gray-400">
-                      Orders: {d.orderCount}
-                    </span>
+                    <span className="ml-3 text-sm text-gray-400">Orders: {d.orderCount}</span>
                   )}
                 </div>
                 <button

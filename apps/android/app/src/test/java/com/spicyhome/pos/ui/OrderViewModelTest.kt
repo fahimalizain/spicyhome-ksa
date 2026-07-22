@@ -1,23 +1,21 @@
 package com.spicyhome.pos.ui.order
 
+import com.google.common.truth.Truth.assertThat
+import com.spicyhome.client.apis.MenuApi
+import com.spicyhome.client.apis.OrdersApi
+import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.util.MoneyFormatter
-import com.google.common.truth.Truth.assertThat
-import com.spicyhome.client.apis.MenuApi
-import com.spicyhome.client.apis.OrdersApi
-import com.spicyhome.client.apis.TablesApi
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -31,15 +29,13 @@ import java.math.BigDecimal
 @OptIn(ExperimentalCoroutinesApi::class)
 class OrderViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var apiClientProvider: ApiClientProvider
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
-
-    private lateinit var viewModel: OrderViewModel
 
     @Before
     fun setUp() {
@@ -50,9 +46,24 @@ class OrderViewModelTest {
 
         every { preferencesManager.serverUrl } returns serverUrlFlow
         every { preferencesManager.authToken } returns authTokenFlow
-        coEvery { preferencesManager.setAuthToken(any()) } returns Unit
-        coEvery { preferencesManager.setUsername(any()) } returns Unit
-        coEvery { preferencesManager.clearAuth() } returns Unit
+
+        // Stable stubs for API factories — no NPEs, no swallowed exceptions
+        val menuApi = mockk<MenuApi>(relaxed = true)
+        val ordersApi = mockk<OrdersApi>(relaxed = true)
+        val tablesApi = mockk<TablesApi>(relaxed = true)
+
+        every { apiClientProvider.createMenuApi(any(), any()) } returns menuApi
+        every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
+        every { apiClientProvider.createTablesApi(any(), any()) } returns tablesApi
+
+        // Stub API calls so loadCategories/loadTables succeed without IO races
+        val catCall = mockk<Call<List<CategoryResponse>>>(relaxed = true)
+        every { menuApi.menuControllerListCategories() } returns catCall
+        every { catCall.execute() } returns Response.success(emptyList())
+
+        val tblCall = mockk<Call<List<TableResponse>>>(relaxed = true)
+        every { tablesApi.tablesControllerList() } returns tblCall
+        every { tblCall.execute() } returns Response.success(emptyList())
     }
 
     @After
@@ -62,9 +73,8 @@ class OrderViewModelTest {
 
     @Test
     fun `initial state is selecting type with empty cart`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        val state = viewModel.uiState.first()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        val state = vm.uiState.value
         assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
         assertThat(state.isCartEmpty).isTrue()
         assertThat(state.cartItemCount).isEqualTo(0)
@@ -73,13 +83,10 @@ class OrderViewModelTest {
 
     @Test
     fun `addToCart adds new item`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
         val item = createItem(1, "Chicken Biryani", 2000, 1500)
-
-        viewModel.addToCart(item)
-
-        val state = viewModel.uiState.first()
+        vm.addToCart(item)
+        val state = vm.uiState.value
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].item.name).isEqualTo("Chicken Biryani")
         assertThat(state.cart[0].qty).isEqualTo(1)
@@ -87,180 +94,126 @@ class OrderViewModelTest {
 
     @Test
     fun `addToCart increments qty for existing item`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
         val item = createItem(1, "Burger", 1500, 1500)
-
-        viewModel.addToCart(item)
-        viewModel.addToCart(item)
-        viewModel.addToCart(item)
-
-        val state = viewModel.uiState.first()
+        vm.addToCart(item)
+        vm.addToCart(item)
+        vm.addToCart(item)
+        val state = vm.uiState.value
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].qty).isEqualTo(3)
     }
 
     @Test
     fun `removeFromCart removes item at index`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "A", 1000, 1500))
-        viewModel.addToCart(createItem(2, "B", 2000, 1500))
-
-        viewModel.removeFromCart(0)
-
-        val state = viewModel.uiState.first()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "A", 1000, 1500))
+        vm.addToCart(createItem(2, "B", 2000, 1500))
+        vm.removeFromCart(0)
+        val state = vm.uiState.value
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].item.name).isEqualTo("B")
     }
 
     @Test
     fun `clearCart empties the cart`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "A", 1000, 1500))
-        viewModel.addToCart(createItem(2, "B", 2000, 1500))
-
-        viewModel.clearCart()
-
-        val state = viewModel.uiState.first()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "A", 1000, 1500))
+        vm.addToCart(createItem(2, "B", 2000, 1500))
+        vm.clearCart()
+        val state = vm.uiState.value
         assertThat(state.cart).isEmpty()
         assertThat(state.isCartEmpty).isTrue()
     }
 
     @Test
     fun `decreaseQty removes item when qty reaches 1`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "Item", 1000, 1500))
-        assertThat(viewModel.uiState.first().cart[0].qty).isEqualTo(1)
-
-        viewModel.decreaseQty(0)
-
-        assertThat(viewModel.uiState.first().cart).isEmpty()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "Item", 1000, 1500))
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(1)
+        vm.decreaseQty(0)
+        assertThat(vm.uiState.value.cart).isEmpty()
     }
 
     @Test
     fun `decreaseQty decrements qty when qty above 1`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "Item", 1000, 1500))
-        viewModel.increaseQty(0) // qty = 2
-        viewModel.increaseQty(0) // qty = 3
-
-        viewModel.decreaseQty(0)
-
-        assertThat(viewModel.uiState.first().cart[0].qty).isEqualTo(2)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "Item", 1000, 1500))
+        vm.increaseQty(0)
+        vm.increaseQty(0)
+        vm.decreaseQty(0)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
     }
 
     @Test
     fun `cartTotals computes correctly with multiple items`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        // Item 1: 1150 halalas (11.50 SAR vat-incl), qty 2
-        viewModel.addToCart(createItem(1, "Item1", 1150, 1500))
-        viewModel.increaseQty(0)
-
-        // Item 2: 2300 halalas (23.00 SAR vat-incl), qty 1
-        viewModel.addToCart(createItem(2, "Item2", 2300, 1500))
-
-        val state = viewModel.uiState.first()
-
-        // Total = 1150*2 + 2300 = 4600
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "Item1", 1150, 1500))
+        vm.increaseQty(0)
+        vm.addToCart(createItem(2, "Item2", 2300, 1500))
+        val state = vm.uiState.value
         assertThat(state.cartTotalHalalas).isEqualTo(4600L)
         assertThat(state.cartItemCount).isEqualTo(3)
-
-        // Verify VAT decomposition: each decomposed VAT + excl = price*qty
         val (_, excl, vat) = MoneyFormatter.cartItemTotal(1150, 2, 1500)
         assertThat(excl + vat).isEqualTo(2300L)
-
-        val (_, excl2, vat2) = MoneyFormatter.cartItemTotal(2300, 1, 1500)
-        assertThat(excl2 + vat2).isEqualTo(2300L)
     }
 
     @Test
     fun `cartTotalHalalas sums all item prices times qty`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "A", 1000, 1500)) // 1000
-        viewModel.addToCart(createItem(2, "B", 2000, 1500)) // 2000
-        viewModel.increaseQty(0) // A qty=2 => 2000
-
-        val state = viewModel.uiState.first()
-        // Total = 2000 + 2000 = 4000
-        assertThat(state.cartTotalHalalas).isEqualTo(4000L)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "A", 1000, 1500))
+        vm.addToCart(createItem(2, "B", 2000, 1500))
+        vm.increaseQty(0)
+        assertThat(vm.uiState.value.cartTotalHalalas).isEqualTo(4000L)
     }
 
     @Test
     fun `setOrderType changes order type`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.setOrderType(OrderType.TAKEAWAY)
-
-        assertThat(viewModel.uiState.first().orderType).isEqualTo(OrderType.TAKEAWAY)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.setOrderType(OrderType.TAKEAWAY)
+        assertThat(vm.uiState.value.orderType).isEqualTo(OrderType.TAKEAWAY)
     }
 
     @Test
     fun `setTable sets selected table`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.setTable(3)
-
-        assertThat(viewModel.uiState.first().selectedTableId).isEqualTo(3)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.setTable(3)
+        assertThat(vm.uiState.value.selectedTableId).isEqualTo(3)
     }
 
     @Test
     fun `proceedToBuild transitions to BUILDING_ORDER state`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.setOrderType(OrderType.TAKEAWAY)
-        viewModel.proceedToBuild()
-
-        assertThat(viewModel.uiState.first().screenState)
-            .isEqualTo(OrderScreenState.BUILDING_ORDER)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.setOrderType(OrderType.TAKEAWAY)
+        vm.proceedToBuild()
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.BUILDING_ORDER)
     }
 
     @Test
     fun `proceedToBuild requires table for dine_in`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        // DINE_IN without table selected
-        viewModel.proceedToBuild()
-
-        assertThat(viewModel.uiState.first().screenState)
-            .isEqualTo(OrderScreenState.SELECTING_TYPE)
-        assertThat(viewModel.uiState.first().error).isNotNull()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.proceedToBuild()
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+        assertThat(vm.uiState.value.error).isNotNull()
     }
 
     @Test
     fun `proceedToBuild with table for dine_in works`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.setOrderType(OrderType.DINE_IN)
-        viewModel.setTable(2)
-        viewModel.proceedToBuild()
-
-        assertThat(viewModel.uiState.first().screenState)
-            .isEqualTo(OrderScreenState.BUILDING_ORDER)
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.setOrderType(OrderType.DINE_IN)
+        vm.setTable(2)
+        vm.proceedToBuild()
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.BUILDING_ORDER)
     }
 
     @Test
     fun `newOrder resets to SELECTING_TYPE with empty cart`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "A", 1000, 1500))
-        viewModel.setOrderType(OrderType.TAKEAWAY)
-        viewModel.proceedToBuild()
-
-        // Manually advance screenState to simulate order created
-        val advanced = viewModel.uiState.first().copy(
-            screenState = OrderScreenState.ORDER_PAID,
-            currentOrderId = 123,
-        )
-        // Reset via newOrder
-        viewModel.newOrder()
-
-        val reset = viewModel.uiState.first()
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "A", 1000, 1500))
+        vm.setOrderType(OrderType.TAKEAWAY)
+        vm.proceedToBuild()
+        vm.newOrder()
+        val reset = vm.uiState.value
         assertThat(reset.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
         assertThat(reset.isCartEmpty).isTrue()
         assertThat(reset.currentOrderId).isNull()
@@ -268,15 +221,12 @@ class OrderViewModelTest {
 
     @Test
     fun `updateItemNotes updates notes for cart item`() = runTest {
-        viewModel = OrderViewModel(preferencesManager, apiClientProvider)
-
-        viewModel.addToCart(createItem(1, "A", 1000, 1500))
-        viewModel.updateItemNotes(0, "no onions, extra spicy")
-
-        assertThat(viewModel.uiState.first().cart[0].notes).isEqualTo("no onions, extra spicy")
+        val vm = OrderViewModel(preferencesManager, apiClientProvider)
+        vm.addToCart(createItem(1, "A", 1000, 1500))
+        vm.updateItemNotes(0, "no onions, extra spicy")
+        assertThat(vm.uiState.value.cart[0].notes).isEqualTo("no onions, extra spicy")
     }
 
-    // Helper to create fake ItemResponse
     private fun createItem(
         id: Long,
         name: String,

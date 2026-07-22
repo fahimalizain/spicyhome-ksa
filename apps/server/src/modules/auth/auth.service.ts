@@ -1,4 +1,11 @@
-import { Injectable, Inject, UnauthorizedException, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  UnauthorizedException,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compareSync, hashSync } from 'bcryptjs';
 import { eq } from 'drizzle-orm';
@@ -93,7 +100,10 @@ export class AuthService {
     return safe;
   }
 
-  createUser(dto: { username: string; pin: string; name: string; roleId: number }, createdBy: number): any {
+  createUser(
+    dto: { username: string; pin: string; name: string; roleId: number },
+    createdBy: number,
+  ): any {
     const existing = this.db.select().from(users).where(eq(users.username, dto.username)).get();
     if (existing) throw new ConflictException('Username already exists');
 
@@ -111,11 +121,24 @@ export class AuthService {
       ...createAuditFields(createdBy, now),
     };
 
-    const result = this.db.insert(users).values(row as any).run();
-    return { id: Number(result.lastInsertRowid), username: dto.username, name: dto.name, roleId: dto.roleId, isActive: true };
+    const result = this.db
+      .insert(users)
+      .values(row as any)
+      .run();
+    return {
+      id: Number(result.lastInsertRowid),
+      username: dto.username,
+      name: dto.name,
+      roleId: dto.roleId,
+      isActive: true,
+    };
   }
 
-  updateUser(id: number, dto: { name?: string; roleId?: number; isActive?: boolean; pin?: string }, updatedBy: number): any {
+  updateUser(
+    id: number,
+    dto: { name?: string; roleId?: number; isActive?: boolean; pin?: string },
+    updatedBy: number,
+  ): any {
     const user = this.db.select().from(users).where(eq(users.id, id)).get();
     if (!user) throw new NotFoundException('User not found');
 
@@ -153,7 +176,10 @@ export class AuthService {
       row[dbKey] = dto[dtoKey] ? 1 : 0;
     }
 
-    const result = this.db.insert(userRoles).values(row as any).run();
+    const result = this.db
+      .insert(userRoles)
+      .values(row as any)
+      .run();
     const id = Number(result.lastInsertRowid);
     return this.db.select().from(userRoles).where(eq(userRoles.id, id)).get();
   }

@@ -54,9 +54,7 @@ describe('seed', () => {
   it('inserts admin user with hashed PIN', () => {
     seedRaw(sqlite);
 
-    const admin = sqlite
-      .prepare('SELECT * FROM users WHERE username = ?')
-      .get('admin') as any;
+    const admin = sqlite.prepare('SELECT * FROM users WHERE username = ?').get('admin') as any;
 
     expect(admin).toBeDefined();
     expect(admin.name).toBe('Administrator');

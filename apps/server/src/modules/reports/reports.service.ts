@@ -20,8 +20,18 @@ export interface XReport {
   openOrderCount: number;
   voidedOrderCount: number;
   salesByType: Record<string, { count: number; totalHalalas: number }>;
-  salesByUser: Array<{ userId: number; userName: string; orderCount: number; totalHalalas: number }>;
-  salesByCategory: Array<{ categoryId: number | null; categoryName: string; itemCount: number; totalHalalas: number }>;
+  salesByUser: Array<{
+    userId: number;
+    userName: string;
+    orderCount: number;
+    totalHalalas: number;
+  }>;
+  salesByCategory: Array<{
+    categoryId: number | null;
+    categoryName: string;
+    itemCount: number;
+    totalHalalas: number;
+  }>;
   paymentTotals: { cash: number };
 }
 
@@ -59,11 +69,7 @@ export class ReportsService {
   private buildBreakdown(dayId: number): XReport {
     const day = this.db.select().from(dayOpenings).where(eq(dayOpenings.id, dayId)).get()!;
 
-    const allOrders = this.db
-      .select()
-      .from(orders)
-      .where(eq(orders.dayOpeningId, dayId))
-      .all();
+    const allOrders = this.db.select().from(orders).where(eq(orders.dayOpeningId, dayId)).all();
 
     const paidOrders = allOrders.filter((o) => o.status === 'paid');
     const sentOrders = allOrders.filter((o) => o.status === 'sent');
@@ -83,9 +89,14 @@ export class ReportsService {
 
     // Per-user sales
     const userIds = [...new Set(paidOrders.map((o) => o.createdBy).filter(Boolean))];
-    const userRows = userIds.length > 0
-      ? this.db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds as number[])).all()
-      : [];
+    const userRows =
+      userIds.length > 0
+        ? this.db
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(inArray(users.id, userIds as number[]))
+            .all()
+        : [];
     const userMap = new Map(userRows.map((u) => [u.id, u.name]));
 
     const salesByUser = userIds.map((uid) => {
@@ -100,13 +111,17 @@ export class ReportsService {
 
     // Per-category sales via order_items (includes deleted-item fallback)
     const paidOrderIds = paidOrders.map((o) => o.id);
-    const oiRows = paidOrderIds.length > 0
-      ? this.db.select().from(orderItems).where(inArray(orderItems.orderId, paidOrderIds)).all()
-      : [];
+    const oiRows =
+      paidOrderIds.length > 0
+        ? this.db.select().from(orderItems).where(inArray(orderItems.orderId, paidOrderIds)).all()
+        : [];
 
     const allCategories = this.db.select().from(itemCategories).all();
     const catMap = new Map(allCategories.map((c) => [c.id, c.name]));
-    const allItems = this.db.select({ id: items.id, categoryId: items.categoryId }).from(items).all();
+    const allItems = this.db
+      .select({ id: items.id, categoryId: items.categoryId })
+      .from(items)
+      .all();
     const itemCatMap = new Map(allItems.map((i) => [i.id, i.categoryId]));
 
     const catAgg = new Map<string, { itemCount: number; totalHalalas: number }>();
@@ -146,10 +161,7 @@ export class ReportsService {
   }
 
   async getSalesRange(from: string, to: string) {
-    const dayRows = this.db
-      .select()
-      .from(dayOpenings)
-      .all();
+    const dayRows = this.db.select().from(dayOpenings).all();
 
     const filtered = dayRows.filter((d) => d.businessDate >= from && d.businessDate <= to);
 

@@ -42,7 +42,12 @@ import {
   EncryptedData,
 } from './zatca-crypto.service';
 
-import { buildUnsignedInvoiceXML, InvoiceXMLInput, InvoiceItemInput, SellerInfo } from './zatca-xml-builder.service';
+import {
+  buildUnsignedInvoiceXML,
+  InvoiceXMLInput,
+  InvoiceItemInput,
+  SellerInfo,
+} from './zatca-xml-builder.service';
 import { encodeZatcaTLV, TLVInput } from './tlv';
 
 const VAT_NUMBER_HALALAS_DIVISOR = 100;
@@ -91,11 +96,7 @@ export class ZatcaInvoiceService {
    */
   async createInvoice(orderId: number): Promise<CreateInvoiceResult> {
     // Check for existing invoice
-    const existing = this.db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.orderId, orderId))
-      .get();
+    const existing = this.db.select().from(invoices).where(eq(invoices.orderId, orderId)).get();
 
     if (existing) {
       return {
@@ -112,11 +113,7 @@ export class ZatcaInvoiceService {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
-    const oiRows = this.db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId))
-      .all();
+    const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
 
     // Load seller config
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
@@ -140,9 +137,7 @@ export class ZatcaInvoiceService {
     // Load keys and certificate
     const privateKeyHex = this.getPrivateKey();
     if (!privateKeyHex) {
-      throw new Error(
-        'ZATCA private key not configured. Run onboarding first.',
-      );
+      throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
     const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
@@ -193,12 +188,7 @@ export class ZatcaInvoiceService {
     const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
 
     // Embed signature into XML
-    const signedXml = embedSignatureIntoXML(
-      unsignedXml,
-      invoiceHashB64,
-      signatureB64,
-      certBase64,
-    );
+    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certBase64);
 
     // Compute TLV QR payload
     const timestampIso = `${issueDate}T${issueTime}+03:00`;
@@ -215,18 +205,21 @@ export class ZatcaInvoiceService {
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
     // Insert invoice
-    const result = this.db.insert(invoices).values({
-      orderId,
-      icv,
-      uuid: invUuid,
-      invoiceHash: invoiceHashB64,
-      prevInvoiceHash,
-      xml: signedXml,
-      qrTlv: qrTlvBase64,
-      status: 'signed',
-      reportedAt: null,
-      ...createAuditFields(1, now),
-    } as any).run();
+    const result = this.db
+      .insert(invoices)
+      .values({
+        orderId,
+        icv,
+        uuid: invUuid,
+        invoiceHash: invoiceHashB64,
+        prevInvoiceHash,
+        xml: signedXml,
+        qrTlv: qrTlvBase64,
+        status: 'signed',
+        reportedAt: null,
+        ...createAuditFields(1, now),
+      } as any)
+      .run();
 
     const invoiceId = Number(result.lastInsertRowid);
 
@@ -256,11 +249,7 @@ export class ZatcaInvoiceService {
    * Get invoice by order ID.
    */
   getByOrderId(orderId: number): any {
-    return this.db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.orderId, orderId))
-      .get();
+    return this.db.select().from(invoices).where(eq(invoices.orderId, orderId)).get();
   }
 
   /**
@@ -280,11 +269,7 @@ export class ZatcaInvoiceService {
    * Get invoice by ID.
    */
   getById(id: number): any {
-    return this.db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.id, id))
-      .get();
+    return this.db.select().from(invoices).where(eq(invoices.id, id)).get();
   }
 
   /**
@@ -304,11 +289,7 @@ export class ZatcaInvoiceService {
    */
   private allocateICV(tx: any): { icv: number; prevInvoiceHash: string } {
     // Get last ICV
-    const lastIcvRow = tx
-      .select()
-      .from(settings)
-      .where(eq(settings.key, 'last_icv'))
-      .get();
+    const lastIcvRow = tx.select().from(settings).where(eq(settings.key, 'last_icv')).get();
 
     let icv: number;
     if (lastIcvRow) {
@@ -319,9 +300,7 @@ export class ZatcaInvoiceService {
         .run();
     } else {
       icv = 1;
-      tx.insert(settings)
-        .values({ key: 'last_icv', value: '1' })
-        .run();
+      tx.insert(settings).values({ key: 'last_icv', value: '1' }).run();
     }
 
     // Get PIH from the previous invoice

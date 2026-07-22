@@ -5,13 +5,13 @@ function findGeneratedDir(): string {
   const candidates = [
     path.join(process.cwd(), 'packages', 'client-kt', 'src', 'generated'),
     path.join(__dirname, 'generated'),
-    path.join(
-      process.env.RUNFILES_DIR || '',
-      '_main', 'packages', 'client-kt', 'src', 'generated',
-    ),
+    path.join(process.env.RUNFILES_DIR || '', '_main', 'packages', 'client-kt', 'src', 'generated'),
     path.join(
       process.env.BUILD_WORKSPACE_DIRECTORY || '',
-      'packages', 'client-kt', 'src', 'generated',
+      'packages',
+      'client-kt',
+      'src',
+      'generated',
     ),
   ];
   for (const c of candidates) {
@@ -21,7 +21,13 @@ function findGeneratedDir(): string {
 }
 
 const GENERATED_ROOT = path.join(
-  findGeneratedDir(), 'src', 'main', 'kotlin', 'com', 'spicyhome', 'client',
+  findGeneratedDir(),
+  'src',
+  'main',
+  'kotlin',
+  'com',
+  'spicyhome',
+  'client',
 );
 
 describe('Kotlin client verification', () => {
@@ -44,12 +50,7 @@ describe('Kotlin client verification', () => {
     'CreatePrinterDto',
     'UpdatePrinterDto',
   ];
-  const requiredInfrastructure = [
-    'ApiClient',
-    'Serializer',
-    'CollectionFormats',
-    'HttpBearerAuth',
-  ];
+  const requiredInfrastructure = ['ApiClient', 'Serializer', 'CollectionFormats', 'HttpBearerAuth'];
 
   for (const api of requiredApis) {
     it(`generated API class exists: ${api}`, () => {
@@ -69,37 +70,28 @@ describe('Kotlin client verification', () => {
     it(`generated infrastructure class exists: ${infra}`, () => {
       const infraDir = path.join(GENERATED_ROOT, 'infrastructure');
       const authDir = path.join(GENERATED_ROOT, 'auth');
-      const possiblePaths = [
-        path.join(infraDir, `${infra}.kt`),
-        path.join(authDir, `${infra}.kt`),
-      ];
+      const possiblePaths = [path.join(infraDir, `${infra}.kt`), path.join(authDir, `${infra}.kt`)];
       const exists = possiblePaths.some((p) => fs.existsSync(p));
       expect(exists).toBe(true);
     });
   }
 
   it('AuthApi contains login method', () => {
-    const content = fs.readFileSync(
-      path.join(GENERATED_ROOT, 'apis', 'AuthApi.kt'), 'utf-8',
-    );
+    const content = fs.readFileSync(path.join(GENERATED_ROOT, 'apis', 'AuthApi.kt'), 'utf-8');
     expect(content).toContain('fun authControllerLogin');
     expect(content).toContain('loginDto: LoginDto');
     expect(content).toContain('Call<LoginResponse>');
   });
 
   it('OrdersApi contains createOrder method', () => {
-    const content = fs.readFileSync(
-      path.join(GENERATED_ROOT, 'apis', 'OrdersApi.kt'), 'utf-8',
-    );
+    const content = fs.readFileSync(path.join(GENERATED_ROOT, 'apis', 'OrdersApi.kt'), 'utf-8');
     expect(content).toContain('fun ordersControllerCreateOrder');
     expect(content).toContain('createOrderDto: CreateOrderDto');
     expect(content).toContain('Call<CreateOrderResponse>');
   });
 
   it('OrdersApi getOrder returns typed OrderResponse', () => {
-    const content = fs.readFileSync(
-      path.join(GENERATED_ROOT, 'apis', 'OrdersApi.kt'), 'utf-8',
-    );
+    const content = fs.readFileSync(path.join(GENERATED_ROOT, 'apis', 'OrdersApi.kt'), 'utf-8');
     expect(content).toContain('fun ordersControllerGetOrder');
     expect(content).toContain('Call<OrderResponse>');
   });
@@ -123,7 +115,8 @@ describe('Kotlin client verification', () => {
 
   it('ApiClient contains baseUrl configuration', () => {
     const content = fs.readFileSync(
-      path.join(GENERATED_ROOT, 'infrastructure', 'ApiClient.kt'), 'utf-8',
+      path.join(GENERATED_ROOT, 'infrastructure', 'ApiClient.kt'),
+      'utf-8',
     );
     expect(content).toContain('baseUrl');
   });

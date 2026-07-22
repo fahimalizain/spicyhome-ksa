@@ -1,8 +1,22 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { orders, orderItems, orderAuditLog, tables, dayOpenings, settings, items } from '@spicyhome/db';
+import {
+  orders,
+  orderItems,
+  orderAuditLog,
+  tables,
+  dayOpenings,
+  settings,
+  items,
+} from '@spicyhome/db';
 import { decomposeVat } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
@@ -19,9 +33,11 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   refunded: [],
 };
 
-function recomputeOrderTotals(
-  rows: Array<{ totalHalalas: number; vatRateBp: number }>,
-): { subtotalHalalas: number; vatHalalas: number; totalHalalas: number } {
+function recomputeOrderTotals(rows: Array<{ totalHalalas: number; vatRateBp: number }>): {
+  subtotalHalalas: number;
+  vatHalalas: number;
+  totalHalalas: number;
+} {
   let subtotal = 0;
   let vat = 0;
   let total = 0;
@@ -60,8 +76,15 @@ export class OrdersService {
       if (!table || !table.isActive) throw new NotFoundException('Table not found or inactive');
     }
 
-    const dayOpening = this.db.select().from(dayOpenings).where(eq(dayOpenings.status, 'open')).get();
-    if (!dayOpening) throw new ConflictException('No open business day. Open a business day before creating orders.');
+    const dayOpening = this.db
+      .select()
+      .from(dayOpenings)
+      .where(eq(dayOpenings.status, 'open'))
+      .get();
+    if (!dayOpening)
+      throw new ConflictException(
+        'No open business day. Open a business day before creating orders.',
+      );
 
     const today = todayInRiyadh();
     if (dayOpening.businessDate !== today) {
@@ -94,12 +117,19 @@ export class OrdersService {
 
       const orderId = Number(insertResult.lastInsertRowid);
 
-      this.auditLog.createEntry(tx, orderId, userId, 'created', {
-        type: dto.type,
-        tableId: dto.tableId ?? null,
-        orderNo,
-        uuid: orderUuid,
-      }, now);
+      this.auditLog.createEntry(
+        tx,
+        orderId,
+        userId,
+        'created',
+        {
+          type: dto.type,
+          tableId: dto.tableId ?? null,
+          orderNo,
+          uuid: orderUuid,
+        },
+        now,
+      );
 
       return { id: orderId, uuid: orderUuid, orderNo };
     });
@@ -110,14 +140,12 @@ export class OrdersService {
   private getNextOrderNo(tx: any, now: number): number {
     const today = new Date(now * 1000).toISOString().slice(0, 10);
 
-    const row = tx
-      .select()
-      .from(settings)
-      .where(eq(settings.key, 'daily_order_seq'))
-      .get();
+    const row = tx.select().from(settings).where(eq(settings.key, 'daily_order_seq')).get();
 
     if (!row) {
-      tx.insert(settings).values({ key: 'daily_order_seq', value: `${today}:1` }).run();
+      tx.insert(settings)
+        .values({ key: 'daily_order_seq', value: `${today}:1` })
+        .run();
       return 1;
     }
 
@@ -140,7 +168,11 @@ export class OrdersService {
     }
   }
 
-  async addItem(orderId: number, dto: { itemId: number; qty: number; notes?: string }, userId: number) {
+  async addItem(
+    orderId: number,
+    dto: { itemId: number; qty: number; notes?: string },
+    userId: number,
+  ) {
     const now = Math.floor(Date.now() / 1000);
 
     return this.db.transaction((tx: any) => {
@@ -153,32 +185,46 @@ export class OrdersService {
 
       const totalHalalas = item.priceHalalas * dto.qty;
 
-      tx.insert(orderItems).values({
-        orderId,
-        itemId: item.id,
-        itemName: item.name,
-        unitPriceHalalas: item.priceHalalas,
-        vatRateBp: item.vatRateBp,
-        qty: dto.qty,
-        totalHalalas,
-        notes: dto.notes ?? null,
-        ...createAuditFields(userId, now),
-      }).run();
+      tx.insert(orderItems)
+        .values({
+          orderId,
+          itemId: item.id,
+          itemName: item.name,
+          unitPriceHalalas: item.priceHalalas,
+          vatRateBp: item.vatRateBp,
+          qty: dto.qty,
+          totalHalalas,
+          notes: dto.notes ?? null,
+          ...createAuditFields(userId, now),
+        })
+        .run();
 
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(tx, orderId, userId, 'item_added', {
-        itemId: item.id,
-        itemName: item.name,
-        qty: dto.qty,
-        totalHalalas,
-      }, now);
+      this.auditLog.createEntry(
+        tx,
+        orderId,
+        userId,
+        'item_added',
+        {
+          itemId: item.id,
+          itemName: item.name,
+          qty: dto.qty,
+          totalHalalas,
+        },
+        now,
+      );
 
       return { success: true };
     });
   }
 
-  async updateItem(orderId: number, orderItemId: number, dto: { qty?: number; notes?: string }, userId: number) {
+  async updateItem(
+    orderId: number,
+    orderItemId: number,
+    dto: { qty?: number; notes?: string },
+    userId: number,
+  ) {
     const now = Math.floor(Date.now() / 1000);
 
     return this.db.transaction((tx: any) => {
@@ -200,11 +246,18 @@ export class OrdersService {
 
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(tx, orderId, userId, 'item_updated', {
-        orderItemId,
-        qty: dto.qty,
-        notes: dto.notes,
-      }, now);
+      this.auditLog.createEntry(
+        tx,
+        orderId,
+        userId,
+        'item_updated',
+        {
+          orderItemId,
+          qty: dto.qty,
+          notes: dto.notes,
+        },
+        now,
+      );
 
       return { success: true };
     });
@@ -225,11 +278,18 @@ export class OrdersService {
 
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(tx, orderId, userId, 'item_removed', {
-        orderItemId,
-        itemName: oi.itemName,
-        totalHalalas: oi.totalHalalas,
-      }, now);
+      this.auditLog.createEntry(
+        tx,
+        orderId,
+        userId,
+        'item_removed',
+        {
+          orderItemId,
+          itemName: oi.itemName,
+          totalHalalas: oi.totalHalalas,
+        },
+        now,
+      );
 
       return { success: true };
     });
@@ -266,7 +326,12 @@ export class OrdersService {
     }
   }
 
-  private transitionStatus(orderId: number, newStatus: string, auditAction: string, userId: number) {
+  private transitionStatus(
+    orderId: number,
+    newStatus: string,
+    auditAction: string,
+    userId: number,
+  ) {
     const now = Math.floor(Date.now() / 1000);
 
     return this.db.transaction((tx: any) => {
@@ -285,10 +350,17 @@ export class OrdersService {
         .where(eq(orders.id, orderId))
         .run();
 
-      this.auditLog.createEntry(tx, orderId, userId, auditAction, {
-        fromStatus: order.status,
-        toStatus: newStatus,
-      }, now);
+      this.auditLog.createEntry(
+        tx,
+        orderId,
+        userId,
+        auditAction,
+        {
+          fromStatus: order.status,
+          toStatus: newStatus,
+        },
+        now,
+      );
 
       return { success: true, status: newStatus };
     });
@@ -321,12 +393,22 @@ export class OrdersService {
     const order = this.db.select().from(orders).where(eq(orders.id, id)).get();
     if (!order) throw new NotFoundException('Order not found');
     const itemsList = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
-    const logs = this.db.select().from(orderAuditLog).where(eq(orderAuditLog.orderId, id)).orderBy(orderAuditLog.id).all();
+    const logs = this.db
+      .select()
+      .from(orderAuditLog)
+      .where(eq(orderAuditLog.orderId, id))
+      .orderBy(orderAuditLog.id)
+      .all();
     return { ...order, items: itemsList, auditLog: logs };
   }
 
   verifyAuditChain(orderId: number): any {
-    const logs = this.db.select().from(orderAuditLog).where(eq(orderAuditLog.orderId, orderId)).orderBy(orderAuditLog.id).all();
+    const logs = this.db
+      .select()
+      .from(orderAuditLog)
+      .where(eq(orderAuditLog.orderId, orderId))
+      .orderBy(orderAuditLog.id)
+      .all();
     return this.auditLog.verifyChain(orderId, logs);
   }
 }

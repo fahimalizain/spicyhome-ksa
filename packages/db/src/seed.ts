@@ -20,31 +20,25 @@ const now = Math.floor(Date.now() / 1000);
  *
  * Idempotent: skips insert if roles/user already exist.
  */
-export function seed(
-  sqliteOrDb: Database.Database | BetterSQLite3Database,
-): void {
-  const sqlite =
-    'exec' in sqliteOrDb ? (sqliteOrDb as Database.Database) : undefined;
-  const db =
-    'insert' in sqliteOrDb
-      ? (sqliteOrDb as BetterSQLite3Database)
-      : drizzle(sqlite!);
+export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): void {
+  const sqlite = 'exec' in sqliteOrDb ? (sqliteOrDb as Database.Database) : undefined;
+  const db = 'insert' in sqliteOrDb ? (sqliteOrDb as BetterSQLite3Database) : drizzle(sqlite!);
 
-  const adminRole = db.select().from(userRoles).where(
-    // drizzle where expects SQL
-    undefined as any,
-  ).all();
+  const adminRole = db
+    .select()
+    .from(userRoles)
+    .where(
+      // drizzle where expects SQL
+      undefined as any,
+    )
+    .all();
 
   // Check using raw SQL for simplicity since drizzle query builder is verbose
-  const execSql = sqlite
-    ? sqlite
-    : ('exec' in (db as any).run
-        ? undefined
-        : undefined);
+  const execSql = sqlite ? sqlite : 'exec' in (db as any).run ? undefined : undefined;
 
   // Use the raw sqlite instance to check existence
   const rawDb = sqlite ?? ((db as any).run as any);
-  const checkSqlite = 'prepare' in sqliteOrDb ? sqliteOrDb as Database.Database : undefined;
+  const checkSqlite = 'prepare' in sqliteOrDb ? (sqliteOrDb as Database.Database) : undefined;
 
   // Actually, let's use a simpler approach — just do the inserts with OR IGNORE
   const effectiveSqlite = findSqlite(db, sqlite);
@@ -52,9 +46,9 @@ export function seed(
     throw new Error('Cannot get raw sqlite instance for seed');
   }
 
-  const existingRoles = effectiveSqlite
-    .prepare('SELECT COUNT(*) as cnt FROM user_roles')
-    .get() as { cnt: number };
+  const existingRoles = effectiveSqlite.prepare('SELECT COUNT(*) as cnt FROM user_roles').get() as {
+    cnt: number;
+  };
 
   if (existingRoles.cnt === 0) {
     effectiveSqlite.exec(`

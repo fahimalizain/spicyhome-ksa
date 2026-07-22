@@ -9,15 +9,7 @@ import { PrintersModule } from '../printers/printers.module';
 @Module({
   imports: [PrintersModule],
   controllers: [ZatcaController],
-  providers: [
-    ZatcaInvoiceService,
-    ZatcaOnboardingService,
-    ZatcaReportingService,
-    ZatcaHttpService,
-  ],
-  exports: [
-    ZatcaInvoiceService,
-    ZatcaHttpService,
-  ],
+  providers: [ZatcaInvoiceService, ZatcaOnboardingService, ZatcaReportingService, ZatcaHttpService],
+  exports: [ZatcaInvoiceService, ZatcaHttpService],
 })
 export class ZatcaModule {}

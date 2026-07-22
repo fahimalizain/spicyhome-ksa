@@ -28,7 +28,10 @@ export class TablesService {
       isActive: dto.isActive !== undefined ? (dto.isActive ? 1 : 0) : 1,
       ...createAuditFields(userId, now),
     };
-    const result = this.db.insert(tables).values(row as any).run();
+    const result = this.db
+      .insert(tables)
+      .values(row as any)
+      .run();
     return { id: Number(result.lastInsertRowid), ...row };
   }
 

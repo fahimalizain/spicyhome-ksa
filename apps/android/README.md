@@ -10,10 +10,10 @@ the Gradle wrapper.
 
 ### Bazel targets
 
-| Target | Command | What it does |
-|---|---|---|
-| APK (debug) | `bazel build //apps/android:apk` | Assembles debug APK via `./gradlew assembleDebug` |
-| Unit tests | `bazel test //apps/android:unit_tests` | Runs `./gradlew testDebugUnitTest` |
+| Target      | Command                                | What it does                                      |
+| ----------- | -------------------------------------- | ------------------------------------------------- |
+| APK (debug) | `bazel build //apps/android:apk`       | Assembles debug APK via `./gradlew assembleDebug` |
+| Unit tests  | `bazel test //apps/android:unit_tests` | Runs `./gradlew testDebugUnitTest`                |
 
 ### Prerequisites
 

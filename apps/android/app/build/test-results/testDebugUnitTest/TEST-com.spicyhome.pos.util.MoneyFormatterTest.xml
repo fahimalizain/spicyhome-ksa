@@ -1,44 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.spicyhome.pos.util.MoneyFormatterTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-07-22T06:34:51" hostname="Fahims-MacBook-Pro.local" time="0.003">
+<testsuite name="com.spicyhome.pos.util.MoneyFormatterTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-07-22T07:06:35" hostname="Fahims-MacBook-Pro.local" time="0.002">
   <properties/>
   <testcase name="cartItemTotal single item qty 1" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="halalasToSar with BigDecimal" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="halalasToSar includes SAR suffix" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="decomposeVat round trip within 1 halala" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.002"/>
-  <testcase name="cartItemTotal computes correctly" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.001"/>
+  <testcase name="cartItemTotal computes correctly" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="halalasToSar formats correctly" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="decomposeVat 15 percent" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <testcase name="decomposeVat with random values" classname="com.spicyhome.pos.util.MoneyFormatterTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[Exception in thread "DefaultDispatcher-worker-4" kotlinx.coroutines.CoroutinesInternalError: Fatal exception in coroutines machinery for DispatchedContinuation[Dispatchers.IO, Continuation at com.spicyhome.pos.ui.order.OrderViewModel$loadCategories$1$response$1.invokeSuspend(OrderViewModel.kt)@253a853f]. Please read KDoc to 'handleFatalException' method and report this incident to maintainers
-	at kotlinx.coroutines.DispatchedTask.handleFatalException$kotlinx_coroutines_core(DispatchedTask.kt:132)
-	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:109)
-	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:113)
-	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:589)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:823)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:720)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:707)
-	Suppressed: kotlinx.coroutines.internal.DiagnosticCoroutineContextException: [CoroutineId(266), "coroutine#266":DispatchedCoroutine{Completed}@60560c78, Dispatchers.IO]
-Caused by: java.lang.IllegalStateException: Module with the Main dispatcher had failed to initialize. For tests Dispatchers.setMain from kotlinx-coroutines-test module can be used
-	at kotlinx.coroutines.internal.MissingMainCoroutineDispatcher.missing(MainDispatchers.kt:111)
-	at kotlinx.coroutines.internal.MissingMainCoroutineDispatcher.isDispatchNeeded(MainDispatchers.kt:92)
-	at kotlinx.coroutines.test.internal.TestMainDispatcher.isDispatchNeeded(TestMainDispatcher.kt:27)
-	at kotlinx.coroutines.internal.DispatchedContinuationKt.resumeCancellableWith(DispatchedContinuation.kt:299)
-	at kotlinx.coroutines.DispatchedCoroutine.afterResume(Builders.common.kt:255)
-	at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:100)
-	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)
-	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:101)
-	... 6 more
-Caused by: java.lang.RuntimeException: Method getMainLooper in android.os.Looper not mocked. See https://developer.android.com/r/studio-ui/build/not-mocked for details.
-	at android.os.Looper.getMainLooper(Looper.java)
-	at kotlinx.coroutines.android.AndroidDispatcherFactory.createDispatcher(HandlerDispatcher.kt:51)
-	at kotlinx.coroutines.internal.MainDispatchersKt.tryCreateDispatcher(MainDispatchers.kt:53)
-	at kotlinx.coroutines.test.internal.TestMainDispatcherFactory.createDispatcher(TestMainDispatcherJvm.kt:11)
-	at kotlinx.coroutines.internal.MainDispatchersKt.tryCreateDispatcher(MainDispatchers.kt:53)
-	at kotlinx.coroutines.internal.MainDispatcherLoader.loadMainDispatcher(MainDispatchers.kt:34)
-	at kotlinx.coroutines.internal.MainDispatcherLoader.<clinit>(MainDispatchers.kt:18)
-	at kotlinx.coroutines.Dispatchers.getMain(Dispatchers.kt:20)
-	at kotlinx.coroutines.test.internal.TestMainDispatcher$Companion.getCurrentTestDispatcher$kotlinx_coroutines_test(TestMainDispatcher.kt:47)
-]]></system-err>
+  <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -17,15 +17,15 @@ describe('sarToHalalas', () => {
   });
 
   it('converts SAR with decimals to halalas', () => {
-    expect(sarToHalalas(12.50)).toBe(1250);
+    expect(sarToHalalas(12.5)).toBe(1250);
     expect(sarToHalalas(0.99)).toBe(99);
     expect(sarToHalalas(1.01)).toBe(101);
     expect(sarToHalalas(0.01)).toBe(1);
   });
 
   it('rounds SAR to nearest halala', () => {
-    expect(sarToHalalas(0.005)).toBe(1);   // 0.005 * 100 = 0.5, round-half-up → 1
-    expect(sarToHalalas(0.004)).toBe(0);   // 0.004 * 100 = 0.4 → 0
+    expect(sarToHalalas(0.005)).toBe(1); // 0.005 * 100 = 0.5, round-half-up → 1
+    expect(sarToHalalas(0.004)).toBe(0); // 0.004 * 100 = 0.4 → 0
     expect(sarToHalalas(12.345)).toBe(1235); // 12.345 * 100 = 1234.5 → 1235
     expect(sarToHalalas(12.344)).toBe(1234); // 12.344 * 100 = 1234.4 → 1234
   });
@@ -129,11 +129,9 @@ describe('decomposeVat', () => {
       // priceIncl * 1500 = 17250 → priceIncl = 11.5 → not integer
       // Choose k=2: numerator = 23000 + 5750 = 28750
       // priceIncl * 1500 = 28750 → priceIncl = 19.166... → not integer
-
       // Let's just test a known case: if result is exactly .5, round up.
       // 115 * 1500 / 11500 = 172500 / 11500 = 15.0 → not .5
       // Test with 5%: 5 * 500 / 10500 = 2500 / 10500 = 0.238...
-
       // Construct: want numerator / denominator = k + 0.5
       // numerator = denominator * k + denominator / 2
       // For 15%: denominator = 11500, need numerator = 11500k + 5750
@@ -150,7 +148,6 @@ describe('decomposeVat', () => {
       // For k=15: 11500*15 + 5750 = 178250, 178250/1500 = 118.833 no
       // For k=5: 11500*5 + 5750 = 63250, 63250/1500 = 42.166 no
       // For k=1: 11500 + 5750 = 17250, 17250/1500 = 11.5 no
-
       // This is getting complex. The exact .5 boundary is hard to hit in practice.
       // We'll verify round-half-up behavior indirectly through recomposition.
     });

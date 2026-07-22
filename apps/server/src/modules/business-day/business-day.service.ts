@@ -13,9 +13,7 @@ function todayInRiyadh(): string {
 
 @Injectable()
 export class BusinessDayService {
-  constructor(
-    @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
-  ) {}
+  constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {}
 
   getOpenDay() {
     return this.db.select().from(dayOpenings).where(eq(dayOpenings.status, 'open')).get() ?? null;
@@ -24,7 +22,9 @@ export class BusinessDayService {
   async openDay(dto: { openingCashHalalas: number }, userId: number) {
     const existing = this.getOpenDay();
     if (existing) {
-      throw new ConflictException('A business day is already open. Close it before opening a new one.');
+      throw new ConflictException(
+        'A business day is already open. Close it before opening a new one.',
+      );
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -39,8 +39,15 @@ export class BusinessDayService {
       ...createAuditFields(userId, now),
     };
 
-    const result = this.db.insert(dayOpenings).values(values as any).run();
-    return this.db.select().from(dayOpenings).where(eq(dayOpenings.id, Number(result.lastInsertRowid))).get();
+    const result = this.db
+      .insert(dayOpenings)
+      .values(values as any)
+      .run();
+    return this.db
+      .select()
+      .from(dayOpenings)
+      .where(eq(dayOpenings.id, Number(result.lastInsertRowid)))
+      .get();
   }
 
   async closeDay(dto: { closingCashHalalas: number }, userId: number) {
@@ -79,23 +86,13 @@ export class BusinessDayService {
         vatHalalas: orders.vatHalalas,
       })
       .from(orders)
-      .where(
-        and(
-          eq(orders.dayOpeningId, openDay.id),
-          eq(orders.status, 'paid'),
-        ),
-      )
+      .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'paid')))
       .all();
 
     const voidedCount = this.db
       .select({ count: orders.id })
       .from(orders)
-      .where(
-        and(
-          eq(orders.dayOpeningId, openDay.id),
-          eq(orders.status, 'voided'),
-        ),
-      )
+      .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'voided')))
       .all().length;
 
     const totalSalesHalalas = paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0);
@@ -132,12 +129,7 @@ export class BusinessDayService {
         vatHalalas: orders.vatHalalas,
       })
       .from(orders)
-      .where(
-        and(
-          eq(orders.dayOpeningId, openDay.id),
-          eq(orders.status, 'paid'),
-        ),
-      )
+      .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'paid')))
       .all();
 
     const liveSales = paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0);

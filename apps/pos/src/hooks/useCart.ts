@@ -24,7 +24,12 @@ type CartAction =
   | { type: 'UPDATE_NOTES'; itemId: number; notes: string }
   | { type: 'SET_ORDER_TYPE'; orderType: 'dine_in' | 'takeaway'; tableId: number | null }
   | { type: 'CLEAR' }
-  | { type: 'LOAD_ORDER'; items: CartItem[]; orderType: 'dine_in' | 'takeaway'; tableId: number | null };
+  | {
+      type: 'LOAD_ORDER';
+      items: CartItem[];
+      orderType: 'dine_in' | 'takeaway';
+      tableId: number | null;
+    };
 
 export interface CartTotals {
   subtotalHalalas: number;
@@ -79,9 +84,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         return {
           ...state,
           items: state.items.map((i) =>
-            i.itemId === action.item.itemId
-              ? { ...i, qty: i.qty + action.item.qty }
-              : i,
+            i.itemId === action.item.itemId ? { ...i, qty: i.qty + action.item.qty } : i,
           ),
         };
       }
@@ -101,9 +104,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       }
       return {
         ...state,
-        items: state.items.map((i) =>
-          i.itemId === action.itemId ? { ...i, qty: action.qty } : i,
-        ),
+        items: state.items.map((i) => (i.itemId === action.itemId ? { ...i, qty: action.qty } : i)),
       };
     }
     case 'UPDATE_NOTES':
@@ -165,7 +166,7 @@ export function useCart() {
 
   const loadOrder = useCallback((order: OrderResponse) => {
     const items: CartItem[] = (order.items || []).map((oi) => ({
-      itemId: oi.itemId as unknown as number || 0,
+      itemId: (oi.itemId as unknown as number) || 0,
       name: oi.itemName,
       unitPriceHalalas: oi.unitPriceHalalas,
       vatRateBp: oi.vatRateBp,

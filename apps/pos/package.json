@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "pnpm exec eslint src",
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
     "@spicyhome/client-ts": "workspace:*",

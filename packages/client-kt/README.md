@@ -24,10 +24,10 @@ the openapi-generator JAR (~30 MB) to the npm cache.
 
 ### Tests
 
-| Test | Command | What it checks |
-|---|---|---|
-| Verify | `bazel test //packages/client-kt:test` | All expected API classes (AuthApi, MenuApi, OrdersApi, TablesApi, PrintersApi), models (LoginDto, CreateOrderDto, etc.), and infrastructure classes exist in the checked-in sources. Always runs, no Java needed. |
-| Drift | Included in `:test`, auto-skips when Java unavailable | Regenerates to a temp dir, diffs against checked-in sources. Fails if the spec changed but sources weren't regenerated. |
+| Test   | Command                                               | What it checks                                                                                                                                                                                                    |
+| ------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verify | `bazel test //packages/client-kt:test`                | All expected API classes (AuthApi, MenuApi, OrdersApi, TablesApi, PrintersApi), models (LoginDto, CreateOrderDto, etc.), and infrastructure classes exist in the checked-in sources. Always runs, no Java needed. |
+| Drift  | Included in `:test`, auto-skips when Java unavailable | Regenerates to a temp dir, diffs against checked-in sources. Fails if the spec changed but sources weren't regenerated.                                                                                           |
 
 ### Structure
 

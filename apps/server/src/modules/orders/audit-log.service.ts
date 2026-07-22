@@ -37,8 +37,7 @@ export class AuditLogService {
     const prevHash = this.getLastHash(tx, orderId);
     const payloadJson = JSON.stringify(payload);
     const hash = this.computeHash(orderId, userId, action, payloadJson, prevHash, createdAt);
-    tx
-      .insert(orderAuditLog)
+    tx.insert(orderAuditLog)
       .values({
         orderId,
         userId,
@@ -61,7 +60,10 @@ export class AuditLogService {
       .all();
   }
 
-  verifyChain(orderId: number, entries: any[]): { valid: boolean; expectedHash?: string; gotHash?: string; index?: number } {
+  verifyChain(
+    orderId: number,
+    entries: any[],
+  ): { valid: boolean; expectedHash?: string; gotHash?: string; index?: number } {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const expectedPrevHash = i === 0 ? '' : entries[i - 1].hash;

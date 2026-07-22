@@ -85,9 +85,7 @@ describe('Client contract test', () => {
   });
 
   it('login fails with wrong credentials', async () => {
-    await expect(
-      client.auth.login({ username: 'admin', pin: '0000' }),
-    ).rejects.toThrow();
+    await expect(client.auth.login({ username: 'admin', pin: '0000' })).rejects.toThrow();
   });
 
   it('createRole returns camelCase shape matching listRoles', async () => {
@@ -168,7 +166,7 @@ describe('Client contract test', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ openingCashHalalas: 50000 }),
     });

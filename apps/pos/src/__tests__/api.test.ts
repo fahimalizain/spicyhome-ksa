@@ -4,9 +4,15 @@ const mockLocalStorage = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 
@@ -16,7 +22,15 @@ vi.mock('@spicyhome/client-ts', () => ({
   SpicyHomeClient: vi.fn().mockImplementation(() => ({
     auth: { login: vi.fn(), me: vi.fn(), listUsers: vi.fn() },
     menu: { listCategories: vi.fn(), listItems: vi.fn() },
-    orders: { list: vi.fn(), get: vi.fn(), create: vi.fn(), addItem: vi.fn(), send: vi.fn(), pay: vi.fn(), void: vi.fn() },
+    orders: {
+      list: vi.fn(),
+      get: vi.fn(),
+      create: vi.fn(),
+      addItem: vi.fn(),
+      send: vi.fn(),
+      pay: vi.fn(),
+      void: vi.fn(),
+    },
     tables: { list: vi.fn() },
     printers: { list: vi.fn() },
   })),
@@ -57,10 +71,24 @@ describe('api module', () => {
   });
 
   it('setMe and getMe round-trip', () => {
-    const me = { id: 1, username: 'admin', name: 'Admin', roleName: 'admin', roleId: 1, isActive: true,
-      manageMenu: true, manageUsers: true, createOrder: true, updateOrder: true,
-      deleteOrderItem: false, voidOrder: false, refundOrder: false,
-      manageTables: false, managePrinters: false, manageSettings: false };
+    const me = {
+      id: 1,
+      username: 'admin',
+      name: 'Admin',
+      roleName: 'admin',
+      roleId: 1,
+      isActive: true,
+      manageMenu: true,
+      manageUsers: true,
+      createOrder: true,
+      updateOrder: true,
+      deleteOrderItem: false,
+      voidOrder: false,
+      refundOrder: false,
+      manageTables: false,
+      managePrinters: false,
+      manageSettings: false,
+    };
     api.setMe(me);
     const stored = api.getMe();
     expect(stored).toEqual(me);

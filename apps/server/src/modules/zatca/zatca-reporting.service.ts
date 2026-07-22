@@ -35,10 +35,7 @@ export class ZatcaReportingService implements OnModuleInit {
     private httpClient: ZatcaHttpService,
     private printersService: PrintersService,
   ) {
-    const intervalMin = parseInt(
-      process.env.ZATCA_REPORTING_INTERVAL_MIN || '5',
-      10,
-    );
+    const intervalMin = parseInt(process.env.ZATCA_REPORTING_INTERVAL_MIN || '5', 10);
     this.POLL_INTERVAL_MS = Math.max(intervalMin, 1) * 60000;
   }
 
@@ -99,12 +96,7 @@ export class ZatcaReportingService implements OnModuleInit {
     const pendingInvoices = this.db
       .select()
       .from(invoices)
-      .where(
-        or(
-          eq(invoices.status, 'signed'),
-          eq(invoices.status, 'failed'),
-        ),
-      )
+      .where(or(eq(invoices.status, 'signed'), eq(invoices.status, 'failed')))
       .limit(10)
       .all();
 
@@ -133,11 +125,7 @@ export class ZatcaReportingService implements OnModuleInit {
     succeeded: number;
     failed: number;
   }> {
-    const inv = this.db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.id, invoiceId))
-      .get();
+    const inv = this.db.select().from(invoices).where(eq(invoices.id, invoiceId)).get();
 
     if (!inv) {
       return { processed: 0, succeeded: 0, failed: 0 };
