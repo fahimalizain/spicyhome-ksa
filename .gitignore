@@ -12,3 +12,8 @@ data/
 .DS_Store
 Thumbs.db
 MODULE.bazel.lock
+
+# Android build artifacts
+apps/android/**/build/
+apps/android/.gradle/
+apps/android/local.properties
