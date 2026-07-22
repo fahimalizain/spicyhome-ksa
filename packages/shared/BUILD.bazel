@@ -1,0 +1,35 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@aspect_rules_jest//jest:defs.bzl", "jest_test")
+
+npm_link_all_packages(name = "node_modules")
+
+ts_project(
+    name = "lib",
+    srcs = glob(["src/**/*.ts"]),
+    tsconfig = "tsconfig.json",
+    transpiler = "tsc",
+    declaration = True,
+    deps = [
+        "//:node_modules/@types/node",
+        ":node_modules/@types/jest",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+npm_package(
+    name = "pkg",
+    srcs = [
+        ":lib",
+        "package.json",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+jest_test(
+    name = "test",
+    config = "jest.config.cjs",
+    data = [":lib"],
+    node_modules = ":node_modules",
+)

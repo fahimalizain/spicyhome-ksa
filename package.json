@@ -1,0 +1,21 @@
+{
+  "name": "spicyhome-ksa",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0 <20.0.0"
+  },
+  "scripts": {
+    "test": "pnpm --recursive test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "typescript": "^5.4.0"
+  }
+}

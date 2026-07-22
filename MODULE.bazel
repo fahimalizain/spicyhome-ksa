@@ -1,0 +1,48 @@
+module(
+    name = "spicyhome",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "aspect_rules_js", version = "2.7.0")
+bazel_dep(name = "aspect_rules_ts", version = "3.9.2")
+bazel_dep(name = "aspect_rules_jest", version = "0.25.2")
+bazel_dep(name = "rules_nodejs", version = "6.3.0")
+
+# Node.js toolchain (hermetic Node 18)
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
+node.toolchain(node_version = "18.20.4")
+use_repo(
+    node,
+    "nodejs_toolchains",
+    "nodejs_darwin_amd64",
+    "nodejs_darwin_arm64",
+    "nodejs_linux_amd64",
+    "nodejs_linux_arm64",
+    "nodejs_windows_amd64",
+)
+
+register_toolchains("@nodejs_toolchains//:all")
+
+# npm package translation from pnpm lockfile
+npm = use_extension(
+    "@aspect_rules_js//npm:extensions.bzl",
+    "npm",
+    dev_dependency = True,
+)
+npm.npm_translate_lock(
+    name = "npm",
+    pnpm_lock = "//:pnpm-lock.yaml",
+    npmrc = "//:.npmrc",
+    verify_node_modules_ignored = "//:.bazelignore",
+    data = [
+        "//:package.json",
+        "//packages/db:package.json",
+        "//packages/shared:package.json",
+    ],
+)
+use_repo(npm, "npm")
+
+# TypeScript compiler (required by aspect_rules_ts)
+rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext", dev_dependency = True)
+rules_ts_ext.deps(ts_version = "5.6.2")
+use_repo(rules_ts_ext, "npm_typescript")

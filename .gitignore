@@ -1,0 +1,14 @@
+node_modules/
+bazel-*
+.bazelrc.user
+dist/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.local
+.DS_Store
+Thumbs.db
+MODULE.bazel.lock
