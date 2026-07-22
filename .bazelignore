@@ -1,4 +1,7 @@
 node_modules
 apps/server/node_modules
+packages/api-spec/node_modules
+packages/client-ts/node_modules
+packages/client-kt/node_modules
 packages/db/node_modules
 packages/shared/node_modules

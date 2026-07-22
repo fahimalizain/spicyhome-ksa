@@ -1,0 +1,2415 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "summary": "Login with username and PIN",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "JWT access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/users": {
+      "get": {
+        "operationId": "AuthController_listUsers",
+        "summary": "List all users",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "AuthController_createUser",
+        "summary": "Create a new user",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/users/{id}": {
+      "get": {
+        "operationId": "AuthController_getUser",
+        "summary": "Get user by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "AuthController_updateUser",
+        "summary": "Update a user",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/roles": {
+      "get": {
+        "operationId": "AuthController_listRoles",
+        "summary": "List all roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoleResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "AuthController_createRole",
+        "summary": "Create a new role",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/roles/{id}": {
+      "put": {
+        "operationId": "AuthController_updateRole",
+        "summary": "Update a role",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/categories": {
+      "get": {
+        "operationId": "MenuController_listCategories",
+        "summary": "List all categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "MenuController_createCategory",
+        "summary": "Create a category",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/categories/{id}": {
+      "get": {
+        "operationId": "MenuController_getCategory",
+        "summary": "Get category by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "MenuController_updateCategory",
+        "summary": "Update a category",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/items": {
+      "get": {
+        "operationId": "MenuController_listItems",
+        "summary": "List all items, optionally filtered by category",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "MenuController_createItem",
+        "summary": "Create an item",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/items/{id}": {
+      "get": {
+        "operationId": "MenuController_getItem",
+        "summary": "Get item by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "MenuController_updateItem",
+        "summary": "Update an item",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/tables": {
+      "get": {
+        "operationId": "TablesController_list",
+        "summary": "List all tables",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of tables",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TableResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "tables"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "TablesController_create",
+        "summary": "Create a table",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "tables"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/tables/{id}": {
+      "get": {
+        "operationId": "TablesController_get",
+        "summary": "Get table by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Table details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "tables"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "TablesController_update",
+        "summary": "Update a table",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "tables"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/printers": {
+      "get": {
+        "operationId": "PrintersController_list",
+        "summary": "List all printers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of printers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PrinterResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "PrintersController_create",
+        "summary": "Create a printer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePrinterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created printer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/printers/{id}": {
+      "get": {
+        "operationId": "PrintersController_get",
+        "summary": "Get printer by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Printer details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "PrintersController_update",
+        "summary": "Update a printer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePrinterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated printer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "OrdersController_listOrders",
+        "summary": "List orders with optional filters",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "OrdersController_createOrder",
+        "summary": "Create a new order",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created order summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getOrder",
+        "summary": "Get order by ID with items and audit log",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order with items and audit log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/audit/verify": {
+      "get": {
+        "operationId": "OrdersController_verifyAuditChain",
+        "summary": "Verify audit log hash chain for an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit chain verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerifyResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/items": {
+      "post": {
+        "operationId": "OrdersController_addItem",
+        "summary": "Add an item to an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddOrderItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Item added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{orderId}/items/{itemId}": {
+      "patch": {
+        "operationId": "OrdersController_updateItem",
+        "summary": "Update an order item (qty or notes)",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Item updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "OrdersController_removeItem",
+        "summary": "Remove an item from an order",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/send": {
+      "post": {
+        "operationId": "OrdersController_sendOrder",
+        "summary": "Send order to kitchen (open → sent)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Order sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/pay": {
+      "post": {
+        "operationId": "OrdersController_payOrder",
+        "summary": "Mark order as paid (sent → paid)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Order paid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/void": {
+      "post": {
+        "operationId": "OrdersController_voidOrder",
+        "summary": "Void an order (open|sent → voided)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Order voided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "SpicyHome POS API",
+    "description": "REST API for the SpicyHome restaurant POS system",
+    "version": "0.0.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Authentication & user management"
+    },
+    {
+      "name": "menu",
+      "description": "Menu items & categories"
+    },
+    {
+      "name": "orders",
+      "description": "Order management"
+    },
+    {
+      "name": "tables",
+      "description": "Table management"
+    },
+    {
+      "name": "printers",
+      "description": "Printer configuration"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "admin"
+          },
+          "pin": {
+            "type": "string",
+            "example": "1234"
+          }
+        },
+        "required": [
+          "username",
+          "pin"
+        ]
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIs..."
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "username": {
+            "type": "string",
+            "example": "cashier1"
+          },
+          "name": {
+            "type": "string",
+            "example": "Ahmed"
+          },
+          "roleId": {
+            "type": "number",
+            "example": 2
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "roleId",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "cashier1"
+          },
+          "pin": {
+            "type": "string",
+            "example": "1234"
+          },
+          "name": {
+            "type": "string",
+            "example": "Ahmed"
+          },
+          "roleId": {
+            "type": "number",
+            "example": 2,
+            "description": "role_id — 1 for admin, 2 for staff"
+          }
+        },
+        "required": [
+          "username",
+          "pin",
+          "name",
+          "roleId"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Ahmed Ali"
+          },
+          "roleId": {
+            "type": "number",
+            "example": 2
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          },
+          "pin": {
+            "type": "string",
+            "example": "5678",
+            "description": "New PIN (4-6 digits)"
+          }
+        }
+      },
+      "RoleResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "staff"
+          },
+          "createOrder": {
+            "type": "boolean",
+            "example": true
+          },
+          "updateOrder": {
+            "type": "boolean",
+            "example": true
+          },
+          "deleteOrderItem": {
+            "type": "boolean",
+            "example": false
+          },
+          "voidOrder": {
+            "type": "boolean",
+            "example": false
+          },
+          "refundOrder": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageMenu": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageTables": {
+            "type": "boolean",
+            "example": false
+          },
+          "managePrinters": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageUsers": {
+            "type": "boolean",
+            "example": false
+          },
+          "manageSettings": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createOrder",
+          "updateOrder",
+          "deleteOrderItem",
+          "voidOrder",
+          "refundOrder",
+          "manageMenu",
+          "manageTables",
+          "managePrinters",
+          "manageUsers",
+          "manageSettings",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateRoleDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "manager"
+          },
+          "createOrder": {
+            "type": "boolean",
+            "default": false
+          },
+          "updateOrder": {
+            "type": "boolean",
+            "default": false
+          },
+          "deleteOrderItem": {
+            "type": "boolean",
+            "default": false
+          },
+          "voidOrder": {
+            "type": "boolean",
+            "default": false
+          },
+          "refundOrder": {
+            "type": "boolean",
+            "default": false
+          },
+          "manageMenu": {
+            "type": "boolean",
+            "default": false
+          },
+          "manageTables": {
+            "type": "boolean",
+            "default": false
+          },
+          "managePrinters": {
+            "type": "boolean",
+            "default": false
+          },
+          "manageUsers": {
+            "type": "boolean",
+            "default": false
+          },
+          "manageSettings": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateRoleDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "manager"
+          },
+          "createOrder": {
+            "type": "boolean"
+          },
+          "updateOrder": {
+            "type": "boolean"
+          },
+          "deleteOrderItem": {
+            "type": "boolean"
+          },
+          "voidOrder": {
+            "type": "boolean"
+          },
+          "refundOrder": {
+            "type": "boolean"
+          },
+          "manageMenu": {
+            "type": "boolean"
+          },
+          "manageTables": {
+            "type": "boolean"
+          },
+          "managePrinters": {
+            "type": "boolean"
+          },
+          "manageUsers": {
+            "type": "boolean"
+          },
+          "manageSettings": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CategoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Burgers"
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "printerId": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sortOrder",
+          "printerId",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Burgers"
+          },
+          "sortOrder": {
+            "type": "number",
+            "default": 0
+          },
+          "printerId": {
+            "type": "number",
+            "description": "Printer ID for kitchen routing"
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Burgers"
+          },
+          "sortOrder": {
+            "type": "number"
+          },
+          "printerId": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "categoryId": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Zinger Burger"
+          },
+          "nameAr": {
+            "type": "object",
+            "example": "زنجر برجر",
+            "nullable": true
+          },
+          "priceHalalas": {
+            "type": "number",
+            "example": 2300,
+            "description": "VAT-inclusive price in halalas"
+          },
+          "vatRateBp": {
+            "type": "number",
+            "example": 1500,
+            "description": "VAT rate in basis points"
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "categoryId",
+          "name",
+          "nameAr",
+          "priceHalalas",
+          "vatRateBp",
+          "sortOrder",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateItemDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Zinger Burger"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "زنجر برجر"
+          },
+          "priceHalalas": {
+            "type": "number",
+            "example": 2300,
+            "description": "VAT-inclusive price in halalas (23.00 SAR)"
+          },
+          "vatRateBp": {
+            "type": "number",
+            "default": 1500,
+            "description": "VAT rate in basis points (1500 = 15%)"
+          },
+          "sortOrder": {
+            "type": "number",
+            "default": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "categoryId",
+          "name",
+          "priceHalalas"
+        ]
+      },
+      "UpdateItemDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "priceHalalas": {
+            "type": "number"
+          },
+          "vatRateBp": {
+            "type": "number"
+          },
+          "sortOrder": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TableResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "T1"
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sortOrder",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateTableDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "T1"
+          },
+          "sortOrder": {
+            "type": "number",
+            "default": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateTableDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "T1"
+          },
+          "sortOrder": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PrinterResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Kitchen"
+          },
+          "ip": {
+            "type": "string",
+            "example": "192.168.1.100"
+          },
+          "port": {
+            "type": "number",
+            "example": 9100
+          },
+          "role": {
+            "type": "string",
+            "example": "kitchen"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ip",
+          "port",
+          "role",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreatePrinterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Kitchen"
+          },
+          "ip": {
+            "type": "string",
+            "example": "192.168.1.100"
+          },
+          "port": {
+            "type": "number",
+            "default": 9100
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "receipt",
+              "kitchen"
+            ],
+            "example": "kitchen"
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "ip",
+          "role"
+        ]
+      },
+      "UpdatePrinterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "port": {
+            "type": "number"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "receipt",
+              "kitchen"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrderItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderId": {
+            "type": "number",
+            "example": 1
+          },
+          "itemId": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "itemName": {
+            "type": "string",
+            "example": "Zinger Burger"
+          },
+          "unitPriceHalalas": {
+            "type": "number",
+            "example": 2300
+          },
+          "vatRateBp": {
+            "type": "number",
+            "example": 1500
+          },
+          "qty": {
+            "type": "number",
+            "example": 2
+          },
+          "totalHalalas": {
+            "type": "number",
+            "example": 4600
+          },
+          "notes": {
+            "type": "object",
+            "example": "no onion",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "itemId",
+          "itemName",
+          "unitPriceHalalas",
+          "vatRateBp",
+          "qty",
+          "totalHalalas",
+          "notes",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "AuditLogEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderId": {
+            "type": "number",
+            "example": 1
+          },
+          "userId": {
+            "type": "number",
+            "example": 1
+          },
+          "action": {
+            "type": "string",
+            "example": "created"
+          },
+          "payload": {
+            "type": "string",
+            "example": "{\"type\":\"dine_in\",\"tableId\":1}"
+          },
+          "prevHash": {
+            "type": "string",
+            "example": ""
+          },
+          "hash": {
+            "type": "string",
+            "example": "abc123..."
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "userId",
+          "action",
+          "payload",
+          "prevHash",
+          "hash",
+          "createdAt"
+        ]
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderNo": {
+            "type": "number",
+            "example": 1
+          },
+          "uuid": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "type": {
+            "type": "string",
+            "example": "dine_in"
+          },
+          "tableId": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "dayOpeningId": {
+            "type": "number",
+            "example": 1
+          },
+          "status": {
+            "type": "string",
+            "example": "open"
+          },
+          "subtotalHalalas": {
+            "type": "number",
+            "example": 4000
+          },
+          "vatHalalas": {
+            "type": "number",
+            "example": 600
+          },
+          "totalHalalas": {
+            "type": "number",
+            "example": 4600
+          },
+          "discountHalalas": {
+            "type": "number",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "object",
+            "example": 1,
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemResponse"
+            }
+          },
+          "auditLog": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditLogEntry"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "uuid",
+          "type",
+          "tableId",
+          "dayOpeningId",
+          "status",
+          "subtotalHalalas",
+          "vatHalalas",
+          "totalHalalas",
+          "discountHalalas",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy",
+          "items",
+          "auditLog"
+        ]
+      },
+      "AuditVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "valid"
+        ]
+      },
+      "CreateOrderDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "dine_in",
+              "takeaway"
+            ],
+            "example": "dine_in"
+          },
+          "tableId": {
+            "type": "number",
+            "example": 1,
+            "description": "Required for dine_in"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CreateOrderResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "uuid": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "orderNo": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "id",
+          "uuid",
+          "orderNo"
+        ]
+      },
+      "AddOrderItemDto": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "number",
+            "example": 1
+          },
+          "qty": {
+            "type": "number",
+            "example": 2
+          },
+          "notes": {
+            "type": "string",
+            "example": "no onion"
+          }
+        },
+        "required": [
+          "itemId",
+          "qty"
+        ]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "UpdateOrderItemDto": {
+        "type": "object",
+        "properties": {
+          "qty": {
+            "type": "number",
+            "example": 3
+          },
+          "notes": {
+            "type": "string",
+            "example": "extra cheese"
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "example": "sent"
+          }
+        },
+        "required": [
+          "success",
+          "status"
+        ]
+      }
+    }
+  }
+}

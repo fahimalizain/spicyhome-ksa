@@ -1,0 +1,20 @@
+{
+  "name": "@spicyhome/client-kt",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest --config jest.config.cjs",
+    "generate": "openapi-generator-cli generate -i ../api-spec/openapi.json -g kotlin -o src/generated --additional-properties=packageName=com.spicyhome.client,library=jvm-retrofit2,collectionFormat=csv,dateLibrary=string"
+  },
+  "devDependencies": {
+    "@openapitools/openapi-generator-cli": "2.15.3",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.19.0",
+    "jest": "^29.7.0",
+    "jest-cli": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.4.0"
+  }
+}

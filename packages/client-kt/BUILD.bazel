@@ -1,0 +1,65 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_library")
+load("@aspect_rules_jest//jest:defs.bzl", "jest_test")
+
+npm_link_all_packages(name = "node_modules")
+
+ts_project(
+    name = "generate_lib",
+    srcs = ["src/generate.ts"],
+    tsconfig = "tsconfig.json",
+    transpiler = "tsc",
+    declaration = True,
+    resolve_json_module = True,
+    deps = [
+        "//:node_modules/@types/node",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+js_binary(
+    name = "generate",
+    data = [
+        ":generate_lib",
+        ":node_modules/@openapitools/openapi-generator-cli",
+        "//packages/api-spec:openapi_json",
+    ],
+    entry_point = "src/generate.js",
+)
+
+ts_project(
+    name = "test_lib",
+    srcs = glob(["src/**/*.test.ts"]),
+    tsconfig = "tsconfig.json",
+    transpiler = "tsc",
+    declaration = True,
+    resolve_json_module = True,
+    deps = [
+        "//:node_modules/@types/node",
+        ":node_modules/@types/jest",
+        ":node_modules/jest",
+    ],
+)
+
+jest_test(
+    name = "test",
+    config = "jest.config.cjs",
+    data = [
+        ":test_lib",
+        ":sources",
+        ":node_modules/@openapitools/openapi-generator-cli",
+        "//packages/api-spec:openapi_json",
+    ],
+    node_modules = ":node_modules",
+)
+
+filegroup(
+    name = "sources",
+    srcs = glob([
+        "src/generated/**/*.kt",
+        "src/generated/**/*.gradle",
+        "src/generated/**/*.properties",
+    ]),
+    visibility = ["//visibility:public"],
+)

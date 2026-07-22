@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Put, Param, Body, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { PrintersService } from './printers.service';
 import { CreatePrinterDto, UpdatePrinterDto } from './dto/create-printer.dto';
+import { PrinterResponse } from './dto/printer-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -13,12 +14,14 @@ export class PrintersController {
 
   @Get()
   @ApiOperation({ summary: 'List all printers' })
+  @ApiOkResponse({ description: 'List of printers', type: [PrinterResponse] })
   list() {
     return this.printersService.list();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get printer by ID' })
+  @ApiOkResponse({ description: 'Printer details', type: PrinterResponse })
   get(@Param('id', ParseIntPipe) id: number) {
     return this.printersService.get(id);
   }
@@ -26,6 +29,7 @@ export class PrintersController {
   @Post()
   @RequiresPermission('manage_printers')
   @ApiOperation({ summary: 'Create a printer' })
+  @ApiCreatedResponse({ description: 'Created printer', type: PrinterResponse })
   create(@Body() dto: CreatePrinterDto, @CurrentUser() user: any) {
     return this.printersService.create(dto, user.sub);
   }
@@ -33,6 +37,7 @@ export class PrintersController {
   @Put(':id')
   @RequiresPermission('manage_printers')
   @ApiOperation({ summary: 'Update a printer' })
+  @ApiOkResponse({ description: 'Updated printer', type: PrinterResponse })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePrinterDto,

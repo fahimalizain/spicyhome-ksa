@@ -1,10 +1,13 @@
 import { Controller, Post, Get, Put, Param, Body, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { LoginResponse } from './dto/login-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserResponse } from './dto/user-response.dto';
 import { CreateRoleDto, UpdateRoleDto } from './dto/create-role.dto';
+import { RoleResponse } from './dto/role-response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -17,6 +20,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @ApiOperation({ summary: 'Login with username and PIN' })
+  @ApiCreatedResponse({ description: 'JWT access token', type: LoginResponse })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.username, dto.pin);
   }
@@ -25,6 +29,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all users' })
+  @ApiOkResponse({ description: 'List of users', type: [UserResponse] })
   listUsers() {
     return this.authService.listUsers();
   }
@@ -33,6 +38,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOkResponse({ description: 'User details', type: UserResponse })
   getUser(@Param('id', ParseIntPipe) id: number) {
     return this.authService.getUserById(id);
   }
@@ -41,6 +47,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new user' })
+  @ApiCreatedResponse({ description: 'Created user', type: UserResponse })
   createUser(@Body() dto: CreateUserDto, @CurrentUser() user: any) {
     return this.authService.createUser(dto, user.sub);
   }
@@ -49,6 +56,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a user' })
+  @ApiOkResponse({ description: 'Updated user', type: UserResponse })
   updateUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
@@ -61,6 +69,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all roles' })
+  @ApiOkResponse({ description: 'List of roles', type: [RoleResponse] })
   listRoles() {
     return this.authService.listRoles();
   }
@@ -69,6 +78,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new role' })
+  @ApiCreatedResponse({ description: 'Created role', type: RoleResponse })
   createRole(@Body() dto: CreateRoleDto, @CurrentUser() user: any) {
     return this.authService.createRole(dto, user.sub);
   }
@@ -77,6 +87,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a role' })
+  @ApiOkResponse({ description: 'Updated role', type: RoleResponse })
   updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRoleDto,

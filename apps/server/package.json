@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^10.4.0",
+    "@spicyhome/client-ts": "workspace:*",
     "@types/bcryptjs": "^2.4.0",
     "@types/better-sqlite3": "^7.6.0",
     "@types/express": "^4.17.21",

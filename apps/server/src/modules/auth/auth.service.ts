@@ -126,7 +126,8 @@ export class AuthService {
     }
 
     const result = this.db.insert(userRoles).values(row as any).run();
-    return { id: Number(result.lastInsertRowid), ...row };
+    const id = Number(result.lastInsertRowid);
+    return this.db.select().from(userRoles).where(eq(userRoles.id, id)).get();
   }
 
   updateRole(id: number, dto: Record<string, any>, updatedBy: number): any {

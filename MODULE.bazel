@@ -37,6 +37,8 @@ npm.npm_translate_lock(
     data = [
         "//:package.json",
         "//apps/server:package.json",
+        "//packages/api-spec:package.json",
+        "//packages/client-ts:package.json",
         "//packages/db:package.json",
         "//packages/shared:package.json",
     ],

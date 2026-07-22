@@ -65,6 +65,20 @@ js_binary(
     },
 )
 
+js_binary(
+    name = "openapi",
+    data = [
+        ":lib",
+        ":node_modules/@spicyhome/db",
+        ":node_modules/@spicyhome/shared",
+    ],
+    entry_point = "src/openapi.js",
+    env = {
+        "TZ": "Asia/Riyadh",
+        "SPICYHOME_DB": ":memory:",
+    },
+)
+
 ts_project(
     name = "lib_test",
     srcs = glob(["src/**/*.test.ts"]),
@@ -76,6 +90,7 @@ ts_project(
         ":lib",
         ":node_modules/@nestjs/common",
         ":node_modules/@nestjs/testing",
+        ":node_modules/@spicyhome/client-ts",
         ":node_modules/@spicyhome/db",
         ":node_modules/@spicyhome/shared",
         ":node_modules/@types/jest",
@@ -91,8 +106,10 @@ jest_test(
     data = [
         ":lib",
         ":lib_test",
+        ":node_modules/@spicyhome/client-ts",
         ":node_modules/@spicyhome/db",
         ":node_modules/@spicyhome/shared",
+        "//packages/api-spec:openapi_json",
         "//packages/db:migrations",
     ],
     node_modules = ":node_modules",
