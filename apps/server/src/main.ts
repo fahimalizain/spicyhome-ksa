@@ -21,6 +21,7 @@ async function bootstrap() {
     .addTag('tables', 'Table management')
     .addTag('printers', 'Printer configuration')
     .addTag('settings', 'Application settings')
+    .addTag('zatca', 'ZATCA e-invoicing')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

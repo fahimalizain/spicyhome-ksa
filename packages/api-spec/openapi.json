@@ -1491,6 +1491,137 @@
           }
         ]
       }
+    },
+    "/zatca/onboard/csr": {
+      "post": {
+        "operationId": "ZatcaController_generateCSR",
+        "summary": "Generate keypair and CSR for ZATCA onboarding",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/onboard/compliance": {
+      "post": {
+        "operationId": "ZatcaController_onboardCompliance",
+        "summary": "Submit CSR with OTP to ZATCA compliance CSID endpoint",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/onboard/production": {
+      "post": {
+        "operationId": "ZatcaController_onboardProduction",
+        "summary": "Exchange compliance CSID for production CSID",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/status": {
+      "get": {
+        "operationId": "ZatcaController_getStatus",
+        "summary": "Get ZATCA onboarding and status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/invoices": {
+      "get": {
+        "operationId": "ZatcaController_listInvoices",
+        "summary": "List ZATCA invoices",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/invoices/{id}": {
+      "get": {
+        "operationId": "ZatcaController_getInvoice",
+        "summary": "Get invoice detail including XML",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
+    },
+    "/zatca/reporting/retry": {
+      "post": {
+        "operationId": "ZatcaController_retryReporting",
+        "summary": "Retry reporting for all pending or a specific invoice",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ]
+      }
     }
   },
   "info": {

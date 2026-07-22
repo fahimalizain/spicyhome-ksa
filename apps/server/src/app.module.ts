@@ -10,6 +10,7 @@ import { TablesModule } from './modules/tables/tables.module';
 import { PrintersModule } from './modules/printers/printers.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { ZatcaModule } from './modules/zatca/zatca.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -23,6 +24,7 @@ const imports: any[] = [
   PrintersModule,
   OrdersModule,
   SettingsModule,
+  ZatcaModule,
 ];
 
 if (spaDist) {
@@ -37,6 +39,7 @@ if (spaDist) {
         '/tables/(.*)',
         '/printers/(.*)',
         '/settings/(.*)',
+        '/zatca/(.*)',
       ],
     }),
   );
