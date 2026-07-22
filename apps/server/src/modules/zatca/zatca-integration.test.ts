@@ -340,6 +340,240 @@ describe('ZATCA Integration', () => {
       }
     });
   });
+
+  describe('Config', () => {
+    it('GET /zatca/config returns defaults when nothing is set', async () => {
+      // Note: the test setup already inserts some settings (seller_name, vat_number, etc.)
+      // so these are NOT empty in this integration test. We test that unset fields
+      // pick up sensible defaults.
+      const res = await request(app.getHttpServer())
+        .get('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // seller_name is pre-seeded as 'SpicyHome Restaurant'
+      expect(res.body.sellerName).toBe('SpicyHome Restaurant');
+      expect(res.body.vatNumber).toBe('300123456789');
+      // cr_number is not set, should default to ''
+      expect(res.body.crNumber).toBe('');
+      expect(res.body.street).toBe('');
+      expect(res.body.building).toBe('');
+      // seller_city is pre-seeded
+      expect(res.body.city).toBe('Riyadh');
+      expect(res.body.postalCode).toBe('');
+      expect(res.body.country).toBe('SA');
+      // zatca_org_unit is pre-seeded
+      expect(res.body.orgUnit).toBe('SpicyHome POS');
+      expect(res.body.apiBaseUrl).toBe(
+        'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal',
+      );
+    });
+
+    it('GET /zatca/config never exposes secret keys', async () => {
+      // Set secret keys
+      const ps = app.get(PrintersService);
+      ps.setSetting('zatca_private_key_encrypted', 'secret_data');
+      ps.setSetting('zatca_compliance_cert', 'cert_data');
+      ps.setSetting('zatca_production_secret', 'prod_secret');
+
+      const res = await request(app.getHttpServer())
+        .get('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Make sure the response shape is only the config fields
+      const keys = Object.keys(res.body);
+      expect(keys).not.toContain('privateKey');
+      expect(keys).not.toContain('cert');
+      expect(keys).not.toContain('secret');
+      expect(keys).toHaveLength(10);
+      expect(keys).toContain('sellerName');
+      expect(keys).toContain('vatNumber');
+      expect(keys).toContain('crNumber');
+      expect(keys).toContain('street');
+      expect(keys).toContain('building');
+      expect(keys).toContain('city');
+      expect(keys).toContain('postalCode');
+      expect(keys).toContain('country');
+      expect(keys).toContain('orgUnit');
+      expect(keys).toContain('apiBaseUrl');
+    });
+
+    it('PUT /zatca/config saves and returns all fields', async () => {
+      const payload = {
+        sellerName: 'Test Restaurant',
+        vatNumber: '300123456789003',
+        crNumber: '1234567890',
+        street: 'Test Street',
+        building: '9999',
+        city: 'Jeddah',
+        postalCode: '54321',
+        country: 'SA',
+        orgUnit: 'Test Unit',
+        apiBaseUrl: 'https://api.example.com',
+      };
+
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send(payload)
+        .expect(200);
+
+      expect(res.body.sellerName).toBe('Test Restaurant');
+      expect(res.body.vatNumber).toBe('300123456789003');
+      expect(res.body.crNumber).toBe('1234567890');
+      expect(res.body.street).toBe('Test Street');
+      expect(res.body.building).toBe('9999');
+      expect(res.body.city).toBe('Jeddah');
+      expect(res.body.postalCode).toBe('54321');
+      expect(res.body.country).toBe('SA');
+      expect(res.body.orgUnit).toBe('Test Unit');
+      expect(res.body.apiBaseUrl).toBe('https://api.example.com');
+
+      // Verify round-trip via GET
+      const getRes = await request(app.getHttpServer())
+        .get('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(getRes.body.sellerName).toBe('Test Restaurant');
+      expect(getRes.body.vatNumber).toBe('300123456789003');
+      expect(getRes.body.crNumber).toBe('1234567890');
+      expect(getRes.body.city).toBe('Jeddah');
+      expect(getRes.body.orgUnit).toBe('Test Unit');
+    });
+
+    it('rejects invalid VAT number format', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          sellerName: 'Test',
+          vatNumber: '12345',
+          crNumber: '1234567890',
+          street: 'S',
+          building: 'B',
+          city: 'C',
+          postalCode: '12345',
+          country: 'SA',
+          orgUnit: 'O',
+        })
+        .expect(400);
+
+      expect(res.body.message).toBeDefined();
+    });
+
+    it('rejects VAT number not starting with 3', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          sellerName: 'Test',
+          vatNumber: '100123456789001',
+          crNumber: '1234567890',
+          street: 'S',
+          building: 'B',
+          city: 'C',
+          postalCode: '12345',
+          country: 'SA',
+          orgUnit: 'O',
+        })
+        .expect(400);
+
+      expect(res.body.message).toBeDefined();
+    });
+
+    it('rejects invalid CR number (not 10 digits)', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          sellerName: 'Test',
+          vatNumber: '300123456789003',
+          crNumber: '12345',
+          street: 'S',
+          building: 'B',
+          city: 'C',
+          postalCode: '12345',
+          country: 'SA',
+          orgUnit: 'O',
+        })
+        .expect(400);
+
+      expect(res.body.message).toBeDefined();
+    });
+
+    it('rejects invalid postal code (not 5 digits)', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          sellerName: 'Test',
+          vatNumber: '300123456789003',
+          crNumber: '1234567890',
+          street: 'S',
+          building: 'B',
+          city: 'C',
+          postalCode: '12',
+          country: 'SA',
+          orgUnit: 'O',
+        })
+        .expect(400);
+
+      expect(res.body.message).toBeDefined();
+    });
+
+    it('rejects missing required fields with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          sellerName: 'Test',
+          // missing vatNumber, crNumber, etc.
+        })
+        .expect(400);
+
+      expect(res.body.message).toBeDefined();
+    });
+
+    it('rejects unauthenticated requests with 401', async () => {
+      await request(app.getHttpServer()).get('/zatca/config').expect(401);
+
+      await request(app.getHttpServer()).put('/zatca/config').send({}).expect(401);
+    });
+
+    it('rejects users without manage_settings with 403', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      // bcrypt hash of PIN '1234'
+      const pinHash = '$2a$10$iI/eaCHPfhHrDN8j3TuXDeROyZ5zOmlAlX9LA5uDHb5qIC.rKbKl2';
+      sqlite.exec(`
+        INSERT INTO user_roles (id, name, create_order, update_order, delete_order_item, void_order, refund_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
+        VALUES (99, 'no_settings', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
+      `);
+      sqlite.exec(`
+        INSERT INTO users (id, username, pin_hash, name, role_id, is_active, created_at, updated_at)
+        VALUES (99, 'staff', '${pinHash}', 'Staff', 99, 1, ${now}, ${now});
+      `);
+
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ username: 'staff', pin: '1234' })
+        .expect(201);
+      const staffToken = loginRes.body.accessToken;
+      expect(staffToken).toBeDefined();
+
+      await request(app.getHttpServer())
+        .get('/zatca/config')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .put('/zatca/config')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({})
+        .expect(403);
+    });
+  });
 });
 
 // ── TLV parser helper ─────────────────────────────────────────────────────────

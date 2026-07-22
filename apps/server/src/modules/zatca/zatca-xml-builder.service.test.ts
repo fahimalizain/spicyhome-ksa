@@ -40,8 +40,9 @@ describe('UBL XML Builder', () => {
     prevInvoiceHash: '',
   };
 
-  it('builds valid XML with root Invoice element', () => {
+  it('builds XML with root Invoice element and XML declaration', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(xml).toContain(
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
     );
@@ -69,7 +70,8 @@ describe('UBL XML Builder', () => {
   it('includes ICV as the invoice ID', () => {
     const input = { ...baseInput, icv: 42 };
     const xml = buildUnsignedInvoiceXML(input);
-    expect(xml).toContain('<cbc:ID>42</cbc:ID>');
+    // The top-level cbc:ID (ICV) is 42
+    expect(xml).toMatch(/<cbc:ID>42<\/cbc:ID>/);
   });
 
   it('includes UUID', () => {
@@ -83,15 +85,43 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:IssueTime>14:30:00</cbc:IssueTime>');
   });
 
-  it('includes InvoiceTypeCode 388 with simplified subtype 0200000', () => {
+  it('includes InvoiceTypeCode 388 with simplified subtype 0200000 for invoice type', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">388</cbc:InvoiceTypeCode>');
+  });
+
+  it('uses InvoiceTypeCode 381 for credit notes', () => {
+    const xml = buildUnsignedInvoiceXML({ ...baseInput, type: 'credit_note' });
+    expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>');
+  });
+
+  it('uses InvoiceTypeCode 383 for debit notes', () => {
+    const xml = buildUnsignedInvoiceXML({ ...baseInput, type: 'debit_note' });
+    expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">383</cbc:InvoiceTypeCode>');
   });
 
   it('includes currency codes', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>');
     expect(xml).toContain('<cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>');
+  });
+
+  it('includes seller party with CR number when provided', () => {
+    const input = {
+      ...baseInput,
+      seller: { ...defaultSeller, crNumber: '1234567890' },
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('schemeID="CRN">1234567890</cbc:ID>');
+  });
+
+  it('falls back to VAT number for CRN when CR number not provided', () => {
+    const input = {
+      ...baseInput,
+      seller: { ...defaultSeller, crNumber: undefined },
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('schemeID="CRN">300123456789</cbc:ID>');
   });
 
   it('includes seller party with VAT number and name', () => {
@@ -101,41 +131,102 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:RegistrationName>SpicyHome Restaurant</cbc:RegistrationName>');
   });
 
-  it('includes seller postal address', () => {
+  it('includes seller postal address without CountrySubentity', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:StreetName>King Fahd Road</cbc:StreetName>');
     expect(xml).toContain('<cbc:BuildingNumber>1234</cbc:BuildingNumber>');
     expect(xml).toContain('<cbc:CityName>Riyadh</cbc:CityName>');
+    // No longer includes CountrySubentity
+    expect(xml).not.toContain('<cbc:CountrySubentity>');
+  });
+
+  it('includes empty AccountingCustomerParty for B2C simplified', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cac:AccountingCustomerParty>');
+  });
+
+  it('includes PaymentMeans with code 10', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
   });
 
   it('includes ICV and PIH in AdditionalDocumentReference', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:ID>ICV</cbc:ID>');
     expect(xml).toContain('<cbc:ID>PIH</cbc:ID>');
-    expect(xml).toContain('<cbc:UUID>1</cbc:UUID>'); // ICV = 1
+    expect(xml).toContain('<cbc:ID>QR</cbc:ID>');
+    // ICV UUID matches ICV value
+    expect(xml).toContain('<cbc:UUID>1</cbc:UUID>');
   });
 
-  it('includes non-empty PIH when prevInvoiceHash is provided', () => {
+  it('uses SDK initial PIH hash when prevInvoiceHash is empty', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==');
+  });
+
+  it('uses prevInvoiceHash in PIH when provided', () => {
     const input = { ...baseInput, prevInvoiceHash: 'abc123hash=' };
     const xml = buildUnsignedInvoiceXML(input);
-    // Should have a Note with PIH
-    expect(xml).toContain('PIH=abc123hash=');
-    // Should have PIH in AdditionalDocumentReference
     expect(xml).toContain('abc123hash=');
+    // No longer uses Note element for PIH
+    expect(xml).not.toContain('<cbc:Note>PIH=');
   });
 
-  it('does NOT include Note with PIH for first invoice', () => {
+  it('includes BillingReference for credit notes', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+      billingReferenceId: '42',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cac:BillingReference>');
+    expect(xml).toContain('<cbc:ID>42</cbc:ID>');
+  });
+
+  it('includes BillingReference for debit notes', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'debit_note',
+      billingReferenceId: '17',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cac:BillingReference>');
+    expect(xml).toContain('<cbc:ID>17</cbc:ID>');
+  });
+
+  it('includes Delivery element for credit notes', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cac:Delivery>');
+    expect(xml).toContain('<cbc:ActualDeliveryDate>');
+  });
+
+  it('does NOT include BillingReference for regular invoices', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).not.toContain('<cbc:Note>PIH=');
+    expect(xml).not.toContain('<cac:BillingReference>');
+  });
+
+  it('includes InstructionNote in PaymentMeans when paymentNote is provided', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+      paymentNote: 'Refund for returned items',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:InstructionNote>Refund for returned items</cbc:InstructionNote>');
   });
 
   it('escapes XML special characters in text', () => {
     const input: InvoiceXMLInput = {
       ...baseInput,
       seller: { ...defaultSeller, name: 'Spicy & Home <Express>' },
-      items: [{ name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 }],
+      items: [
+        { name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 },
+      ],
     };
-
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('Spicy &amp; Home &lt;Express&gt;');
     expect(xml).toContain('Burger &amp; Fries&quot; Special');
@@ -144,8 +235,6 @@ describe('UBL XML Builder', () => {
   it('includes invoice lines with correct structure', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cac:InvoiceLine>');
-    expect(xml).toContain('<cbc:ID>1</cbc:ID>');
-    expect(xml).toContain('<cbc:ID>2</cbc:ID>');
     expect(xml).toContain('<cbc:InvoicedQuantity unitCode="PCE">2</cbc:InvoicedQuantity>');
     expect(xml).toContain('<cbc:InvoicedQuantity unitCode="PCE">1</cbc:InvoicedQuantity>');
   });
@@ -154,6 +243,14 @@ describe('UBL XML Builder', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:Name>Zinger Burger</cbc:Name>');
     expect(xml).toContain('<cbc:Name>Pepsi</cbc:Name>');
+  });
+
+  it('places InvoiceLine elements after LegalMonetaryTotal', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    const lmtIdx = xml.indexOf('<cac:LegalMonetaryTotal>');
+    const invLineIdx = xml.indexOf('<cac:InvoiceLine>');
+    expect(lmtIdx).toBeGreaterThan(-1);
+    expect(invLineIdx).toBeGreaterThan(lmtIdx);
   });
 
   it('includes tax categories S for standard and Z for zero-rated', () => {
@@ -165,6 +262,7 @@ describe('UBL XML Builder', () => {
       ],
     };
     const xml = buildUnsignedInvoiceXML(input);
+    // Tax categories in line items
     expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:ID>Z</cbc:ID>');
   });
@@ -176,8 +274,6 @@ describe('UBL XML Builder', () => {
       items: [{ name: 'Item', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 }],
     };
     const xml = buildUnsignedInvoiceXML(input);
-    // Check excluded and VAT amounts
-    // 2300 => excl = Math.round(2300 * 1500 / 11500) = 300, excl = 2300 - 300 = 2000
     expect(xml).toContain(
       '<cbc:LineExtensionAmount currencyID="SAR">20.00</cbc:LineExtensionAmount>',
     );
@@ -195,15 +291,14 @@ describe('UBL XML Builder', () => {
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>');
-    expect(xml).toContain('<cbc:TaxExclusiveAmount currencyID="SAR">5.00</cbc:TaxExclusiveAmount>');
+    expect(xml).toContain(
+      '<cbc:TaxExclusiveAmount currencyID="SAR">5.00</cbc:TaxExclusiveAmount>',
+    );
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">5.00</cbc:PayableAmount>');
   });
 
   it('handles mixed VAT rates with correct totals', () => {
     // 2x Zinger @ 23 SAR (15%) + 1x Bread @ 1 SAR (0%)
-    // 15%: 46 SAR incl → ~40 SAR excl + ~6 SAR VAT
-    // 0%: 1 SAR incl → 1 SAR excl + 0 SAR VAT
-    // Total: 47 SAR incl, 41 SAR excl, 6 SAR VAT
     const input: InvoiceXMLInput = {
       ...baseInput,
       items: [
@@ -213,11 +308,9 @@ describe('UBL XML Builder', () => {
     };
     const xml = buildUnsignedInvoiceXML(input);
 
-    // Should have both S and Z tax categories
     expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:ID>Z</cbc:ID>');
 
-    // Total incl should be 47.00
     expect(xml).toContain(
       '<cbc:TaxInclusiveAmount currencyID="SAR">47.00</cbc:TaxInclusiveAmount>',
     );
@@ -231,6 +324,15 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:TaxExclusiveAmount');
     expect(xml).toContain('<cbc:TaxInclusiveAmount');
     expect(xml).toContain('<cbc:PayableAmount');
+    // Always includes AllowanceTotalAmount and PrepaidAmount
+    expect(xml).toContain('<cbc:AllowanceTotalAmount');
+    expect(xml).toContain('<cbc:PrepaidAmount');
+  });
+
+  it('includes invoice-level AllowanceCharge', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cac:AllowanceCharge>');
+    expect(xml).toContain('<cbc:ChargeIndicator>false</cbc:ChargeIndicator>');
   });
 
   it('includes discount when provided', () => {
@@ -246,24 +348,25 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">50.75</cbc:PayableAmount>');
   });
 
+  it('includes Signature placeholder', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain(
+      '<cbc:ID>urn:oasis:names:specification:ubl:signature:Invoice</cbc:ID>',
+    );
+    expect(xml).toContain(
+      '<cbc:SignatureMethod>urn:oasis:names:specification:ubl:dsig:enveloped:xades</cbc:SignatureMethod>',
+    );
+  });
+
+  it('includes PrepaidAmount as 0.00', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cbc:PrepaidAmount currencyID="SAR">0.00</cbc:PrepaidAmount>');
+  });
+
   it('produces deterministic output for same input', () => {
     const xml1 = buildUnsignedInvoiceXML(baseInput);
     const xml2 = buildUnsignedInvoiceXML(baseInput);
     expect(xml1).toBe(xml2);
-  });
-
-  it('line extension amount matches sum of line excl amounts', () => {
-    const input: InvoiceXMLInput = {
-      ...baseInput,
-      items: [
-        { name: 'A', unitPriceHalalas: 1150, vatRateBp: 1500, qty: 3 }, // 3 x 11.50 = 34.50
-      ],
-    };
-    const xml = buildUnsignedInvoiceXML(input);
-
-    // 1150 each → excl per unit: Math.round(1150*1500/11500)=150, excl=1000, 3 units: 3000 excl
-    const lineExt = extractTagContent(xml, 'cbc:LineExtensionAmount');
-    expect(lineExt).not.toBeNull();
   });
 
   it('VAT total equals inclusive minus exclusive', () => {
@@ -274,7 +377,6 @@ describe('UBL XML Builder', () => {
 
     if (taxIncl !== null && taxExcl !== null) {
       const vat = taxIncl - taxExcl;
-      // VAT should be roughly 15/115 of the standard-rated portion
       expect(vat).toBeGreaterThan(0);
     }
   });
@@ -282,14 +384,9 @@ describe('UBL XML Builder', () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function extractTagContent(xml: string, tagName: string): string | null {
+function extractNumericValue(xml: string, tagName: string): number | null {
   const regex = new RegExp(`<${tagName}[^>]*>([^<]*)</${tagName}>`);
   const match = xml.match(regex);
-  return match ? match[1] : null;
-}
-
-function extractNumericValue(xml: string, tagName: string): number | null {
-  const content = extractTagContent(xml, tagName);
-  if (content === null) return null;
-  return parseFloat(content);
+  if (match === null) return null;
+  return parseFloat(match[1]);
 }

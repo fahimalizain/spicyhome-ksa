@@ -130,8 +130,9 @@ export class RealtimeClient {
 
   private buildUrl(): string {
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const prefix = !this.baseUrl && import.meta.env.DEV ? '/api' : '';
     const host = this.baseUrl || window.location.host;
-    const path = `${wsProto}//${host}/ws`;
+    const path = `${wsProto}//${host}${prefix}/ws`;
     return this.token ? `${path}?token=${this.token}` : path;
   }
 

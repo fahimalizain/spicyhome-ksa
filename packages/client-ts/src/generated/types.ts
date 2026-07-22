@@ -460,6 +460,330 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/zatca/onboard/csr': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Generate keypair and CSR for ZATCA onboarding */
+    post: operations['ZatcaController_generateCSR'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/compliance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit CSR with OTP to ZATCA compliance CSID endpoint */
+    post: operations['ZatcaController_onboardCompliance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/production': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Exchange compliance CSID for production CSID */
+    post: operations['ZatcaController_onboardProduction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get ZATCA onboarding and status */
+    get: operations['ZatcaController_getStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List ZATCA invoices */
+    get: operations['ZatcaController_listInvoices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/invoices/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get invoice detail including XML */
+    get: operations['ZatcaController_getInvoice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get ZATCA seller configuration */
+    get: operations['ZatcaController_getConfig'];
+    /** Update ZATCA seller configuration */
+    put: operations['ZatcaController_updateConfig'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/reporting/retry': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Retry reporting for all pending or a specific invoice */
+    post: operations['ZatcaController_retryReporting'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/open': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Open a new business day */
+    post: operations['BusinessDayController_openDay'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Close the current open business day */
+    post: operations['BusinessDayController_closeDay'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get current open day with live X-report totals */
+    get: operations['BusinessDayController_getCurrent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List past business days (paged) */
+    get: operations['BusinessDayController_list'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get a business day by ID */
+    get: operations['BusinessDayController_getDay'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/x': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Live X-report for the current open day */
+    get: operations['ReportsController_getXReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/z/{dayId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Z-report for a closed day */
+    get: operations['ReportsController_getZReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/sales': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Daily sales totals over a date range */
+    get: operations['ReportsController_getSales'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/vat': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** VAT summary over a date range (for VAT return) */
+    get: operations['ReportsController_getVat'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/z/{dayId}/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Print Z-report on receipt printer */
+    post: operations['ReportsController_printZReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/x/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Print X-report on receipt printer */
+    post: operations['ReportsController_printXReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -803,6 +1127,10 @@ export interface components {
       role?: 'receipt' | 'kitchen';
       isActive?: boolean;
     };
+    PrinterStatusResponse: {
+      /** @example true */
+      reachable: boolean;
+    };
     SuccessResponse: {
       /** @example true */
       success: boolean;
@@ -955,6 +1283,116 @@ export interface components {
       key: string;
       /** @example SpicyHome */
       value: string;
+    };
+    ZatcaConfigDto: {
+      /**
+       * @description Legal seller name for CSR and invoice XML
+       * @example SpicyHome Restaurant
+       */
+      sellerName: string;
+      /**
+       * @description 15-digit KSA VAT number (starts and ends with 3)
+       * @example 300123456789003
+       */
+      vatNumber: string;
+      /**
+       * @description 10-digit Commercial Registration number
+       * @example 1234567890
+       */
+      crNumber: string;
+      /**
+       * @description Street name
+       * @example King Fahd Road
+       */
+      street: string;
+      /**
+       * @description Building number
+       * @example 1234
+       */
+      building: string;
+      /**
+       * @description City name
+       * @example Riyadh
+       */
+      city: string;
+      /**
+       * @description 5-digit postal code
+       * @example 12345
+       */
+      postalCode: string;
+      /**
+       * @description 2-letter ISO country code
+       * @example SA
+       */
+      country: string;
+      /**
+       * @description Organizational unit for CSR
+       * @example SpicyHome POS
+       */
+      orgUnit: string;
+      /**
+       * @description ZATCA API base URL (defaults to developer portal)
+       * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal
+       */
+      apiBaseUrl?: string;
+    };
+    OpenDayDto: {
+      /**
+       * @description Opening cash counted in halalas
+       * @example 50000
+       */
+      openingCashHalalas: number;
+    };
+    DayOpeningResponse: {
+      /** @example 1 */
+      id: number;
+      /** @example 2026-07-22 */
+      businessDate: string;
+      /** @example open */
+      status: string;
+      /** @example 50000 */
+      openingCashHalalas: number;
+      openedAt: number;
+      openedBy: number;
+      closedAt?: Record<string, never> | null;
+      closedBy?: Record<string, never> | null;
+      closingCashHalalas?: Record<string, never> | null;
+      totalSalesHalalas?: Record<string, never> | null;
+      totalVatHalalas?: Record<string, never> | null;
+      orderCount?: Record<string, never> | null;
+      createdAt: number;
+      updatedAt: number;
+      createdBy?: Record<string, never> | null;
+      updatedBy?: Record<string, never> | null;
+    };
+    CloseDayDto: {
+      /**
+       * @description Closing cash counted in halalas
+       * @example 125000
+       */
+      closingCashHalalas: number;
+    };
+    CloseDayResponse: {
+      /** @example 1 */
+      id: number;
+      /** @example 2026-07-22 */
+      businessDate: string;
+      /** @example closed */
+      status: string;
+      /** @example 50000 */
+      openingCashHalalas: number;
+      openedAt: number;
+      openedBy: number;
+      closedAt: number;
+      closedBy: number;
+      /** @example 125000 */
+      closingCashHalalas: number;
+      /** @example 46000 */
+      totalSalesHalalas: number;
+      /** @example 6000 */
+      totalVatHalalas: number;
+      /** @example 5 */
+      orderCount: number;
     };
   };
   responses: never;
@@ -1557,7 +1995,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['PrinterStatusResponse'];
+        };
       };
     };
   };
@@ -1883,6 +2323,429 @@ export interface operations {
         content: {
           'application/json': components['schemas']['SettingResponse'];
         };
+      };
+    };
+  };
+  ZatcaController_generateCSR: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_onboardCompliance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_onboardProduction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_listInvoices: {
+    parameters: {
+      query: {
+        limit: number;
+        offset: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description ZATCA seller configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaConfigDto'];
+        };
+      };
+    };
+  };
+  ZatcaController_updateConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ZatcaConfigDto'];
+      };
+    };
+    responses: {
+      /** @description Updated configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaConfigDto'];
+        };
+      };
+    };
+  };
+  ZatcaController_retryReporting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_openDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenDayDto'];
+      };
+    };
+    responses: {
+      /** @description Business day opened */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DayOpeningResponse'];
+        };
+      };
+      /** @description A business day is already open */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_closeDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CloseDayDto'];
+      };
+    };
+    responses: {
+      /** @description Business day closed with frozen totals */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CloseDayResponse'];
+        };
+      };
+      /** @description No open business day to close */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Open/sent orders exist — cannot close */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_getCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current open day or null */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_list: {
+    parameters: {
+      query?: {
+        page?: number;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Paged list of business days */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_getDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Business day */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DayOpeningResponse'];
+        };
+      };
+      /** @description Business day not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getXReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description X-report snapshot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getZReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        dayId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Z-report detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getSales: {
+    parameters: {
+      query: {
+        from: string;
+        to: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Daily sales totals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getVat: {
+    parameters: {
+      query: {
+        from: string;
+        to: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description VAT summary with grand total */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_printZReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        dayId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_printXReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

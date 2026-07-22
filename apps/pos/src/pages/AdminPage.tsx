@@ -10,6 +10,7 @@ export function AdminPage() {
     { path: '/admin/printers', label: 'Printers', show: me?.managePrinters },
     { path: '/admin/tables', label: 'Tables', show: me?.manageTables },
     { path: '/admin/users', label: 'Users', show: me?.manageUsers },
+    { path: '/admin/zatca', label: 'ZATCA', show: me?.manageSettings },
   ];
 
   return (

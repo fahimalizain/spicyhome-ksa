@@ -1,21 +1,25 @@
 /**
  * ZATCA UBL 2.1 Simplified Invoice XML Builder.
  *
- * Generates a KSA-2 profile simplified tax invoice (B2C) from an order
- * and seller configuration. Output is a deterministic XML string
- * (no extraneous whitespace between tags) suitable for hashing.
+ * Generates KSA-2 profile simplified tax invoice, credit note, and debit note
+ * (B2C) from an order and seller configuration.
+ *
+ * Output is a deterministic XML string (no extraneous whitespace between tags)
+ * suitable for canonicalization and hashing.
  *
  * Profile:
- *   - InvoiceTypeCode: 388 (tax invoice) with subtype "0200000" (simplified)
- *   - No Buyer legal data (simplified B2C — buyer is anonymous)
+ *   - InvoiceTypeCode: 388 (invoice), 381 (credit note), 383 (debit note)
+ *   - Subtype: "0200000" (simplified, B2C)
+ *   - No Buyer legal data (simplified B2C — anonymous AccountingCustomerParty)
  *   - Line items with VAT-inclusive prices (compute excl. via decomposeVat)
- *   - Tax totals: 15% standard rate and zero-rated support
- *   - Seller: name, VAT number, CR placeholder, address placeholders
+ *   - Tax totals: grouped by rate
  */
 
-import { decomposeVat, sarToHalalas, halalasToSar } from '@spicyhome/shared';
+import { decomposeVat, halalasToSar } from '@spicyhome/shared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export type InvoiceDocumentType = 'invoice' | 'credit_note' | 'debit_note';
 
 export interface InvoiceItemInput {
   name: string;
@@ -30,9 +34,9 @@ export interface InvoiceItemInput {
 export interface SellerInfo {
   name: string;
   vatNumber: string;
-  /** Street name — placeholder if not configured */
+  /** Street name */
   street?: string;
-  /** Building number — placeholder if not configured */
+  /** Building number */
   buildingNumber?: string;
   /** City */
   city?: string;
@@ -40,9 +44,13 @@ export interface SellerInfo {
   postalCode?: string;
   /** Country (default SA) */
   country?: string;
+  /** Commercial Registration number */
+  crNumber?: string;
 }
 
 export interface InvoiceXMLInput {
+  /** Document type */
+  type?: InvoiceDocumentType;
   /** Invoice Counter Value (strictly incrementing) */
   icv: number;
   /** UUID for the invoice */
@@ -59,28 +67,49 @@ export interface InvoiceXMLInput {
   discountHalalas?: number;
   /** Previous Invoice Hash — empty string for first invoice */
   prevInvoiceHash: string;
+  /** For credit/debit notes: the ICV of the original invoice being corrected */
+  billingReferenceId?: string;
+  /** Payment instruction note (KSA-10 reason for credit/debit notes) */
+  paymentNote?: string;
 }
+
+// ── InvoiceTypeCode mapping ────────────────────────────────────────────────────
+
+const INVOICE_TYPE_CODES: Record<InvoiceDocumentType, number> = {
+  invoice: 388,
+  credit_note: 381,
+  debit_note: 383,
+};
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const INITIAL_PIH = 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==';
 
 // ── XML Builder ───────────────────────────────────────────────────────────────
 
 /**
  * Build the unsigned UBL 2.1 simplified invoice XML.
  *
- * The XML does NOT include a UBLExtensions / signature block.
- * That is injected later by `embedSignatureIntoXML`.
- *
- * Namespace conventions:
- *   - Default namespace: urn:oasis:names:specification:ubl:schema:xsd:Invoice-2
- *   - cac: CommonAggregateComponents-2
- *   - cbc: CommonBasicComponents-2
- *   - ext: CommonExtensionComponents-2
- *
- * Deterministic serialization: no self-closing tags where possible,
- * consistent indentation, no extraneous whitespace around values.
+ * Supports invoice, credit note, and debit note document types.
+ * The XML does NOT include a UBLExtensions / signature block — that is injected
+ * later by `embedSignatureIntoXML`.
  */
 export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
-  const { icv, uuid, issueDate, issueTime, seller, items, discountHalalas, prevInvoiceHash } =
-    input;
+  const type = input.type || 'invoice';
+  const {
+    icv,
+    uuid,
+    issueDate,
+    issueTime,
+    seller,
+    items,
+    discountHalalas,
+    prevInvoiceHash,
+    billingReferenceId,
+  } = input;
+
+  const typeCode = INVOICE_TYPE_CODES[type];
+  const isCorrection = type === 'credit_note' || type === 'debit_note';
 
   // Compute line totals and tax breakdown
   const lines = items.map((item, idx) => {
@@ -105,18 +134,17 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   // Compute totals
   const totalExcl = lines.reduce((sum, l) => sum + l.lineExcl, 0);
   const totalIncl = lines.reduce((sum, l) => sum + l.lineTotalIncl, 0);
-  const totalVat = totalIncl - totalExcl;
-
-  // Discount
   const discount = discountHalalas ?? 0;
   const allowanceTotal = discount;
   const payableAmount = totalIncl - discount;
 
-  // Group tax by rate for tax totals
+  // Group tax by rate
   const taxGroups = groupTaxByRate(lines);
 
-  // Build XML parts
   const parts: string[] = [];
+
+  // ── XML declaration ──
+  parts.push('<?xml version="1.0" encoding="UTF-8"?>');
 
   // ── Root opening ──
   parts.push(
@@ -132,41 +160,58 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`  <cbc:UUID>${uuid}</cbc:UUID>`);
   parts.push(`  <cbc:IssueDate>${issueDate}</cbc:IssueDate>`);
   parts.push(`  <cbc:IssueTime>${issueTime}</cbc:IssueTime>`);
+  parts.push(`  <cbc:InvoiceTypeCode name="0200000">${typeCode}</cbc:InvoiceTypeCode>`);
 
-  // InvoiceTypeCode — simplified tax invoice
-  parts.push(`  <cbc:InvoiceTypeCode name="0200000">388</cbc:InvoiceTypeCode>`);
-
-  // Invoice Document Currency
+  // ── Currencies ──
   parts.push(`  <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>`);
   parts.push(`  <cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>`);
 
-  // ── Invoice Note for PIH ──
-  if (prevInvoiceHash) {
-    parts.push(`  <cbc:Note>PIH=${prevInvoiceHash}</cbc:Note>`);
+  // ── BillingReference (credit/debit notes only) ──
+  if (isCorrection && billingReferenceId) {
+    parts.push(`  <cac:BillingReference>`);
+    parts.push(`    <cac:InvoiceDocumentReference>`);
+    parts.push(`      <cbc:ID>${billingReferenceId}</cbc:ID>`);
+    parts.push(`    </cac:InvoiceDocumentReference>`);
+    parts.push(`  </cac:BillingReference>`);
   }
 
-  // ── AdditionalDocumentReference for ICV and PIH ──
-  // ICV
+  // ── AdditionalDocumentReference: ICV ──
   parts.push(`  <cac:AdditionalDocumentReference>`);
   parts.push(`    <cbc:ID>ICV</cbc:ID>`);
   parts.push(`    <cbc:UUID>${icv}</cbc:UUID>`);
   parts.push(`  </cac:AdditionalDocumentReference>`);
 
-  // PIH
+  // ── AdditionalDocumentReference: PIH ──
+  const pihValue = prevInvoiceHash || INITIAL_PIH;
   parts.push(`  <cac:AdditionalDocumentReference>`);
   parts.push(`    <cbc:ID>PIH</cbc:ID>`);
   parts.push(`    <cac:Attachment>`);
   parts.push(
-    `      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${prevInvoiceHash || 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg=='}</cbc:EmbeddedDocumentBinaryObject>`,
+    `      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${pihValue}</cbc:EmbeddedDocumentBinaryObject>`,
   );
   parts.push(`    </cac:Attachment>`);
   parts.push(`  </cac:AdditionalDocumentReference>`);
 
-  // ── Seller (AccountingSupplierParty) ──
+  // ── AdditionalDocumentReference: QR (placeholder — filled after signing) ──
+  parts.push(`  <cac:AdditionalDocumentReference>`);
+  parts.push(`    <cbc:ID>QR</cbc:ID>`);
+  parts.push(`    <cac:Attachment>`);
+  parts.push(`      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain"></cbc:EmbeddedDocumentBinaryObject>`);
+  parts.push(`    </cac:Attachment>`);
+  parts.push(`  </cac:AdditionalDocumentReference>`);
+
+  // ── Signature placeholder ──
+  parts.push(`  <cac:Signature>`);
+  parts.push(`    <cbc:ID>urn:oasis:names:specification:ubl:signature:Invoice</cbc:ID>`);
+  parts.push(`    <cbc:SignatureMethod>urn:oasis:names:specification:ubl:dsig:enveloped:xades</cbc:SignatureMethod>`);
+  parts.push(`  </cac:Signature>`);
+
+  // ── AccountingSupplierParty (Seller) ──
+  const crn = seller.crNumber || seller.vatNumber;
   parts.push(`  <cac:AccountingSupplierParty>`);
   parts.push(`    <cac:Party>`);
   parts.push(`      <cac:PartyIdentification>`);
-  parts.push(`        <cbc:ID schemeID="CRN">${escapeXml(seller.vatNumber)}</cbc:ID>`);
+  parts.push(`        <cbc:ID schemeID="CRN">${escapeXml(crn)}</cbc:ID>`);
   parts.push(`      </cac:PartyIdentification>`);
   parts.push(`      <cac:PostalAddress>`);
   parts.push(
@@ -180,9 +225,6 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   );
   parts.push(`        <cbc:CityName>${escapeXml(seller.city || 'Riyadh')}</cbc:CityName>`);
   parts.push(`        <cbc:PostalZone>${escapeXml(seller.postalCode || '12345')}</cbc:PostalZone>`);
-  parts.push(
-    `        <cbc:CountrySubentity>${escapeXml(seller.city || 'Riyadh')}</cbc:CountrySubentity>`,
-  );
   parts.push(`        <cac:Country>`);
   parts.push(
     `          <cbc:IdentificationCode>${escapeXml(seller.country || 'SA')}</cbc:IdentificationCode>`,
@@ -201,93 +243,86 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`    </cac:Party>`);
   parts.push(`  </cac:AccountingSupplierParty>`);
 
-  // ── Invoice Lines ──
-  for (const line of lines) {
-    parts.push(`  <cac:InvoiceLine>`);
-    parts.push(`    <cbc:ID>${line.index}</cbc:ID>`);
-    parts.push(`    <cbc:InvoicedQuantity unitCode="PCE">${line.qty}</cbc:InvoicedQuantity>`);
-    parts.push(
-      `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(line.lineExcl)}</cbc:LineExtensionAmount>`,
-    );
+  // ── AccountingCustomerParty (empty for simplified B2C) ──
+  parts.push(`  <cac:AccountingCustomerParty>`);
+  parts.push(`  </cac:AccountingCustomerParty>`);
 
-    // Tax total for this line
-    parts.push(`    <cac:TaxTotal>`);
-    parts.push(
-      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(line.lineVat)}</cbc:TaxAmount>`,
-    );
-    parts.push(
-      `      <cbc:RoundingAmount currencyID="SAR">${halalasToSar(line.lineTotalIncl)}</cbc:RoundingAmount>`,
-    );
-    parts.push(`    </cac:TaxTotal>`);
+  // ── Delivery (credit/debit notes only) ──
+  if (isCorrection) {
+    parts.push(`  <cac:Delivery>`);
+    parts.push(`    <cbc:ActualDeliveryDate>${issueDate}</cbc:ActualDeliveryDate>`);
+    parts.push(`  </cac:Delivery>`);
+  }
 
-    // Item info
-    parts.push(`    <cac:Item>`);
-    parts.push(`      <cbc:Name>${line.name}</cbc:Name>`);
-    // Tax category per item
-    parts.push(`      <cac:ClassifiedTaxCategory>`);
-    parts.push(`        <cbc:ID>${line.vatRateBp === 0 ? 'Z' : 'S'}</cbc:ID>`);
-    parts.push(`        <cbc:Percent>${(line.vatRateBp / 100).toFixed(2)}</cbc:Percent>`);
-    parts.push(`        <cac:TaxScheme>`);
-    parts.push(`          <cbc:ID>VAT</cbc:ID>`);
-    parts.push(`        </cac:TaxScheme>`);
-    parts.push(`      </cac:ClassifiedTaxCategory>`);
-    parts.push(`    </cac:Item>`);
+  // ── PaymentMeans ──
+  parts.push(`  <cac:PaymentMeans>`);
+  parts.push(`    <cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>`);
+  if (input.paymentNote) {
+    parts.push(`    <cbc:InstructionNote>${escapeXml(input.paymentNote)}</cbc:InstructionNote>`);
+  }
+  parts.push(`  </cac:PaymentMeans>`);
 
-    // Price
-    parts.push(`    <cac:Price>`);
+  // ── Invoice-level AllowanceCharge (discount) ──
+  if (discount > 0) {
+    parts.push(`  <cac:AllowanceCharge>`);
+    parts.push(`    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>`);
+    parts.push(`    <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>`);
     parts.push(
-      `      <cbc:PriceAmount currencyID="SAR">${halalasToSar(line.unitPriceExcl)}</cbc:PriceAmount>`,
+      `    <cbc:Amount currencyID="SAR">${halalasToSar(discount)}</cbc:Amount>`,
     );
-    parts.push(`      <cac:AllowanceCharge>`);
-    parts.push(`        <cbc:ChargeIndicator>false</cbc:ChargeIndicator>`);
-    parts.push(`        <cbc:Amount currencyID="SAR">0.00</cbc:Amount>`);
-    parts.push(`      </cac:AllowanceCharge>`);
-    parts.push(`    </cac:Price>`);
-
-    parts.push(`  </cac:InvoiceLine>`);
+    parts.push(`    <cac:TaxCategory>`);
+    parts.push(`      <cbc:ID>${taxGroups.standard.rateBp > 0 ? 'S' : 'Z'}</cbc:ID>`);
+    parts.push(`      <cbc:Percent>${(taxGroups.standard.rateBp / 100).toFixed(2)}</cbc:Percent>`);
+    parts.push(`      <cac:TaxScheme>`);
+    parts.push(`        <cbc:ID>VAT</cbc:ID>`);
+    parts.push(`      </cac:TaxScheme>`);
+    parts.push(`    </cac:TaxCategory>`);
+    parts.push(`  </cac:AllowanceCharge>`);
+  } else {
+    // Always include a zero AllowanceCharge for XSD compliance
+    parts.push(`  <cac:AllowanceCharge>`);
+    parts.push(`    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>`);
+    parts.push(`    <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>`);
+    parts.push(`    <cbc:Amount currencyID="SAR">0.00</cbc:Amount>`);
+    parts.push(`    <cac:TaxCategory>`);
+    parts.push(`      <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">S</cbc:ID>`);
+    parts.push(`      <cbc:Percent>15</cbc:Percent>`);
+    parts.push(`      <cac:TaxScheme>`);
+    parts.push(`        <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>`);
+    parts.push(`      </cac:TaxScheme>`);
+    parts.push(`    </cac:TaxCategory>`);
+    parts.push(`  </cac:AllowanceCharge>`);
   }
 
   // ── Tax Totals ──
-  // Standard rate
-  if (taxGroups.standard.vatAmount > 0) {
-    parts.push(`  <cac:TaxTotal>`);
-    parts.push(
-      `    <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`,
-    );
-    parts.push(`    <cac:TaxSubtotal>`);
-    parts.push(
-      `      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.standard.taxableAmount)}</cbc:TaxableAmount>`,
-    );
-    parts.push(
-      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(taxGroups.standard.vatAmount)}</cbc:TaxAmount>`,
-    );
-    parts.push(`      <cac:TaxCategory>`);
-    parts.push(`        <cbc:ID>S</cbc:ID>`);
-    parts.push(
-      `        <cbc:Percent>${(taxGroups.standard.rateBp / 100).toFixed(2)}</cbc:Percent>`,
-    );
-    parts.push(`        <cac:TaxScheme>`);
-    parts.push(`          <cbc:ID>VAT</cbc:ID>`);
-    parts.push(`        </cac:TaxScheme>`);
-    parts.push(`      </cac:TaxCategory>`);
-    parts.push(`    </cac:TaxSubtotal>`);
-    parts.push(`  </cac:TaxTotal>`);
-  }
+  // First TaxTotal: VAT amount only (without TaxSubtotal) — required per XSD
+  const totalVat = totalIncl - totalExcl;
+  parts.push(`  <cac:TaxTotal>`);
+  parts.push(`    <cbc:TaxAmount currencyID="SAR">${halalasToSar(totalVat)}</cbc:TaxAmount>`);
+  parts.push(`  </cac:TaxTotal>`);
 
-  // Zero-rated
-  if (taxGroups.zeroRated.vatAmount >= 0 && taxGroups.zeroRated.taxableAmount > 0) {
+  // Additional TaxTotals with subtotals per rate
+  for (const group of [taxGroups.standard, taxGroups.zeroRated]) {
+    if (group.taxableAmount <= 0) continue;
+
     parts.push(`  <cac:TaxTotal>`);
-    parts.push(`    <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>`);
+    parts.push(
+      `    <cbc:TaxAmount currencyID="SAR">${halalasToSar(group.vatAmount)}</cbc:TaxAmount>`,
+    );
     parts.push(`    <cac:TaxSubtotal>`);
     parts.push(
-      `      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(taxGroups.zeroRated.taxableAmount)}</cbc:TaxableAmount>`,
+      `      <cbc:TaxableAmount currencyID="SAR">${halalasToSar(group.taxableAmount)}</cbc:TaxableAmount>`,
     );
-    parts.push(`      <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>`);
+    parts.push(
+      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(group.vatAmount)}</cbc:TaxAmount>`,
+    );
     parts.push(`      <cac:TaxCategory>`);
-    parts.push(`        <cbc:ID>Z</cbc:ID>`);
-    parts.push(`        <cbc:Percent>0.00</cbc:Percent>`);
+    parts.push(`        <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">${group.rateBp === 0 ? 'Z' : 'S'}</cbc:ID>`);
+    parts.push(
+      `        <cbc:Percent>${(group.rateBp / 100).toFixed(2)}</cbc:Percent>`,
+    );
     parts.push(`        <cac:TaxScheme>`);
-    parts.push(`          <cbc:ID>VAT</cbc:ID>`);
+    parts.push(`          <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>`);
     parts.push(`        </cac:TaxScheme>`);
     parts.push(`      </cac:TaxCategory>`);
     parts.push(`    </cac:TaxSubtotal>`);
@@ -305,15 +340,54 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(
     `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(totalIncl)}</cbc:TaxInclusiveAmount>`,
   );
-  if (allowanceTotal > 0) {
-    parts.push(
-      `    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`,
-    );
-  }
+  parts.push(
+    `    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`,
+  );
+  parts.push(`    <cbc:PrepaidAmount currencyID="SAR">0.00</cbc:PrepaidAmount>`);
   parts.push(
     `    <cbc:PayableAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:PayableAmount>`,
   );
   parts.push(`  </cac:LegalMonetaryTotal>`);
+
+  // ── Invoice Lines ──
+  for (const line of lines) {
+    parts.push(`  <cac:InvoiceLine>`);
+    parts.push(`    <cbc:ID>${line.index}</cbc:ID>`);
+    parts.push(`    <cbc:InvoicedQuantity unitCode="PCE">${line.qty}</cbc:InvoicedQuantity>`);
+    parts.push(
+      `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(line.lineExcl)}</cbc:LineExtensionAmount>`,
+    );
+
+    parts.push(`    <cac:TaxTotal>`);
+    parts.push(
+      `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(line.lineVat)}</cbc:TaxAmount>`,
+    );
+    parts.push(
+      `      <cbc:RoundingAmount currencyID="SAR">${halalasToSar(line.lineTotalIncl)}</cbc:RoundingAmount>`,
+    );
+    parts.push(`    </cac:TaxTotal>`);
+
+    // Item info
+    parts.push(`    <cac:Item>`);
+    parts.push(`      <cbc:Name>${line.name}</cbc:Name>`);
+    parts.push(`      <cac:ClassifiedTaxCategory>`);
+    parts.push(`        <cbc:ID>${line.vatRateBp === 0 ? 'Z' : 'S'}</cbc:ID>`);
+    parts.push(`        <cbc:Percent>${(line.vatRateBp / 100).toFixed(2)}</cbc:Percent>`);
+    parts.push(`        <cac:TaxScheme>`);
+    parts.push(`          <cbc:ID>VAT</cbc:ID>`);
+    parts.push(`        </cac:TaxScheme>`);
+    parts.push(`      </cac:ClassifiedTaxCategory>`);
+    parts.push(`    </cac:Item>`);
+
+    // Price
+    parts.push(`    <cac:Price>`);
+    parts.push(
+      `      <cbc:PriceAmount currencyID="SAR">${halalasToSar(line.unitPriceExcl)}</cbc:PriceAmount>`,
+    );
+    parts.push(`    </cac:Price>`);
+
+    parts.push(`  </cac:InvoiceLine>`);
+  }
 
   // ── Root closing ──
   parts.push(`</Invoice>`);

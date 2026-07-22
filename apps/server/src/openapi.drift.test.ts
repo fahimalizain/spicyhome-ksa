@@ -53,6 +53,7 @@ describe('OpenAPI spec drift check', () => {
       .addTag('settings', 'Application settings')
       .addTag('day', 'Business day open/close')
       .addTag('reports', 'X/Z reports and sales summaries')
+      .addTag('zatca', 'ZATCA e-invoicing')
       .build();
 
     const generated = SwaggerModule.createDocument(app, config);

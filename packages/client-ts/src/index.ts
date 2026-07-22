@@ -30,5 +30,9 @@ export type {
   SuccessResponse,
   StatusResponse,
   AuditVerifyResponse,
+  ZatcaConfigDto,
+  ZatcaOnboardingState,
+  ZatcaInvoice,
+  ZatcaReportingResult,
 } from './client';
 export type { paths, components, operations } from './generated/types';

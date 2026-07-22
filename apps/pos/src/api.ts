@@ -5,7 +5,7 @@ const TOKEN_KEY = 'spicyhome_token';
 const ME_KEY = 'spicyhome_me';
 
 function getBaseUrl(): string {
-  return window.location.origin;
+  return import.meta.env.DEV ? `${window.location.origin}/api` : window.location.origin;
 }
 
 export const client = new SpicyHomeClient({

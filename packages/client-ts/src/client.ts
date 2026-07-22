@@ -33,6 +33,39 @@ export type AuditVerifyResponse = Schemas['AuditVerifyResponse'];
 export type TableResponse = Schemas['TableResponse'];
 export type PrinterResponse = Schemas['PrinterResponse'];
 
+export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
+
+export interface ZatcaOnboardingState {
+  state: 'not_started' | 'csr_generated' | 'compliance' | 'production';
+  keyGenerated: boolean;
+  complianceDone: boolean;
+  productionDone: boolean;
+  complianceCertExpiry: number | null;
+  productionCertExpiry: number | null;
+  publicKeyPem: string | null;
+}
+
+export interface ZatcaInvoice {
+  id: number;
+  orderId: number;
+  icv: number;
+  uuid: string;
+  invoiceHash: string;
+  prevInvoiceHash: string;
+  xml: string;
+  qrTlv: string;
+  status: string;
+  reportedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ZatcaReportingResult {
+  processed: number;
+  succeeded: number;
+  failed: number;
+}
+
 export interface SpicyHomeClientConfig {
   baseUrl: string;
   getToken: () => string | null;
@@ -45,7 +78,7 @@ async function request<T>(
   body?: unknown,
   query?: Record<string, string | undefined>,
 ): Promise<T> {
-  const url = new URL(path, config.baseUrl);
+  const url = new URL(config.baseUrl.replace(/\/+$/, '') + path);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) {
@@ -228,5 +261,45 @@ export class SpicyHomeClient {
     printZ: (dayId: number) => request<any>(this.config, 'POST', `/reports/z/${dayId}/print`),
 
     printX: () => request<any>(this.config, 'POST', '/reports/x/print'),
+  };
+
+  zatca = {
+    getConfig: () => request<ZatcaConfigDto>(this.config, 'GET', '/zatca/config'),
+
+    updateConfig: (config: ZatcaConfigDto) =>
+      request<ZatcaConfigDto>(this.config, 'PUT', '/zatca/config', config),
+
+    getStatus: () => request<ZatcaOnboardingState>(this.config, 'GET', '/zatca/status'),
+
+    generateCsr: () =>
+      request<{ csr: string; publicKeyPem: string }>(this.config, 'POST', '/zatca/onboard/csr'),
+
+    onboardCompliance: (otp: string) =>
+      request<{ success: boolean; requestId: string }>(
+        this.config,
+        'POST',
+        '/zatca/onboard/compliance',
+        { otp },
+      ),
+
+    onboardProduction: () =>
+      request<{ success: boolean; requestId: string }>(
+        this.config,
+        'POST',
+        '/zatca/onboard/production',
+      ),
+
+    listInvoices: (limit?: number, offset?: number) =>
+      request<ZatcaInvoice[]>(this.config, 'GET', '/zatca/invoices', undefined, {
+        limit: limit?.toString(),
+        offset: offset?.toString(),
+      }),
+
+    getInvoice: (id: number) => request<ZatcaInvoice>(this.config, 'GET', `/zatca/invoices/${id}`),
+
+    retryReporting: (invoiceId?: number) =>
+      request<ZatcaReportingResult>(this.config, 'POST', '/zatca/reporting/retry', {
+        invoiceId,
+      }),
   };
 }

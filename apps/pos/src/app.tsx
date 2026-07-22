@@ -10,6 +10,7 @@ import { CategoriesPage } from './pages/admin/CategoriesPage';
 import { PrintersPage } from './pages/admin/PrintersPage';
 import { TablesPage } from './pages/admin/TablesPage';
 import { UsersPage } from './pages/admin/UsersPage';
+import { ZatcaPage } from './pages/admin/ZatcaPage';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -30,6 +31,7 @@ export function App() {
             <Route path="/admin/printers" element={<PrintersPage />} />
             <Route path="/admin/tables" element={<TablesPage />} />
             <Route path="/admin/users" element={<UsersPage />} />
+            <Route path="/admin/zatca" element={<ZatcaPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

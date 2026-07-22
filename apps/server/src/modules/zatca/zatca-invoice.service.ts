@@ -118,6 +118,7 @@ export class ZatcaInvoiceService {
     // Load seller config
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
     const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
+    const crNumber = this.printersService.getSetting('cr_number', '');
     const sellerStreet = this.printersService.getSetting('seller_street', '');
     const sellerBuilding = this.printersService.getSetting('seller_building', '');
     const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
@@ -127,6 +128,7 @@ export class ZatcaInvoiceService {
     const seller: SellerInfo = {
       name: sellerName,
       vatNumber,
+      crNumber: crNumber || undefined,
       street: sellerStreet || undefined,
       buildingNumber: sellerBuilding || undefined,
       city: sellerCity,

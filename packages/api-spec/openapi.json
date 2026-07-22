@@ -1504,6 +1504,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1519,6 +1524,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1534,6 +1544,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1549,6 +1564,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1581,6 +1601,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1605,6 +1630,73 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/zatca/config": {
+      "get": {
+        "operationId": "ZatcaController_getConfig",
+        "summary": "Get ZATCA seller configuration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "ZATCA seller configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaConfigDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "ZatcaController_updateConfig",
+        "summary": "Update ZATCA seller configuration",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZatcaConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaConfigDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1620,6 +1712,11 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2013,6 +2110,10 @@
     {
       "name": "reports",
       "description": "X/Z reports and sales summaries"
+    },
+    {
+      "name": "zatca",
+      "description": "ZATCA e-invoicing"
     }
   ],
   "servers": [],
@@ -3281,6 +3382,72 @@
         "required": [
           "key",
           "value"
+        ]
+      },
+      "ZatcaConfigDto": {
+        "type": "object",
+        "properties": {
+          "sellerName": {
+            "type": "string",
+            "example": "SpicyHome Restaurant",
+            "description": "Legal seller name for CSR and invoice XML"
+          },
+          "vatNumber": {
+            "type": "string",
+            "example": "300123456789003",
+            "description": "15-digit KSA VAT number (starts and ends with 3)"
+          },
+          "crNumber": {
+            "type": "string",
+            "example": "1234567890",
+            "description": "10-digit Commercial Registration number"
+          },
+          "street": {
+            "type": "string",
+            "example": "King Fahd Road",
+            "description": "Street name"
+          },
+          "building": {
+            "type": "string",
+            "example": "1234",
+            "description": "Building number"
+          },
+          "city": {
+            "type": "string",
+            "example": "Riyadh",
+            "description": "City name"
+          },
+          "postalCode": {
+            "type": "string",
+            "example": "12345",
+            "description": "5-digit postal code"
+          },
+          "country": {
+            "type": "string",
+            "example": "SA",
+            "description": "2-letter ISO country code"
+          },
+          "orgUnit": {
+            "type": "string",
+            "example": "SpicyHome POS",
+            "description": "Organizational unit for CSR"
+          },
+          "apiBaseUrl": {
+            "type": "string",
+            "example": "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal",
+            "description": "ZATCA API base URL (defaults to developer portal)"
+          }
+        },
+        "required": [
+          "sellerName",
+          "vatNumber",
+          "crNumber",
+          "street",
+          "building",
+          "city",
+          "postalCode",
+          "country",
+          "orgUnit"
         ]
       },
       "OpenDayDto": {
