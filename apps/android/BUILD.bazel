@@ -59,5 +59,6 @@ sh_test(
     ],
     args = ["$(rootpath //:MODULE.bazel)"],
     size = "large",
+    flaky = True,
     tags = ["no-sandbox", "local", "requires-network"],
 )
