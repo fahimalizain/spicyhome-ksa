@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Server (ts-node)",
+      "runtimeArgs": ["-r", "ts-node/register/transpile-only"],
+      "args": ["${workspaceFolder}/apps/server/src/main.ts"],
+      "cwd": "${workspaceFolder}/apps/server",
+      "env": {
+        "TZ": "Asia/Riyadh",
+        "PORT": "3742"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

@@ -8,8 +8,14 @@ import * as path from 'path';
 
 export const DRIZZLE = 'DRIZZLE';
 
+function resolveDbPath(raw: string): string {
+  if (path.isAbsolute(raw)) return raw;
+  const root = process.env.BUILD_WORKSPACE_DIRECTORY || process.cwd();
+  return path.join(root, raw);
+}
+
 function getDbPath(): string {
-  const dbPath = process.env.SPICYHOME_DB || './data/spicyhome.db';
+  const dbPath = resolveDbPath(process.env.SPICYHOME_DB || './data/spicyhome.db');
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });

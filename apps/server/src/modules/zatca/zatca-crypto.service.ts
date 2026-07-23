@@ -418,17 +418,26 @@ export interface CsrSubject {
   organizationName: string;
   organizationalUnit: string;
   country: string;
-  organizationIdentifier?: string; // OID 2.5.4.97
 }
+
+export interface CsrExtensionParams {
+  zatcaEnv: 'sandbox' | 'simulation' | 'production';
+  serialNumber: string;
+  vatNumber: string;
+  invoiceType: string;
+  locationAddress: string;
+  businessCategory: string;
+}
+
+/** OID 1.2.840.113549.1.9.14 — pkcs-9-at-extensionRequest */
+const EXTENSION_REQUEST_OID = '1.2.840.113549.1.9.14';
+/** OID 1.3.6.1.4.1.311.20.2 — ZATCA code-signing custom extension */
+const ZATCA_CUSTOM_OID = '1.3.6.1.4.1.311.20.2';
+/** OID 2.5.29.17 — subjectAltName */
+const SAN_OID = '2.5.29.17';
 
 function encodeSubjectDN(subject: CsrSubject): Uint8Array {
   const rdns: Uint8Array[] = [];
-
-  if (subject.organizationIdentifier) {
-    const oid = encodeOid('2.5.4.97');
-    const value = derPrintableString(subject.organizationIdentifier);
-    rdns.push(derSet([derSequence([oid, value])]));
-  }
 
   {
     const oid = encodeOid('2.5.4.6');
@@ -437,14 +446,14 @@ function encodeSubjectDN(subject: CsrSubject): Uint8Array {
   }
 
   {
-    const oid = encodeOid('2.5.4.10');
-    const value = derUtf8String(subject.organizationName);
+    const oid = encodeOid('2.5.4.11');
+    const value = derUtf8String(subject.organizationalUnit);
     rdns.push(derSet([derSequence([oid, value])]));
   }
 
   {
-    const oid = encodeOid('2.5.4.11');
-    const value = derUtf8String(subject.organizationalUnit);
+    const oid = encodeOid('2.5.4.10');
+    const value = derUtf8String(subject.organizationName);
     rdns.push(derSet([derSequence([oid, value])]));
   }
 
@@ -457,20 +466,82 @@ function encodeSubjectDN(subject: CsrSubject): Uint8Array {
   return derSequence(rdns);
 }
 
+function encodeCustomExtension(env: string): Uint8Array {
+  const label =
+    env === 'sandbox'
+      ? 'TESTZATCA-Code-Signing'
+      : env === 'simulation'
+        ? 'PREZATCA-Code-Signing'
+        : 'ZATCA-Code-Signing';
+
+  const utf8Value = derUtf8String(label);
+  const extnID = encodeOid(ZATCA_CUSTOM_OID);
+  const extnValue = derOctetString(utf8Value);
+
+  return derSequence([extnID, extnValue]);
+}
+
+function encodeSanExtension(params: CsrExtensionParams): Uint8Array {
+  const rdns: Uint8Array[] = [];
+
+  rdns.push(derSet([derSequence([encodeOid('2.5.4.4'), derPrintableString(params.serialNumber)])]));
+  rdns.push(
+    derSet([
+      derSequence([encodeOid('0.9.2342.19200300.100.1.1'), derPrintableString(params.vatNumber)]),
+    ]),
+  );
+  rdns.push(derSet([derSequence([encodeOid('2.5.4.12'), derPrintableString(params.invoiceType)])]));
+  rdns.push(
+    derSet([derSequence([encodeOid('2.5.4.26'), derPrintableString(params.locationAddress)])]),
+  );
+  rdns.push(
+    derSet([derSequence([encodeOid('2.5.4.15'), derPrintableString(params.businessCategory)])]),
+  );
+
+  const directoryName = derSequence(rdns);
+  const generalName = derContextTagged(4, directoryName);
+  const generalNames = derSequence([generalName]);
+
+  const extnID = encodeOid(SAN_OID);
+  const extnValue = derOctetString(generalNames);
+
+  return derSequence([extnID, extnValue]);
+}
+
+function encodeExtensionRequest(extensions: Uint8Array[]): Uint8Array {
+  const extensionsSeq = derSequence(extensions);
+  const attrType = encodeOid(EXTENSION_REQUEST_OID);
+  const attrValues = derSet([extensionsSeq]);
+  const attribute = derSequence([attrType, attrValues]);
+  return derSet([attribute]);
+}
+
 /**
  * Build a PKCS#10 CSR (CertificationRequest) DER.
  * Signed with ECDSA secp256k1 + SHA-256.
+ * Includes ZATCA-required custom extension (1.3.6.1.4.1.311.20.2) and
+ * Subject Alternative Name (2.5.29.17) with business metadata as DirectoryName.
  */
 export function buildCSR(
   subject: CsrSubject,
   publicKeyHex: string,
   privateKeyHex: string,
+  extensions?: CsrExtensionParams,
 ): Uint8Array {
   const pubKeyDer = exportPublicKeyDer(publicKeyHex);
 
   const version = derInteger(0);
   const subjectName = encodeSubjectDN(subject);
-  const attributes = derContextTagged(0, derSequence([]));
+
+  let attributes: Uint8Array;
+  if (extensions) {
+    const extnList: Uint8Array[] = [encodeCustomExtension(extensions.zatcaEnv)];
+    const sanExt = encodeSanExtension(extensions);
+    if (sanExt.length > 0) extnList.push(sanExt);
+    attributes = derContextTagged(0, encodeExtensionRequest(extnList));
+  } else {
+    attributes = new Uint8Array([0xa0, 0x00]);
+  }
 
   const csrInfo = derSequence([version, subjectName, pubKeyDer, attributes]);
 

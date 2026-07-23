@@ -106,6 +106,10 @@ export class ZatcaHttpService implements ZatcaHttpClient {
         timeout: timeoutMs,
       };
 
+      this.logger.log(
+        `${method} ${url} headers=${JSON.stringify(headers)} body=${options.body ? `${options.body.substring(0, 200)}...` : '(none)'}`,
+      );
+
       const req = httpModule.request(reqOptions, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -117,6 +121,9 @@ export class ZatcaHttpService implements ZatcaHttpClient {
               if (v !== undefined) resHeaders[k] = Array.isArray(v) ? v.join(', ') : v;
             }
           }
+          this.logger.log(
+            `${method} ${url} → ${res.statusCode} headers=${JSON.stringify(resHeaders)} body=${body.substring(0, 500)}`,
+          );
           resolve({ status: res.statusCode ?? 0, headers: resHeaders, body });
         });
       });

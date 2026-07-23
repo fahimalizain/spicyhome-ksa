@@ -6,6 +6,7 @@ import {
   Param,
   Body,
   Query,
+  ParseIntPipe,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
@@ -66,8 +67,11 @@ export class ZatcaController {
 
   @Get('invoices')
   @ApiOperation({ summary: 'List ZATCA invoices' })
-  async listInvoices(@Query('limit') limit?: number, @Query('offset') offset?: number) {
-    return this.invoiceService.listInvoices(limit || 50, offset || 0);
+  async listInvoices(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+  ) {
+    return this.invoiceService.listInvoices(limit ?? 50, offset ?? 0);
   }
 
   @Get('invoices/:id')

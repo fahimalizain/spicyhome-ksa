@@ -161,7 +161,9 @@ describe('UBL XML Builder', () => {
 
   it('uses SDK initial PIH hash when prevInvoiceHash is empty', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).toContain('NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==');
+    expect(xml).toContain(
+      'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==',
+    );
   });
 
   it('uses prevInvoiceHash in PIH when provided', () => {
@@ -223,9 +225,7 @@ describe('UBL XML Builder', () => {
     const input: InvoiceXMLInput = {
       ...baseInput,
       seller: { ...defaultSeller, name: 'Spicy & Home <Express>' },
-      items: [
-        { name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 },
-      ],
+      items: [{ name: 'Burger & Fries" Special', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1 }],
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('Spicy &amp; Home &lt;Express&gt;');
@@ -291,9 +291,7 @@ describe('UBL XML Builder', () => {
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>');
-    expect(xml).toContain(
-      '<cbc:TaxExclusiveAmount currencyID="SAR">5.00</cbc:TaxExclusiveAmount>',
-    );
+    expect(xml).toContain('<cbc:TaxExclusiveAmount currencyID="SAR">5.00</cbc:TaxExclusiveAmount>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">5.00</cbc:PayableAmount>');
   });
 
@@ -350,9 +348,7 @@ describe('UBL XML Builder', () => {
 
   it('includes Signature placeholder', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).toContain(
-      '<cbc:ID>urn:oasis:names:specification:ubl:signature:Invoice</cbc:ID>',
-    );
+    expect(xml).toContain('<cbc:ID>urn:oasis:names:specification:ubl:signature:Invoice</cbc:ID>');
     expect(xml).toContain(
       '<cbc:SignatureMethod>urn:oasis:names:specification:ubl:dsig:enveloped:xades</cbc:SignatureMethod>',
     );

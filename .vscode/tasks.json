@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Server: Dev (Bazel)",
+      "type": "shell",
+      "command": "bazel run //apps/server:dev",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "TZ": "Asia/Riyadh",
+          "SPICYHOME_DB": "./data/spicyhome.db",
+          "PORT": "3742"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Server: Dev (Bazel + Inspect)",
+      "type": "shell",
+      "command": "NODE_OPTIONS='--inspect' bazel run //apps/server:dev",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "TZ": "Asia/Riyadh",
+          "SPICYHOME_DB": "./data/spicyhome.db",
+          "PORT": "3742"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": []
+    },
+    {
+      "label": "Build: Server (Bazel)",
+      "type": "shell",
+      "command": "bazel build //apps/server:dev",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Check: Lint + Typecheck",
+      "type": "shell",
+      "command": "pnpm check",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

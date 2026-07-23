@@ -297,19 +297,25 @@ describe('CSR Builder', () => {
     const kp = generateKeyPair();
     const csrDer = buildCSR(
       {
-        commonName: '300123456789',
+        commonName: 'TST-00000001-300123456789',
         organizationName: 'SpicyHome Restaurant',
-        organizationalUnit: 'SpicyHome POS',
+        organizationalUnit: '300123456789',
         country: 'SA',
-        organizationIdentifier: 'VAT-SA-300123456789',
       },
       kp.publicKeyHex,
       kp.privateKeyHex,
+      {
+        zatcaEnv: 'sandbox',
+        serialNumber: '1-TST|2-TST|3-deadbeef-beef-dead-beef-deadbeef1234',
+        vatNumber: '300123456789',
+        invoiceType: '1100',
+        locationAddress: 'RIYADH',
+        businessCategory: 'Retail',
+      },
     );
 
     expect(csrDer).toBeTruthy();
     expect(csrDer.length).toBeGreaterThan(100);
-    // Should start with SEQUENCE tag
     expect(csrDer[0]).toBe(0x30);
   });
 

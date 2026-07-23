@@ -14,6 +14,7 @@
  */
 
 import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { DRIZZLE } from '../database/database.module';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaHttpService, ZatcaHttpClient } from './zatca-http.service';
@@ -25,6 +26,7 @@ import {
   encryptAtRest,
   hexToBytes,
 } from './zatca-crypto.service';
+import type { CsrExtensionParams } from './zatca-crypto.service';
 import { PrintersService } from '../printers/printers.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -70,40 +72,52 @@ export class ZatcaOnboardingService {
     }
 
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
-    const orgUnit = this.printersService.getSetting('zatca_org_unit', 'SpicyHome POS');
-    const orgIdentifier = `VAT-SA-${vatNumber}`;
+    const city = this.printersService.getSetting('seller_city', 'Riyadh').toUpperCase();
 
-    // Generate keypair
+    const randomHex = () => randomBytes(4).toString('hex');
+    const serialNumber = `1-TST|2-TST|3-${randomHex()}-${randomHex().substring(0, 4)}-${randomHex().substring(0, 4)}-${randomHex().substring(0, 4)}-${randomHex().substring(0, 12)}`;
+    const commonName = `TST-${randomHex()}-${vatNumber}`;
+
     const keyPair = generateKeyPair();
     const publicKeyPem = getPublicKeyPem(keyPair.publicKeyHex);
 
-    // Encrypt and store private key
     const secret = process.env.ZATCA_SECRET || 'spicyhome-zatca-secret-change-me';
     this.invoiceService.storePrivateKey(keyPair.privateKeyHex, secret);
 
-    // Store public key
     this.printersService.setSetting('zatca_public_key', keyPair.publicKeyHex);
 
-    // Build CSR
+    const invoiceType = this.printersService.getSetting('zatca_invoice_type', '1100');
+    const businessCategory = this.printersService.getSetting('zatca_business_category', 'Retail');
+
+    const extensions: CsrExtensionParams = {
+      zatcaEnv: 'sandbox',
+      serialNumber,
+      vatNumber,
+      invoiceType,
+      locationAddress: city,
+      businessCategory,
+    };
+
     const csrDer = buildCSR(
       {
-        commonName: vatNumber,
+        commonName,
         organizationName: sellerName,
-        organizationalUnit: orgUnit,
+        organizationalUnit: vatNumber,
         country: 'SA',
-        organizationIdentifier: orgIdentifier,
       },
       keyPair.publicKeyHex,
       keyPair.privateKeyHex,
+      extensions,
     );
 
     const csrPem = toPem(csrDer, 'CERTIFICATE REQUEST');
 
-    // Update state
-    this.invoiceService.setOnboardingState('csr_generated');
+    // Store base64 of PEM bytes (matching ERPGulf's format for compliance API)
+    const csrBase64 = Buffer.from(csrPem).toString('base64');
+    this.printersService.setSetting('zatca_csr_base64', csrBase64);
+    this.printersService.setSetting('zatca_csr_pem', csrPem);
 
-    // Store CSR for reference
-    this.printersService.setSetting('zatca_csr', csrPem);
+    this.invoiceService.setOnboardingState('csr_generated');
 
     return { csr: csrPem, publicKeyPem };
   }
@@ -119,21 +133,19 @@ export class ZatcaOnboardingService {
    *   { binarySecurityToken, secret, requestID, ... }
    */
   async onboardCompliance(otp: string): Promise<{ success: boolean; requestId: string }> {
-    const csrPem = this.printersService.getSetting('zatca_csr', '');
-    if (!csrPem) {
+    const csrBase64 = this.printersService.getSetting('zatca_csr_base64', '');
+    if (!csrBase64) {
       throw new BadRequestException('CSR not generated. Run CSR generation first.');
     }
 
     const baseUrl = this.getApiBaseUrl();
     const url = `${baseUrl}/compliance`;
 
-    // Strip PEM header/footer and newlines to get base64 DER
-    const csrBase64 = csrPem
-      .replace(/-----BEGIN CERTIFICATE REQUEST-----/, '')
-      .replace(/-----END CERTIFICATE REQUEST-----/, '')
-      .replace(/\s/g, '');
-
     const body = JSON.stringify({ csr: csrBase64 });
+
+    this.logger.log(
+      `Compliance POST ${url} csrBase64Len=${csrBase64.length} headers=${JSON.stringify({ OTP: otp, 'Accept-Version': 'V2' })}`,
+    );
 
     const response = await this.httpClient.post(url, {
       body,
@@ -145,7 +157,9 @@ export class ZatcaOnboardingService {
     });
 
     if (response.status !== 200) {
-      this.logger.error(`Compliance onboarding failed: ${response.status} — ${response.body}`);
+      this.logger.error(
+        `Compliance onboarding failed: ${response.status}, headers=${JSON.stringify(response.headers)}, body=${response.body}`,
+      );
       throw new Error(`ZATCA compliance onboarding failed (${response.status}): ${response.body}`);
     }
 
@@ -161,6 +175,7 @@ export class ZatcaOnboardingService {
 
     this.printersService.setSetting('zatca_compliance_cert', certBase64);
     this.printersService.setSetting('zatca_compliance_secret', secret);
+    this.printersService.setSetting('zatca_compliance_request_id', result.requestID || '');
     this.invoiceService.setOnboardingState('compliance');
 
     this.logger.log(`Compliance CSID obtained: requestID=${result.requestID || 'unknown'}`);
@@ -183,16 +198,21 @@ export class ZatcaOnboardingService {
       );
     }
 
-    const csrPem = this.printersService.getSetting('zatca_csr', '');
-    const csrBase64 = csrPem
-      .replace(/-----BEGIN CERTIFICATE REQUEST-----/, '')
-      .replace(/-----END CERTIFICATE REQUEST-----/, '')
-      .replace(/\s/g, '');
+    const complianceRequestId = this.printersService.getSetting('zatca_compliance_request_id', '');
+    if (!complianceRequestId) {
+      throw new BadRequestException(
+        'Compliance request ID not found. Run compliance onboarding first.',
+      );
+    }
 
     const baseUrl = this.getApiBaseUrl();
     const url = `${baseUrl}/production/csids`;
 
-    const body = JSON.stringify({ compliance_request_id: csrBase64 });
+    const body = JSON.stringify({ compliance_request_id: complianceRequestId });
+
+    this.logger.log(
+      `Production POST ${url} requestId=${complianceRequestId} certLen=${complianceCert.length} secret=***`,
+    );
 
     const response = await this.httpClient.post(url, {
       body,
@@ -207,7 +227,9 @@ export class ZatcaOnboardingService {
     });
 
     if (response.status !== 200) {
-      this.logger.error(`Production onboarding failed: ${response.status} — ${response.body}`);
+      this.logger.error(
+        `Production onboarding failed: ${response.status}, headers=${JSON.stringify(response.headers)}, body=${response.body}`,
+      );
       throw new Error(
         `ZATCA production CSID onboarding failed (${response.status}): ${response.body}`,
       );

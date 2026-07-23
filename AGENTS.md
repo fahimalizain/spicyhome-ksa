@@ -9,7 +9,7 @@ Codebase conventions and constraints for all contributors and AI agents.
   `npm_translate_lock` in MODULE.bazel.
 - **Node 18**: server must stay Node 18 compatible (Windows 7 target).
   Host Node version must be >= 18. Node 18 toolchain is pinned in MODULE.bazel
-  via `node.toolchain(node_version = "18.20.5")`.
+  via `node.toolchain(node_version = "18.20.4")`.
 - To add/update npm deps: edit `package.json`, run `pnpm install`, commit the
   updated `pnpm-lock.yaml`.
 
@@ -93,19 +93,20 @@ All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
 
 ## Versioning & Releases
 
-- **Date-based versioning**: releases use `YYYYMMDD[.N]` where `YYYYMMDD` is the
-  release date in Asia/Riyadh and `.N` is an optional same-day increment
-  (starting at `.1`). Examples: `20260722`, `20260722.1`, `20260722.2`.
+- **Date-based versioning**: releases use `YYYYMM.DD.N` where `YYYYMM.DD` is the
+  release date in Asia/Riyadh and `.N` is the same-day increment
+  (starting at `.0`). Examples: `202607.23.0`, `202607.23.1`.
 - **`VERSION`** at the repository root is the single source of truth.
 - `scripts/bump-version.sh` updates `VERSION`, `MODULE.bazel`, and all workspace
   `package.json` files to a new version. Run `scripts/bump-version.sh date` for
-  an auto bump or `scripts/bump-version.sh 20260722.1` for an explicit version.
+  an auto bump or `scripts/bump-version.sh 202607.23.1` for an explicit version.
+  Use `--dry --today YYYYMMDD` to preview without writing files.
 - **Releases** are created manually via the `Release SpicyHome POS` GitHub
   Actions workflow (`.github/workflows/release.yml`). It bumps the version,
   runs tests, builds the Windows 7 package and the Android APK, commits and tags
   the version bump, and creates a GitHub release with both
-  `spicyhome-pos-win7-vYYYYMMDD[.N].zip` and
-  `spicyhome-pos-android-vYYYYMMDD[.N].apk`.
+  `spicyhome-pos-win7-vYYYYMM.DD.N.zip` and
+  `spicyhome-pos-android-vYYYYMM.DD.N.apk`.
 
 ## Packaging
 
@@ -113,6 +114,6 @@ All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
 pnpm package:win7   # runs packaging/build-package.sh
 ```
 
-Produces `dist/spicyhome-pos-win7.zip` — portable Node.js v18.20.5 (win-x64) +
+Produces `dist/spicyhome-pos-win7.zip` — portable Node.js v18.20.4 (win-x64) +
 compiled server JS + SPA dist + startup scripts. The generated server
 `package.json` uses the version from the `VERSION` file.

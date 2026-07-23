@@ -79,8 +79,8 @@ fun NavGraph(
             ),
         ) { backStackEntry ->
             val args = backStackEntry.arguments
-            val initialTableId: Long? = args?.getLong("tableId")?.takeIf { args.containsKey("tableId") && !args.isNull("tableId") }
-            val initialOrderId: Long? = args?.getLong("orderId")?.takeIf { args.containsKey("orderId") && !args.isNull("orderId") }
+            val initialTableId: Long? = args?.let { b -> if (b.containsKey("tableId") && b.get("tableId") != null) b.getLong("tableId") else null }
+            val initialOrderId: Long? = args?.let { b -> if (b.containsKey("orderId") && b.get("orderId") != null) b.getLong("orderId") else null }
             val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider, initialTableId, initialOrderId))
             OrderScreen(
                 viewModel = vm,
