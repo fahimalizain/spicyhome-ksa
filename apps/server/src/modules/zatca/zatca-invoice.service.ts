@@ -149,7 +149,18 @@ export class ZatcaInvoiceService {
       qty: oi.qty,
     }));
 
-    // Compute timestamp in Asia/Riyadh timezone (UTC+3)
+    // ── Timestamp in Asia/Riyadh timezone (UTC+3) ──
+    // CRITICAL: The QR code tag 3 timestamp MUST match the XML's
+    // <cbc:IssueDate> and <cbc:IssueTime> exactly. ZATCA validates this
+    // (KSA-25 rule) and returns "invoiceTimeStamp_QRCODE_INVALID" warning
+    // if they differ.
+    //
+    // We use sv-SE locale because it produces ISO-8601 format:
+    //   toLocaleDateString('sv-SE') → "2026-07-23"
+    //   toLocaleTimeString('sv-SE', {hour12:false}) → "16:38:22"
+    //
+    // Previous bug: used toISOString() (UTC) for IssueDate but getHours()
+    // (local) for IssueTime → mismatch when server timezone ≠ UTC.
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date(now * 1000);
     const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
@@ -177,21 +188,34 @@ export class ZatcaInvoiceService {
 
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
-    // Compute invoice hash
+    // ── Compute invoice hash and sign ──
+    // The invoice hash = SHA-256 of the canonicalized unsigned XML (after
+    // stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference).
+    // This is base64(raw_bytes) — 44 chars.
+    // This same value goes into <ds:DigestValue> AND is sent as `invoiceHash`
+    // in the ZATCA API JSON body.
     const invoiceHashB64 = computeInvoiceHash(unsignedXml);
     const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
 
-    // Sign
+    // ECDSA signature: sign the SHA-256 hash hex with secp256k1 private key
     const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
 
-    // Embed signature into XML
+    // ── Certificate: double-base64 decode ──
+    // ZATCA's binarySecurityToken is base64-encoded base64. We decode one
+    // layer here: Buffer.from(certBase64, 'base64').toString('utf-8')
+    // gives us the cert body base64 (e.g. "MIICQjCC...") that goes directly
+    // into <ds:X509Certificate> and is used for cert hashing.
     const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
 
     const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
 
-    // Compute TLV QR payload with all 9 tags
-    // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly (no timezone offset)
+    // ── QR TLV payload (9 tags) ──
+    // Tag 3 (timestamp): MUST be `${issueDate}T${issueTime}` — the exact
+    // same values that went into <cbc:IssueDate> and <cbc:IssueTime>.
+    // Any mismatch causes "invoiceTimeStamp_QRCODE_INVALID" warning.
+    // Note: no timezone offset suffix — ZATCA expects naive +03:00 time.
     const timestampIso = `${issueDate}T${issueTime}`;
+    // Tag 9: raw ECDSA signature bytes from the ZATCA-issued X.509 cert
     const certSigB64 = extractCertSignature(certForXml);
     const tlvInput: TLVInput = {
       sellerName,
@@ -201,18 +225,20 @@ export class ZatcaInvoiceService {
       vatHalalas: order.vatHalalas,
       invoiceHashBase64: invoiceHashB64,
       signatureBase64: signatureB64,
-      // Tag 8: PublicKey.getEncoded() = SPKI DER bytes (not raw EC point)
+      // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
+      // (NOT the raw 65-byte EC point — ZATCA SDK uses SPKI DER, ~88 bytes)
       publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-    // Inject QR into signed XML
+    // Inject QR into signed XML (after signing — QR is excluded from hash)
     const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
 
-    // The invoiceHash sent to ZATCA = DigestValue = hash of unsigned XML
-    // (after stripping UBLExtensions, Signature, QR). This is the same
-    // value as invoiceHashB64 which we embedded in <ds:DigestValue>.
+    // The invoiceHash sent to ZATCA API = DigestValue = hash of unsigned XML
+    // after stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference.
+    // This is the same value as invoiceHashB64 which we embedded in
+    // <ds:DigestValue> for the invoiceSignedData Reference.
     const finalInvoiceHash = invoiceHashB64;
 
     // Insert invoice
@@ -362,14 +388,18 @@ export class ZatcaInvoiceService {
     const digestHashB64 = computeInvoiceHash(unsignedXml);
     const digestHashHex = computeInvoiceHashHex(unsignedXml);
 
+    // ECDSA signature of the invoice hash
     const signatureB64 = signHashBase64(digestHashHex, privateKeyHex);
+    // Double-base64 decode: ZATCA's binarySecurityToken is base64(base64(cert))
     const certForXml = Buffer.from(complianceCert, 'base64').toString('utf-8');
     const signedXml = embedSignatureIntoXML(unsignedXml, digestHashB64, signatureB64, certForXml);
 
-    // Compute QR TLV with all 9 tags
-    const totalHalalas = 11500; // the dummy item: unitPriceHalalas * qty
-    const vatHalalas = 1500; // 15% VAT on 10000 excl = 1500 halalas
-    // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly (no timezone offset)
+    // ── QR TLV with all 9 tags ──
+    // Dummy compliance invoice: 11500 halalas total, 1500 halalas VAT
+    // (10000 excl + 15% VAT = 11500 incl)
+    const totalHalalas = 11500;
+    const vatHalalas = 1500;
+    // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly
     const timestampIso = `${issueDate}T${issueTime}`;
     const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
     const certSigB64 = extractCertSignature(certForXml);
@@ -382,13 +412,14 @@ export class ZatcaInvoiceService {
       vatHalalas,
       invoiceHashBase64: digestHashB64,
       signatureBase64: signatureB64,
-      // Tag 8: PublicKey.getEncoded() = SPKI DER bytes (not raw EC point)
+      // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
+      // (NOT the raw 65-byte EC point — ZATCA SDK uses SPKI DER, ~88 bytes)
       publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-    // Inject QR into signed XML
+    // Inject QR into signed XML (after signing — QR is excluded from hash)
     const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
 
     // The invoiceHash sent to ZATCA = DigestValue = hash of unsigned XML

@@ -145,6 +145,16 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
       ' xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">',
   );
 
+  // ── UBLExtensions placeholder ──
+  // This empty placeholder is replaced by embedSignatureIntoXML() with the
+  // full XAdES signature block. Having the placeholder here ensures that
+  // canonicalizeForHash() strips the same element from both the unsigned and
+  // signed XML, producing identical surrounding whitespace after stripping.
+  // Without this placeholder, the whitespace where UBLExtensions sits would
+  // differ between the unsigned XML (no UBLExtensions) and the signed XML
+  // (UBLExtensions present but stripped), causing hash mismatches.
+  parts.push(`  <ext:UBLExtensions></ext:UBLExtensions>`);
+
   // ── Profile & IDs ──
   parts.push(`  <cbc:ProfileID>reporting:1.0</cbc:ProfileID>`);
   parts.push(`  <cbc:ID>${icv}</cbc:ID>`);
@@ -282,6 +292,10 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     parts.push(`    <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>`);
     parts.push(`    <cbc:Amount currencyID="SAR">0.00</cbc:Amount>`);
     parts.push(`    <cac:TaxCategory>`);
+    // cbc:ID attributes: schemeAgencyID before schemeID (alphabetical by
+    // local name) to match C14N canonicalization attribute ordering.
+    // C14N sorts attributes by namespace URI (both have none) then by local
+    // name. "schemeAgencyID" < "schemeID" alphabetically.
     parts.push(`      <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5305">S</cbc:ID>`);
     parts.push(`      <cbc:Percent>15</cbc:Percent>`);
     parts.push(`      <cac:TaxScheme>`);
@@ -314,11 +328,13 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
       `      <cbc:TaxAmount currencyID="SAR">${halalasToSar(group.vatAmount)}</cbc:TaxAmount>`,
     );
     parts.push(`      <cac:TaxCategory>`);
+    // Attribute order: schemeAgencyID before schemeID (C14N alphabetical)
     parts.push(
       `        <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5305">${group.rateBp === 0 ? 'Z' : 'S'}</cbc:ID>`,
     );
     parts.push(`        <cbc:Percent>${(group.rateBp / 100).toFixed(2)}</cbc:Percent>`);
     parts.push(`        <cac:TaxScheme>`);
+    // Attribute order: schemeAgencyID before schemeID (C14N alphabetical)
     parts.push(`          <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5153">VAT</cbc:ID>`);
     parts.push(`        </cac:TaxScheme>`);
     parts.push(`      </cac:TaxCategory>`);

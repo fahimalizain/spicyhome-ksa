@@ -32,6 +32,15 @@ function numberToHalalasStr(halalas: number): string {
  * Encode a single TLV entry using BER length encoding.
  *
  * `value` can be either a string (encoded as UTF-8) or raw Uint8Array bytes.
+ *
+ * BER length encoding (matching ZATCA SDK's BerTlvBuilder.fillLength):
+ *   - Length < 128:  1 byte  (the length value itself, e.g. 0x0A)
+ *   - Length 128-255: 2 bytes (0x81, length)
+ *   - Length 256-65535: 3 bytes (0x82, high byte, low byte)
+ *   - Length >= 65536: 4 bytes (0x83, ... )
+ *
+ * Tags 8 and 9 use raw Uint8Array values (binary bytes, not strings).
+ * All other tags use string values (UTF-8 encoded).
  */
 function encodeTLV(tag: number, value: string | Uint8Array): Uint8Array {
   const tagByte = new Uint8Array([tag]);
@@ -71,7 +80,9 @@ export interface TLVInput {
   signatureBase64: string;
   /** Base64-encoded raw uncompressed secp256k1 public key (65 bytes) */
   publicKeyBase64: string;
-  /** Base64-encoded raw ECDSA signature bytes from the ZATCA-issued X.509 certificate */
+  /** Base64-encoded raw ECDSA signature bytes from the ZATCA-issued X.509 certificate
+   *  (extracted by extractCertSignature() — the CA's signature over the cert, NOT our
+   *  invoice signature). Omitted if not available (Phase 1 / pre-onboarding). */
   certificateSignatureBase64?: string;
 }
 
@@ -91,9 +102,13 @@ export function encodeZatcaTLV(input: TLVInput): string {
   entries.push(encodeTLV(5, numberToHalalasStr(input.vatHalalas)));
   entries.push(encodeTLV(6, input.invoiceHashBase64));
   entries.push(encodeTLV(7, input.signatureBase64));
-  // Tag 8: public key as raw binary bytes (decode base64 → bytes)
+  // Tag 8: public key as SPKI DER bytes (NOT the raw 65-byte EC point).
+  // ZATCA SDK uses PublicKey.getEncoded() which returns SubjectPublicKeyInfo
+  // DER (~88 bytes for secp256k1). We decode base64 → raw bytes for TLV.
   entries.push(encodeTLV(8, Buffer.from(input.publicKeyBase64, 'base64')));
-  // Tag 9: ZATCA CA cert ECDSA signature as raw binary bytes
+  // Tag 9: ZATCA CA cert ECDSA signature as raw binary bytes.
+  // This is the CA's signature over the certificate (not our invoice signature).
+  // Extracted by extractCertSignature() from the X.509 DER structure.
   if (input.certificateSignatureBase64) {
     entries.push(encodeTLV(9, Buffer.from(input.certificateSignatureBase64, 'base64')));
   }

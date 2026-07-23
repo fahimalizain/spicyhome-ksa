@@ -142,33 +142,94 @@ export function verifySignature(
 }
 
 // ── Invoice hashing ───────────────────────────────────────────────────────────
+//
+// ZATCA's invoice hash flow (matching ERPGulf's working implementation):
+//
+//   1. Take the UNSIGNED UBL XML (with UBLExtensions placeholder, cac:Signature
+//      placeholder, and empty QR AdditionalDocumentReference).
+//   2. Strip: XML prolog, <ext:UBLExtensions>, <cac:Signature>, and the QR
+//      <cac:AdditionalDocumentReference>.
+//   3. SHA-256 the remaining XML string (UTF-8 bytes) — NO whitespace collapse,
+//      NO C14N canonicalization. ZATCA does the same regex-style stripping on
+//      the server side. Collapsing whitespace with `>\s+<` → `><` BREAKS the
+//      hash because ZATCA preserves inter-tag whitespace text nodes.
+//   4. Encode as base64 of the RAW 32-byte SHA-256 output (NOT base64 of the
+//      hex string — that's the signed-properties/cert-hash pattern, which is
+//      different!).
+//
+//   This hash goes into <ds:DigestValue> for the invoiceSignedData Reference,
+//   AND is sent as `invoiceHash` in the compliance/reporting API JSON body.
+//   Both must be the same value.
 
+/**
+ * Strip elements that ZATCA excludes from invoice hashing, then return the
+ * remaining XML string. Does NOT collapse whitespace or canonicalize —
+ * ZATCA's server-side transform produces the same output by stripping the
+ * same elements and hashing the raw text.
+ *
+ * Strips:
+ *   - <?xml ...?> prolog
+ *   - <ext:UBLExtensions>...</ext:UBLExtensions> (contains the signature)
+ *   - <cac:Signature>...</cac:Signature> (UBL signature placeholder)
+ *   - <cac:AdditionalDocumentReference> for QR (contains the QR code)
+ *
+ * IMPORTANT: Do NOT add `>\s+<` → `><` whitespace collapse here. We tried
+ * that and it caused `invalid-invoice-hash` errors because ZATCA preserves
+ * whitespace text nodes between elements after stripping.
+ *
+ * IMPORTANT: Do NOT strip `xmlns:ext` from the root <Invoice> element.
+ * We tried that too and it broke the hash. ZATCA's transform keeps the
+ * root element's namespace declarations as-is.
+ */
 export function canonicalizeForHash(xml: string): string {
   // Strip XML prolog — the ZATCA SDK invoice.xsl outputs
   // omit-xml-declaration="yes", and c14n11 excludes the declaration.
   let canonical = xml.replace(/<\?xml[^>]*\?>\s*/, '');
 
-  canonical = canonical.replace(/<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g, '');
+  // Strip UBLExtensions (contains the XAdES signature block)
+  canonical = canonical.replace(
+    /<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g,
+    '',
+  );
 
+  // Also strip self-closing UBLExtensions (the placeholder in unsigned XML)
   canonical = canonical.replace(/<ext:UBLExtensions\/>/g, '');
+
+  // Strip cac:Signature (the UBL-level signature placeholder, not the
+  // XAdES ds:Signature inside UBLExtensions)
   canonical = canonical.replace(/<cac:Signature>[\s\S]*?<\/cac:Signature>/g, '');
+
+  // Strip the QR AdditionalDocumentReference (identified by cbc:ID = "QR")
   canonical = canonical.replace(
     /<cac:AdditionalDocumentReference>\s*<cbc:ID>QR<\/cbc:ID>[\s\S]*?<\/cac:AdditionalDocumentReference>/g,
     '',
   );
-  canonical = canonical.replace(/>\s+</g, '><');
-  canonical = canonical.trim();
 
   return canonical;
 }
 
+/**
+ * Compute the invoice hash: SHA-256 of the canonicalized XML, encoded as
+ * base64 of the RAW 32-byte hash output.
+ *
+ * CRITICAL: This uses `base64(raw_bytes)` — NOT `base64(hex_string)`.
+ * The signed-properties hash and cert hash use `base64(hex_string)`, but
+ * the invoice hash uses `base64(raw_bytes)`. This matches ERPGulf's
+ * `getinvoicehash()` which does `base64.b64encode(bytes.fromhex(hex_digest))`.
+ *
+ * @returns 44-character base64 string (e.g. "EK8uDENCtGeD/gyIMKNgETCxzYJd7tfPk2a6C7Y10+A=")
+ */
 export function computeInvoiceHash(xml: string): string {
   const canonical = canonicalizeForHash(xml);
   const hashBytes = sha256(new TextEncoder().encode(canonical));
-  const hexHash = bytesToHex(hashBytes);
-  return Buffer.from(hexHash, 'utf8').toString('base64');
+  // base64 of raw 32-byte SHA-256 output (NOT base64 of hex string)
+  return Buffer.from(hashBytes).toString('base64');
 }
 
+/**
+ * Compute the invoice hash as a hex string (used for ECDSA signing).
+ * @returns 64-character lowercase hex string
+ */
 export function computeInvoiceHashHex(xml: string): string {
   const canonical = canonicalizeForHash(xml);
   const hashBytes = sha256(new TextEncoder().encode(canonical));
@@ -195,15 +256,25 @@ function wrapCertInPem(certBodyB64: string): string {
 /**
  * Compute the certificate hash for XAdES QualifyingProperties.
  *
- * ERPGulf's certificate_hash():
- *   SHA-256(cert_body_string_as_utf8_bytes) → hex → base64(hex_string)
+ * CRITICAL: This uses `base64(hex_string)` — NOT `base64(raw_bytes)`.
+ * The invoice hash uses `base64(raw_bytes)`, but the cert hash and
+ * signed-properties hash use `base64(hex_string)`. This matches ERPGulf's
+ * `certificate_hash()` which does:
+ *   SHA-256(cert_body_string_as_utf8_bytes) → hexdigest → base64(hex_string)
  *
  * The certBodyB64 is the base64 string that goes directly in
- * <ds:X509Certificate>, NOT the DER bytes.
+ * <ds:X509Certificate> — NOT the DER bytes, NOT the PEM. It's the raw
+ * base64 body (e.g. "MIICQjCCAeig...") as decoded from ZATCA's
+ * binarySecurityToken (which is double-base64-encoded: we decode one
+ * layer with `Buffer.from(cert, 'base64').toString('utf-8')` before
+ * passing it here).
+ *
+ * @returns 88-character base64 string (base64 of a 64-char hex string)
  */
 export function computeCertHash(certBodyB64: string): string {
   const hashBytes = sha256(new TextEncoder().encode(certBodyB64));
   const hexHash = bytesToHex(hashBytes);
+  // base64 of the hex string (ERPGulf pattern), NOT base64 of raw bytes
   return Buffer.from(hexHash, 'utf8').toString('base64');
 }
 
@@ -213,6 +284,15 @@ export function computeCertHash(certBodyB64: string): string {
  *
  * Uses Node.js built-in X509Certificate (available since Node 15.6).
  * node-forge cannot parse ECDSA certificates.
+ *
+ * IMPORTANT: Node's X509Certificate.issuer returns RDNs in root-to-leaf
+ * order (e.g. "DC=local\nDC=gov\nCN=eInvoicing"). ZATCA/ERPGulf expects
+ * RFC4514 leaf-to-root order (e.g. "CN=eInvoicing, DC=gov, DC=local").
+ * We reverse the lines and join with ", ".
+ *
+ * IMPORTANT: Node's X509Certificate.serialNumber returns a hex string.
+ * ZATCA/ERPGulf expects the serial as a DECIMAL string. We convert
+ * hex → BigInt → decimal string.
  */
 export function extractCertInfo(certBodyB64: string): {
   issuerName: string;
@@ -222,28 +302,54 @@ export function extractCertInfo(certBodyB64: string): {
   const x509 = new X509Certificate(pem);
 
   // Node's issuer is multiline root-to-leaf (DC=local, DC=gov, ...).
-  // ERPGulf uses RFC4514 leaf-to-root: CN=..., DC=..., DC=...
+  // ZATCA/ERPGulf expects RFC4514 leaf-to-root: CN=..., DC=..., DC=...
+  // So we split by newlines, reverse, and join with ", "
   const issuerLines = x509.issuer
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
   const issuerName = issuerLines.reverse().join(', ');
 
-  // Node's serialNumber is a hex string; ERPGulf uses decimal
+  // Node's serialNumber is a hex string (e.g. "01A2B3...");
+  // ZATCA/ERPGulf expects decimal (e.g. "1784799443055")
   const serialNumber = BigInt('0x' + x509.serialNumber).toString(10);
 
   return { issuerName, serialNumber };
 }
 
 /**
- * Build the standalone <xades:SignedProperties> XML string.
+ * Build the STANDALONE <xades:SignedProperties> XML string used ONLY for
+ * computing the signed properties hash (SHA-256 → hex → base64(hex)).
  *
- * This string is used BOTH for:
- *  1. Computing the signed properties hash (SHA-256 → hex → base64)
- *  2. Embedding directly inside <xades:QualifyingProperties> in the signature block
+ * ════════════════════════════════════════════════════════════════════════════
+ * THIS IS THE #1 FINNICKY PART OF THE ENTIRE ZATCA IMPLEMENTATION.
+ * ════════════════════════════════════════════════════════════════════════════
  *
- * The two MUST be byte-for-byte identical — any whitespace difference
- * will cause a hash mismatch and ZATCA rejection.
+ * ZATCA validates the signed-properties hash by:
+ *   1. Extracting the <xades:SignedProperties> text from the submitted XML
+ *   2. Adding namespace declarations that were inherited from ancestors:
+ *      - xmlns:xades (from xades:QualifyingProperties parent)
+ *      - xmlns:ds   (from ds:Signature ancestor)
+ *   3. SHA-256 hashing the resulting standalone string
+ *
+ * The standalone string we hash MUST match what ZATCA produces after step 2.
+ * Through extensive testing against ERPGulf's working Python implementation
+ * and ZATCA's sandbox API, we determined:
+ *
+ *   - xmlns:xades goes on the ROOT <xades:SignedProperties> element
+ *   - xmlns:ds goes on EACH INDIVIDUAL ds: child element (DigestMethod,
+ *     DigestValue, X509IssuerName, X509SerialNumber) — NOT on the root
+ *   - The WHITESPACE (indentation) in the standalone string MUST EXACTLY
+ *     match the whitespace in the EMBEDDED XML (from buildEmbeddedSignedPropertiesXml)
+ *
+ * If the whitespace differs by even a single space, the hash will not match
+ * and ZATCA returns `signed-properties-hashing` error.
+ *
+ * The standalone string starts at column 0 (no leading spaces on the root
+ * element) and uses the SAME relative indentation as the embedded version.
+ *
+ * Reference: ERPGulf's `generate_signed_properties_hash()` in
+ * sign_invoice_first.py line 786.
  */
 export function buildSignedPropertiesXml(
   signingTime: string,
@@ -251,48 +357,126 @@ export function buildSignedPropertiesXml(
   issuerName: string,
   serialNumber: string,
 ): string {
+  // NOTE: The whitespace here MUST match buildEmbeddedSignedPropertiesXml
+  // exactly (minus the 18-space root offset). Do NOT change indentation!
   return [
-    '                <xades:SignedProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="xadesSignedProperties">',
-    '                  <xades:SignedSignatureProperties>',
-    `                    <xades:SigningTime>${signingTime}</xades:SigningTime>`,
-    '                    <xades:SigningCertificate>',
-    '                      <xades:Cert>',
-    '                        <xades:CertDigest>',
-    '                          <ds:DigestMethod xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>',
-    `                          <ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${certDigestB64}</ds:DigestValue>`,
-    '                        </xades:CertDigest>',
-    '                        <xades:IssuerSerial>',
-    `                          <ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${issuerName}</ds:X509IssuerName>`,
-    `                          <ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${serialNumber}</ds:X509SerialNumber>`,
-    '                        </xades:IssuerSerial>',
-    '                      </xades:Cert>',
-    '                    </xades:SigningCertificate>',
-    '                  </xades:SignedSignatureProperties>',
-    '                </xades:SignedProperties>',
+    '<xades:SignedProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="xadesSignedProperties">',
+    '                    <xades:SignedSignatureProperties>',
+    `                      <xades:SigningTime>${signingTime}</xades:SigningTime>`,
+    '                      <xades:SigningCertificate>',
+    '                        <xades:Cert>',
+    '                          <xades:CertDigest>',
+    '                            <ds:DigestMethod xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>',
+    `                            <ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${certDigestB64}</ds:DigestValue>`,
+    '                          </xades:CertDigest>',
+    '                          <xades:IssuerSerial>',
+    `                            <ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${issuerName}</ds:X509IssuerName>`,
+    `                            <ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${serialNumber}</ds:X509SerialNumber>`,
+    '                          </xades:IssuerSerial>',
+    '                        </xades:Cert>',
+    '                      </xades:SigningCertificate>',
+    '                    </xades:SignedSignatureProperties>',
+    '                  </xades:SignedProperties>',
+  ].join('\n');
+}
+
+/**
+ * Build the EMBEDDED <xades:SignedProperties> XML fragment for insertion
+ * inside <xades:QualifyingProperties> in the full signed XML.
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * THIS MUST NOT HAVE REDUNDANT NAMESPACE DECLARATIONS.
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * In the embedded context:
+ *   - xmlns:xades is inherited from the parent <xades:QualifyingProperties>
+ *   - xmlns:ds is inherited from the ancestor <ds:Signature>
+ *
+ * If we include xmlns:ds on each ds: element here (like the standalone
+ * version), ZATCA's XML parser sees them as redundant namespace declarations
+ * and the extracted SignedProperties text won't match our standalone hash
+ * string. This causes `signed-properties-hashing` errors.
+ *
+ * The indentation here (18-space root, 20/22/24/26/28-space children) must
+ * match the standalone version's indentation (0-space root, same relative
+ * offsets). This is because ZATCA extracts the text node whitespace along
+ * with the element — if the whitespace differs, the hash differs.
+ *
+ * Compare with ERPGulf's sample XML at:
+ * /private/tmp/zatca_erpgulf/zatca_erpgulf/simplifeid invoice.xml
+ */
+function buildEmbeddedSignedPropertiesXml(
+  signingTime: string,
+  certDigestB64: string,
+  issuerName: string,
+  serialNumber: string,
+): string {
+  // NOTE: No xmlns:xades on root (inherited from QualifyingProperties)
+  // NOTE: No xmlns:ds on ds: elements (inherited from ds:Signature)
+  // NOTE: Indentation matches buildSignedPropertiesXml (offset by 18 spaces)
+  return [
+    '                  <xades:SignedProperties Id="xadesSignedProperties">',
+    '                    <xades:SignedSignatureProperties>',
+    `                      <xades:SigningTime>${signingTime}</xades:SigningTime>`,
+    '                      <xades:SigningCertificate>',
+    '                        <xades:Cert>',
+    '                          <xades:CertDigest>',
+    '                            <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>',
+    `                            <ds:DigestValue>${certDigestB64}</ds:DigestValue>`,
+    '                          </xades:CertDigest>',
+    '                          <xades:IssuerSerial>',
+    `                            <ds:X509IssuerName>${issuerName}</ds:X509IssuerName>`,
+    `                            <ds:X509SerialNumber>${serialNumber}</ds:X509SerialNumber>`,
+    '                          </xades:IssuerSerial>',
+    '                        </xades:Cert>',
+    '                      </xades:SigningCertificate>',
+    '                    </xades:SignedSignatureProperties>',
+    '                  </xades:SignedProperties>',
   ].join('\n');
 }
 
 /**
  * Compute the XAdES signed properties hash.
  *
- * ERPGulf's generate_signed_properties_hash():
- *   SHA-256(signedProperties_xml_string_utf8_bytes) → hex → base64(hex_string)
+ * CRITICAL: This uses `base64(hex_string)` — NOT `base64(raw_bytes)`.
+ * The invoice hash uses `base64(raw_bytes)`, but the signed-properties hash
+ * and cert hash use `base64(hex_string)`. This matches ERPGulf's
+ * `generate_signed_properties_hash()` which does:
+ *   SHA-256(xml_string_utf8_bytes) → hexdigest → base64(hex_string)
+ *
+ * @returns 88-character base64 string (base64 of a 64-char hex string)
  */
 export function computeSignedPropertiesHash(signedPropertiesXml: string): string {
   const hashBytes = sha256(new TextEncoder().encode(signedPropertiesXml));
   const hexHash = bytesToHex(hashBytes);
+  // base64 of the hex string (ERPGulf pattern), NOT base64 of raw bytes
   return Buffer.from(hexHash, 'utf8').toString('base64');
 }
 
 /**
  * Build the full UBL signature block matching ZATCA's expected structure.
  *
- * This includes:
- *  - UBLExtensions wrapper
- *  - ds:Signature with ECDSA signature, certificate, and key info
- *  - Two ds:Reference elements: invoiceSignedData + xadesSignedProperties
- *  - Four ds:Transform elements (3 XPath + 1 c14n11)
- *  - Full XAdES QualifyingProperties block in ds:Object
+ * This produces the <ext:UBLExtensions> element that gets inserted into the
+ * invoice XML. It contains:
+ *   - UBLExtension → ExtensionURI → ExtensionContent
+ *   - sig:UBLDocumentSignatures with sac:SignatureInformation
+ *   - ds:Signature with:
+ *     - ds:SignedInfo (CanonicalizationMethod, SignatureMethod, 2 References)
+ *     - ds:Reference #1: invoiceSignedData (3 XPath transforms + c14n11)
+ *     - ds:Reference #2: xadesSignedProperties (no transforms, just hash)
+ *     - ds:SignatureValue (ECDSA-SECP256K1-SHA256 DER signature)
+ *     - ds:KeyInfo → ds:X509Data → ds:X509Certificate
+ *     - ds:Object → xades:QualifyingProperties → [embedded SignedProperties]
+ *
+ * The 3 XPath transforms in the invoiceSignedData Reference tell ZATCA to
+ * strip UBLExtensions, cac:Signature, and QR AdditionalDocumentReference
+ * before hashing — matching what our canonicalizeForHash() does.
+ *
+ * @param invoiceHashB64       — base64(raw_bytes) of SHA-256(canonicalized XML)
+ * @param signatureB64         — base64 DER ECDSA signature of the invoice hash
+ * @param certificateB64       — cert body base64 (goes in <ds:X509Certificate>)
+ * @param signedPropertiesHashB64 — base64(hex_string) of SHA-256(standalone SP XML)
+ * @param signedPropertiesXml  — EMBEDDED SignedProperties (no redundant ns declarations)
  */
 function buildUBLSignatureBlock(
   invoiceHashB64: string,
@@ -362,19 +546,27 @@ function buildUBLSignatureBlock(
  * Embed the UBL signature block and XAdES QualifyingProperties into an
  * unsigned UBL invoice XML.
  *
- * Fixes two critical bugs from the original implementation:
- *   1. Skips the XML prolog (<?xml ...?>) so the signature block is inserted
- *      INSIDE <Invoice>, not before it.
- *   2. Includes the full XAdES QualifyingProperties block with SigningTime,
- *      SigningCertificate, IssuerSerial, and the second ds:Reference for
- *      xadesSignedProperties.
+ * The unsigned XML must contain an empty placeholder:
+ *   <ext:UBLExtensions></ext:UBLExtensions>
+ * This function replaces that placeholder with the full signature block.
  *
- * @param unsignedXml  The unsigned UBL XML string (with <?xml ...?> prolog).
- * @param invoiceHashB64  Base64-encoded SHA-256 hash of the canonicalized invoice.
- * @param signatureB64  Base64-encoded ECDSA signature (DER format).
- * @param certificateB64  The cert body base64 string (MIID3j...), decoded from
- *                         ZATCA's binarySecurityToken. Goes directly in
- *                         <ds:X509Certificate>.
+ * The signature block is built with TWO versions of the SignedProperties:
+ *   1. STANDALONE (buildSignedPropertiesXml) — has explicit xmlns:ds on
+ *      each ds: element and xmlns:xades on root. Used for computing the
+ *      signed-properties hash via computeSignedPropertiesHash().
+ *   2. EMBEDDED (buildEmbeddedSignedPropertiesXml) — NO redundant namespace
+ *      declarations (inherited from ancestors). Used in the actual XML.
+ *
+ * Both versions MUST have identical whitespace/indentation (offset by the
+ * root element's leading spaces). If they differ, ZATCA's hash won't match.
+ *
+ * SigningTime uses UTC (toISOString) — this matches ERPGulf which uses
+ * datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S").
+ *
+ * @param unsignedXml     — unsigned UBL XML with <ext:UBLExtensions></ext:UBLExtensions> placeholder
+ * @param invoiceHashB64  — base64(raw_bytes) SHA-256 hash of canonicalized invoice
+ * @param signatureB64    — base64 DER ECDSA signature
+ * @param certificateB64  — cert body base64 (decoded from ZATCA's double-base64 binarySecurityToken)
  */
 export function embedSignatureIntoXML(
   unsignedXml: string,
@@ -382,39 +574,41 @@ export function embedSignatureIntoXML(
   signatureB64: string,
   certificateB64: string,
 ): string {
-  // Bug fix: skip XML prolog (<?xml ...?>) and find root element's opening tag
-  const prologEnd = unsignedXml.indexOf('?>');
-  const afterProlog = prologEnd !== -1 ? prologEnd + 2 : 0;
-  const rootOpenEnd = unsignedXml.indexOf('>', afterProlog);
-  if (rootOpenEnd === -1) {
-    throw new Error('Invalid XML: no root element opening found');
-  }
-
-  const prolog = unsignedXml.slice(0, rootOpenEnd + 1);
-  const rest = unsignedXml.slice(rootOpenEnd + 1);
-
-  // Compute XAdES values from the certificate
-  const signingTime = new Date().toISOString().slice(0, 19); // YYYY-MM-DDTHH:MM:SS (UTC)
+  // SigningTime in UTC (matches ERPGulf's datetime.utcnow())
+  const signingTime = new Date().toISOString().slice(0, 19);
   const certDigestB64 = computeCertHash(certificateB64);
   const { issuerName, serialNumber } = extractCertInfo(certificateB64);
 
-  // Build the xadesSignedProperties XML (same string used for hashing AND embedding)
-  const signedPropertiesXml = buildSignedPropertiesXml(
+  // Build STANDALONE SignedProperties (with explicit ns declarations) for hashing
+  const standaloneSP = buildSignedPropertiesXml(
     signingTime,
     certDigestB64,
     issuerName,
     serialNumber,
   );
-  const signedPropertiesHashB64 = computeSignedPropertiesHash(signedPropertiesXml);
+  const signedPropertiesHashB64 = computeSignedPropertiesHash(standaloneSP);
+
+  // Build EMBEDDED SignedProperties (without redundant ns) for the XML
+  const embeddedSP = buildEmbeddedSignedPropertiesXml(
+    signingTime,
+    certDigestB64,
+    issuerName,
+    serialNumber,
+  );
 
   const signatureBlock = buildUBLSignatureBlock(
     invoiceHashB64,
     signatureB64,
     certificateB64,
     signedPropertiesHashB64,
-    signedPropertiesXml,
+    embeddedSP,
   );
-  return prolog + '\n' + signatureBlock + rest;
+
+  // Replace the empty UBLExtensions placeholder with the full signature block
+  return unsignedXml.replace(
+    /  <ext:UBLExtensions><\/ext:UBLExtensions>/,
+    signatureBlock,
+  );
 }
 
 // ── DER signature encoding/decoding ────────────────────────────────────────────
@@ -871,6 +1065,11 @@ export function bytesToBase64(bytes: Uint8Array): string {
  *
  * This function replaces the empty EmbeddedDocumentBinaryObject text content
  * with the actual QR TLV base64 string.
+ *
+ * IMPORTANT: The QR is injected AFTER signing. The invoice hash is computed
+ * on the XML WITHOUT the QR (the QR AdditionalDocumentReference is stripped
+ * by canonicalizeForHash). So injecting the QR after signing doesn't
+ * invalidate the signature.
  */
 export function injectQrIntoXml(signedXml: string, qrTlvBase64: string): string {
   return signedXml.replace(

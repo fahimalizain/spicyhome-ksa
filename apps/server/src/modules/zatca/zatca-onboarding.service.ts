@@ -276,11 +276,13 @@ export class ZatcaOnboardingService {
   async runComplianceCheck(
     invoiceIdOrType: number | null,
     documentType?: ZATCAInvoiceDocumentType,
+    debug = false,
   ): Promise<{
     success: boolean;
     status: number;
     warnings: string[];
     errors: string[];
+    debug?: any;
   }> {
     const state = this.invoiceService.getOnboardingState();
     if (state !== 'compliance' && state !== 'production') {
@@ -301,6 +303,7 @@ export class ZatcaOnboardingService {
     let invoiceHash: string;
     let uuid: string;
     let invoiceBase64: string;
+    let debugData: any = undefined;
 
     if (invoiceIdOrType !== null && typeof invoiceIdOrType === 'number') {
       // Existing invoice by ID
@@ -321,6 +324,14 @@ export class ZatcaOnboardingService {
       invoiceHash = generated.invoiceHash;
       uuid = generated.uuid;
       invoiceBase64 = Buffer.from(generated.signedXml).toString('base64');
+
+      if (debug) {
+        debugData = {
+          signedXml: generated.signedXml,
+          invoiceHash,
+          uuid,
+        };
+      }
 
       this.logger.log(
         `Compliance check POST type=${documentType} hash=${invoiceHash?.slice(0, 20)}...`,
@@ -356,7 +367,7 @@ export class ZatcaOnboardingService {
     });
 
     if (response.status === 200) {
-      return { success: true, status: 200, warnings: [], errors: [] };
+      return { success: true, status: 200, warnings: [], errors: [], ...(debug ? { debug: debugData } : {}) };
     }
 
     if (response.status === 202) {
@@ -371,7 +382,7 @@ export class ZatcaOnboardingService {
       } catch {
         // Response body may not be parseable JSON
       }
-      return { success: true, status: 202, warnings, errors: [] };
+      return { success: true, status: 202, warnings, errors: [], ...(debug ? { debug: debugData } : {}) };
     }
 
     let errors: string[] = [];
@@ -392,7 +403,7 @@ export class ZatcaOnboardingService {
 
     this.logger.error(`Compliance check failed: ${response.status}, body=${response.body}`);
 
-    return { success: false, status: response.status, warnings: [], errors };
+    return { success: false, status: response.status, warnings: [], errors, ...(debug ? { debug: debugData } : {}) };
   }
 
   /**

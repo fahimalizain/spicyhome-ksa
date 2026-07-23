@@ -57,6 +57,7 @@ export class ZatcaController {
   async runComplianceCheck(
     @Body('invoiceId') invoiceId?: number,
     @Body('documentType') documentType?: string,
+    @Body('debug') debug?: boolean,
   ): Promise<{
     success: boolean;
     status: number;
@@ -67,7 +68,7 @@ export class ZatcaController {
       throw new BadRequestException('Either invoiceId or documentType is required');
     }
     const type = documentType as ZATCAInvoiceDocumentType | undefined;
-    return this.onboardingService.runComplianceCheck(invoiceId ?? null, type);
+    return this.onboardingService.runComplianceCheck(invoiceId ?? null, type, debug ?? false);
   }
 
   @Post('onboard/production')

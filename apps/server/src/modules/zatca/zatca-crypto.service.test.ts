@@ -196,12 +196,12 @@ describe('Invoice Hashing', () => {
     expect(canonical).toContain('ProfileID');
   });
 
-  it('canonicalizeForHash collapses inter-tag whitespace', () => {
+  it('canonicalizeForHash preserves inter-tag whitespace', () => {
     const xml =
       '<Invoice xmlns="...">\n  <cbc:ID>1</cbc:ID>\n  <cbc:UUID>abc</cbc:UUID>\n</Invoice>';
     const canonical = canonicalizeForHash(xml);
-    expect(canonical).not.toContain('\n');
-    expect(canonical).toContain('><');
+    expect(canonical).toContain('\n');
+    expect(canonical).toContain('<cbc:ID>');
   });
 
   it('canonicalizeForHash preserves text content', () => {
@@ -221,15 +221,14 @@ describe('Invoice Hashing', () => {
     expect(canonical).toContain('<cbc:ID>');
   });
 
-  it('computeInvoiceHash produces base64 of hex string (ERPGulf pattern)', () => {
+  it('computeInvoiceHash produces base64 of raw SHA-256 (ERPGulf pattern)', () => {
     const xml =
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
     const hash = computeInvoiceHash(xml);
     expect(hash).toBeTruthy();
     expect(() => Buffer.from(hash, 'base64')).not.toThrow();
-    const decoded = Buffer.from(hash, 'base64').toString('utf8');
-    expect(decoded.length).toBe(64);
-    expect(decoded).toMatch(/^[0-9a-f]{64}$/);
+    const decoded = Buffer.from(hash, 'base64');
+    expect(decoded.length).toBe(32);
   });
 
   it('computeInvoiceHashHex produces 64-char hex', () => {
@@ -253,13 +252,13 @@ describe('Invoice Hashing', () => {
     expect(computeInvoiceHash(xml1)).not.toBe(computeInvoiceHash(xml2));
   });
 
-  it('hashing matches ERPGulf pattern: base64(hex(sha256(canonical)))', () => {
+  it('hashing matches ERPGulf pattern: base64(SHA-256(canonical))', () => {
     const xml = '<Invoice><cbc:ID>test123</cbc:ID></Invoice>';
     const canonical = canonicalizeForHash(xml);
 
     const nobleHash = computeInvoiceHash(xml);
-    const nodeHex = createHash('sha256').update(canonical, 'utf8').digest('hex');
-    const expectedB64 = Buffer.from(nodeHex, 'utf8').toString('base64');
+    const nodeHash = createHash('sha256').update(canonical, 'utf8').digest();
+    const expectedB64 = nodeHash.toString('base64');
 
     expect(nobleHash).toBe(expectedB64);
   });
@@ -291,13 +290,14 @@ describe('Signature Embedding', () => {
     'KoZIzj0EAwIDSAAwRQIhALE/ichmnWXCUKUbca3yci8oqwaLvFdHVjQrveI9uqAb' +
     'AiA9hC4M8jgMBADPSzmd2uiPJA6gKR3LE03U75eqbC/rXA==';
 
-  it('embeds signature block into XML', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
+  const unsignedXmlBase =
+    '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">\n  <ext:UBLExtensions></ext:UBLExtensions>\n  <cbc:ID>1</cbc:ID>\n</Invoice>';
+
+  it('signature block replaces UBLExtensions placeholder in XML', () => {
     const hashB64 = 'dGVzdGhhc2g=';
     const sigB64 = 'dGVzdHNpZw==';
 
-    const signedXml = embedSignatureIntoXML(unsignedXml, hashB64, sigB64, certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, hashB64, sigB64, certBodyB64);
 
     expect(signedXml).toContain('<cbc:ID>1</cbc:ID>');
     expect(signedXml).toContain('UBLExtensions');
@@ -308,28 +308,15 @@ describe('Signature Embedding', () => {
     expect(signedXml).toContain(certBodyB64);
   });
 
-  it('signature block is inserted after root element opening (not after XML prolog)', () => {
-    const unsignedXml =
+  it('returns unsigned XML unchanged when no UBLExtensions placeholder present', () => {
+    const noPlaceholderXml =
       '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
-
-    // UBLExtensions should appear AFTER <Invoice ...> not after <?xml ...?>
-    const xmlPrologPos = signedXml.indexOf('?>');
-    const invoiceOpenPos = signedXml.indexOf('<Invoice');
-    const extPos = signedXml.indexOf('UBLExtensions');
-
-    expect(invoiceOpenPos).toBeGreaterThan(xmlPrologPos);
-    expect(extPos).toBeGreaterThan(invoiceOpenPos);
-
-    // Verify UBLExtensions is INSIDE <Invoice> (between opening and closing)
-    const idPos = signedXml.indexOf('<cbc:ID>');
-    expect(extPos).toBeLessThan(idPos);
+    const result = embedSignatureIntoXML(noPlaceholderXml, 'a', 'b', certBodyB64);
+    expect(result).not.toContain('UBLExtensions');
   });
 
   it('contains XAdES QualifyingProperties block', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
     expect(signedXml).toContain('xades:QualifyingProperties');
     expect(signedXml).toContain('Target="signature"');
@@ -344,54 +331,36 @@ describe('Signature Embedding', () => {
   });
 
   it('uses sbc namespace for ReferencedSignatureID', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
     expect(signedXml).toContain('<sbc:ReferencedSignatureID>urn:oasis:names:specification:ubl:signature:Invoice</sbc:ReferencedSignatureID>');
     expect(signedXml).toContain('xmlns:sbc="urn:oasis:names:specification:ubl:schema:xsd:SignatureBasicComponents-2"');
-    // Should NOT use sac namespace for ReferencedSignatureID
     expect(signedXml).not.toContain('<sac:ReferencedSignatureID>');
   });
 
   it('uses correct canonicalization method URL', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
     expect(signedXml).toContain('http://www.w3.org/2006/12/xml-c14n11');
-    // Should NOT use the older c14n URL
     expect(signedXml).not.toContain('http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
   });
 
   it('contains two ds:Reference elements', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
-    // First reference: invoice data
     expect(signedXml).toContain('Id="invoiceSignedData"');
-    // Second reference: xades signed properties
     expect(signedXml).toContain('URI="#xadesSignedProperties"');
     expect(signedXml).toContain('Type="http://www.w3.org/2000/09/xmldsig#SignatureProperties"');
   });
 
   it('contains all four XPath transforms', () => {
-    const unsignedXml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
-    const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', certBodyB64);
+    const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
     expect(signedXml).toContain('not(//ancestor-or-self::ext:UBLExtensions)');
     expect(signedXml).toContain('not(//ancestor-or-self::cac:Signature)');
     expect(signedXml).toContain("not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID='QR'])");
-    // Should have 4 ds:Transform elements (3 XPath + 1 c14n11)
-    // Use a regex that matches <ds:Transform (with space or />) but not <ds:Transforms>
     const transformCount = (signedXml.match(/<ds:Transform[\s/>]/g) || []).length;
     expect(transformCount).toBe(4);
-  });
-
-  it('throws on invalid XML without root opening', () => {
-    expect(() => embedSignatureIntoXML('no-angle-brackets', 'a', 'b', 'c')).toThrow();
   });
 });
 
@@ -531,7 +500,7 @@ describe('Signed Properties', () => {
     expect(xml).toContain('2024-12-30T08:20:32');
   });
 
-  it('computeSignedPropertiesHash produces base64 of hex', () => {
+  it('computeSignedPropertiesHash produces valid base64 of hex string (ERPGulf pattern)', () => {
     const xml = buildSignedPropertiesXml(
       '2024-12-30T08:20:32',
       'ZDMwMmI0MTE1NzVjOTU2NTk4YzVlODhhYmI0ODU2NDUyNTU2YTVhYjhhMDFmN2FjYjk1YTA2OWQ0NjY2MjQ4NQ==',
@@ -542,12 +511,10 @@ describe('Signed Properties', () => {
 
     expect(hash).toBeTruthy();
     expect(typeof hash).toBe('string');
-    // Should be valid base64
     expect(() => Buffer.from(hash, 'base64')).not.toThrow();
-    // The decoded base64 should be a 64-char hex string
     const decoded = Buffer.from(hash, 'base64').toString('utf8');
     expect(decoded.length).toBe(64);
-    expect(/^[0-9a-f]+$/.test(decoded)).toBe(true);
+    expect(decoded).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('computeSignedPropertiesHash is consistent with embedded XML', () => {
