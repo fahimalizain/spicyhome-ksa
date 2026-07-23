@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { ZatcaConfigDto, ZatcaOnboardingState, ZatcaInvoice } from '@spicyhome/client-ts';
+import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation';
 const ZATCA_PRODUCTION_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core';
@@ -43,6 +44,16 @@ export function ZatcaPage() {
   const [invoiceDetailLoading, setInvoiceDetailLoading] = useState(false);
   const [retryTargetId, setRetryTargetId] = useState<number | null>(null);
   const [retryingAll, setRetryingAll] = useState(false);
+
+  // ── Compliance check state ──
+  const [complianceChecking, setComplianceChecking] = useState<number | null>(null);
+  const [complianceResults, setComplianceResults] = useState<
+    Record<number, { success: boolean; status: number; warnings: string[]; errors: string[] }>
+  >({});
+  const [complianceTypeChecking, setComplianceTypeChecking] = useState<string | null>(null);
+  const [complianceTypeResults, setComplianceTypeResults] = useState<
+    Record<string, { success: boolean; status: number; warnings: string[]; errors: string[] }>
+  >({});
 
   useEffect(() => {
     loadConfig();
@@ -145,6 +156,48 @@ export function ZatcaPage() {
       setOnboardingError(e.message || 'Failed to promote to production');
     } finally {
       setPromotingProduction(false);
+    }
+  }
+
+  async function handleComplianceCheck(invoiceId: number) {
+    setComplianceChecking(invoiceId);
+    setOnboardingError('');
+    try {
+      const result = await client.zatca.runComplianceCheck(invoiceId);
+      setComplianceResults((prev) => ({ ...prev, [invoiceId]: result }));
+    } catch (e: any) {
+      setComplianceResults((prev) => ({
+        ...prev,
+        [invoiceId]: {
+          success: false,
+          status: 0,
+          warnings: [],
+          errors: [e.message || 'Compliance check failed'],
+        },
+      }));
+    } finally {
+      setComplianceChecking(null);
+    }
+  }
+
+  async function handleComplianceTypeCheck(type: ZATCAInvoiceDocumentType) {
+    setComplianceTypeChecking(type);
+    setOnboardingError('');
+    try {
+      const result = await client.zatca.runComplianceCheck(undefined, type);
+      setComplianceTypeResults((prev) => ({ ...prev, [type]: result }));
+    } catch (e: any) {
+      setComplianceTypeResults((prev) => ({
+        ...prev,
+        [type]: {
+          success: false,
+          status: 0,
+          warnings: [],
+          errors: [e.message || 'Compliance check failed'],
+        },
+      }));
+    } finally {
+      setComplianceTypeChecking(null);
     }
   }
 
@@ -463,6 +516,149 @@ export function ZatcaPage() {
               )}
             </div>
 
+            {/* Step 2.5: Compliance Check */}
+            {onboarding.complianceDone && (
+              <div className="border border-gray-700 rounded-lg p-3 space-y-3">
+                <h3 className="text-xs font-semibold text-gray-400">Step 2.5: Compliance Check</h3>
+                <div className="text-xs text-gray-500">
+                  Submit invoices to ZATCA for compliance validation. ZATCA requires this before
+                  issuing a production CSID.
+                </div>
+
+                {/* Part A: Type-based compliance checks (dynamic generation) */}
+                <div className="space-y-1">
+                  <h4 className="text-xs font-semibold text-gray-500">
+                    Quick Checks (auto-generated)
+                  </h4>
+                  {[
+                    { type: 'invoice', label: 'Simplified Tax Invoice' },
+                    { type: 'credit_note', label: 'Simplified Credit Note' },
+                    { type: 'debit_note', label: 'Simplified Debit Note' },
+                  ].map(({ type, label }) => {
+                    const result = complianceTypeResults[type];
+                    return (
+                      <div
+                        key={type}
+                        className="flex items-center justify-between bg-gray-700/50 rounded px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white">{label}</span>
+                          {result && (
+                            <span
+                              className={
+                                'px-1.5 py-0.5 rounded text-xs ' +
+                                (result.status === 200
+                                  ? 'bg-green-700 text-green-100'
+                                  : result.status === 202
+                                    ? 'bg-yellow-700 text-yellow-100'
+                                    : 'bg-red-700 text-red-100')
+                              }
+                            >
+                              {result.status === 200
+                                ? 'Passed'
+                                : result.status === 202
+                                  ? 'Warning'
+                                  : `Failed (${result.status})`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {result && result.warnings.length > 0 && (
+                            <div
+                              className="text-xs text-yellow-400 max-w-40 truncate"
+                              title={result.warnings.join('\n')}
+                            >
+                              {result.warnings[0]}
+                            </div>
+                          )}
+                          {result && result.errors.length > 0 && (
+                            <div
+                              className="text-xs text-red-400 max-w-40 truncate"
+                              title={result.errors.join('\n')}
+                            >
+                              {result.errors[0]}
+                            </div>
+                          )}
+                          <button
+                            onClick={() =>
+                              handleComplianceTypeCheck(type as ZATCAInvoiceDocumentType)
+                            }
+                            disabled={complianceTypeChecking === type}
+                            className="touch-target bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded px-3 py-1.5 text-xs text-white"
+                          >
+                            {complianceTypeChecking === type ? 'Checking...' : 'Check'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Part B: Invoice-based compliance checks (real invoices from DB) */}
+                {invoices.filter((inv) => inv.status === 'signed').length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-semibold text-gray-500">Existing Invoices</h4>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {invoices
+                        .filter((inv) => inv.status === 'signed')
+                        .map((inv) => {
+                          const result = complianceResults[inv.id];
+                          return (
+                            <div
+                              key={inv.id}
+                              className="flex items-center justify-between bg-gray-700/50 rounded px-3 py-2"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-white font-mono">#{inv.icv}</span>
+                                {result && (
+                                  <span
+                                    className={
+                                      'px-1.5 py-0.5 rounded text-xs ' +
+                                      (result.status === 200
+                                        ? 'bg-green-700 text-green-100'
+                                        : result.status === 202
+                                          ? 'bg-yellow-700 text-yellow-100'
+                                          : 'bg-red-700 text-red-100')
+                                    }
+                                  >
+                                    {result.status === 200
+                                      ? 'Passed'
+                                      : result.status === 202
+                                        ? 'Warning'
+                                        : `Failed (${result.status})`}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {result && result.warnings.length > 0 && (
+                                  <div className="text-xs text-yellow-400 max-w-32 truncate">
+                                    {result.warnings[0]}
+                                  </div>
+                                )}
+                                {result && result.errors.length > 0 && (
+                                  <div className="text-xs text-red-400 max-w-32 truncate">
+                                    {result.errors[0]}
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => handleComplianceCheck(inv.id)}
+                                  disabled={complianceChecking === inv.id}
+                                  className="touch-target bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded px-3 py-1.5 text-xs text-white"
+                                >
+                                  {complianceChecking === inv.id
+                                    ? 'Checking...'
+                                    : 'Check Compliance'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Step 3: Go Production */}
             <div className="border border-gray-700 rounded-lg p-3 space-y-2">
               <h3 className="text-xs font-semibold text-gray-400">Step 3: Go Production</h3>
@@ -479,7 +675,7 @@ export function ZatcaPage() {
                 {onboarding.productionDone
                   ? 'Production CSID active'
                   : onboarding.complianceDone
-                    ? 'Ready for production promotion'
+                    ? 'Ready for production promotion (run compliance checks first)'
                     : 'Complete compliance onboarding first'}
               </div>
               <button

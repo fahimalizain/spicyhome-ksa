@@ -15,11 +15,14 @@
  *   - Tax totals: grouped by rate
  */
 
-import { decomposeVat, halalasToSar } from '@spicyhome/shared';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export type InvoiceDocumentType = 'invoice' | 'credit_note' | 'debit_note';
+import {
+  decomposeVat,
+  halalasToSar,
+  ZATCAInvoiceDocumentType,
+  ZATCA_INVOICE_TYPE_CODES,
+  ZATCA_SIMPLIFIED_SUBTYPES,
+  ZATCA_INITIAL_PIH,
+} from '@spicyhome/shared';
 
 export interface InvoiceItemInput {
   name: string;
@@ -50,7 +53,7 @@ export interface SellerInfo {
 
 export interface InvoiceXMLInput {
   /** Document type */
-  type?: InvoiceDocumentType;
+  type?: ZATCAInvoiceDocumentType;
   /** Invoice Counter Value (strictly incrementing) */
   icv: number;
   /** UUID for the invoice */
@@ -72,19 +75,6 @@ export interface InvoiceXMLInput {
   /** Payment instruction note (KSA-10 reason for credit/debit notes) */
   paymentNote?: string;
 }
-
-// ── InvoiceTypeCode mapping ────────────────────────────────────────────────────
-
-const INVOICE_TYPE_CODES: Record<InvoiceDocumentType, number> = {
-  invoice: 388,
-  credit_note: 381,
-  debit_note: 383,
-};
-
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-const INITIAL_PIH =
-  'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==';
 
 // ── XML Builder ───────────────────────────────────────────────────────────────
 
@@ -109,7 +99,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     billingReferenceId,
   } = input;
 
-  const typeCode = INVOICE_TYPE_CODES[type];
+  const typeCode = ZATCA_INVOICE_TYPE_CODES[type];
   const isCorrection = type === 'credit_note' || type === 'debit_note';
 
   // Compute line totals and tax breakdown
@@ -161,7 +151,9 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`  <cbc:UUID>${uuid}</cbc:UUID>`);
   parts.push(`  <cbc:IssueDate>${issueDate}</cbc:IssueDate>`);
   parts.push(`  <cbc:IssueTime>${issueTime}</cbc:IssueTime>`);
-  parts.push(`  <cbc:InvoiceTypeCode name="0200000">${typeCode}</cbc:InvoiceTypeCode>`);
+  parts.push(
+    `  <cbc:InvoiceTypeCode name="${ZATCA_SIMPLIFIED_SUBTYPES[type]}">${typeCode}</cbc:InvoiceTypeCode>`,
+  );
 
   // ── Currencies ──
   parts.push(`  <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>`);
@@ -183,7 +175,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`  </cac:AdditionalDocumentReference>`);
 
   // ── AdditionalDocumentReference: PIH ──
-  const pihValue = prevInvoiceHash || INITIAL_PIH;
+  const pihValue = prevInvoiceHash || ZATCA_INITIAL_PIH;
   parts.push(`  <cac:AdditionalDocumentReference>`);
   parts.push(`    <cbc:ID>PIH</cbc:ID>`);
   parts.push(`    <cac:Attachment>`);
@@ -260,10 +252,12 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   }
 
   // ── PaymentMeans ──
+  const instructionNote =
+    input.paymentNote || (isCorrection ? 'Cancellation or Additional Charge' : undefined);
   parts.push(`  <cac:PaymentMeans>`);
   parts.push(`    <cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>`);
-  if (input.paymentNote) {
-    parts.push(`    <cbc:InstructionNote>${escapeXml(input.paymentNote)}</cbc:InstructionNote>`);
+  if (instructionNote) {
+    parts.push(`    <cbc:InstructionNote>${escapeXml(instructionNote)}</cbc:InstructionNote>`);
   }
   parts.push(`  </cac:PaymentMeans>`);
 
@@ -288,10 +282,10 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     parts.push(`    <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>`);
     parts.push(`    <cbc:Amount currencyID="SAR">0.00</cbc:Amount>`);
     parts.push(`    <cac:TaxCategory>`);
-    parts.push(`      <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">S</cbc:ID>`);
+    parts.push(`      <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5305">S</cbc:ID>`);
     parts.push(`      <cbc:Percent>15</cbc:Percent>`);
     parts.push(`      <cac:TaxScheme>`);
-    parts.push(`        <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>`);
+    parts.push(`        <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5153">VAT</cbc:ID>`);
     parts.push(`      </cac:TaxScheme>`);
     parts.push(`    </cac:TaxCategory>`);
     parts.push(`  </cac:AllowanceCharge>`);
@@ -321,11 +315,11 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     );
     parts.push(`      <cac:TaxCategory>`);
     parts.push(
-      `        <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">${group.rateBp === 0 ? 'Z' : 'S'}</cbc:ID>`,
+      `        <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5305">${group.rateBp === 0 ? 'Z' : 'S'}</cbc:ID>`,
     );
     parts.push(`        <cbc:Percent>${(group.rateBp / 100).toFixed(2)}</cbc:Percent>`);
     parts.push(`        <cac:TaxScheme>`);
-    parts.push(`          <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>`);
+    parts.push(`          <cbc:ID schemeAgencyID="6" schemeID="UN/ECE 5153">VAT</cbc:ID>`);
     parts.push(`        </cac:TaxScheme>`);
     parts.push(`      </cac:TaxCategory>`);
     parts.push(`    </cac:TaxSubtotal>`);

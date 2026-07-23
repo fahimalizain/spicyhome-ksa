@@ -1,10 +1,4 @@
-import {
-  buildUnsignedInvoiceXML,
-  InvoiceXMLInput,
-  InvoiceItemInput,
-  SellerInfo,
-} from './zatca-xml-builder.service';
-import { decomposeVat, halalasToSar } from '@spicyhome/shared';
+import { buildUnsignedInvoiceXML, InvoiceXMLInput, SellerInfo } from './zatca-xml-builder.service';
 
 describe('UBL XML Builder', () => {
   const defaultSeller: SellerInfo = {
@@ -95,9 +89,9 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>');
   });
 
-  it('uses InvoiceTypeCode 383 for debit notes', () => {
+  it('uses InvoiceTypeCode 383 for debit notes with subtype 0211000', () => {
     const xml = buildUnsignedInvoiceXML({ ...baseInput, type: 'debit_note' });
-    expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">383</cbc:InvoiceTypeCode>');
+    expect(xml).toContain('<cbc:InvoiceTypeCode name="0211000">383</cbc:InvoiceTypeCode>');
   });
 
   it('includes currency codes', () => {
@@ -219,6 +213,46 @@ describe('UBL XML Builder', () => {
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('<cbc:InstructionNote>Refund for returned items</cbc:InstructionNote>');
+  });
+
+  it('includes default InstructionNote for credit notes without paymentNote', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain(
+      '<cbc:InstructionNote>Cancellation or Additional Charge</cbc:InstructionNote>',
+    );
+  });
+
+  it('includes default InstructionNote for debit notes without paymentNote', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'debit_note',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain(
+      '<cbc:InstructionNote>Cancellation or Additional Charge</cbc:InstructionNote>',
+    );
+  });
+
+  it('does NOT include InstructionNote for regular invoices', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).not.toContain('<cbc:InstructionNote>');
+  });
+
+  it('explicit paymentNote overrides default InstructionNote for corrections', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'debit_note',
+      paymentNote: 'Additional charge for extra sauce',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain(
+      '<cbc:InstructionNote>Additional charge for extra sauce</cbc:InstructionNote>',
+    );
+    expect(xml).not.toContain('Cancellation or Additional Charge');
   });
 
   it('escapes XML special characters in text', () => {

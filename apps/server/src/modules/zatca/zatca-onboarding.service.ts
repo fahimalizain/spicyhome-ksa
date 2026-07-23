@@ -13,23 +13,14 @@
  *   not_started → csr_generated → compliance → production
  */
 
-import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { DRIZZLE } from '../database/database.module';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
-import { ZatcaHttpService, ZatcaHttpClient } from './zatca-http.service';
-import {
-  generateKeyPair,
-  buildCSR,
-  toPem,
-  getPublicKeyPem,
-  encryptAtRest,
-  hexToBytes,
-} from './zatca-crypto.service';
+import { ZatcaHttpService } from './zatca-http.service';
+import { generateKeyPair, buildCSR, toPem, getPublicKeyPem } from './zatca-crypto.service';
 import type { CsrExtensionParams } from './zatca-crypto.service';
+import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import type * as schema from '@spicyhome/db';
 
 export interface OnboardingState {
   state: 'not_started' | 'csr_generated' | 'compliance' | 'production';
@@ -273,6 +264,138 @@ export class ZatcaOnboardingService {
   }
 
   /**
+   * Compliance check: submit a signed invoice to ZATCA's compliance/invoices endpoint.
+   *
+   * Validates the invoice XML structure, business rules, QR code, and
+   * cryptographic stamp. This must be completed before ZATCA will issue
+   * a production CSID (though the sandbox may not enforce it strictly).
+   *
+   * Does NOT change the onboarding state — compliance checks can be run
+   * multiple times for different invoices.
+   */
+  async runComplianceCheck(
+    invoiceIdOrType: number | null,
+    documentType?: ZATCAInvoiceDocumentType,
+  ): Promise<{
+    success: boolean;
+    status: number;
+    warnings: string[];
+    errors: string[];
+  }> {
+    const state = this.invoiceService.getOnboardingState();
+    if (state !== 'compliance' && state !== 'production') {
+      throw new BadRequestException(
+        `Compliance checks require compliance onboarding to be completed. Current state: ${state}.`,
+      );
+    }
+
+    const complianceCert = this.printersService.getSetting('zatca_compliance_cert', '');
+    const complianceSecret = this.printersService.getSetting('zatca_compliance_secret', '');
+
+    if (!complianceCert || !complianceSecret) {
+      throw new BadRequestException(
+        'Compliance credentials not found. Run compliance onboarding first.',
+      );
+    }
+
+    let invoiceHash: string;
+    let uuid: string;
+    let invoiceBase64: string;
+
+    if (invoiceIdOrType !== null && typeof invoiceIdOrType === 'number') {
+      // Existing invoice by ID
+      const invoice = this.invoiceService.getById(invoiceIdOrType);
+      if (!invoice) {
+        throw new BadRequestException(`Invoice ${invoiceIdOrType} not found`);
+      }
+      invoiceHash = invoice.invoiceHash;
+      uuid = invoice.uuid;
+      invoiceBase64 = Buffer.from(invoice.xml).toString('base64');
+
+      this.logger.log(
+        `Compliance check POST invoiceId=${invoiceIdOrType} hash=${invoiceHash?.slice(0, 20)}...`,
+      );
+    } else if (documentType) {
+      // Dynamically generate invoice for the given document type
+      const generated = await this.invoiceService.buildComplianceInvoice(documentType);
+      invoiceHash = generated.invoiceHash;
+      uuid = generated.uuid;
+      invoiceBase64 = Buffer.from(generated.signedXml).toString('base64');
+
+      this.logger.log(
+        `Compliance check POST type=${documentType} hash=${invoiceHash?.slice(0, 20)}...`,
+      );
+    } else {
+      throw new BadRequestException('Either invoiceId or documentType is required');
+    }
+
+    const body = JSON.stringify({
+      invoiceHash,
+      uuid,
+      invoice: invoiceBase64,
+    });
+
+    const baseUrl = this.getApiBaseUrl();
+    const url = `${baseUrl}/compliance/invoices`;
+
+    this.logger.log(
+      `Compliance check POST ${url} hash=${invoiceHash?.slice(0, 20)}... uuid=${uuid} invoiceB64Len=${invoiceBase64.length} bodyLen=${body.length}`,
+    );
+
+    const response = await this.httpClient.post(url, {
+      body,
+      headers: {
+        'Accept-Version': 'V2',
+        'Accept-Language': 'en',
+      },
+      auth: {
+        username: complianceCert,
+        password: complianceSecret,
+      },
+      timeoutMs: 30000,
+    });
+
+    if (response.status === 200) {
+      return { success: true, status: 200, warnings: [], errors: [] };
+    }
+
+    if (response.status === 202) {
+      let warnings: string[] = [];
+      try {
+        const result = JSON.parse(response.body);
+        if (result.warnings && Array.isArray(result.warnings)) {
+          warnings = result.warnings.map(extractMessage);
+        } else if (result.validationResults?.warningMessages) {
+          warnings = result.validationResults.warningMessages.map(extractMessage);
+        }
+      } catch {
+        // Response body may not be parseable JSON
+      }
+      return { success: true, status: 202, warnings, errors: [] };
+    }
+
+    let errors: string[] = [];
+    try {
+      const result = JSON.parse(response.body);
+      if (result.errors && Array.isArray(result.errors)) {
+        errors = result.errors.map(extractMessage);
+      } else if (result.validationResults?.errorMessages) {
+        errors = result.validationResults.errorMessages.map(extractMessage);
+      } else if (result.message) {
+        errors = [result.message];
+      } else if (result.errorMessage) {
+        errors = [result.errorMessage];
+      }
+    } catch {
+      errors = [response.body];
+    }
+
+    this.logger.error(`Compliance check failed: ${response.status}, body=${response.body}`);
+
+    return { success: false, status: response.status, warnings: [], errors };
+  }
+
+  /**
    * Return the ZATCA API base URL.
    *
    * Can be overridden via `zatca_api_base_url` setting for simulation.
@@ -284,4 +407,12 @@ export class ZatcaOnboardingService {
       'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
     );
   }
+}
+
+function extractMessage(item: unknown): string {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object' && 'message' in item) {
+    return String((item as { message: string }).message);
+  }
+  return JSON.stringify(item);
 }

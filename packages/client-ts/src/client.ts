@@ -289,6 +289,14 @@ export class SpicyHomeClient {
         '/zatca/onboard/production',
       ),
 
+    runComplianceCheck: (invoiceId?: number, documentType?: string) =>
+      request<{ success: boolean; status: number; warnings: string[]; errors: string[] }>(
+        this.config,
+        'POST',
+        '/zatca/onboard/compliance-check',
+        { invoiceId, documentType },
+      ),
+
     listInvoices: (limit?: number, offset?: number) =>
       request<ZatcaInvoice[]>(this.config, 'GET', '/zatca/invoices', undefined, {
         limit: limit?.toString(),

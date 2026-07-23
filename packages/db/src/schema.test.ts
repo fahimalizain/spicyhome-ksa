@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
 import { createTestDb, findMigrationsDir, applyMigrations } from './migrate';
-import { seedRaw } from './seed';
 
 describe('schema — migrations', () => {
   let migrationsDir: string;
@@ -119,7 +118,6 @@ describe('schema — invariants', () => {
     it('order_items.order_id references orders.id with cascade delete', () => {
       const now = Math.floor(Date.now() / 1000);
       // Set up dependencies
-      const roleRow = sqlite.prepare('SELECT id FROM user_roles LIMIT 1').get() as any;
       const userRow = sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any;
 
       sqlite.exec(`

@@ -10,6 +10,18 @@ describe('ZATCA TLV Encoder', () => {
     invoiceHashBase64: 'dGVzdGhhc2g=', // "testhash"
     signatureBase64: 'dGVzdHNpZw==', // "testsig"
     publicKeyBase64: 'dGVzdHB1YmtleQ==', // "testpubkey"
+    certificateSignatureBase64: 'dGVzdGNlcnRzaWc=', // "testcertsig"
+  };
+
+  const baseInput8Tags: TLVInput = {
+    sellerName: 'SpicyHome Restaurant',
+    vatNumber: '300123456789',
+    timestamp: '2024-01-15T14:30:00+03:00',
+    totalHalalas: 2300,
+    vatHalalas: 300,
+    invoiceHashBase64: 'dGVzdGhhc2g=', // "testhash"
+    signatureBase64: 'dGVzdHNpZw==', // "testsig"
+    publicKeyBase64: 'dGVzdHB1YmtleQ==', // "testpubkey"
   };
 
   it('produces a non-empty base64 string', () => {
@@ -46,8 +58,19 @@ describe('ZATCA TLV Encoder', () => {
     expect(byTag.get(5)).toBe('16.00'); // vat
   });
 
-  it('encodes all 8 tags in order 1-8', () => {
+  it('encodes all 9 tags in order 1-9', () => {
     const tlvBase64 = encodeZatcaTLV(baseInput);
+    const tlv = Buffer.from(tlvBase64, 'base64');
+
+    const entries = parseTLV(tlv);
+    expect(entries.length).toBe(9);
+
+    const tags = entries.map((e) => e.tag);
+    expect(tags).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('omits tag 9 when certificateSignatureBase64 is not provided', () => {
+    const tlvBase64 = encodeZatcaTLV(baseInput8Tags);
     const tlv = Buffer.from(tlvBase64, 'base64');
 
     const entries = parseTLV(tlv);
@@ -65,7 +88,7 @@ describe('ZATCA TLV Encoder', () => {
 
     for (const entry of entries) {
       expect(entry.tag).toBeGreaterThanOrEqual(1);
-      expect(entry.tag).toBeLessThanOrEqual(8);
+      expect(entry.tag).toBeLessThanOrEqual(9);
       expect(entry.length).toBe(entry.valueBytes.length);
     }
   });
@@ -152,11 +175,38 @@ function parseTLV(buffer: Buffer): TLVParsed[] {
   let offset = 0;
 
   while (offset < buffer.length) {
-    if (offset + 3 > buffer.length) break;
+    // At minimum we need tag (1 byte) + length prefix (1 or more bytes)
+    if (offset + 2 > buffer.length) break;
 
     const tag = buffer[offset];
-    const length = (buffer[offset + 1] << 8) | buffer[offset + 2];
-    offset += 3;
+    offset += 1;
+
+    let length: number;
+    const firstLenByte = buffer[offset];
+
+    if (firstLenByte === 0x81) {
+      // 2-byte length: 0x81 + 1 byte
+      if (offset + 2 > buffer.length) break;
+      length = buffer[offset + 1];
+      offset += 2;
+    } else if (firstLenByte === 0x82) {
+      // 3-byte length: 0x82 + 2 bytes (big-endian)
+      if (offset + 3 > buffer.length) break;
+      length = (buffer[offset + 1] << 8) | buffer[offset + 2];
+      offset += 3;
+    } else if (firstLenByte === 0x83) {
+      // 4-byte length: 0x83 + 3 bytes (big-endian)
+      if (offset + 4 > buffer.length) break;
+      length = (buffer[offset + 1] << 16) | (buffer[offset + 2] << 8) | buffer[offset + 3];
+      offset += 4;
+    } else if (firstLenByte < 128) {
+      // Short form: 1 byte (value < 128)
+      length = firstLenByte;
+      offset += 1;
+    } else {
+      // Unexpected length byte (>= 128 but not 0x81/0x82/0x83)
+      break;
+    }
 
     if (offset + length > buffer.length) break;
 

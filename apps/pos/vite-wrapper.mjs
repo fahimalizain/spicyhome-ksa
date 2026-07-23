@@ -1,7 +1,5 @@
 import { createServer, build } from 'vite';
 
-const mode = process.env.VITE_MODE || 'production';
-
 async function main() {
   if (process.argv.includes('dev')) {
     const server = await createServer({

@@ -1532,6 +1532,26 @@
         ]
       }
     },
+    "/zatca/onboard/compliance-check": {
+      "post": {
+        "operationId": "ZatcaController_runComplianceCheck",
+        "summary": "Run compliance check by submitting a signed invoice to ZATCA",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/zatca/onboard/production": {
       "post": {
         "operationId": "ZatcaController_onboardProduction",

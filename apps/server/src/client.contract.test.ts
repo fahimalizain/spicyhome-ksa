@@ -11,7 +11,6 @@ import * as http from 'http';
 
 let app: INestApplication;
 let sqlite: Database.Database;
-let server: http.Server;
 let client: SpicyHomeClient;
 let token: string;
 let baseUrl: string;
@@ -49,7 +48,6 @@ beforeAll(async () => {
   await app.init();
 
   await app.listen(port);
-  const httpServer = app.getHttpServer();
 
   baseUrl = `http://127.0.0.1:${port}`;
 
@@ -233,9 +231,6 @@ describe('Client contract test', () => {
   });
 
   it('voids a new order', async () => {
-    const tablesRes: any = await client.tables.list();
-    const tableId = tablesRes[0]?.id || 1;
-
     const newOrder: any = await client.orders.create({
       type: 'takeaway',
     });

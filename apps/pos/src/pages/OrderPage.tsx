@@ -1,14 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useCart } from '../hooks/useCart';
-import type {
-  CategoryResponse,
-  ItemResponse,
-  TableResponse,
-  OrderResponse,
-} from '@spicyhome/client-ts';
+import type { CategoryResponse, ItemResponse, TableResponse } from '@spicyhome/client-ts';
 
 export function OrderPage() {
   const cart = useCart();

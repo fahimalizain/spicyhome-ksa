@@ -96,7 +96,7 @@ export class AuthService {
   getUserById(id: number): any {
     const user = this.db.select().from(users).where(eq(users.id, id)).get();
     if (!user) throw new NotFoundException('User not found');
-    const { pinHash, ...safe } = user;
+    const { pinHash: _pinHash, ...safe } = user;
     return safe;
   }
 
@@ -158,7 +158,7 @@ export class AuthService {
     this.db.update(users).set(updates).where(eq(users.id, id)).run();
 
     const updated = this.db.select().from(users).where(eq(users.id, id)).get()!;
-    const { pinHash, ...safe } = updated;
+    const { pinHash: _pinHash, ...safe } = updated;
     return safe;
   }
 

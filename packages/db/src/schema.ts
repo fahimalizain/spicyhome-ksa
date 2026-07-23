@@ -1,5 +1,4 @@
-import { sqliteTable, integer, text, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
 

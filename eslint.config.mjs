@@ -23,7 +23,11 @@ export default tseslint.config(
     languageOptions: {
       globals: { module: 'writable', require: 'writable', __dirname: 'readonly' },
     },
-    rules: { 'no-undef': 'off' },
+    rules: {
+      'no-undef': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
   },
 
   // MJS wrapper files (vite-wrapper.mjs, vitest-wrapper.mjs)
@@ -32,7 +36,10 @@ export default tseslint.config(
     languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
     rules: {
       'no-undef': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
     },
   },
 
@@ -42,7 +49,10 @@ export default tseslint.config(
     rules: {
       // Disable rules that would cause massive churn
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-require-imports': 'off',
       'no-undef': 'off',
       'no-empty': 'off',

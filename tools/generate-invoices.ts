@@ -18,8 +18,8 @@ import {
   buildUnsignedInvoiceXML,
   InvoiceXMLInput,
   SellerInfo,
-  InvoiceDocumentType,
 } from '../apps/server/src/modules/zatca/zatca-xml-builder.service';
+import { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 const OUTPUT_DIR = join(__dirname, 'zatca-sdk', 'Data', 'Samples', 'Generated');
 
@@ -46,7 +46,7 @@ const items = [
 // ── Invoice generation ─────────────────────────────────────────────────────────
 
 function generateDocument(
-  type: InvoiceDocumentType,
+  type: ZATCAInvoiceDocumentType,
   icv: number,
   billingReferenceId?: string,
   paymentNote?: string,
@@ -74,21 +74,22 @@ function generateDocument(
 function main(): void {
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const types: Array<{ type: InvoiceDocumentType; icv: number; billingReferenceId?: string }> = [
-    { type: 'invoice', icv: 1 },
-    {
-      type: 'credit_note',
-      icv: 2,
-      billingReferenceId: '1',
-      paymentNote: 'In case of goods or services refund',
-    },
-    {
-      type: 'debit_note',
-      icv: 3,
-      billingReferenceId: '1',
-      paymentNote: 'Amendment of the supply value',
-    },
-  ];
+  const types: Array<{ type: ZATCAInvoiceDocumentType; icv: number; billingReferenceId?: string }> =
+    [
+      { type: 'invoice', icv: 1 },
+      {
+        type: 'credit_note',
+        icv: 2,
+        billingReferenceId: '1',
+        paymentNote: 'In case of goods or services refund',
+      },
+      {
+        type: 'debit_note',
+        icv: 3,
+        billingReferenceId: '1',
+        paymentNote: 'Amendment of the supply value',
+      },
+    ];
 
   for (const doc of types) {
     const xml = generateDocument(doc.type, doc.icv, doc.billingReferenceId, doc.paymentNote);

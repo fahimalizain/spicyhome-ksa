@@ -343,7 +343,7 @@ export class OrdersService {
   private emitPrintEvent(event: string, orderId: number, userId: number): void {
     try {
       this.eventEmitter.emit(event, { orderId, userId });
-    } catch (err: any) {
+    } catch (_err: any) {
       // Swallow — print events never fail the order operation
     }
   }

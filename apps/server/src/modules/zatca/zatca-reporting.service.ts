@@ -14,11 +14,11 @@
  */
 
 import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { eq, or, isNull, sql } from 'drizzle-orm';
-import { invoices, settings } from '@spicyhome/db';
+import { eq, or } from 'drizzle-orm';
+import { invoices } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
-import { ZatcaHttpService, ZatcaHttpClient } from './zatca-http.service';
+import { ZatcaHttpService } from './zatca-http.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 

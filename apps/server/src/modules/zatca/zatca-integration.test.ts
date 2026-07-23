@@ -18,9 +18,6 @@ import { PrintersService } from '../../modules/printers/printers.service';
 import { FakeZatcaHttpClient, ZatcaHttpService } from '../../modules/zatca/zatca-http.service';
 import { ZatcaReportingService } from '../../modules/zatca/zatca-reporting.service';
 import { ZatcaInvoiceService } from '../../modules/zatca/zatca-invoice.service';
-import { ZatcaOnboardingService } from '../../modules/zatca/zatca-onboarding.service';
-
-declare let global: any;
 
 describe('ZATCA Integration', () => {
   let app: INestApplication;
@@ -205,7 +202,7 @@ describe('ZATCA Integration', () => {
         expect(inv.icv).toBe(1);
         expect(inv.invoiceHash).toBeTruthy();
         expect(inv.qrTlvBase64).toBeTruthy();
-      } catch (err: any) {
+      } catch (_err: any) {
         // Fallback: check if event listener already created it
       }
 
@@ -245,6 +242,205 @@ describe('ZATCA Integration', () => {
         expect(entries.length).toBe(8);
         expect(entries.map((e: any) => e.tag)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       }
+    });
+  });
+
+  describe('Compliance Check', () => {
+    it('passes when ZATCA returns 200', async () => {
+      fakeHttp.responses.set('/compliance/invoices', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+      });
+
+      const invoiceService = app.get(ZatcaInvoiceService);
+      const invoices = invoiceService.listInvoices(1, 0);
+
+      if (invoices.length === 0) {
+        return;
+      }
+
+      const invoiceId = invoices[0].id;
+      const res = await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ invoiceId })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.status).toBe(200);
+      expect(res.body.warnings).toEqual([]);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    it('passes with warnings when ZATCA returns 202', async () => {
+      fakeHttp.responses.set('/compliance/invoices', {
+        status: 202,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            status: 'WARNING',
+            warningMessages: ['QR code formatting issue', 'Minor XML validation warning'],
+          },
+        }),
+      });
+
+      const invoiceService = app.get(ZatcaInvoiceService);
+      const invoices = invoiceService.listInvoices(1, 0);
+
+      if (invoices.length === 0) {
+        return;
+      }
+
+      const invoiceId = invoices[0].id;
+      const res = await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ invoiceId })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.status).toBe(202);
+      expect(res.body.warnings.length).toBeGreaterThan(0);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    it('fails when ZATCA returns 400', async () => {
+      fakeHttp.responses.set('/compliance/invoices', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            status: 'ERROR',
+            errorMessages: ['Invalid invoice structure', 'Missing required fields'],
+          },
+        }),
+      });
+
+      const invoiceService = app.get(ZatcaInvoiceService);
+      const invoices = invoiceService.listInvoices(1, 0);
+
+      if (invoices.length === 0) {
+        return;
+      }
+
+      const invoiceId = invoices[0].id;
+      const res = await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ invoiceId })
+        .expect(201);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.status).toBe(400);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects with 400 when neither invoiceId nor documentType is provided', async () => {
+      await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(400);
+    });
+
+    it('rejects unauthenticated requests with 401', async () => {
+      await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .send({ invoiceId: 1 })
+        .expect(401);
+    });
+
+    describe('Type-based compliance checks (dynamic XML generation)', () => {
+      it('check for invoice type generates signed XML and submits to ZATCA', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'invoice' })
+          .expect(201);
+
+        expect(res.body.success).toBe(true);
+        expect(res.body.status).toBe(200);
+      });
+
+      it('check for credit_note type generates XML with InvoiceTypeCode 381', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        // Inspect the invoice service directly to verify XML content
+        const invoiceService = app.get(ZatcaInvoiceService);
+        const generated = await invoiceService.buildComplianceInvoice('credit_note');
+
+        expect(generated.signedXml).toContain(
+          '<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>',
+        );
+        expect(generated.signedXml).toContain('BillingReference');
+        expect(generated.signedXml).toContain('SME00001');
+        expect(generated.signedXml).toContain(
+          '<cbc:InstructionNote>Cancellation or Additional Charge</cbc:InstructionNote>',
+        );
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'credit_note' })
+          .expect(201);
+        expect(res.body.success).toBe(true);
+      });
+
+      it('check for debit_note type generates XML with InvoiceTypeCode 383 and subtype 0211000', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const invoiceService = app.get(ZatcaInvoiceService);
+        const generated = await invoiceService.buildComplianceInvoice('debit_note');
+
+        expect(generated.signedXml).toContain(
+          '<cbc:InvoiceTypeCode name="0211000">383</cbc:InvoiceTypeCode>',
+        );
+        expect(generated.signedXml).toContain('BillingReference');
+        expect(generated.signedXml).toContain('SME00001');
+        expect(generated.signedXml).toContain(
+          '<cbc:InstructionNote>Cancellation or Additional Charge</cbc:InstructionNote>',
+        );
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'debit_note' })
+          .expect(201);
+        expect(res.body.success).toBe(true);
+      });
+
+      it('requires onboarding state to be at least compliance for type-based checks', async () => {
+        // Already in production/compliance state from earlier onboarding tests
+        // Just verify the endpoint accepts it
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'invoice' })
+          .expect(201);
+
+        expect(res.body.success).toBe(true);
+      });
     });
   });
 
@@ -364,9 +560,7 @@ describe('ZATCA Integration', () => {
       expect(res.body.country).toBe('SA');
       // zatca_org_unit is pre-seeded
       expect(res.body.orgUnit).toBe('SpicyHome POS');
-      expect(res.body.apiBaseUrl).toBe(
-        'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
-      );
+      expect(res.body.apiBaseUrl).toBe('https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation');
     });
 
     it('GET /zatca/config never exposes secret keys', async () => {

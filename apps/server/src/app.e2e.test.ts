@@ -7,10 +7,6 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from './app.module';
 import { DRIZZLE } from './modules/database/database.module';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-
 let app: INestApplication;
 let sqlite: any;
 let db: any;

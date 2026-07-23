@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCart, computeTotals } from '../hooks/useCart';
-import type { ItemResponse, OrderResponse } from '@spicyhome/client-ts';
+import type { ItemResponse } from '@spicyhome/client-ts';
 
 const mockItem: ItemResponse = {
   id: 1,

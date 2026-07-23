@@ -17,6 +17,7 @@ import { ZatcaReportingService } from './zatca-reporting.service';
 import { PrintersService } from '../printers/printers.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { ZatcaConfigDto } from './dto/zatca-config.dto';
+import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 @ApiTags('zatca')
 @ApiBearerAuth()
@@ -48,6 +49,25 @@ export class ZatcaController {
       throw new BadRequestException('OTP is required');
     }
     return this.onboardingService.onboardCompliance(otp);
+  }
+
+  @Post('onboard/compliance-check')
+  @RequiresPermission('manage_settings')
+  @ApiOperation({ summary: 'Run compliance check by submitting a signed invoice to ZATCA' })
+  async runComplianceCheck(
+    @Body('invoiceId') invoiceId?: number,
+    @Body('documentType') documentType?: string,
+  ): Promise<{
+    success: boolean;
+    status: number;
+    warnings: string[];
+    errors: string[];
+  }> {
+    if (!invoiceId && !documentType) {
+      throw new BadRequestException('Either invoiceId or documentType is required');
+    }
+    const type = documentType as ZATCAInvoiceDocumentType | undefined;
+    return this.onboardingService.runComplianceCheck(invoiceId ?? null, type);
   }
 
   @Post('onboard/production')

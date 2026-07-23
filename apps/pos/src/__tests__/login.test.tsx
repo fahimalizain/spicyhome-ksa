@@ -52,7 +52,6 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByText('2'));
     fireEvent.click(screen.getByText('3'));
 
-    const pinDots = document.querySelectorAll('.w-12.h-12');
     const filledDots = document.querySelectorAll('.border-brand-500');
     expect(filledDots).toHaveLength(3);
   });

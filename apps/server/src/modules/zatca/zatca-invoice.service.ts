@@ -20,7 +20,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { eq, desc } from 'drizzle-orm';
-import { IncomingMessage } from 'http';
 import { orders, orderItems, invoices, settings } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
@@ -29,17 +28,15 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
 import {
-  generateKeyPair,
   computeInvoiceHash,
   computeInvoiceHashHex,
   signHashBase64,
-  signHashHex,
   embedSignatureIntoXML,
-  getPublicKeyPem,
+  injectQrIntoXml,
+  extractCertSignature,
   encryptAtRest,
   decryptAtRest,
-  KeyPair,
-  EncryptedData,
+  exportPublicKeyDer,
 } from './zatca-crypto.service';
 
 import {
@@ -48,9 +45,8 @@ import {
   InvoiceItemInput,
   SellerInfo,
 } from './zatca-xml-builder.service';
+import { ZATCAInvoiceDocumentType, ZATCA_INITIAL_PIH } from '@spicyhome/shared';
 import { encodeZatcaTLV, TLVInput } from './tlv';
-
-const VAT_NUMBER_HALALAS_DIVISOR = 100;
 
 export interface CreateInvoiceResult {
   id: number;
@@ -153,12 +149,11 @@ export class ZatcaInvoiceService {
       qty: oi.qty,
     }));
 
-    // Compute timestamp
+    // Compute timestamp in Asia/Riyadh timezone (UTC+3)
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date(now * 1000);
-    const issueDate = nowDate.toISOString().slice(0, 10);
-    const pad2 = (n: number) => String(n).padStart(2, '0');
-    const issueTime = `${pad2(nowDate.getHours())}:${pad2(nowDate.getMinutes())}:${pad2(nowDate.getSeconds())}`;
+    const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Riyadh', hour12: false });
 
     // Allocate ICV and get PIH atomically
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
@@ -190,10 +185,14 @@ export class ZatcaInvoiceService {
     const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
 
     // Embed signature into XML
-    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certBase64);
+    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
 
-    // Compute TLV QR payload
-    const timestampIso = `${issueDate}T${issueTime}+03:00`;
+    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+
+    // Compute TLV QR payload with all 9 tags
+    // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly (no timezone offset)
+    const timestampIso = `${issueDate}T${issueTime}`;
+    const certSigB64 = extractCertSignature(certForXml);
     const tlvInput: TLVInput = {
       sellerName,
       vatNumber,
@@ -202,9 +201,19 @@ export class ZatcaInvoiceService {
       vatHalalas: order.vatHalalas,
       invoiceHashBase64: invoiceHashB64,
       signatureBase64: signatureB64,
-      publicKeyBase64: Buffer.from(publicKeyHex, 'hex').toString('base64'),
+      // Tag 8: PublicKey.getEncoded() = SPKI DER bytes (not raw EC point)
+      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+
+    // Inject QR into signed XML
+    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+
+    // The invoiceHash sent to ZATCA = DigestValue = hash of unsigned XML
+    // (after stripping UBLExtensions, Signature, QR). This is the same
+    // value as invoiceHashB64 which we embedded in <ds:DigestValue>.
+    const finalInvoiceHash = invoiceHashB64;
 
     // Insert invoice
     const result = this.db
@@ -213,9 +222,9 @@ export class ZatcaInvoiceService {
         orderId,
         icv,
         uuid: invUuid,
-        invoiceHash: invoiceHashB64,
+        invoiceHash: finalInvoiceHash,
         prevInvoiceHash,
-        xml: signedXml,
+        xml: finalSignedXml,
         qrTlv: qrTlvBase64,
         status: 'signed',
         reportedAt: null,
@@ -225,25 +234,18 @@ export class ZatcaInvoiceService {
 
     const invoiceId = Number(result.lastInsertRowid);
 
-    // Emit invoice.created for the reporting worker
-    try {
-      const { EventEmitter2 } = require('@nestjs/event-emitter');
-      // We can't inject EventEmitter2 easily here, but the reporting worker
-      // polls the DB, so we don't strictly need to emit.
-    } catch {}
-
     this.logger.log(
-      `Invoice created: ICV=${icv}, order=${orderId}, hash=${invoiceHashB64.slice(0, 20)}...`,
+      `Invoice created: ICV=${icv}, order=${orderId}, hash=${finalInvoiceHash.slice(0, 20)}...`,
     );
 
     return {
       id: invoiceId,
       icv,
       uuid: invUuid,
-      invoiceHash: invoiceHashB64,
+      invoiceHash: finalInvoiceHash,
       status: 'signed',
       qrTlvBase64,
-      signedXml,
+      signedXml: finalSignedXml,
     };
   }
 
@@ -281,6 +283,119 @@ export class ZatcaInvoiceService {
   getQrTlvPayload(orderId: number): string | null {
     const inv = this.getByOrderId(orderId);
     return inv?.qrTlv ?? null;
+  }
+
+  /**
+   * Build a dynamically-generated signed invoice XML for ZATCA compliance checks.
+   *
+   * This generates a full, signed invoice using the same XML pipeline as real
+   * orders — with real seller config, real keys, real signatures — but without
+   * tying it to a real order or persisting it to the DB. ZATCA determines the
+   * invoice type from the `InvoiceTypeCode` element in the XML.
+   */
+  async buildComplianceInvoice(
+    type: ZATCAInvoiceDocumentType,
+  ): Promise<{ signedXml: string; invoiceHash: string; uuid: string }> {
+    const { randomUUID } = require('crypto');
+
+    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
+    const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
+    const crNumber = this.printersService.getSetting('cr_number', '');
+    const sellerStreet = this.printersService.getSetting('seller_street', '');
+    const sellerBuilding = this.printersService.getSetting('seller_building', '');
+    const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
+    const sellerPostal = this.printersService.getSetting('seller_postal', '');
+    const sellerCountry = this.printersService.getSetting('seller_country', 'SA');
+
+    const seller: SellerInfo = {
+      name: sellerName,
+      vatNumber,
+      crNumber: crNumber || undefined,
+      street: sellerStreet || undefined,
+      buildingNumber: sellerBuilding || undefined,
+      city: sellerCity,
+      postalCode: sellerPostal || undefined,
+      country: sellerCountry,
+    };
+
+    const privateKeyHex = this.getPrivateKey();
+    if (!privateKeyHex) {
+      throw new Error('ZATCA private key not configured. Run onboarding first.');
+    }
+
+    const complianceCert = this.printersService.getSetting('zatca_compliance_cert', '');
+    if (!complianceCert) {
+      throw new Error('ZATCA compliance certificate not found. Run compliance onboarding first.');
+    }
+
+    // Dummy line item for compliance check
+    const items: InvoiceItemInput[] = [
+      { name: 'Compliance Test Item', unitPriceHalalas: 11500, vatRateBp: 1500, qty: 1 },
+    ];
+
+    const now = Math.floor(Date.now() / 1000);
+    const nowDate = new Date(now * 1000);
+    const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Riyadh', hour12: false });
+
+    // Read current ICV without incrementing — compliance invoices don't consume ICV
+    const lastIcvRow = this.db.select().from(settings).where(eq(settings.key, 'last_icv')).get();
+    const icv = lastIcvRow ? parseInt(lastIcvRow.value, 10) : 0;
+
+    const invUuid = randomUUID();
+    const isCorrection = type === 'credit_note' || type === 'debit_note';
+
+    const xmlInput: InvoiceXMLInput = {
+      type,
+      icv,
+      uuid: invUuid,
+      issueDate,
+      issueTime,
+      seller,
+      items,
+      prevInvoiceHash: ZATCA_INITIAL_PIH,
+      billingReferenceId: isCorrection ? 'SME00001' : undefined,
+    };
+
+    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+
+    const digestHashB64 = computeInvoiceHash(unsignedXml);
+    const digestHashHex = computeInvoiceHashHex(unsignedXml);
+
+    const signatureB64 = signHashBase64(digestHashHex, privateKeyHex);
+    const certForXml = Buffer.from(complianceCert, 'base64').toString('utf-8');
+    const signedXml = embedSignatureIntoXML(unsignedXml, digestHashB64, signatureB64, certForXml);
+
+    // Compute QR TLV with all 9 tags
+    const totalHalalas = 11500; // the dummy item: unitPriceHalalas * qty
+    const vatHalalas = 1500; // 15% VAT on 10000 excl = 1500 halalas
+    // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly (no timezone offset)
+    const timestampIso = `${issueDate}T${issueTime}`;
+    const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
+    const certSigB64 = extractCertSignature(certForXml);
+
+    const tlvInput: TLVInput = {
+      sellerName,
+      vatNumber,
+      timestamp: timestampIso,
+      totalHalalas,
+      vatHalalas,
+      invoiceHashBase64: digestHashB64,
+      signatureBase64: signatureB64,
+      // Tag 8: PublicKey.getEncoded() = SPKI DER bytes (not raw EC point)
+      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      certificateSignatureBase64: certSigB64,
+    };
+    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+
+    // Inject QR into signed XML
+    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+
+    // The invoiceHash sent to ZATCA = DigestValue = hash of unsigned XML
+    // (same as digestHashB64 we embedded in <ds:DigestValue>).
+    const invoiceHash = digestHashB64;
+
+    return { signedXml: finalSignedXml, invoiceHash, uuid: invUuid };
   }
 
   // ── Internal helpers ────────────────────────────────────────────────────────
@@ -336,6 +451,13 @@ export class ZatcaInvoiceService {
 
   /**
    * Get the current certificate (compliance or production) as base64.
+   *
+   * ZATCA's `binarySecurityToken` is double-base64-encoded: the raw value is a
+   * base64 string that itself encodes the DER cert body (another base64 string).
+   * This raw value is used directly for Basic Auth, but must be decoded once
+   * before embedding in <ds:X509Certificate> in the UBL XML — otherwise ZATCA
+   * rejects the invoice with "Invalid encoded base 64 format".
+   * See ERPGulf sign_invoice_first.py line 399: base64.b64decode(binarySecurityToken).
    */
   private getCertificate(): string {
     const prodCert = this.printersService.getSetting('zatca_production_cert', '');

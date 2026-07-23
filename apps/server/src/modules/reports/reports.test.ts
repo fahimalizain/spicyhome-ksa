@@ -296,7 +296,6 @@ describe('ReportsService', () => {
     it('returns VAT summary with grand total', async () => {
       dayService.openDay({ openingCashHalalas: 0 }, 1);
       const day = dayService.getOpenDay()!;
-      const date = day.businessDate;
       sqlite.exec(`
         UPDATE day_openings SET
           status = 'closed',

@@ -1,5 +1,5 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
-import { halalasToSar, decomposeVat } from '@spicyhome/shared';
+import { halalasToSar } from '@spicyhome/shared';
 
 export interface ReceiptOptions {
   restaurantName: string;

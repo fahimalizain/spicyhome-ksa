@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { eq, and, inArray, gte, lte } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { orders, orderItems, dayOpenings, itemCategories, items, users } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
@@ -127,7 +127,6 @@ export class ReportsService {
     const catAgg = new Map<string, { itemCount: number; totalHalalas: number }>();
     for (const oi of oiRows) {
       const catId = oi.itemId ? (itemCatMap.get(oi.itemId) ?? null) : null;
-      const catName = catId ? (catMap.get(catId) ?? 'Uncategorized') : 'Uncategorized';
       const key = catId === null ? 'null' : String(catId);
       if (!catAgg.has(key)) catAgg.set(key, { itemCount: 0, totalHalalas: 0 });
       const agg = catAgg.get(key)!;
