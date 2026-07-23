@@ -10,10 +10,25 @@
       "cwd": "${workspaceFolder}/apps/server",
       "env": {
         "TZ": "Asia/Riyadh",
-        "PORT": "3742"
+        "SPICYHOME_DB": "${workspaceFolder}/data/spicyhome.db",
+        "PORT": "3742",
+        "TS_NODE_SCOPE": "false",
+        "TS_NODE_PREFER_TS_EXTS": "true"
       },
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "Attach to Server (Bazel)",
+      "port": 9229,
+      "sourceMaps": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/private/var/tmp/_bazel_fahimalizain/7cadd61f577b04e64d6a41f150af0032/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/apps/server/dev_inspect_/dev_inspect.runfiles/_main",
+      "skipFiles": ["<node_internals>/**"],
+      "restart": false,
+      "timeout": 30000
     }
   ]
 }

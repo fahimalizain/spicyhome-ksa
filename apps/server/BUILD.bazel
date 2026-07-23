@@ -16,6 +16,7 @@ ts_project(
     transpiler = "tsc",
     declaration = True,
     resolve_json_module = True,
+    source_map = True,
     deps = [
         "//:node_modules/@types/node",
         ":node_modules/@nestjs/common",
@@ -76,6 +77,23 @@ js_binary(
 )
 
 js_binary(
+    name = "dev_inspect",
+    data = [
+        ":lib",
+        ":node_modules/@noble/curves",
+        ":node_modules/@noble/hashes",
+        ":node_modules/@spicyhome/db",
+        ":node_modules/@spicyhome/shared",
+    ],
+    entry_point = "src/main.js",
+    env = {
+        "TZ": "Asia/Riyadh",
+        "SPICYHOME_DB": "./data/spicyhome.db",
+        "NODE_OPTIONS": "--inspect=9229",
+    },
+)
+
+js_binary(
     name = "openapi",
     data = [
         ":lib",
@@ -98,6 +116,7 @@ ts_project(
     transpiler = "tsc",
     declaration = True,
     resolve_json_module = True,
+    source_map = True,
     deps = [
         ":lib",
         ":node_modules/@nestjs/common",

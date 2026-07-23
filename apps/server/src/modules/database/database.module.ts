@@ -1,4 +1,4 @@
-import { Global, Module, OnModuleInit, Inject } from '@nestjs/common';
+import { Global, Module, OnModuleInit, Inject, Logger } from '@nestjs/common';
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
@@ -48,6 +48,7 @@ function extractSqlite(db: BetterSQLite3Database<typeof schema>): Database.Datab
       provide: DRIZZLE,
       useFactory: (): BetterSQLite3Database<typeof schema> => {
         const dbPath = getDbPath();
+        Logger.log(`Database path: ${dbPath}`, DatabaseModule.name);
         const sqlite = new Database(dbPath);
         sqlite.pragma('journal_mode = WAL');
         sqlite.pragma('foreign_keys = ON');
