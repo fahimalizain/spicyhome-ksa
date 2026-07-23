@@ -15,23 +15,27 @@ import {
   encryptAtRest,
   decryptAtRest,
   hexToBytes,
-  encodeOid,
-  derSequence,
-  derSet,
-  derInteger,
-  derPrintableString,
-  derUtf8String,
-  derBitString,
-  derOctetString,
-  derNull,
-  derContextTagged,
   exportPublicKeyDer,
-  bytesToBase64,
 } from './zatca-crypto.service';
 
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { createHash } from 'crypto';
+import * as forge from 'node-forge';
+
+const { asn1 } = forge;
+
+function oidDerStr(oid: string): string {
+  return (asn1.oidToDer(oid) as any).bytes() as string;
+}
+
+function getAsn1Children(node: forge.asn1.Asn1): forge.asn1.Asn1[] {
+  return node.value as forge.asn1.Asn1[];
+}
+
+function getAsn1Value(node: forge.asn1.Asn1): string {
+  return node.value as string;
+}
 
 // ── Key Generation ────────────────────────────────────────────────────────────
 
@@ -39,9 +43,9 @@ describe('Key Generation', () => {
   it('generates a valid keypair', () => {
     const kp = generateKeyPair();
     expect(kp.privateKeyHex).toBeTruthy();
-    expect(kp.privateKeyHex.length).toBe(64); // 32 bytes hex
-    expect(kp.publicKeyHex.length).toBe(130); // 65 bytes hex (uncompressed)
-    expect(kp.publicKeyHex.slice(0, 2)).toBe('04'); // 0x04 prefix
+    expect(kp.privateKeyHex.length).toBe(64);
+    expect(kp.publicKeyHex.length).toBe(130);
+    expect(kp.publicKeyHex.slice(0, 2)).toBe('04');
     expect(kp.publicKeyBase64).toBeTruthy();
   });
 
@@ -80,7 +84,6 @@ describe('ECDSA Signing and Verification', () => {
     expect(derSigHex).toBeTruthy();
     expect(derSigHex.length).toBeGreaterThan(0);
 
-    // Convert DER hex to base64 for verify
     const derSigBase64 = Buffer.from(hexToBytes(derSigHex)).toString('base64');
 
     const valid = verifySignature(hashHex, derSigBase64, publicKeyHex);
@@ -94,7 +97,6 @@ describe('ECDSA Signing and Verification', () => {
     const derSigHex = signHashHex(hashHex, privateKeyHex);
     const derSigBase64 = Buffer.from(hexToBytes(derSigHex)).toString('base64');
 
-    // Verify with different hash
     const wrongHash = bytesToHex(sha256(new TextEncoder().encode('bad message')));
     const valid = verifySignature(wrongHash, derSigBase64, publicKeyHex);
     expect(valid).toBe(false);
@@ -120,19 +122,16 @@ describe('ECDSA Signing and Verification', () => {
     const decoded = Buffer.from(b64, 'base64');
     expect(decoded.length).toBeGreaterThan(0);
 
-    // Verify round-trip
     const valid = verifySignature(hashHex, b64, publicKeyHex);
     expect(valid).toBe(true);
   });
 
-  it('consistent sign: same input → same output', () => {
+  it('consistent sign: same input => same output', () => {
     const hashHex = bytesToHex(sha256(new TextEncoder().encode('consistent')));
 
     const sig1 = signHashHex(hashHex, privateKeyHex);
     const sig2 = signHashHex(hashHex, privateKeyHex);
 
-    // ECDSA should be deterministic with the same message and key
-    // (noble/curves uses RFC 6979 deterministic k)
     expect(sig1).toBe(sig2);
   });
 
@@ -170,7 +169,7 @@ describe('DER Signature Encoding', () => {
 
   it('produces valid DER sequence structure', () => {
     const der = encodeSignatureDER(42n, 99n);
-    expect(der[0]).toBe(0x30); // SEQUENCE tag
+    expect(der[0]).toBe(0x30);
   });
 });
 
@@ -215,7 +214,7 @@ describe('Invoice Hashing', () => {
     expect(hash).toBeTruthy();
     expect(() => Buffer.from(hash, 'base64')).not.toThrow();
     const decoded = Buffer.from(hash, 'base64');
-    expect(decoded.length).toBe(32); // SHA-256 = 32 bytes
+    expect(decoded.length).toBe(32);
   });
 
   it('computeInvoiceHashHex produces 64-char hex', () => {
@@ -226,14 +225,14 @@ describe('Invoice Hashing', () => {
     expect(hashHex.length).toBe(64);
   });
 
-  it('hashing is deterministic: same XML → same hash', () => {
+  it('hashing is deterministic: same XML => same hash', () => {
     const xml = '<Invoice><cbc:ID>42</cbc:ID></Invoice>';
     const h1 = computeInvoiceHash(xml);
     const h2 = computeInvoiceHash(xml);
     expect(h1).toBe(h2);
   });
 
-  it('different XML → different hash', () => {
+  it('different XML => different hash', () => {
     const xml1 = '<Invoice><cbc:ID>1</cbc:ID></Invoice>';
     const xml2 = '<Invoice><cbc:ID>2</cbc:ID></Invoice>';
     expect(computeInvoiceHash(xml1)).not.toBe(computeInvoiceHash(xml2));
@@ -262,10 +261,7 @@ describe('Signature Embedding', () => {
 
     const signedXml = embedSignatureIntoXML(unsignedXml, hashB64, sigB64, certB64);
 
-    // Should contain the original content
     expect(signedXml).toContain('<cbc:ID>1</cbc:ID>');
-
-    // Should contain the signature block
     expect(signedXml).toContain('UBLExtensions');
     expect(signedXml).toContain('UBLDocumentSignatures');
     expect(signedXml).toContain('ds:Signature');
@@ -279,7 +275,6 @@ describe('Signature Embedding', () => {
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>';
     const signedXml = embedSignatureIntoXML(unsignedXml, 'a', 'b', 'c');
 
-    // UBLExtensions should appear before the first child element
     const extPos = signedXml.indexOf('UBLExtensions');
     const idPos = signedXml.indexOf('<cbc:ID>');
     expect(extPos).toBeLessThan(idPos);
@@ -293,26 +288,25 @@ describe('Signature Embedding', () => {
 // ── CSR Builder ───────────────────────────────────────────────────────────────
 
 describe('CSR Builder', () => {
+  const csrSubject = {
+    commonName: 'TST-00000001-300123456789',
+    organizationName: 'SpicyHome Restaurant',
+    organizationalUnit: '300123456789',
+    country: 'SA',
+  };
+
+  const csrExtensions = {
+    zatcaEnv: 'sandbox' as const,
+    serialNumber: '1-TST|2-TST|3-deadbeef-beef-dead-beef-deadbeef1234',
+    vatNumber: '300123456789',
+    invoiceType: '1100',
+    locationAddress: 'RIYADH',
+    businessCategory: 'Retail',
+  };
+
   it('builds a CSR and returns DER bytes', () => {
     const kp = generateKeyPair();
-    const csrDer = buildCSR(
-      {
-        commonName: 'TST-00000001-300123456789',
-        organizationName: 'SpicyHome Restaurant',
-        organizationalUnit: '300123456789',
-        country: 'SA',
-      },
-      kp.publicKeyHex,
-      kp.privateKeyHex,
-      {
-        zatcaEnv: 'sandbox',
-        serialNumber: '1-TST|2-TST|3-deadbeef-beef-dead-beef-deadbeef1234',
-        vatNumber: '300123456789',
-        invoiceType: '1100',
-        locationAddress: 'RIYADH',
-        businessCategory: 'Retail',
-      },
-    );
+    const csrDer = buildCSR(csrSubject, kp.publicKeyHex, kp.privateKeyHex, csrExtensions);
 
     expect(csrDer).toBeTruthy();
     expect(csrDer.length).toBeGreaterThan(100);
@@ -322,12 +316,7 @@ describe('CSR Builder', () => {
   it('csr can be converted to PEM', () => {
     const kp = generateKeyPair();
     const csrDer = buildCSR(
-      {
-        commonName: '300123456789',
-        organizationName: 'SpicyHome',
-        organizationalUnit: 'POS',
-        country: 'SA',
-      },
+      { commonName: '300123456789', organizationName: 'SpicyHome', organizationalUnit: 'POS', country: 'SA' },
       kp.publicKeyHex,
       kp.privateKeyHex,
     );
@@ -357,66 +346,106 @@ describe('CSR Builder', () => {
     const b64_2 = Buffer.from(csr2).toString('base64');
     expect(b64_1).not.toBe(b64_2);
   });
-});
 
-// ── DER Encoding Helpers ──────────────────────────────────────────────────────
+  it('CSR DER can be parsed by forge as a valid sequence', () => {
+    const kp = generateKeyPair();
+    const csrDer = buildCSR(csrSubject, kp.publicKeyHex, kp.privateKeyHex, csrExtensions);
 
-describe('DER Encoding Helpers', () => {
-  it('encodes OID correctly', () => {
-    const oid = encodeOid('1.2.840.10045.2.1');
-    expect(oid[0]).toBe(0x06); // OID tag
+    const parsed = asn1.fromDer(Buffer.from(csrDer).toString('binary'));
+    expect(parsed.tagClass).toBe(asn1.Class.UNIVERSAL);
+    expect(parsed.type).toBe(asn1.Type.SEQUENCE);
+    expect(parsed.constructed).toBe(true);
   });
 
-  it('derSEQUENCE wraps with tag 0x30', () => {
-    const seq = derSequence([new Uint8Array([1, 2, 3])]);
-    expect(seq[0]).toBe(0x30);
+  it('CSR contains version integer 0', () => {
+    const kp = generateKeyPair();
+    const csrDer = buildCSR(csrSubject, kp.publicKeyHex, kp.privateKeyHex, csrExtensions);
+
+    const parsed = asn1.fromDer(Buffer.from(csrDer).toString('binary'));
+    const csrInfo = getAsn1Children(parsed)[0];
+    const version = getAsn1Children(csrInfo)[0];
+
+    expect(version.type).toBe(asn1.Type.INTEGER);
+    const valStr = getAsn1Value(version);
+    expect(valStr).toBe('\x00');
   });
 
-  it('derBitString wraps with tag 0x03', () => {
-    const bs = derBitString(new Uint8Array([1, 2]));
-    expect(bs[0]).toBe(0x03);
+  it('CSR subject contains expected OIDs', () => {
+    const kp = generateKeyPair();
+    const csrDer = buildCSR(csrSubject, kp.publicKeyHex, kp.privateKeyHex, csrExtensions);
+
+    const parsed = asn1.fromDer(Buffer.from(csrDer).toString('binary'));
+    const csrInfo = getAsn1Children(parsed)[0];
+    const subjectName = getAsn1Children(csrInfo)[1];
+
+    const oids: string[] = [];
+    for (const rdn of getAsn1Children(subjectName)) {
+      for (const attr of getAsn1Children(rdn)) {
+        const seqChildren = getAsn1Children(attr);
+        const oidNode = seqChildren[0];
+        const derBytes = getAsn1Value(oidNode);
+        try {
+          oids.push(asn1.derToOid(derBytes));
+        } catch {
+          // skip
+        }
+      }
+    }
+
+    expect(oids).toContain('2.5.4.6');
+    expect(oids).toContain('2.5.4.11');
+    expect(oids).toContain('2.5.4.10');
+    expect(oids).toContain('2.5.4.3');
   });
 
-  it('derInteger handles 0', () => {
-    const int0 = derInteger(0);
-    // Should be 02 01 00
-    expect(int0[0]).toBe(0x02);
+  it('CSR with extensions includes custom extension OID', () => {
+    const kp = generateKeyPair();
+    const csrDer = buildCSR(csrSubject, kp.publicKeyHex, kp.privateKeyHex, csrExtensions);
+
+    const parsed = asn1.fromDer(Buffer.from(csrDer).toString('binary'));
+    const csrInfo = getAsn1Children(parsed)[0];
+    const attributes = getAsn1Children(csrInfo)[3];
+
+    expect(attributes.tagClass).toBe(asn1.Class.CONTEXT_SPECIFIC);
+    expect(attributes.type).toBe(0);
+
+    const derStr = Buffer.from(csrDer).toString('binary');
+    const extReqOid = oidDerStr('1.2.840.113549.1.9.14');
+    expect(derStr.indexOf(extReqOid)).toBeGreaterThan(-1);
+
+    const customOid = oidDerStr('1.3.6.1.4.1.311.20.2');
+    expect(derStr.indexOf(customOid)).toBeGreaterThan(-1);
+
+    const sanOid = oidDerStr('2.5.29.17');
+    expect(derStr.indexOf(sanOid)).toBeGreaterThan(-1);
   });
 
-  it('derInteger handles positive value > 127', () => {
-    const int = derInteger(200);
-    expect(int[0]).toBe(0x02);
-    // Should have leading 0x00 to avoid being interpreted as negative
+  it('CSR without extensions has empty context-tagged attributes', () => {
+    const kp = generateKeyPair();
+    const csrDer = buildCSR(
+      { commonName: 'X', organizationName: 'Y', organizationalUnit: 'Z', country: 'SA' },
+      kp.publicKeyHex,
+      kp.privateKeyHex,
+    );
+
+    const derStr = Buffer.from(csrDer).toString('binary');
+    expect(derStr).toContain('\xa0\x00');
   });
 
-  it('derPrintableString wraps with tag 0x13', () => {
-    const ps = derPrintableString('SA');
-    expect(ps[0]).toBe(0x13);
-  });
-
-  it('derUtf8String wraps with tag 0x0c', () => {
-    const us = derUtf8String('Test');
-    expect(us[0]).toBe(0x0c);
-  });
-
-  it('derNull is [0x05, 0x00]', () => {
-    const n = derNull();
-    expect(n.length).toBe(2);
-    expect(n[0]).toBe(0x05);
-    expect(n[1]).toBe(0x00);
-  });
-
-  it('derContextTagged wraps with 0xa0+tagNum', () => {
-    const ct = derContextTagged(0, new Uint8Array([1]));
-    expect(ct[0]).toBe(0xa0);
-  });
-
-  it('exportPublicKeyDer produces valid DER', () => {
+  it('exportPublicKeyDer produces valid SPKI DER', () => {
     const kp = generateKeyPair();
     const der = exportPublicKeyDer(kp.publicKeyHex);
-    expect(der[0]).toBe(0x30); // SEQUENCE
-    // Should contain the algorithm OID and the public key
+    expect(der[0]).toBe(0x30);
     expect(der.length).toBeGreaterThan(50);
+
+    const parsed = asn1.fromDer(Buffer.from(der).toString('binary'));
+    expect(parsed.type).toBe(asn1.Type.SEQUENCE);
+
+    const algId = getAsn1Children(parsed)[0];
+    expect(algId.type).toBe(asn1.Type.SEQUENCE);
+
+    const spki = getAsn1Children(parsed)[1];
+    expect(spki.type).toBe(asn1.Type.BITSTRING);
   });
 });
 

@@ -365,7 +365,7 @@ describe('ZATCA Integration', () => {
       // zatca_org_unit is pre-seeded
       expect(res.body.orgUnit).toBe('SpicyHome POS');
       expect(res.body.apiBaseUrl).toBe(
-        'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal',
+        'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
       );
     });
 

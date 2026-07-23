@@ -101,7 +101,7 @@ export class ZatcaController {
       orgUnit: this.printersService.getSetting('zatca_org_unit', ''),
       apiBaseUrl: this.printersService.getSetting(
         'zatca_api_base_url',
-        'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal',
+        'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
       ),
     };
   }

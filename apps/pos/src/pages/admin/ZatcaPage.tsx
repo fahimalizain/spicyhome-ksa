@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { ZatcaConfigDto, ZatcaOnboardingState, ZatcaInvoice } from '@spicyhome/client-ts';
 
-const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal';
+const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation';
 const ZATCA_PRODUCTION_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core';
 
 export function ZatcaPage() {

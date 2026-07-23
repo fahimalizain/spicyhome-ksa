@@ -10,7 +10,7 @@ ts_project(
     name = "lib",
     srcs = glob(
         ["src/**/*.ts"],
-        exclude = ["src/**/*.test.ts"],
+        exclude = ["src/**/*.d.ts", "src/**/*.test.ts"],
     ),
     tsconfig = "tsconfig.json",
     transpiler = "tsc",

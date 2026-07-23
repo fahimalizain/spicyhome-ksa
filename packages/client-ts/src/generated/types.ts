@@ -1332,7 +1332,7 @@ export interface components {
       orgUnit: string;
       /**
        * @description ZATCA API base URL (defaults to developer portal)
-       * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal
+       * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation
        */
       apiBaseUrl?: string;
     };

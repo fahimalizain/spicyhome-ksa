@@ -1,11 +1,11 @@
 /**
- * ZATCA Crypto Service — pure-JS ECDSA secp256k1 signing, hashing, CSR generation.
+ * ZATCA Crypto Service — ECDSA secp256k1 signing, hashing, CSR generation.
  *
- * Uses @noble/curves for key ops and @noble/hashes for SHA-256.
+ * Uses @noble/curves for secp256k1 key ops and @noble/hashes for SHA-256.
+ * Uses node-forge for PKCS#10 CSR ASN.1 construction (same approach as
+ * ERPGulf's Python cryptography.x509.CertificateSigningRequestBuilder).
+ *
  * Key encryption at rest: AES-256-GCM via node:crypto.
- *
- * CSR builder: constructs a PKCS#10 CSR in DER format with the required
- * ZATCA subject DN fields (CN, OU, O, C, and OrganizationIdentifier).
  *
  * Hashing rules per ZATCA e-invoicing spec:
  *   1. Generate UBL invoice XML WITHOUT UBLExtensions/signature.
@@ -18,23 +18,50 @@ import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypt
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
+import * as forge from 'node-forge';
+
+const { asn1 } = forge;
+
+// ── Forge ASN.1 helpers ────────────────────────────────────────────────────────
+
+function asn1ToBytes(node: forge.asn1.Asn1): Uint8Array {
+  const buf = asn1.toDer(node);
+  return new Uint8Array(Buffer.from(buf.bytes(), 'binary'));
+}
+
+function strToBinary(s: string): string {
+  return Buffer.from(s, 'utf8').toString('binary');
+}
+
+function oidDer(oid: string): string {
+  return (asn1.oidToDer(oid) as any).bytes() as string;
+}
+
+function intDer(n: number): string {
+  return (asn1.integerToDer(n) as any).bytes() as string;
+}
+
+function padIntegerBytes(bytes: Uint8Array): Uint8Array {
+  if (bytes.length > 0 && (bytes[0] & 0x80) !== 0) {
+    const padded = new Uint8Array(bytes.length + 1);
+    padded[0] = 0;
+    padded.set(bytes, 1);
+    return padded;
+  }
+  return bytes;
+}
 
 // ── Key generation ─────────────────────────────────────────────────────────────
 
 export interface KeyPair {
-  privateKeyHex: string; // 32-byte private key as hex
-  publicKeyHex: string; // 65-byte uncompressed public key as hex (04 || x || y)
-  publicKeyBase64: string; // 65-byte uncompressed public key as base64
+  privateKeyHex: string;
+  publicKeyHex: string;
+  publicKeyBase64: string;
 }
 
-/**
- * Generate a fresh ECDSA secp256k1 keypair.
- * Returns private key as hex (32 bytes = 64 hex chars) and
- * public key as uncompressed hex (65 bytes = 130 hex chars, 04||x||y).
- */
 export function generateKeyPair(): KeyPair {
   const privateKey = secp256k1.utils.randomPrivateKey();
-  const publicKey = secp256k1.getPublicKey(privateKey, false); // uncompressed
+  const publicKey = secp256k1.getPublicKey(privateKey, false);
 
   return {
     privateKeyHex: bytesToHex(privateKey),
@@ -44,21 +71,34 @@ export function generateKeyPair(): KeyPair {
 }
 
 /**
- * Export public key in DER SubjectPublicKeyInfo format.
+ * Build SubjectPublicKeyInfo ASN.1 node for secp256k1 public key.
  */
-export function exportPublicKeyDer(publicKeyHex: string): Uint8Array {
+function buildSubjectPublicKeyInfo(publicKeyHex: string): forge.asn1.Asn1 {
   const pubBytes = hexToBytes(publicKeyHex);
 
-  const ecPubKeyOid = encodeOid('1.2.840.10045.2.1');
-  const secp256k1Oid = encodeOid('1.3.132.0.10');
-  const algIdSeq = derSequence([ecPubKeyOid, secp256k1Oid]);
+  const algorithm = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, oidDer('1.2.840.10045.2.1')),
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, oidDer('1.3.132.0.10')),
+  ]);
 
-  const bitStrContent = new Uint8Array(pubBytes.length + 1);
-  bitStrContent[0] = 0;
-  bitStrContent.set(pubBytes, 1);
-  const bitString = derBitString(bitStrContent);
+  const spkBytes = new Uint8Array(pubBytes.length + 1);
+  spkBytes[0] = 0;
+  spkBytes.set(pubBytes, 1);
+  const subjectPublicKey = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.BITSTRING,
+    false,
+    Buffer.from(spkBytes).toString('binary'),
+  );
 
-  return derSequence([algIdSeq, bitString]);
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    algorithm,
+    subjectPublicKey,
+  ]);
+}
+
+export function exportPublicKeyDer(publicKeyHex: string): Uint8Array {
+  return asn1ToBytes(buildSubjectPublicKeyInfo(publicKeyHex));
 }
 
 export function toPem(derBytes: Uint8Array, label: string): string {
@@ -77,10 +117,8 @@ export function getPublicKeyPem(publicKeyHex: string): string {
   return toPem(der, 'PUBLIC KEY');
 }
 
-/**
- * Sign a SHA-256 hash (32 bytes as hex) with ECDSA secp256k1.
- * Returns DER-encoded signature as hex string.
- */
+// ── Signing ────────────────────────────────────────────────────────────────────
+
 export function signHashHex(hashHex: string, privateKeyHex: string): string {
   const hashBytes = hexToBytes(hashHex);
   const privBytes = hexToBytes(privateKeyHex);
@@ -89,17 +127,11 @@ export function signHashHex(hashHex: string, privateKeyHex: string): string {
   return bytesToHex(derSig);
 }
 
-/**
- * Sign a message hash and return DER signature as base64.
- */
 export function signHashBase64(hashHex: string, privateKeyHex: string): string {
   const derHex = signHashHex(hashHex, privateKeyHex);
   return Buffer.from(hexToBytes(derHex)).toString('base64');
 }
 
-/**
- * Verify an ECDSA signature over a hash.
- */
 export function verifySignature(
   hashHex: string,
   signatureDerBase64: string,
@@ -109,52 +141,30 @@ export function verifySignature(
   const sigDerBytes = new Uint8Array(Buffer.from(signatureDerBase64, 'base64'));
   const pubBytes = hexToBytes(publicKeyHex);
 
-  // Use DER format verification
   return secp256k1.verify(sigDerBytes, hashBytes, pubBytes, { format: 'der' } as any);
 }
 
 // ── Invoice hashing ───────────────────────────────────────────────────────────
 
-/**
- * Canonicalize UBL XML for hashing per ZATCA rules.
- *
- * 1. Strip UBLExtensions element and its contents.
- * 2. Collapse inter-tag whitespace: > \n < → > <
- * 3. Trim the entire document.
- *
- * NOTE: This is a pragmatic canonicalization. Our XML builder produces
- * deterministic output without extraneous whitespace, so canonicalization
- * is primarily stripping the UBLExtensions (signature block) for the
- * unsigned hash.
- */
 export function canonicalizeForHash(xml: string): string {
-  let canonical = xml.replace(/<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g, '');
+  let canonical = xml.replace(
+    /<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g,
+    '',
+  );
 
   canonical = canonical.replace(/<ext:UBLExtensions\/>/g, '');
-
-  // Collapse inter-tag whitespace
   canonical = canonical.replace(/>\s+</g, '><');
-
   canonical = canonical.trim();
 
   return canonical;
 }
 
-/**
- * Compute the ZATCA invoice hash:
- *   1. Canonicalize XML (strip UBLExtensions)
- *   2. SHA-256 over UTF-8 bytes
- *   3. Base64 encode the 32-byte hash
- */
 export function computeInvoiceHash(xml: string): string {
   const canonical = canonicalizeForHash(xml);
   const hashBytes = sha256(new TextEncoder().encode(canonical));
   return Buffer.from(hashBytes).toString('base64');
 }
 
-/**
- * Compute invoice hash as hex (for signing).
- */
 export function computeInvoiceHashHex(xml: string): string {
   const canonical = canonicalizeForHash(xml);
   const hashBytes = sha256(new TextEncoder().encode(canonical));
@@ -163,14 +173,6 @@ export function computeInvoiceHashHex(xml: string): string {
 
 // ── X509 signature value wrapping for UBL 2.1 ──────────────────────────────────
 
-/**
- * Embed an ECDSA signature into the UBL 2.1 Invoice/Signature extension.
- *
- * This function takes an unsigned invoice XML and inserts the digital signature
- * into the UBLExtensions block per the UBL 2.1 XAdES enveloped signature profile.
- *
- * The signature block is inserted immediately after the root <Invoice ...> tag.
- */
 export function embedSignatureIntoXML(
   unsignedXml: string,
   invoiceHashB64: string,
@@ -234,121 +236,32 @@ function buildUBLSignatureBlock(
   ].join('\n');
 }
 
-// ── DER encoding helpers ──────────────────────────────────────────────────────
+// ── DER signature encoding/decoding ────────────────────────────────────────────
 
-export function encodeOid(oidStr: string): Uint8Array {
-  const parts = oidStr.split('.').map(Number);
-  if (parts.length < 2) throw new Error('Invalid OID');
-
-  const result: number[] = [];
-  result.push(40 * parts[0] + parts[1]);
-
-  for (let i = 2; i < parts.length; i++) {
-    let val = parts[i];
-    if (val < 128) {
-      result.push(val);
-    } else {
-      const stack: number[] = [];
-      while (val > 0) {
-        stack.push((val & 0x7f) | 0x80);
-        val >>= 7;
-      }
-      stack[stack.length - 1] &= 0x7f;
-      result.push(...stack.reverse());
-    }
-  }
-
-  return new Uint8Array([0x06, result.length, ...result]);
-}
-
-export function derSequence(items: Uint8Array[]): Uint8Array {
-  const content = concatBytes(items);
-  return derWrap(0x30, content);
-}
-
-export function derSet(items: Uint8Array[]): Uint8Array {
-  const content = concatBytes(items);
-  return derWrap(0x31, content);
-}
-
-export function derBitString(data: Uint8Array): Uint8Array {
-  return derWrap(0x03, data);
-}
-
-export function derOctetString(data: Uint8Array): Uint8Array {
-  return derWrap(0x04, data);
-}
-
-export function derInteger(value: Uint8Array | number): Uint8Array {
-  let bytes: Uint8Array;
-  if (typeof value === 'number') {
-    bytes = encodeIntegerValue(value);
-  } else {
-    bytes = value;
-  }
-  if (bytes.length > 0 && (bytes[0] & 0x80) !== 0) {
-    const padded = new Uint8Array(bytes.length + 1);
-    padded[0] = 0;
-    padded.set(bytes, 1);
-    bytes = padded;
-  }
-  return derWrap(0x02, bytes);
-}
-
-function encodeIntegerValue(n: number): Uint8Array {
-  if (n === 0) return new Uint8Array([0]);
-  const hex = n.toString(16);
-  const padded = hex.length % 2 === 0 ? hex : '0' + hex;
-  return hexToBytes(padded);
-}
-
-export function derPrintableString(str: string): Uint8Array {
-  const bytes = new TextEncoder().encode(str);
-  return derWrap(0x13, bytes);
-}
-
-export function derUtf8String(str: string): Uint8Array {
-  const bytes = new TextEncoder().encode(str);
-  return derWrap(0x0c, bytes);
-}
-
-export function derNull(): Uint8Array {
-  return new Uint8Array([0x05, 0x00]);
-}
-
-export function derContextTagged(tagNum: number, content: Uint8Array): Uint8Array {
-  return derWrap(0xa0 + tagNum, content);
-}
-
-function derWrap(tag: number, value: Uint8Array): Uint8Array {
-  const lenBytes = encodeDerLength(value.length);
-  const result = new Uint8Array(1 + lenBytes.length + value.length);
-  result[0] = tag;
-  result.set(lenBytes, 1);
-  result.set(value, 1 + lenBytes.length);
-  return result;
-}
-
-function encodeDerLength(len: number): Uint8Array {
-  if (len < 128) return new Uint8Array([len]);
-  const hex = len.toString(16);
-  const padded = hex.length % 2 === 0 ? hex : '0' + hex;
-  const lenBytes = hexToBytes(padded);
-  return new Uint8Array([0x80 | lenBytes.length, ...lenBytes]);
-}
-
-/** Encode r,s bigints into DER signature bytes. */
 export function encodeSignatureDER(r: bigint, s: bigint): Uint8Array {
-  const rBytes = bigintToDerBytes(r);
-  const sBytes = bigintToDerBytes(s);
+  const rBytesRaw = bigintToDerBytes(r);
+  const sBytesRaw = bigintToDerBytes(s);
 
-  const rInt = derInteger(rBytes);
-  const sInt = derInteger(sBytes);
+  const rBytes = padIntegerBytes(rBytesRaw);
+  const sBytes = padIntegerBytes(sBytesRaw);
 
-  return derSequence([rInt, sInt]);
+  const rInt = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.INTEGER,
+    false,
+    Buffer.from(rBytes).toString('binary'),
+  );
+  const sInt = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.INTEGER,
+    false,
+    Buffer.from(sBytes).toString('binary'),
+  );
+
+  const seq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [rInt, sInt]);
+  return asn1ToBytes(seq);
 }
 
-/** Decode DER signature bytes to r,s bigints. */
 export function decodeSignatureDER(derBytes: Uint8Array): { r: bigint; s: bigint } {
   if (derBytes[0] !== 0x30) throw new Error('Invalid DER signature: not a SEQUENCE');
 
@@ -360,7 +273,8 @@ export function decodeSignatureDER(derBytes: Uint8Array): { r: bigint; s: bigint
 
   if (derBytes[offset] !== 0x02) throw new Error('Expected INTEGER for r');
   offset++;
-  const rLen = derBytes[offset] >= 0x80 ? readLongLength(derBytes, offset) : derBytes[offset];
+  const rLen =
+    derBytes[offset] >= 0x80 ? readLongLength(derBytes, offset) : derBytes[offset];
   if (derBytes[offset] >= 0x80) {
     const lenOctets = derBytes[offset] & 0x7f;
     offset += 1 + lenOctets;
@@ -372,7 +286,8 @@ export function decodeSignatureDER(derBytes: Uint8Array): { r: bigint; s: bigint
 
   if (derBytes[offset] !== 0x02) throw new Error('Expected INTEGER for s');
   offset++;
-  const sLen = derBytes[offset] >= 0x80 ? readLongLength(derBytes, offset) : derBytes[offset];
+  const sLen =
+    derBytes[offset] >= 0x80 ? readLongLength(derBytes, offset) : derBytes[offset];
   if (derBytes[offset] >= 0x80) {
     const lenOctets = derBytes[offset] & 0x7f;
     offset += 1 + lenOctets;
@@ -429,44 +344,64 @@ export interface CsrExtensionParams {
   businessCategory: string;
 }
 
-/** OID 1.2.840.113549.1.9.14 — pkcs-9-at-extensionRequest */
 const EXTENSION_REQUEST_OID = '1.2.840.113549.1.9.14';
-/** OID 1.3.6.1.4.1.311.20.2 — ZATCA code-signing custom extension */
 const ZATCA_CUSTOM_OID = '1.3.6.1.4.1.311.20.2';
-/** OID 2.5.29.17 — subjectAltName */
 const SAN_OID = '2.5.29.17';
 
-function encodeSubjectDN(subject: CsrSubject): Uint8Array {
-  const rdns: Uint8Array[] = [];
-
-  {
-    const oid = encodeOid('2.5.4.6');
-    const value = derPrintableString(subject.country);
-    rdns.push(derSet([derSequence([oid, value])]));
-  }
-
-  {
-    const oid = encodeOid('2.5.4.11');
-    const value = derUtf8String(subject.organizationalUnit);
-    rdns.push(derSet([derSequence([oid, value])]));
-  }
-
-  {
-    const oid = encodeOid('2.5.4.10');
-    const value = derUtf8String(subject.organizationName);
-    rdns.push(derSet([derSequence([oid, value])]));
-  }
-
-  {
-    const oid = encodeOid('2.5.4.3');
-    const value = derPrintableString(subject.commonName);
-    rdns.push(derSet([derSequence([oid, value])]));
-  }
-
-  return derSequence(rdns);
+function makeAttrTypeAndValue(oid: string, valNode: forge.asn1.Asn1): forge.asn1.Asn1 {
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, oidDer(oid)),
+    valNode,
+  ]);
 }
 
-function encodeCustomExtension(env: string): Uint8Array {
+function makeRDN(setChildren: forge.asn1.Asn1[]): forge.asn1.Asn1 {
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, true, setChildren);
+}
+
+function encodeSubjectDN(subject: CsrSubject): forge.asn1.Asn1 {
+  const rdns: forge.asn1.Asn1[] = [];
+
+  rdns.push(
+    makeRDN([
+      makeAttrTypeAndValue(
+        '2.5.4.6',
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(subject.country)),
+      ),
+    ]),
+  );
+
+  rdns.push(
+    makeRDN([
+      makeAttrTypeAndValue(
+        '2.5.4.11',
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.UTF8, false, strToBinary(subject.organizationalUnit)),
+      ),
+    ]),
+  );
+
+  rdns.push(
+    makeRDN([
+      makeAttrTypeAndValue(
+        '2.5.4.10',
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.UTF8, false, strToBinary(subject.organizationName)),
+      ),
+    ]),
+  );
+
+  rdns.push(
+    makeRDN([
+      makeAttrTypeAndValue(
+        '2.5.4.3',
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(subject.commonName)),
+      ),
+    ]),
+  );
+
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, rdns);
+}
+
+function encodeCustomExtension(env: string): forge.asn1.Asn1 {
   const label =
     env === 'sandbox'
       ? 'TESTZATCA-Code-Signing'
@@ -474,53 +409,70 @@ function encodeCustomExtension(env: string): Uint8Array {
         ? 'PREZATCA-Code-Signing'
         : 'ZATCA-Code-Signing';
 
-  const utf8Value = derUtf8String(label);
-  const extnID = encodeOid(ZATCA_CUSTOM_OID);
-  const extnValue = derOctetString(utf8Value);
+  const utf8Value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.UTF8, false, strToBinary(label));
+  const extnValue = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.OCTETSTRING,
+    false,
+    asn1.toDer(utf8Value).bytes(),
+  );
 
-  return derSequence([extnID, extnValue]);
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, oidDer(ZATCA_CUSTOM_OID)),
+    extnValue,
+  ]);
 }
 
-function encodeSanExtension(params: CsrExtensionParams): Uint8Array {
-  const rdns: Uint8Array[] = [];
+function encodeSanExtension(params: CsrExtensionParams): forge.asn1.Asn1 {
+  const rdns: forge.asn1.Asn1[] = [];
 
-  rdns.push(derSet([derSequence([encodeOid('2.5.4.4'), derPrintableString(params.serialNumber)])]));
-  rdns.push(
-    derSet([
-      derSequence([encodeOid('0.9.2342.19200300.100.1.1'), derPrintableString(params.vatNumber)]),
-    ]),
+  rdns.push(makeRDN([makeAttrTypeAndValue('2.5.4.4', asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(params.serialNumber)))]));
+  rdns.push(makeRDN([makeAttrTypeAndValue('0.9.2342.19200300.100.1.1', asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(params.vatNumber)))]));
+  rdns.push(makeRDN([makeAttrTypeAndValue('2.5.4.12', asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(params.invoiceType)))]));
+  rdns.push(makeRDN([makeAttrTypeAndValue('2.5.4.26', asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(params.locationAddress)))]));
+  rdns.push(makeRDN([makeAttrTypeAndValue('2.5.4.15', asn1.create(asn1.Class.UNIVERSAL, asn1.Type.PRINTABLESTRING, false, strToBinary(params.businessCategory)))]));
+
+  const directoryName = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, rdns);
+  const generalName = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 4, true, [directoryName]);
+  const generalNames = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [generalName]);
+
+  const extnValue = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.OCTETSTRING,
+    false,
+    asn1.toDer(generalNames).bytes(),
   );
-  rdns.push(derSet([derSequence([encodeOid('2.5.4.12'), derPrintableString(params.invoiceType)])]));
-  rdns.push(
-    derSet([derSequence([encodeOid('2.5.4.26'), derPrintableString(params.locationAddress)])]),
-  );
-  rdns.push(
-    derSet([derSequence([encodeOid('2.5.4.15'), derPrintableString(params.businessCategory)])]),
-  );
 
-  const directoryName = derSequence(rdns);
-  const generalName = derContextTagged(4, directoryName);
-  const generalNames = derSequence([generalName]);
-
-  const extnID = encodeOid(SAN_OID);
-  const extnValue = derOctetString(generalNames);
-
-  return derSequence([extnID, extnValue]);
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, oidDer(SAN_OID)),
+    extnValue,
+  ]);
 }
 
-function encodeExtensionRequest(extensions: Uint8Array[]): Uint8Array {
-  const extensionsSeq = derSequence(extensions);
-  const attrType = encodeOid(EXTENSION_REQUEST_OID);
-  const attrValues = derSet([extensionsSeq]);
-  const attribute = derSequence([attrType, attrValues]);
-  return derSet([attribute]);
+function encodeExtensionRequest(extensions: forge.asn1.Asn1[]): forge.asn1.Asn1 {
+  const extensionsSeq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, extensions);
+  const attrType = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.OID,
+    false,
+    oidDer(EXTENSION_REQUEST_OID),
+  );
+  const attrValues = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, true, [extensionsSeq]);
+  return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    attrType,
+    attrValues,
+  ]);
 }
 
 /**
  * Build a PKCS#10 CSR (CertificationRequest) DER.
- * Signed with ECDSA secp256k1 + SHA-256.
- * Includes ZATCA-required custom extension (1.3.6.1.4.1.311.20.2) and
- * Subject Alternative Name (2.5.29.17) with business metadata as DirectoryName.
+ *
+ * Uses node-forge for ASN.1 construction (X.509 Distinguished Name, extensions,
+ * SubjectPublicKeyInfo) — matching the library-based approach of Python's
+ * cryptography.x509.CertificateSigningRequestBuilder.
+ *
+ * Signing is done with @noble/curves ECDSA secp256k1 + SHA-256 since node-forge
+ * does not natively support secp256k1.
  */
 export function buildCSR(
   subject: CsrSubject,
@@ -528,36 +480,68 @@ export function buildCSR(
   privateKeyHex: string,
   extensions?: CsrExtensionParams,
 ): Uint8Array {
-  const pubKeyDer = exportPublicKeyDer(publicKeyHex);
+  const pubKeyNode = buildSubjectPublicKeyInfo(publicKeyHex);
 
-  const version = derInteger(0);
+  const version = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.INTEGER,
+    false,
+    intDer(0),
+  );
   const subjectName = encodeSubjectDN(subject);
 
-  let attributes: Uint8Array;
+  let attributes: forge.asn1.Asn1;
   if (extensions) {
-    const extnList: Uint8Array[] = [encodeCustomExtension(extensions.zatcaEnv)];
-    const sanExt = encodeSanExtension(extensions);
-    if (sanExt.length > 0) extnList.push(sanExt);
-    attributes = derContextTagged(0, encodeExtensionRequest(extnList));
+    const extnList: forge.asn1.Asn1[] = [
+      encodeCustomExtension(extensions.zatcaEnv),
+      encodeSanExtension(extensions),
+    ];
+    attributes = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [
+      encodeExtensionRequest(extnList),
+    ]);
   } else {
-    attributes = new Uint8Array([0xa0, 0x00]);
+    attributes = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, []);
   }
 
-  const csrInfo = derSequence([version, subjectName, pubKeyDer, attributes]);
+  const csrInfo = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    version,
+    subjectName,
+    pubKeyNode,
+    attributes,
+  ]);
 
-  const sigAlgOid = encodeOid('1.2.840.10045.4.3.2');
-  const sigAlgorithm = derSequence([sigAlgOid]);
+  const sigAlgOid = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.OID,
+    false,
+    oidDer('1.2.840.10045.4.3.2'),
+  );
+  const sigAlgorithm = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+    sigAlgOid,
+  ]);
 
-  const csrInfoSigBytes = sha256(csrInfo);
-  const sig = secp256k1.sign(csrInfoSigBytes, hexToBytes(privateKeyHex));
+  const csrInfoDer = asn1ToBytes(csrInfo);
+  const csrInfoHash = sha256(csrInfoDer);
+  const sig = secp256k1.sign(csrInfoHash, hexToBytes(privateKeyHex));
   const derSig = encodeSignatureDER(sig.r, sig.s);
 
   const sigContent = new Uint8Array(derSig.length + 1);
   sigContent[0] = 0;
   sigContent.set(derSig, 1);
-  const sigBitStr = derBitString(sigContent);
+  const sigBitStr = asn1.create(
+    asn1.Class.UNIVERSAL,
+    asn1.Type.BITSTRING,
+    false,
+    Buffer.from(sigContent).toString('binary'),
+  );
 
-  return derSequence([csrInfo, sigAlgorithm, sigBitStr]);
+  return asn1ToBytes(
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      csrInfo,
+      sigAlgorithm,
+      sigBitStr,
+    ]),
+  );
 }
 
 // ── Key encryption at rest ────────────────────────────────────────────────────
@@ -624,16 +608,4 @@ export function hexToBytes(hex: string): Uint8Array {
 
 export function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64');
-}
-
-function concatBytes(arrays: Uint8Array[]): Uint8Array {
-  let totalLen = 0;
-  for (const a of arrays) totalLen += a.length;
-  const result = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const a of arrays) {
-    result.set(a, offset);
-    offset += a.length;
-  }
-  return result;
 }
