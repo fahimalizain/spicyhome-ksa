@@ -128,10 +128,10 @@ find "$ROOT_DIR/bazel-bin/packages/db/src" -name "*.js" -print0 2>/dev/null | wh
   chmod 644 "$PACKAGE_DIR/packages/db/$rel"
 done
 
-# Drizzle migration SQL files
+# Drizzle migration SQL files — server looks for these in packages/db/drizzle/
 if [ -d "$ROOT_DIR/packages/db/drizzle" ]; then
-  mkdir -p "$PACKAGE_DIR/server/migrations"
-  cp -f "$ROOT_DIR/packages/db/drizzle/"*.sql "$PACKAGE_DIR/server/migrations/" 2>/dev/null || true
+  mkdir -p "$PACKAGE_DIR/packages/db/drizzle"
+  cp -f "$ROOT_DIR/packages/db/drizzle/"*.sql "$PACKAGE_DIR/packages/db/drizzle/" 2>/dev/null || true
 fi
 
 # Create package.json files from source, then fix them up:
@@ -223,13 +223,21 @@ if (-not (Test-Path $nodeModules)) {
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
     $installArgs = @("install", "--production", "--ignore-scripts")
-    $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru
+    $logOut = Join-Path $env:TEMP "spicyhome-npm-out.log"
+    $logErr = Join-Path $env:TEMP "spicyhome-npm-err.log"
+    $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
+        Write-Host ""
+        if (Test-Path $logOut) { Get-Content $logOut | Write-Output }
+        if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
+        Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
+        Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
         Read-Host "Press Enter to exit"
         exit 1
     }
+    Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
 
     # better-sqlite3's native binary is pre-bundled at prebuilt/better_sqlite3.node.
     # npm install wipes server/node_modules so we copy it in afterwards.
@@ -246,13 +254,23 @@ if (-not (Test-Path $nodeModules)) {
 }
 
 Write-Host "Starting server..."
+# NODE_PATH: workspace packages are symlinked into server/node_modules, but
+# Node resolves modules relative to the REAL fs path (packages/db/), not the
+# junction.  Setting NODE_PATH ensures server/node_modules is always in the
+# search path so workspace packages find their deps.
+$env:NODE_PATH = Join-Path $scriptDir "server\node_modules"
 $nodeExe = Join-Path $scriptDir "node\node.exe"
 $mainJs = Join-Path $scriptDir "server\main.js"
-$process = Start-Process -FilePath $nodeExe -ArgumentList $mainJs -WorkingDirectory $scriptDir -Wait -NoNewWindow -PassThru
 
-if ($process.ExitCode -ne 0) {
+# Run directly so stderr/stdout is visible in the console.
+# Set location so the server sees the right cwd (for .env, data/ etc.).
+Set-Location $scriptDir
+& $nodeExe $mainJs
+$exitCode = $LASTEXITCODE
+
+if ($exitCode -ne 0) {
     Write-Host ""
-    Write-Host "Server exited with error code $($process.ExitCode)"
+    Write-Host "Server exited with error code $exitCode"
     Read-Host "Press Enter to exit"
 }
 PSEOF
