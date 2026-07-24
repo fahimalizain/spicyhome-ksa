@@ -25,10 +25,10 @@ NODE_SHA256="910237449895b4de61026568dc076fa6c3ffcd667563ed03112a4a77e1f1556b"
 # to avoid requiring a C++ toolchain on the target Windows 7 machine.
 # Update this file when bumping better-sqlite3:
 #   packaging/prebuilt/better_sqlite3.node
-BETTER_SQLITE3_PREBUILT="$SCRIPT_DIR/prebuilt/better_sqlite3.node"
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+BETTER_SQLITE3_PREBUILT="$SCRIPT_DIR/prebuilt/better_sqlite3.node"
 DIST_DIR="$ROOT_DIR/dist"
 PACKAGE_DIR="$DIST_DIR/spicyhome-pos-win7"
 TEMP_DIR="$DIST_DIR/.tmp"
