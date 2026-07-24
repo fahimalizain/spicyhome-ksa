@@ -1104,7 +1104,7 @@ export function extractCertSignature(certBodyB64: string): string {
   }
 
   let offset = 1;
-  const totalLen = rawDer[offset] < 0x80 ? rawDer[offset] : readDerLength(rawDer, offset);
+  const _totalLen = rawDer[offset] < 0x80 ? rawDer[offset] : readDerLength(rawDer, offset);
   if (rawDer[offset] < 0x80) {
     offset += 1;
   } else {
@@ -1143,7 +1143,7 @@ export function extractCertSignature(certBodyB64: string): string {
   }
 
   // BIT STRING has a leading byte indicating unused bits (should be 0x00)
-  const unusedBits = rawDer[offset];
+  const _unusedBits = rawDer[offset];
   offset += 1;
 
   // The actual signature bytes are the remaining bytes minus the unused-bits byte
