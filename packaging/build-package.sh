@@ -134,21 +134,15 @@ if [ -d "$ROOT_DIR/packages/db/drizzle" ]; then
   cp -f "$ROOT_DIR/packages/db/drizzle/"*.sql "$PACKAGE_DIR/server/migrations/" 2>/dev/null || true
 fi
 
-# Create a package.json for the server from the real source,
-# stripping devDependencies and workspace-only deps so npm can
-# resolve everything on the target machine.
+# Create package.json files from source, then fix them up:
+# - strip scripts & devDependencies
+# - convert workspace:* deps to file: references
+# - fix main field for compiled JS
 cp "$ROOT_DIR/apps/server/package.json" "$PACKAGE_DIR/server/package.json"
-node -e "
-  const fs = require('fs');
-  const p = JSON.parse(fs.readFileSync('$PACKAGE_DIR/server/package.json', 'utf8'));
-  delete p.scripts;
-  delete p.devDependencies;
-  for (const [k, v] of Object.entries(p.dependencies || {})) {
-    if (v.startsWith('workspace:')) delete p.dependencies[k];
-  }
-  p.main = 'main.js';
-  fs.writeFileSync('$PACKAGE_DIR/server/package.json', JSON.stringify(p, null, 2) + '\n');
-"
+cp "$ROOT_DIR/packages/shared/package.json" "$PACKAGE_DIR/packages/shared/package.json"
+cp "$ROOT_DIR/packages/db/package.json" "$PACKAGE_DIR/packages/db/package.json"
+
+node "$SCRIPT_DIR/fixup-packages.js" "$PACKAGE_DIR"
 
 echo "Server packaged."
 
