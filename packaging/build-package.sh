@@ -192,6 +192,7 @@ $env:TZ = "Asia/Riyadh"
 $env:SPA_DIST = Join-Path $scriptDir "pos"
 $env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
 $env:PORT = "3742"
+$env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
 
 Write-Host "=========================================="
 Write-Host "  SpicyHome POS Server"
@@ -207,6 +208,13 @@ Write-Host ""
 $dataDir = Join-Path $scriptDir "data"
 if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
+}
+
+# Ensure migrations directory exists (required by server startup).
+# SQL files are pre-copied during packaging.
+$migrationsDir = Join-Path $scriptDir "packages\db\drizzle"
+if (-not (Test-Path $migrationsDir)) {
+    New-Item -ItemType Directory -Path $migrationsDir | Out-Null
 }
 
 # First run: install server dependencies (requires internet)

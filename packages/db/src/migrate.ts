@@ -37,23 +37,24 @@ export function createTestDb(migrationsDir: string, dbPath?: string): Database.D
 }
 
 /**
- * Find the drizzle migrations directory relative to the workspace root.
+ * Find the drizzle migrations directory.
  *
- * Under Bazel's runfiles, data files are symlinked preserving the
- * workspace-relative path structure. We use a heuristic that tries
- * several possible locations.
+ * Prefers the MIGRATIONS_DIR environment variable (set by the startup
+ * script in packaged builds).  Falls back to common locations for local
+ * development and Bazel test sandboxes.
  */
 export function findMigrationsDir(): string {
-  // In Bazel sandbox, the runfiles are under the execroot.
-  // The package path (packages/db/drizzle) is preserved.
+  if (process.env.MIGRATIONS_DIR && fs.existsSync(process.env.MIGRATIONS_DIR)) {
+    return process.env.MIGRATIONS_DIR;
+  }
+
   const candidates = [
-    // Direct run (pnpm jest): relative to __dirname
+    path.join(__dirname, 'drizzle'),
     path.join(__dirname, '..', 'drizzle'),
-    // Bazel runfiles: relative to workspace root in execroot
     path.join(process.env.RUNFILES_DIR || '', '_main', 'packages', 'db', 'drizzle'),
     path.join(process.env.TEST_SRCDIR || '', '_main', 'packages', 'db', 'drizzle'),
-    // Bazel 7: other possible paths
     path.join(process.env.BUILD_WORKSPACE_DIRECTORY || '', 'packages', 'db', 'drizzle'),
+    path.join(process.cwd(), 'packages', 'db', 'drizzle'),
   ];
 
   for (const candidate of candidates) {
@@ -62,13 +63,5 @@ export function findMigrationsDir(): string {
     }
   }
 
-  // Last resort: try the relative path from CWD
-  const cwdCandidate = path.join(process.cwd(), 'packages', 'db', 'drizzle');
-  if (fs.existsSync(cwdCandidate)) {
-    return cwdCandidate;
-  }
-
-  throw new Error(
-    `Cannot find migrations directory. Tried: ${candidates.join(', ')}, ${cwdCandidate}`,
-  );
+  throw new Error(`Cannot find migrations directory. Tried: ${candidates.join(', ')}`);
 }
