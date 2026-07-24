@@ -172,9 +172,11 @@ echo "Server packaged."
 # ──────────────────────────────────────────────────
 # We ship the precompiled native module so that npm install on the target
 # machine does not need a C++ toolchain to rebuild better-sqlite3.
+# It is placed OUTSIDE server/node_modules because npm install will wipe
+# that directory on first run; the PS script copies it in after npm install.
 echo "Bundling better-sqlite3 prebuilt binary..."
-mkdir -p "$PACKAGE_DIR/server/node_modules/better-sqlite3/build/Release"
-cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/server/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+mkdir -p "$PACKAGE_DIR/prebuilt"
+cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/prebuilt/better_sqlite3.node"
 echo "better-sqlite3 native binary bundled."
 
 # ──────────────────────────────────────────────────
@@ -250,8 +252,14 @@ if (-not (Test-Path $nodeModules)) {
         exit 1
     }
 
-    # better-sqlite3's native binary is pre-bundled in the package, so no
-    # rebuild (which would require a C++ toolchain) is needed on the target.
+    # better-sqlite3's native binary is pre-bundled at prebuilt/better_sqlite3.node.
+    # npm install wipes server/node_modules so we copy it in afterwards.
+    $prebuiltBin = Join-Path $scriptDir "prebuilt\better_sqlite3.node"
+    $targetDir = Join-Path $serverDir "node_modules\better-sqlite3\build\Release"
+    if (Test-Path $prebuiltBin) {
+        New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        Copy-Item $prebuiltBin (Join-Path $targetDir "better_sqlite3.node") -Force
+    }
 
     Write-Host ""
     Write-Host "Dependencies installed successfully."
