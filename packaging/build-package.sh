@@ -134,36 +134,21 @@ if [ -d "$ROOT_DIR/packages/db/drizzle" ]; then
   cp -f "$ROOT_DIR/packages/db/drizzle/"*.sql "$PACKAGE_DIR/server/migrations/" 2>/dev/null || true
 fi
 
-# Create a workspace package.json for the server so npm install resolves deps
-cat > "$PACKAGE_DIR/server/package.json" << PKGJSON
-{
-  "name": "@spicyhome/server",
-  "version": "$PACKAGE_VERSION",
-  "private": true,
-  "type": "commonjs",
-  "main": "main.js",
-  "dependencies": {
-    "@nestjs/common": "^10.4.0",
-    "@nestjs/core": "^10.4.0",
-    "@nestjs/event-emitter": "^2.0.0",
-    "@nestjs/jwt": "^10.2.0",
-    "@nestjs/platform-express": "^10.4.0",
-    "@nestjs/serve-static": "^4.0.0",
-    "@nestjs/swagger": "^7.4.0",
-    "@noble/curves": "^1.9.7",
-    "@noble/hashes": "^1.8.0",
-    "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.0.0",
-    "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.1",
-    "drizzle-orm": "^0.33.0",
-    "express": "^4.19.0",
-    "reflect-metadata": "^0.1.14",
-    "rxjs": "^7.8.0",
-    "uuid": "^9.0.0"
+# Create a package.json for the server from the real source,
+# stripping devDependencies and workspace-only deps so npm can
+# resolve everything on the target machine.
+cp "$ROOT_DIR/apps/server/package.json" "$PACKAGE_DIR/server/package.json"
+node -e "
+  const fs = require('fs');
+  const p = JSON.parse(fs.readFileSync('$PACKAGE_DIR/server/package.json', 'utf8'));
+  delete p.scripts;
+  delete p.devDependencies;
+  for (const [k, v] of Object.entries(p.dependencies || {})) {
+    if (v.startsWith('workspace:')) delete p.dependencies[k];
   }
-}
-PKGJSON
+  p.main = 'main.js';
+  fs.writeFileSync('$PACKAGE_DIR/server/package.json', JSON.stringify(p, null, 2) + '\n');
+"
 
 echo "Server packaged."
 
