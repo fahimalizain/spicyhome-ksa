@@ -124,7 +124,7 @@ export class ZatcaController {
         'zatca_api_base_url',
         'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
       ),
-      environment: this.printersService.getSetting('zatca_environment', 'sandbox') as
+      environment: this.printersService.getSetting('zatca_environment', 'simulation') as
         ZATCAEnvironment | undefined,
     };
   }

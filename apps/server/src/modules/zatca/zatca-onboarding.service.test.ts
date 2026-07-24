@@ -39,8 +39,8 @@ function createMockHttpClient() {
 
 function setupComplianceState(invoiceService: MockInvoiceService, store: Map<string, string>) {
   invoiceService.getOnboardingState.mockReturnValue('compliance');
-  store.set('zatca_compliance_cert', 'fake-compliance-cert');
-  store.set('zatca_compliance_secret', 'fake-compliance-secret');
+  store.set('zatca_simulation_compliance_cert', 'fake-compliance-cert');
+  store.set('zatca_simulation_compliance_secret', 'fake-compliance-secret');
   invoiceService.buildComplianceInvoice.mockResolvedValue({
     signedXml:
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>',
@@ -58,7 +58,7 @@ function mockComplianceHttpSuccess(httpClient: MockHttpClient) {
 }
 
 function parseComplianceResults(store: Map<string, string>): ComplianceResultEntry[] {
-  const json = store.get('zatca_compliance_results') ?? '[]';
+  const json = store.get('zatca_simulation_compliance_results') ?? '[]';
   return JSON.parse(json);
 }
 
@@ -97,7 +97,7 @@ describe('getState', () => {
 
     it('returns stored compliance results', () => {
       store.set(
-        'zatca_compliance_results',
+        'zatca_simulation_compliance_results',
         JSON.stringify([
           {
             key: 'invoice',
@@ -135,7 +135,7 @@ describe('getState', () => {
     });
 
     it('returns empty array for corrupted JSON', () => {
-      store.set('zatca_compliance_results', '{corrupted-json!!!');
+      store.set('zatca_simulation_compliance_results', '{corrupted-json!!!');
 
       const state = service.getState();
 
@@ -144,7 +144,7 @@ describe('getState', () => {
 
     it('preserves full OnboardingState shape alongside complianceResults', () => {
       store.set(
-        'zatca_compliance_results',
+        'zatca_simulation_compliance_results',
         JSON.stringify([
           {
             key: 'debit_note',
@@ -216,7 +216,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_compliance_results',
+      'zatca_simulation_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -248,7 +248,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_compliance_results',
+      'zatca_simulation_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -287,7 +287,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_compliance_results',
+      'zatca_simulation_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -313,7 +313,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     setupComplianceState(invoiceService, store);
     mockComplianceHttpSuccess(httpClient);
 
-    store.set('zatca_compliance_results', '{corrupted-json');
+    store.set('zatca_simulation_compliance_results', '{corrupted-json');
 
     await service.runComplianceCheck(null, 'invoice');
 
@@ -797,13 +797,24 @@ describe('generateCSR OID label', () => {
     expect(payload.indexOf('PREZATCA-Code-Signing')).toBe(-1);
   });
 
-  it('defaults to sandbox OID label when environment is not set', async () => {
+  it('uses PREZATCA-Code-Signing OID label for simulation environment', async () => {
+    setupCsrSettings(store);
+    store.set('zatca_environment', 'simulation');
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    expect(payload.indexOf('PREZATCA-Code-Signing')).toBeGreaterThan(-1);
+    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBe(-1);
+  });
+
+  it('defaults to simulation OID label when environment is not set', async () => {
     setupCsrSettings(store);
 
     const { csr } = await service.generateCSR();
     const payload = extractCsrPayload(csr);
 
-    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBeGreaterThan(-1);
-    expect(payload.indexOf('PREZATCA-Code-Signing')).toBe(-1);
+    expect(payload.indexOf('PREZATCA-Code-Signing')).toBeGreaterThan(-1);
+    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBe(-1);
   });
 });

@@ -6,7 +6,7 @@ export const ZATCA_INVOICE_TYPE_CODES = {
 
 export type ZATCAInvoiceDocumentType = 'invoice' | 'credit_note' | 'debit_note';
 
-export type ZATCAEnvironment = 'sandbox' | 'production';
+export type ZATCAEnvironment = 'sandbox' | 'simulation' | 'production';
 
 export const ZATCA_SIMPLIFIED_SUBTYPES: Record<ZATCAInvoiceDocumentType, string> = {
   invoice: '0200000',
@@ -16,3 +16,8 @@ export const ZATCA_SIMPLIFIED_SUBTYPES: Record<ZATCAInvoiceDocumentType, string>
 
 export const ZATCA_INITIAL_PIH =
   'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==';
+
+/** Build a per-environment ZATCA settings key. */
+export function zatcaKey(env: ZATCAEnvironment, suffix: string): string {
+  return `zatca_${env}_${suffix}`;
+}

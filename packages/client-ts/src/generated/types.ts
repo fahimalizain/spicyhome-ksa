@@ -1336,10 +1336,10 @@ export interface components {
        */
       apiBaseUrl?: string;
       /**
-       * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, production→ZATCA-Code-Signing)
+       * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)
        * @example production
        */
-      environment?: 'sandbox' | 'production';
+      environment?: 'sandbox' | 'simulation' | 'production';
     };
     OpenDayDto: {
       /**

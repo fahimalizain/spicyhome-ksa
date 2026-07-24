@@ -602,7 +602,7 @@ export function embedSignatureIntoXML(
   );
 
   // Replace the empty UBLExtensions placeholder with the full signature block
-  return unsignedXml.replace(/  <ext:UBLExtensions><\/ext:UBLExtensions>/, signatureBlock);
+  return unsignedXml.replace(/ {2}<ext:UBLExtensions><\/ext:UBLExtensions>/, signatureBlock);
 }
 
 // ── DER signature encoding/decoding ────────────────────────────────────────────

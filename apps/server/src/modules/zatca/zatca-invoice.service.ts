@@ -45,7 +45,12 @@ import {
   InvoiceItemInput,
   SellerInfo,
 } from './zatca-xml-builder.service';
-import { ZATCAInvoiceDocumentType, ZATCA_INITIAL_PIH } from '@spicyhome/shared';
+import {
+  zatcaKey,
+  ZATCA_INITIAL_PIH,
+  ZATCAInvoiceDocumentType,
+  ZATCAEnvironment,
+} from '@spicyhome/shared';
 import { encodeZatcaTLV, TLVInput } from './tlv';
 
 export interface CreateInvoiceResult {
@@ -133,13 +138,14 @@ export class ZatcaInvoiceService {
     };
 
     // Load keys and certificate
-    const privateKeyHex = this.getPrivateKey();
+    const env = this.getEnv();
+    const privateKeyHex = this.getPrivateKey(env);
     if (!privateKeyHex) {
       throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
-    const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
-    const certBase64 = this.getCertificate();
+    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, 'public_key'), '');
+    const certBase64 = this.getCertificate(env);
 
     // Build invoice items from order items
     const invItems: InvoiceItemInput[] = oiRows.map((oi) => ({
@@ -171,7 +177,7 @@ export class ZatcaInvoiceService {
 
     // Allocate ICV and get PIH atomically
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateICV(tx);
+      return this.allocateICV(tx, env);
     });
 
     // Generate UUID
@@ -347,12 +353,14 @@ export class ZatcaInvoiceService {
       country: sellerCountry,
     };
 
-    const privateKeyHex = this.getPrivateKey();
+    const env = this.getEnv();
+
+    const privateKeyHex = this.getPrivateKey(env);
     if (!privateKeyHex) {
       throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
-    const complianceCert = this.printersService.getSetting('zatca_compliance_cert', '');
+    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
     if (!complianceCert) {
       throw new Error('ZATCA compliance certificate not found. Run compliance onboarding first.');
     }
@@ -371,7 +379,8 @@ export class ZatcaInvoiceService {
     });
 
     // Read current ICV without incrementing — compliance invoices don't consume ICV
-    const lastIcvRow = this.db.select().from(settings).where(eq(settings.key, 'last_icv')).get();
+    const lastIcvKey = zatcaKey(env, 'last_icv');
+    const lastIcvRow = this.db.select().from(settings).where(eq(settings.key, lastIcvKey)).get();
     const icv = lastIcvRow ? parseInt(lastIcvRow.value, 10) : 0;
 
     const invUuid = randomUUID();
@@ -407,7 +416,7 @@ export class ZatcaInvoiceService {
     const vatHalalas = 1500;
     // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly
     const timestampIso = `${issueDate}T${issueTime}`;
-    const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
+    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, 'public_key'), '');
     const certSigB64 = extractCertSignature(certForXml);
 
     const tlvInput: TLVInput = {
@@ -438,23 +447,31 @@ export class ZatcaInvoiceService {
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   /**
+   * Read the active ZATCA environment from settings.
+   */
+  private getEnv(): ZATCAEnvironment {
+    return this.printersService.getSetting('zatca_environment', 'simulation') as ZATCAEnvironment;
+  }
+
+  /**
    * Atomically allocate the next ICV and get PIH.
    * Must be called within a transaction.
    */
-  private allocateICV(tx: any): { icv: number; prevInvoiceHash: string } {
+  private allocateICV(tx: any, env: ZATCAEnvironment): { icv: number; prevInvoiceHash: string } {
     // Get last ICV
-    const lastIcvRow = tx.select().from(settings).where(eq(settings.key, 'last_icv')).get();
+    const lastIcvKey = zatcaKey(env, 'last_icv');
+    const lastIcvRow = tx.select().from(settings).where(eq(settings.key, lastIcvKey)).get();
 
     let icv: number;
     if (lastIcvRow) {
       icv = parseInt(lastIcvRow.value, 10) + 1;
       tx.update(settings)
         .set({ value: String(icv) })
-        .where(eq(settings.key, 'last_icv'))
+        .where(eq(settings.key, lastIcvKey))
         .run();
     } else {
       icv = 1;
-      tx.insert(settings).values({ key: 'last_icv', value: '1' }).run();
+      tx.insert(settings).values({ key: lastIcvKey, value: '1' }).run();
     }
 
     // Get PIH from the previous invoice
@@ -474,16 +491,16 @@ export class ZatcaInvoiceService {
   /**
    * Retrieve and decrypt the seller's private key from settings.
    */
-  private getPrivateKey(): string | null {
-    const encrypted = this.printersService.getSetting('zatca_private_key_encrypted', '');
-    const iv = this.printersService.getSetting('zatca_private_key_iv', '');
-    const salt = this.printersService.getSetting('zatca_private_key_salt', '');
-    const authTag = this.printersService.getSetting('zatca_private_key_auth_tag', '');
+  private getPrivateKey(env: ZATCAEnvironment): string | null {
+    const encrypted = this.printersService.getSetting(zatcaKey(env, 'private_key_encrypted'), '');
+    const ivLabel = this.printersService.getSetting(zatcaKey(env, 'private_key_iv'), '');
+    const salt = this.printersService.getSetting(zatcaKey(env, 'private_key_salt'), '');
+    const authTag = this.printersService.getSetting(zatcaKey(env, 'private_key_auth_tag'), '');
 
-    if (!encrypted || !iv || !salt || !authTag) return null;
+    if (!encrypted || !ivLabel || !salt || !authTag) return null;
 
     const secret = process.env.ZATCA_SECRET || 'spicyhome-zatca-secret-change-me';
-    return decryptAtRest({ ciphertext: encrypted, iv, salt, authTag }, secret);
+    return decryptAtRest({ ciphertext: encrypted, iv: ivLabel, salt, authTag }, secret);
   }
 
   /**
@@ -496,32 +513,32 @@ export class ZatcaInvoiceService {
    * rejects the invoice with "Invalid encoded base 64 format".
    * See ERPGulf sign_invoice_first.py line 399: base64.b64decode(binarySecurityToken).
    */
-  private getCertificate(): string {
-    const prodCert = this.printersService.getSetting('zatca_production_cert', '');
+  private getCertificate(env: ZATCAEnvironment): string {
+    const prodCert = this.printersService.getSetting(zatcaKey(env, 'production_cert'), '');
     if (prodCert) return prodCert;
-    const complianceCert = this.printersService.getSetting('zatca_compliance_cert', '');
+    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
     return complianceCert;
   }
 
   /**
    * Store an encrypted private key in settings.
    */
-  storePrivateKey(privateKeyHex: string, secret: string): void {
+  storePrivateKey(privateKeyHex: string, secret: string, env: ZATCAEnvironment): void {
     const enc = encryptAtRest(privateKeyHex, secret);
-    this.printersService.setSetting('zatca_private_key_encrypted', enc.ciphertext);
-    this.printersService.setSetting('zatca_private_key_iv', enc.iv);
-    this.printersService.setSetting('zatca_private_key_salt', enc.salt);
-    this.printersService.setSetting('zatca_private_key_auth_tag', enc.authTag);
+    this.printersService.setSetting(zatcaKey(env, 'private_key_encrypted'), enc.ciphertext);
+    this.printersService.setSetting(zatcaKey(env, 'private_key_iv'), enc.iv);
+    this.printersService.setSetting(zatcaKey(env, 'private_key_salt'), enc.salt);
+    this.printersService.setSetting(zatcaKey(env, 'private_key_auth_tag'), enc.authTag);
   }
 
   /**
    * Check if onboarding has been completed to the given stage.
    */
-  getOnboardingState(): string {
-    return this.printersService.getSetting('zatca_onboarding_state', 'not_started');
+  getOnboardingState(env: ZATCAEnvironment): string {
+    return this.printersService.getSetting(zatcaKey(env, 'onboarding_state'), 'not_started');
   }
 
-  setOnboardingState(state: string): void {
-    this.printersService.setSetting('zatca_onboarding_state', state);
+  setOnboardingState(state: string, env: ZATCAEnvironment): void {
+    this.printersService.setSetting(zatcaKey(env, 'onboarding_state'), state);
   }
 }

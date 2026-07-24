@@ -68,9 +68,10 @@ export class ZatcaConfigDto {
   @ApiPropertyOptional({
     example: 'production',
     description:
-      'ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, production→ZATCA-Code-Signing)',
+      'ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)',
+    enum: ['sandbox', 'simulation', 'production'],
   })
   @IsOptional()
-  @IsIn(['sandbox', 'production'])
+  @IsIn(['sandbox', 'simulation', 'production'])
   environment?: ZATCAEnvironment;
 }

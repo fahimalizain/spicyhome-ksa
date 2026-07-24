@@ -19,6 +19,8 @@ import { invoices } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { ZatcaHttpService } from './zatca-http.service';
+import { zatcaKey } from '@spicyhome/shared';
+import type { ZATCAEnvironment } from '@spicyhome/shared';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -81,13 +83,18 @@ export class ZatcaReportingService implements OnModuleInit {
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
+  private getEnv(): ZATCAEnvironment {
+    return this.printersService.getSetting('zatca_environment', 'simulation') as ZATCAEnvironment;
+  }
+
   private async processQueue(): Promise<{
     processed: number;
     succeeded: number;
     failed: number;
   }> {
     // Only run if onboarding is at compliance or production stage
-    const state = this.printersService.getSetting('zatca_onboarding_state', 'not_started');
+    const env = this.getEnv();
+    const state = this.printersService.getSetting(zatcaKey(env, 'onboarding_state'), 'not_started');
     if (state !== 'compliance' && state !== 'production') {
       this.logger.debug('Reporting skipped: onboarding not complete');
       return { processed: 0, succeeded: 0, failed: 0 };
@@ -153,10 +160,17 @@ export class ZatcaReportingService implements OnModuleInit {
     const url = `${baseUrl}/invoices/reporting/single`;
 
     // Get credentials
-    const productionSecret = this.printersService.getSetting('zatca_production_secret', '');
-    const productionCert = this.printersService.getSetting('zatca_production_cert', '');
-    const complianceSecret = this.printersService.getSetting('zatca_compliance_secret', '');
-    const complianceCert = this.printersService.getSetting('zatca_compliance_cert', '');
+    const env = this.getEnv();
+    const productionSecret = this.printersService.getSetting(
+      zatcaKey(env, 'production_secret'),
+      '',
+    );
+    const productionCert = this.printersService.getSetting(zatcaKey(env, 'production_cert'), '');
+    const complianceSecret = this.printersService.getSetting(
+      zatcaKey(env, 'compliance_secret'),
+      '',
+    );
+    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
 
     // Use production credentials if available, otherwise compliance
     const cert = productionCert || complianceCert;
