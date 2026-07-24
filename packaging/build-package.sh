@@ -13,11 +13,19 @@ set -euo pipefail
 #   data/                         — created at runtime on target machine
 #
 # The start-server.bat runs 'npm install --production' on first launch
-# to download server dependencies (including Windows-native better-sqlite3).
+# to download server dependencies. The Windows-native better-sqlite3 binary
+# is pre-bundled so the target machine does not need a C++ toolchain.
 
 NODE_VERSION="18.20.5"
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-x64.zip"
 NODE_SHA256="910237449895b4de61026568dc076fa6c3ffcd667563ed03112a4a77e1f1556b"
+
+# Pre-built better-sqlite3 native binary for Node 18 ABI (v108) on Windows
+# x64. Checked into the repo to avoid network downloads during packaging and
+# to avoid requiring a C++ toolchain on the target Windows 7 machine.
+# Update this file when bumping better-sqlite3:
+#   packaging/prebuilt/better_sqlite3.node
+BETTER_SQLITE3_PREBUILT="$SCRIPT_DIR/prebuilt/better_sqlite3.node"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -160,7 +168,17 @@ PKGJSON
 echo "Server packaged."
 
 # ──────────────────────────────────────────────────
-# 4. Copy SPA dist
+# 4. Bundle better-sqlite3 native binary for Windows x64 / Node 18
+# ──────────────────────────────────────────────────
+# We ship the precompiled native module so that npm install on the target
+# machine does not need a C++ toolchain to rebuild better-sqlite3.
+echo "Bundling better-sqlite3 prebuilt binary..."
+mkdir -p "$PACKAGE_DIR/server/node_modules/better-sqlite3/build/Release"
+cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/server/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+echo "better-sqlite3 native binary bundled."
+
+# ──────────────────────────────────────────────────
+# 5. Copy SPA dist
 # ──────────────────────────────────────────────────
 echo "Packaging SPA..."
 rm -rf "$PACKAGE_DIR/pos"
@@ -171,79 +189,107 @@ fi
 echo "SPA packaged."
 
 # ──────────────────────────────────────────────────
-# 5. Create start-server.bat
+# 6. Create PowerShell script + cmd wrapper
 # ──────────────────────────────────────────────────
+# We use a PowerShell script for the real logic because cmd.exe on Windows 7
+# is extremely sensitive to parentheses, colons, and quoting inside batch
+# blocks and is prone to cryptic parse errors such as:
+#   ". was unexpected at this time."
+# The generated .bat is only a thin wrapper that launches the .ps1 with the
+# execution policy bypassed for convenience.
+
+cat > "$PACKAGE_DIR/start-server.ps1" << 'PSEOF'
+$ErrorActionPreference = "Stop"
+
+# Node 18 prints "Windows 8.1 or higher required" on Windows 7 unless we
+# opt out of the platform check. This environment variable makes Node 18
+# run on Windows 7 as documented in Node release notes.
+$env:NODE_SKIP_PLATFORM_CHECK = "1"
+
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$env:TZ = "Asia/Riyadh"
+$env:SPA_DIST = Join-Path $scriptDir "pos"
+$env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
+$env:PORT = "3742"
+
+Write-Host "=========================================="
+Write-Host "  SpicyHome POS Server"
+Write-Host "=========================================="
+Write-Host ""
+Write-Host "Server:   $(Join-Path $scriptDir 'server\main.js')"
+Write-Host "SPA:      $($env:SPA_DIST)"
+Write-Host "Database: $($env:SPICYHOME_DB)"
+Write-Host "Port:     $($env:PORT)"
+Write-Host ""
+
+# Create data directory
+$dataDir = Join-Path $scriptDir "data"
+if (-not (Test-Path $dataDir)) {
+    New-Item -ItemType Directory -Path $dataDir | Out-Null
+}
+
+# First run: install server dependencies (requires internet)
+$nodeModules = Join-Path $scriptDir "server\node_modules"
+if (-not (Test-Path $nodeModules)) {
+    Write-Host ""
+    Write-Host "========================================"
+    Write-Host "  First run: installing dependencies..."
+    Write-Host "  This requires internet (one-time)."
+    Write-Host "========================================"
+    Write-Host ""
+
+    $serverDir = Join-Path $scriptDir "server"
+    $npmCmd = Join-Path $scriptDir "node\npm.cmd"
+
+    $installArgs = @("install", "--production", "--ignore-scripts")
+    $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru
+    if ($installProcess.ExitCode -ne 0) {
+        Write-Host "ERROR: npm install failed." -ForegroundColor Red
+        Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+
+    # better-sqlite3's native binary is pre-bundled in the package, so no
+    # rebuild (which would require a C++ toolchain) is needed on the target.
+
+    Write-Host ""
+    Write-Host "Dependencies installed successfully."
+    Write-Host ""
+}
+
+Write-Host "Starting server..."
+$nodeExe = Join-Path $scriptDir "node\node.exe"
+$mainJs = Join-Path $scriptDir "server\main.js"
+$process = Start-Process -FilePath $nodeExe -ArgumentList $mainJs -WorkingDirectory $scriptDir -Wait -NoNewWindow -PassThru
+
+if ($process.ExitCode -ne 0) {
+    Write-Host ""
+    Write-Host "Server exited with error code $($process.ExitCode)"
+    Read-Host "Press Enter to exit"
+}
+PSEOF
+
 cat > "$PACKAGE_DIR/start-server.bat" << 'BATEOF'
 @echo off
-setlocal enabledelayedexpansion
-
-set "TZ=Asia/Riyadh"
-set "SPA_DIST=%~dp0pos"
-set "SPICYHOME_DB=%~dp0data\spicyhome.db"
-set "PORT=3742"
-
-echo ==========================================
-echo   SpicyHome POS Server
-echo ==========================================
-echo.
-echo Server:   %~dp0server\main.js
-echo SPA:      %SPA_DIST%
-echo Database: %SPICYHOME_DB%
-echo Port:     %PORT%
-echo.
-
-REM Create data directory
-if not exist "%~dp0data" mkdir "%~dp0data"
-
-REM First run: install server dependencies (requires internet)
-if not exist "%~dp0server\node_modules" (
-    echo.
-    echo ========================================
-    echo   First run: installing dependencies...
-    echo   This requires internet (one-time).
-    echo ========================================
-    echo.
-    cd /d "%~dp0server"
-    call "%~dp0node\npm.cmd" install --production --ignore-scripts
-    if !ERRORLEVEL! NEQ 0 (
-        echo ERROR: npm install failed.
-        echo Try running: node\npm.cmd install --production --ignore-scripts
-        pause
-        exit /b 1
-    )
-    REM Rebuild better-sqlite3 for Windows
-    call "%~dp0node\npm.cmd" rebuild better-sqlite3
-    cd /d "%~dp0"
-    echo.
-    echo Dependencies installed successfully.
-    echo.
-)
-
-echo Starting server...
-"%~dp0node\node.exe" "%~dp0server\main.js"
-
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo Server exited with error code %ERRORLEVEL%
-    pause
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-server.ps1" %*
 BATEOF
 
-# Ensure start-server.bat uses Windows CRLF line endings.
-# cmd.exe on Windows 7 fails to parse batch files with Unix LF-only endings,
-# producing errors such as ". was unexpected at this time."
-sed 's/$/\r/' "$PACKAGE_DIR/start-server.bat" > "$PACKAGE_DIR/start-server.bat.crlf"
-mv "$PACKAGE_DIR/start-server.bat.crlf" "$PACKAGE_DIR/start-server.bat"
+# Ensure line endings are Windows CRLF for readability on Notepad/Windows 7.
+for f in "$PACKAGE_DIR/start-server.bat" "$PACKAGE_DIR/start-server.ps1"; do
+  sed 's/$/\r/' "$f" > "$f.crlf"
+  mv "$f.crlf" "$f"
+done
 
-echo "start-server.bat created."
+echo "start-server.bat and start-server.ps1 created."
 
 # ──────────────────────────────────────────────────
-# 6. Copy README.txt
+# 7. Copy README.txt
 # ──────────────────────────────────────────────────
 cp "$SCRIPT_DIR/README.txt" "$PACKAGE_DIR/README.txt"
 
 # ──────────────────────────────────────────────────
-# 7. Zip
+# 8. Zip
 # ──────────────────────────────────────────────────
 echo "Creating zip..."
 # Fix permissions before zipping (Bazel outputs are read-only)
