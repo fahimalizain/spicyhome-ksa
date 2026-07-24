@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/client-kt",
-  "version": "202607.24.2",
+  "version": "202607.24.3",
   "private": true,
   "type": "commonjs",
   "scripts": {
