@@ -17,7 +17,7 @@ import { ZatcaReportingService } from './zatca-reporting.service';
 import { PrintersService } from '../printers/printers.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { ZatcaConfigDto } from './dto/zatca-config.dto';
-import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 @ApiTags('zatca')
 @ApiBearerAuth()
@@ -124,6 +124,8 @@ export class ZatcaController {
         'zatca_api_base_url',
         'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
       ),
+      environment: this.printersService.getSetting('zatca_environment', 'sandbox') as
+        ZATCAEnvironment | undefined,
     };
   }
 
@@ -144,6 +146,10 @@ export class ZatcaController {
 
     if (dto.apiBaseUrl !== undefined) {
       this.printersService.setSetting('zatca_api_base_url', dto.apiBaseUrl);
+    }
+
+    if (dto.environment !== undefined) {
+      this.printersService.setSetting('zatca_environment', dto.environment);
     }
 
     return this.getConfig();

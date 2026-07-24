@@ -1,5 +1,5 @@
 import { ZatcaOnboardingService } from './zatca-onboarding.service';
-import type { ComplianceResultEntry, OnboardingState } from './zatca-onboarding.service';
+import type { ComplianceResultEntry } from './zatca-onboarding.service';
 
 type MockPrintersService = ReturnType<typeof createMockPrintersService>;
 type MockInvoiceService = ReturnType<typeof createMockInvoiceService>;
@@ -60,6 +60,14 @@ function mockComplianceHttpSuccess(httpClient: MockHttpClient) {
 function parseComplianceResults(store: Map<string, string>): ComplianceResultEntry[] {
   const json = store.get('zatca_compliance_results') ?? '[]';
   return JSON.parse(json);
+}
+
+function setupCsrSettings(store: Map<string, string>) {
+  store.set('vat_number', '300123456789003');
+  store.set('seller_name', 'SpicyHome Restaurant');
+  store.set('seller_city', 'Riyadh');
+  store.set('zatca_invoice_type', '1100');
+  store.set('zatca_business_category', 'Retail');
 }
 
 // ── getState: complianceResults loading ─────────────────────────────────────
@@ -735,5 +743,67 @@ describe('compliance results round-trip', () => {
     expect(entry.errors).toEqual([]);
     expect(entry.warnings).toEqual([]);
     expect(entry.checkedAt).toBeGreaterThan(0);
+  });
+});
+
+// ── generateCSR: environment → OID label ─────────────────────────────────
+
+describe('generateCSR OID label', () => {
+  let store: Map<string, string>;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    const printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+  });
+
+  function extractCsrPayload(csrPem: string): Buffer {
+    const lines = csrPem
+      .split('\n')
+      .filter((l) => !l.startsWith('-----'))
+      .join('');
+    return Buffer.from(lines, 'base64');
+  }
+
+  it('uses ZATCA-Code-Signing OID label for production environment', async () => {
+    setupCsrSettings(store);
+    store.set('zatca_environment', 'production');
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    expect(payload.indexOf('ZATCA-Code-Signing')).toBeGreaterThan(-1);
+    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBe(-1);
+    expect(payload.indexOf('PREZATCA-Code-Signing')).toBe(-1);
+  });
+
+  it('uses TESTZATCA-Code-Signing OID label for sandbox environment', async () => {
+    setupCsrSettings(store);
+    store.set('zatca_environment', 'sandbox');
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBeGreaterThan(-1);
+    expect(payload.indexOf('PREZATCA-Code-Signing')).toBe(-1);
+  });
+
+  it('defaults to sandbox OID label when environment is not set', async () => {
+    setupCsrSettings(store);
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    expect(payload.indexOf('TESTZATCA-Code-Signing')).toBeGreaterThan(-1);
+    expect(payload.indexOf('PREZATCA-Code-Signing')).toBe(-1);
   });
 });

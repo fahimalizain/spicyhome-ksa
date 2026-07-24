@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { ZatcaConfigDto, ZatcaOnboardingState, ZatcaInvoice } from '@spicyhome/client-ts';
-import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation';
 const ZATCA_PRODUCTION_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core';
@@ -23,7 +23,7 @@ export function ZatcaPage() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState('');
-  const [zatcaEnv, setZatcaEnv] = useState<'sandbox' | 'production'>('sandbox');
+  const [zatcaEnv, setZatcaEnv] = useState<ZATCAEnvironment>('sandbox');
 
   // ── Onboarding state ──
   const [onboarding, setOnboarding] = useState<ZatcaOnboardingState | null>(null);
@@ -70,7 +70,9 @@ export function ZatcaPage() {
     try {
       const data = await client.zatca.getConfig();
       setConfig(data);
-      if (data.apiBaseUrl?.includes('/e-invoicing/core')) {
+      if (data.environment) {
+        setZatcaEnv(data.environment);
+      } else if (data.apiBaseUrl?.includes('/e-invoicing/core')) {
         setZatcaEnv('production');
       } else {
         setZatcaEnv('sandbox');
@@ -88,7 +90,11 @@ export function ZatcaPage() {
     setConfigError('');
     try {
       const url = zatcaEnv === 'sandbox' ? ZATCA_SANDBOX_URL : ZATCA_PRODUCTION_URL;
-      const data = await client.zatca.updateConfig({ ...config, apiBaseUrl: url });
+      const data = await client.zatca.updateConfig({
+        ...config,
+        apiBaseUrl: url,
+        environment: zatcaEnv,
+      });
       setConfig(data);
     } catch (e: any) {
       // Extract validation error message from the server response
@@ -410,7 +416,7 @@ export function ZatcaPage() {
                     type="button"
                     onClick={() => setZatcaEnv('sandbox')}
                     className={
-                      'touch-target px-4 py-2 text-sm rounded-l-md ' +
+                      'touch-target px-3 py-2 text-sm rounded-l-md ' +
                       (zatcaEnv === 'sandbox'
                         ? 'bg-brand-600 text-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
                         : 'bg-gray-700 text-gray-400 hover:text-white')
@@ -422,7 +428,7 @@ export function ZatcaPage() {
                     type="button"
                     onClick={() => setZatcaEnv('production')}
                     className={
-                      'touch-target px-4 py-2 text-sm rounded-r-md ' +
+                      'touch-target px-3 py-2 text-sm rounded-r-md ' +
                       (zatcaEnv === 'production'
                         ? 'bg-brand-600 text-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
                         : 'bg-gray-700 text-gray-400 hover:text-white')

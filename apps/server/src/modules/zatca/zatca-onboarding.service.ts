@@ -19,7 +19,7 @@ import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaHttpService } from './zatca-http.service';
 import { generateKeyPair, buildCSR, toPem, getPublicKeyPem } from './zatca-crypto.service';
 import type { CsrExtensionParams } from './zatca-crypto.service';
-import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
 
 export interface ComplianceResultEntry {
@@ -92,9 +92,13 @@ export class ZatcaOnboardingService {
 
     const invoiceType = this.printersService.getSetting('zatca_invoice_type', '1100');
     const businessCategory = this.printersService.getSetting('zatca_business_category', 'Retail');
+    const zatcaEnv = this.printersService.getSetting(
+      'zatca_environment',
+      'sandbox',
+    ) as ZATCAEnvironment;
 
     const extensions: CsrExtensionParams = {
-      zatcaEnv: 'sandbox',
+      zatcaEnv,
       serialNumber,
       vatNumber,
       invoiceType,

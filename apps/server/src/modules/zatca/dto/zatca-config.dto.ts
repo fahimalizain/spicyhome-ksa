@@ -1,5 +1,6 @@
-import { IsString, IsOptional, Matches, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsIn, Matches, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { ZATCAEnvironment } from '@spicyhome/shared';
 
 export class ZatcaConfigDto {
   @ApiProperty({
@@ -63,4 +64,13 @@ export class ZatcaConfigDto {
   @IsString()
   @Matches(/^https?:\/\/.+/, { message: 'apiBaseUrl must be a valid URL starting with http' })
   apiBaseUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'production',
+    description:
+      'ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, production→ZATCA-Code-Signing)',
+  })
+  @IsOptional()
+  @IsIn(['sandbox', 'production'])
+  environment?: ZATCAEnvironment;
 }

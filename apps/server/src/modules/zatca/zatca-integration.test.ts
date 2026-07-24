@@ -580,7 +580,7 @@ describe('ZATCA Integration', () => {
       expect(keys).not.toContain('privateKey');
       expect(keys).not.toContain('cert');
       expect(keys).not.toContain('secret');
-      expect(keys).toHaveLength(10);
+      expect(keys).toHaveLength(11);
       expect(keys).toContain('sellerName');
       expect(keys).toContain('vatNumber');
       expect(keys).toContain('crNumber');
@@ -591,6 +591,7 @@ describe('ZATCA Integration', () => {
       expect(keys).toContain('country');
       expect(keys).toContain('orgUnit');
       expect(keys).toContain('apiBaseUrl');
+      expect(keys).toContain('environment');
     });
 
     it('PUT /zatca/config saves and returns all fields', async () => {

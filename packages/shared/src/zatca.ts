@@ -6,6 +6,8 @@ export const ZATCA_INVOICE_TYPE_CODES = {
 
 export type ZATCAInvoiceDocumentType = 'invoice' | 'credit_note' | 'debit_note';
 
+export type ZATCAEnvironment = 'sandbox' | 'production';
+
 export const ZATCA_SIMPLIFIED_SUBTYPES: Record<ZATCAInvoiceDocumentType, string> = {
   invoice: '0200000',
   credit_note: '0200000',

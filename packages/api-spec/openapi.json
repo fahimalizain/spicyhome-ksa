@@ -3456,6 +3456,11 @@
             "type": "string",
             "example": "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation",
             "description": "ZATCA API base URL (defaults to developer portal)"
+          },
+          "environment": {
+            "type": "string",
+            "example": "production",
+            "description": "ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, production→ZATCA-Code-Signing)"
           }
         },
         "required": [

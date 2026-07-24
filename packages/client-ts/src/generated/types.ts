@@ -1335,6 +1335,11 @@ export interface components {
        * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation
        */
       apiBaseUrl?: string;
+      /**
+       * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, production→ZATCA-Code-Signing)
+       * @example production
+       */
+      environment?: 'sandbox' | 'production';
     };
     OpenDayDto: {
       /**
