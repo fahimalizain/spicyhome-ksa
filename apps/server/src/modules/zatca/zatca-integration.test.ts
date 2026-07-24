@@ -122,7 +122,7 @@ describe('ZATCA Integration', () => {
         status: 200,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          binarySecurityToken: 'FAKE_CERT_B64',
+          binarySecurityToken: 'TUlJQ1FqQ0NBZWlnQXdJQkFnSUdBWitPVmpodk1Bb0dDQ3FHU000OUJBTUNNQlV4RXpBUkJnTlZCQU1NQ21WSmJuWnZhV05wYm1jd0hoY05Nall3TnpJek1Ea3pOekU0V2hjTk16RXdOekl5TWpFd01EQXdXakNCaWpFTE1Ba0dBMVVFQmhNQ1UwRXhHREFXQmdOVkJBc01Eek14TVRNNU9UazJPVEV3TURBd016RTZNRGdHQTFVRUNnd3gyTFRZc2RtRDJLa2cyWVhaaHRpeTJZUWcyS2ZaaE5pbzJZZllwOWl4MktmWXFpRFpoTm1FMktyWXJOaW4yTEhZcVRFbE1DTUdBMVVFQXhNY1ZGTlVMV0V3TTJabE1UUTJMVE14TVRNNU9UazJPVEV3TURBd016QldNQkFHQnlxR1NNNDlBZ0VHQlN1QkJBQUtBMElBQkhQYkdRMFVlczgrZG5SK1FKRmo1ZTBheDNRWllPdmpGSkdqVlY2dXBZZ3Vwb0Y1WVZrZFhEN09NRGJMWjRQQk9iZ1JDQWRiRGxidUs4QUcyUG9vczBTamdiQXdnYTB3REFZRFZSMFRBUUgvQkFJd0FEQ0JuQVlEVlIwUkJJR1VNSUdScElHT01JR0xNVGN3TlFZRFZRUUVFeTR4TFZSVFZId3lMVlJUVkh3ekxUTmlObU14TWpNMkxUWXpZakF0WXpsbE1DMHlZV1ZqTFdZeE1qZGpPVEl4TVI4d0hRWUtDWkltaVpQeUxHUUJBUk1QTXpFeE16azVPVFk1TVRBd01EQXpNUTB3Q3dZRFZRUU1Fd1F4TVRBd01ROHdEUVlEVlFRYUV3WlNTVmxCUkVneER6QU5CZ05WQkE4VEJsSmxkR0ZwYkRBS0JnZ3Foa2pPUFFRREFnTklBREJGQWlBK0VWZnpxQWhvM0xnR3prbHlkZjh4ZjFQQ1U5R2JGY0M0NUVnb0JYTWF2d0loQU9BMG9UUlQzanFOc0k1WllWdnI2b3NOdjNvK2JlN2hBbGY5Q2tmSnhRRnU=',
           secret: 'fake_secret',
           requestID: 'req-001',
         }),
@@ -142,7 +142,7 @@ describe('ZATCA Integration', () => {
         status: 200,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          binarySecurityToken: 'FAKE_PROD_CERT_B64',
+          binarySecurityToken: 'TUlJQ1FqQ0NBZWlnQXdJQkFnSUdBWitPVmpodk1Bb0dDQ3FHU000OUJBTUNNQlV4RXpBUkJnTlZCQU1NQ21WSmJuWnZhV05wYm1jd0hoY05Nall3TnpJek1Ea3pOekU0V2hjTk16RXdOekl5TWpFd01EQXdXakNCaWpFTE1Ba0dBMVVFQmhNQ1UwRXhHREFXQmdOVkJBc01Eek14TVRNNU9UazJPVEV3TURBd016RTZNRGdHQTFVRUNnd3gyTFRZc2RtRDJLa2cyWVhaaHRpeTJZUWcyS2ZaaE5pbzJZZllwOWl4MktmWXFpRFpoTm1FMktyWXJOaW4yTEhZcVRFbE1DTUdBMVVFQXhNY1ZGTlVMV0V3TTJabE1UUTJMVE14TVRNNU9UazJPVEV3TURBd016QldNQkFHQnlxR1NNNDlBZ0VHQlN1QkJBQUtBMElBQkhQYkdRMFVlczgrZG5SK1FKRmo1ZTBheDNRWllPdmpGSkdqVlY2dXBZZ3Vwb0Y1WVZrZFhEN09NRGJMWjRQQk9iZ1JDQWRiRGxidUs4QUcyUG9vczBTamdiQXdnYTB3REFZRFZSMFRBUUgvQkFJd0FEQ0JuQVlEVlIwUkJJR1VNSUdScElHT01JR0xNVGN3TlFZRFZRUUVFeTR4TFZSVFZId3lMVlJUVkh3ekxUTmlObU14TWpNMkxUWXpZakF0WXpsbE1DMHlZV1ZqTFdZeE1qZGpPVEl4TVI4d0hRWUtDWkltaVpQeUxHUUJBUk1QTXpFeE16azVPVFk1TVRBd01EQXpNUTB3Q3dZRFZRUU1Fd1F4TVRBd01ROHdEUVlEVlFRYUV3WlNTVmxCUkVneER6QU5CZ05WQkE4VEJsSmxkR0ZwYkRBS0JnZ3Foa2pPUFFRREFnTklBREJGQWlBK0VWZnpxQWhvM0xnR3prbHlkZjh4ZjFQQ1U5R2JGY0M0NUVnb0JYTWF2d0loQU9BMG9UUlQzanFOc0k1WllWdnI2b3NOdjNvK2JlN2hBbGY5Q2tmSnhRRnU=',
           secret: 'fake_prod_secret',
           requestID: 'req-prod-001',
         }),
@@ -162,6 +162,15 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       expect(stateRes.body.state).toBe('production');
+    });
+
+    // Clean up broad fake HTTP keys set during onboarding so they
+    // don't accidentally match compliance-check or reporting URLs.
+    // (The FakeZatcaHttpClient.matchResponse uses url.includes(),
+    // so a key like 'compliance' would also match '/compliance/invoices'.)
+    afterAll(() => {
+      fakeHttp.responses.delete('compliance');
+      fakeHttp.responses.delete('production');
     });
   });
 
@@ -229,7 +238,7 @@ describe('ZATCA Integration', () => {
       }
     });
 
-    it('QR TLV has all 8 required tags', async () => {
+    it('QR TLV has all 9 required tags', async () => {
       const invoiceService = app.get(ZatcaInvoiceService);
       const invoices = invoiceService.listInvoices(1, 0);
 
@@ -239,8 +248,8 @@ describe('ZATCA Integration', () => {
 
         const tlv = Buffer.from(tlvBase64, 'base64');
         const entries = parseTLV(tlv);
-        expect(entries.length).toBe(8);
-        expect(entries.map((e: any) => e.tag)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(entries.length).toBe(9);
+        expect(entries.map((e: any) => e.tag)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
       }
     });
   });
@@ -772,15 +781,41 @@ describe('ZATCA Integration', () => {
 });
 
 // ── TLV parser helper ─────────────────────────────────────────────────────────
+//
+// The TLV encoder uses BER variable-length encoding:
+//   - Length < 128:            1 byte  (the length itself)
+//   - Length 128–255:          2 bytes (0x81, length)
+//   - Length 256–65535:        3 bytes (0x82, high, low)
+//   - Length >= 65536:         4 bytes (0x83, ...)
+//
+// This matches the BerTlvBuilder.fillLength() algorithm used by the ZATCA SDK.
+
+function readBERLength(buffer: Buffer, offset: number): { length: number; bytesRead: number } {
+  const first = buffer[offset];
+  if (first < 128) {
+    return { length: first, bytesRead: 1 };
+  }
+  const numLenBytes = first & 0x7f;
+  let length = 0;
+  for (let i = 0; i < numLenBytes; i++) {
+    length = (length << 8) | buffer[offset + 1 + i];
+  }
+  return { length, bytesRead: 1 + numLenBytes };
+}
 
 function parseTLV(buffer: Buffer): Array<{ tag: number; length: number; value: string }> {
   const entries: Array<{ tag: number; length: number; value: string }> = [];
   let offset = 0;
 
-  while (offset + 3 <= buffer.length) {
+  while (offset + 2 <= buffer.length) {
     const tag = buffer[offset];
-    const length = (buffer[offset + 1] << 8) | buffer[offset + 2];
-    offset += 3;
+    const { length, bytesRead } = readBERLength(buffer, offset + 1);
+    offset += 1 + bytesRead;
+
+    if (length === 0) {
+      entries.push({ tag, length, value: '' });
+      continue;
+    }
 
     if (offset + length > buffer.length) break;
 
