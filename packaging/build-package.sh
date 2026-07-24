@@ -229,6 +229,12 @@ if %ERRORLEVEL% NEQ 0 (
 )
 BATEOF
 
+# Ensure start-server.bat uses Windows CRLF line endings.
+# cmd.exe on Windows 7 fails to parse batch files with Unix LF-only endings,
+# producing errors such as ". was unexpected at this time."
+sed 's/$/\r/' "$PACKAGE_DIR/start-server.bat" > "$PACKAGE_DIR/start-server.bat.crlf"
+mv "$PACKAGE_DIR/start-server.bat.crlf" "$PACKAGE_DIR/start-server.bat"
+
 echo "start-server.bat created."
 
 # ──────────────────────────────────────────────────
