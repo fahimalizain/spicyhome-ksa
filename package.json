@@ -12,6 +12,7 @@
     "format": "pnpm exec prettier --check .",
     "format:fix": "pnpm exec prettier --write .",
     "typecheck": "pnpm --recursive typecheck",
+    "ensure-node24": "node -e \"process.exit(process.version.startsWith('v24.') ? 0 : 1)\" || (echo 'ERROR: Node 24 required. Run: nvm use' && exit 1)",
     "check": "pnpm lint && pnpm format && pnpm typecheck",
     "package:win7": "bash packaging/build-package.sh",
     "postinstall": "lefthook install",

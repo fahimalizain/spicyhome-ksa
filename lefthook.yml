@@ -1,13 +1,17 @@
 pre-commit:
   commands:
+    ensure-node24:
+      run: pnpm ensure-node24
     format:
       glob: '*.{js,ts,tsx,jsx,json,yaml,yml,css,html}'
       run: pnpm exec prettier --write {staged_files}
       stage_fixed: true
 
 pre-push:
-  parallel: true
+  piped: true
   commands:
+    ensure-node24:
+      run: pnpm ensure-node24
     format:
       run: pnpm format
     lint:
