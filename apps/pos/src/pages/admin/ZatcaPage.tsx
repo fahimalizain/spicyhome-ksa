@@ -54,6 +54,7 @@ export function ZatcaPage() {
   const [complianceTypeResults, setComplianceTypeResults] = useState<
     Record<string, { success: boolean; status: number; warnings: string[]; errors: string[] }>
   >({});
+  const [complianceCheckedAt, setComplianceCheckedAt] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadConfig();
@@ -106,6 +107,41 @@ export function ZatcaPage() {
     try {
       const data = await client.zatca.getStatus();
       setOnboarding(data);
+
+      // Populate compliance results from persisted DB state
+      const typeResults: Record<
+        string,
+        { success: boolean; status: number; warnings: string[]; errors: string[] }
+      > = {};
+      const invoiceResults: Record<
+        number,
+        { success: boolean; status: number; warnings: string[]; errors: string[] }
+      > = {};
+      const checkedAt: Record<string, number> = {};
+      for (const entry of data.complianceResults || []) {
+        checkedAt[entry.key] = entry.checkedAt;
+        if (entry.key.startsWith('invoice_')) {
+          const id = Number(entry.key.substring(8));
+          if (!Number.isNaN(id)) {
+            invoiceResults[id] = {
+              success: entry.success,
+              status: entry.status,
+              warnings: entry.warnings,
+              errors: entry.errors,
+            };
+          }
+        } else {
+          typeResults[entry.key] = {
+            success: entry.success,
+            status: entry.status,
+            warnings: entry.warnings,
+            errors: entry.errors,
+          };
+        }
+      }
+      setComplianceTypeResults(typeResults);
+      setComplianceResults(invoiceResults);
+      setComplianceCheckedAt(checkedAt);
     } catch (e: any) {
       setOnboardingError(e.message || 'Failed to load status');
     } finally {
@@ -165,6 +201,7 @@ export function ZatcaPage() {
     try {
       const result = await client.zatca.runComplianceCheck(invoiceId);
       setComplianceResults((prev) => ({ ...prev, [invoiceId]: result }));
+      await loadOnboarding();
     } catch (e: any) {
       setComplianceResults((prev) => ({
         ...prev,
@@ -186,6 +223,7 @@ export function ZatcaPage() {
     try {
       const result = await client.zatca.runComplianceCheck(undefined, type);
       setComplianceTypeResults((prev) => ({ ...prev, [type]: result }));
+      await loadOnboarding();
     } catch (e: any) {
       setComplianceTypeResults((prev) => ({
         ...prev,
@@ -536,6 +574,7 @@ export function ZatcaPage() {
                     { type: 'debit_note', label: 'Simplified Debit Note' },
                   ].map(({ type, label }) => {
                     const result = complianceTypeResults[type];
+                    const checkedAt = complianceCheckedAt[type];
                     return (
                       <div
                         key={type}
@@ -559,6 +598,11 @@ export function ZatcaPage() {
                                 : result.status === 202
                                   ? 'Warning'
                                   : `Failed (${result.status})`}
+                            </span>
+                          )}
+                          {checkedAt && (
+                            <span className="text-xs text-gray-500">
+                              {new Date(checkedAt * 1000).toLocaleString()}
                             </span>
                           )}
                         </div>
@@ -603,6 +647,7 @@ export function ZatcaPage() {
                         .filter((inv) => inv.status === 'signed')
                         .map((inv) => {
                           const result = complianceResults[inv.id];
+                          const checkedAt = complianceCheckedAt[`invoice_${inv.id}`];
                           return (
                             <div
                               key={inv.id}
@@ -626,6 +671,11 @@ export function ZatcaPage() {
                                       : result.status === 202
                                         ? 'Warning'
                                         : `Failed (${result.status})`}
+                                  </span>
+                                )}
+                                {checkedAt && (
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(checkedAt * 1000).toLocaleString()}
                                   </span>
                                 )}
                               </div>

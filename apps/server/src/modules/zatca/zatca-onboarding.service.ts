@@ -22,6 +22,17 @@ import type { CsrExtensionParams } from './zatca-crypto.service';
 import type { ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
 
+export interface ComplianceResultEntry {
+  /** 'invoice' | 'credit_note' | 'debit_note' or `invoice_<id>` for real invoices */
+  key: string;
+  success: boolean;
+  status: number;
+  warnings: string[];
+  errors: string[];
+  /** Unix epoch seconds when the check was run */
+  checkedAt: number;
+}
+
 export interface OnboardingState {
   state: 'not_started' | 'csr_generated' | 'compliance' | 'production';
   /** Whether a keypair has been generated */
@@ -36,6 +47,8 @@ export interface OnboardingState {
   productionCertExpiry: number | null;
   /** Public key PEM */
   publicKeyPem: string | null;
+  /** Stored compliance check results (persisted across page refreshes) */
+  complianceResults: ComplianceResultEntry[];
 }
 
 @Injectable()
@@ -252,14 +265,23 @@ export class ZatcaOnboardingService {
     const publicKey = this.printersService.getSetting('zatca_public_key', '');
     const publicKeyPem = publicKey ? getPublicKeyPem(publicKey) : null;
 
+    const complianceResultsJson = this.printersService.getSetting('zatca_compliance_results', '[]');
+    let complianceResults: ComplianceResultEntry[];
+    try {
+      complianceResults = JSON.parse(complianceResultsJson);
+    } catch {
+      complianceResults = [];
+    }
+
     return {
       state,
       keyGenerated: state !== 'not_started',
       complianceDone: state === 'compliance' || state === 'production',
       productionDone: state === 'production',
-      complianceCertExpiry: null, // we don't parse expiry from cert here
-      productionCertExpiry: null, // we don't parse expiry from cert here
+      complianceCertExpiry: null,
+      productionCertExpiry: null,
       publicKeyPem,
+      complianceResults,
     };
   }
 
@@ -304,6 +326,7 @@ export class ZatcaOnboardingService {
     let uuid: string;
     let invoiceBase64: string;
     let debugData: any = undefined;
+    let resultKey: string;
 
     if (invoiceIdOrType !== null && typeof invoiceIdOrType === 'number') {
       // Existing invoice by ID
@@ -314,6 +337,7 @@ export class ZatcaOnboardingService {
       invoiceHash = invoice.invoiceHash;
       uuid = invoice.uuid;
       invoiceBase64 = Buffer.from(invoice.xml).toString('base64');
+      resultKey = `invoice_${invoiceIdOrType}`;
 
       this.logger.log(
         `Compliance check POST invoiceId=${invoiceIdOrType} hash=${invoiceHash?.slice(0, 20)}...`,
@@ -324,6 +348,7 @@ export class ZatcaOnboardingService {
       invoiceHash = generated.invoiceHash;
       uuid = generated.uuid;
       invoiceBase64 = Buffer.from(generated.signedXml).toString('base64');
+      resultKey = documentType;
 
       if (debug) {
         debugData = {
@@ -367,7 +392,15 @@ export class ZatcaOnboardingService {
     });
 
     if (response.status === 200) {
-      return { success: true, status: 200, warnings: [], errors: [], ...(debug ? { debug: debugData } : {}) };
+      const result = {
+        success: true,
+        status: 200,
+        warnings: [] as string[],
+        errors: [] as string[],
+        ...(debug ? { debug: debugData } : {}),
+      };
+      this.persistComplianceResult(resultKey, result);
+      return result;
     }
 
     if (response.status === 202) {
@@ -382,7 +415,28 @@ export class ZatcaOnboardingService {
       } catch {
         // Response body may not be parseable JSON
       }
-      return { success: true, status: 202, warnings, errors: [], ...(debug ? { debug: debugData } : {}) };
+      const result = {
+        success: true,
+        status: 202,
+        warnings,
+        errors: [] as string[],
+        ...(debug ? { debug: debugData } : {}),
+      };
+      this.persistComplianceResult(resultKey, result);
+      return result;
+    }
+
+    if (response.status === 406 && isSubmittedBefore(response.body)) {
+      this.logger.log(`Compliance check already submitted for ${resultKey}: treating as success`);
+      const result = {
+        success: true,
+        status: 200,
+        warnings: [] as string[],
+        errors: [] as string[],
+        ...(debug ? { debug: debugData } : {}),
+      };
+      this.persistComplianceResult(resultKey, result);
+      return result;
     }
 
     let errors: string[] = [];
@@ -403,7 +457,54 @@ export class ZatcaOnboardingService {
 
     this.logger.error(`Compliance check failed: ${response.status}, body=${response.body}`);
 
-    return { success: false, status: response.status, warnings: [], errors, ...(debug ? { debug: debugData } : {}) };
+    const result = {
+      success: false,
+      status: response.status,
+      warnings: [] as string[],
+      errors,
+      ...(debug ? { debug: debugData } : {}),
+    };
+    this.persistComplianceResult(resultKey, result);
+    return result;
+  }
+
+  /**
+   * Persist a compliance check result to the settings table.
+   *
+   * Results are stored as a JSON array under the `zatca_compliance_results` key.
+   * Each entry is keyed by document type ('invoice', 'credit_note', 'debit_note')
+   * or by `invoice_<id>` for real invoice checks. Re-running a check for the
+   * same key overwrites the previous entry.
+   */
+  private persistComplianceResult(
+    key: string,
+    result: { success: boolean; status: number; warnings: string[]; errors: string[] },
+  ): void {
+    const json = this.printersService.getSetting('zatca_compliance_results', '[]');
+    let entries: ComplianceResultEntry[];
+    try {
+      entries = JSON.parse(json);
+    } catch {
+      entries = [];
+    }
+
+    const entry: ComplianceResultEntry = {
+      key,
+      success: result.success,
+      status: result.status,
+      warnings: result.warnings,
+      errors: result.errors,
+      checkedAt: Math.floor(Date.now() / 1000),
+    };
+
+    const idx = entries.findIndex((e) => e.key === key);
+    if (idx >= 0) {
+      entries[idx] = entry;
+    } else {
+      entries.push(entry);
+    }
+
+    this.printersService.setSetting('zatca_compliance_results', JSON.stringify(entries));
   }
 
   /**
@@ -417,6 +518,24 @@ export class ZatcaOnboardingService {
       'zatca_api_base_url',
       'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
     );
+  }
+}
+
+/**
+ * Returns true if the 406 response body indicates a duplicate compliance
+ * submission — i.e. any error entry has `code === 'Submitted before'`.
+ */
+function isSubmittedBefore(body: string): boolean {
+  try {
+    const parsed = JSON.parse(body);
+    const errors = parsed?.validationResults?.errorMessages;
+    if (!Array.isArray(errors)) return false;
+    return errors.some(
+      (e: unknown) =>
+        e && typeof e === 'object' && (e as Record<string, unknown>).code === 'Submitted before',
+    );
+  } catch {
+    return false;
   }
 }
 

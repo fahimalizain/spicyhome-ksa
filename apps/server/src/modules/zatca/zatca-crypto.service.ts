@@ -187,10 +187,7 @@ export function canonicalizeForHash(xml: string): string {
   let canonical = xml.replace(/<\?xml[^>]*\?>\s*/, '');
 
   // Strip UBLExtensions (contains the XAdES signature block)
-  canonical = canonical.replace(
-    /<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g,
-    '',
-  );
+  canonical = canonical.replace(/<ext:UBLExtensions(\s[^>]*)?>[\s\S]*?<\/ext:UBLExtensions>/g, '');
 
   // Also strip self-closing UBLExtensions (the placeholder in unsigned XML)
   canonical = canonical.replace(/<ext:UBLExtensions\/>/g, '');
@@ -510,7 +507,7 @@ function buildUBLSignatureBlock(
     '                      <ds:XPath>not(//ancestor-or-self::cac:Signature)</ds:XPath>',
     '                    </ds:Transform>',
     '                    <ds:Transform Algorithm="http://www.w3.org/TR/1999/REC-xpath-19991116">',
-    '                      <ds:XPath>not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID=\'QR\'])</ds:XPath>',
+    "                      <ds:XPath>not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID='QR'])</ds:XPath>",
     '                    </ds:Transform>',
     '                    <ds:Transform Algorithm="http://www.w3.org/2006/12/xml-c14n11"/>',
     '                  </ds:Transforms>',
@@ -605,10 +602,7 @@ export function embedSignatureIntoXML(
   );
 
   // Replace the empty UBLExtensions placeholder with the full signature block
-  return unsignedXml.replace(
-    /  <ext:UBLExtensions><\/ext:UBLExtensions>/,
-    signatureBlock,
-  );
+  return unsignedXml.replace(/  <ext:UBLExtensions><\/ext:UBLExtensions>/, signatureBlock);
 }
 
 // ── DER signature encoding/decoding ────────────────────────────────────────────
@@ -1138,7 +1132,8 @@ export function extractCertSignature(certBodyB64: string): string {
   }
 
   // Signature value is a BIT STRING (tag 0x03)
-  if (rawDer[offset] !== 0x03) throw new Error(`Expected BIT STRING for signature, got 0x${rawDer[offset].toString(16)}`);
+  if (rawDer[offset] !== 0x03)
+    throw new Error(`Expected BIT STRING for signature, got 0x${rawDer[offset].toString(16)}`);
   offset += 1;
   const sigLen = rawDer[offset] < 0x80 ? rawDer[offset] : readDerLength(rawDer, offset);
   if (rawDer[offset] < 0x80) {

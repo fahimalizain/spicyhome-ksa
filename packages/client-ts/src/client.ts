@@ -35,6 +35,17 @@ export type PrinterResponse = Schemas['PrinterResponse'];
 
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
+export interface ComplianceResultEntry {
+  /** 'invoice' | 'credit_note' | 'debit_note' or `invoice_<id>` for real invoices */
+  key: string;
+  success: boolean;
+  status: number;
+  warnings: string[];
+  errors: string[];
+  /** Unix epoch seconds when the check was run */
+  checkedAt: number;
+}
+
 export interface ZatcaOnboardingState {
   state: 'not_started' | 'csr_generated' | 'compliance' | 'production';
   keyGenerated: boolean;
@@ -43,6 +54,7 @@ export interface ZatcaOnboardingState {
   complianceCertExpiry: number | null;
   productionCertExpiry: number | null;
   publicKeyPem: string | null;
+  complianceResults: ComplianceResultEntry[];
 }
 
 export interface ZatcaInvoice {

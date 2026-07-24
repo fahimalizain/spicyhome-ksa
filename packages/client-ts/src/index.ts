@@ -32,6 +32,7 @@ export type {
   AuditVerifyResponse,
   ZatcaConfigDto,
   ZatcaOnboardingState,
+  ComplianceResultEntry,
   ZatcaInvoice,
   ZatcaReportingResult,
 } from './client';

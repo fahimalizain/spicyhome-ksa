@@ -333,8 +333,12 @@ describe('Signature Embedding', () => {
   it('uses sbc namespace for ReferencedSignatureID', () => {
     const signedXml = embedSignatureIntoXML(unsignedXmlBase, 'a', 'b', certBodyB64);
 
-    expect(signedXml).toContain('<sbc:ReferencedSignatureID>urn:oasis:names:specification:ubl:signature:Invoice</sbc:ReferencedSignatureID>');
-    expect(signedXml).toContain('xmlns:sbc="urn:oasis:names:specification:ubl:schema:xsd:SignatureBasicComponents-2"');
+    expect(signedXml).toContain(
+      '<sbc:ReferencedSignatureID>urn:oasis:names:specification:ubl:signature:Invoice</sbc:ReferencedSignatureID>',
+    );
+    expect(signedXml).toContain(
+      'xmlns:sbc="urn:oasis:names:specification:ubl:schema:xsd:SignatureBasicComponents-2"',
+    );
     expect(signedXml).not.toContain('<sac:ReferencedSignatureID>');
   });
 
@@ -358,7 +362,9 @@ describe('Signature Embedding', () => {
 
     expect(signedXml).toContain('not(//ancestor-or-self::ext:UBLExtensions)');
     expect(signedXml).toContain('not(//ancestor-or-self::cac:Signature)');
-    expect(signedXml).toContain("not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID='QR'])");
+    expect(signedXml).toContain(
+      "not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID='QR'])",
+    );
     const transformCount = (signedXml.match(/<ds:Transform[\s/>]/g) || []).length;
     expect(transformCount).toBe(4);
   });
@@ -446,9 +452,7 @@ describe('extractCertInfo', () => {
       'AiA9hC4M8jgMBADPSzmd2uiPJA6gKR3LE03U75eqbC/rXA==';
     const { issuerName } = extractCertInfo(certBody);
 
-    expect(issuerName).toBe(
-      'CN=PRZEINVOICESCA4-CA, DC=extgazt, DC=gov, DC=local',
-    );
+    expect(issuerName).toBe('CN=PRZEINVOICESCA4-CA, DC=extgazt, DC=gov, DC=local');
   });
 
   it('extracts serial number as decimal string', () => {
@@ -524,12 +528,7 @@ describe('Signed Properties', () => {
     const serialNumber = '12345';
 
     // Build the signed properties XML
-    const xml = buildSignedPropertiesXml(
-      signingTime,
-      certDigest,
-      issuerName,
-      serialNumber,
-    );
+    const xml = buildSignedPropertiesXml(signingTime, certDigest, issuerName, serialNumber);
     // Hash it
     const hash = computeSignedPropertiesHash(xml);
 

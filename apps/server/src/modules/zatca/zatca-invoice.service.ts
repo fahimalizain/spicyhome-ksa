@@ -164,7 +164,10 @@ export class ZatcaInvoiceService {
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date(now * 1000);
     const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
-    const issueTime = nowDate.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Riyadh', hour12: false });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+      timeZone: 'Asia/Riyadh',
+      hour12: false,
+    });
 
     // Allocate ICV and get PIH atomically
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
@@ -362,7 +365,10 @@ export class ZatcaInvoiceService {
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date(now * 1000);
     const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
-    const issueTime = nowDate.toLocaleTimeString('sv-SE', { timeZone: 'Asia/Riyadh', hour12: false });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+      timeZone: 'Asia/Riyadh',
+      hour12: false,
+    });
 
     // Read current ICV without incrementing — compliance invoices don't consume ICV
     const lastIcvRow = this.db.select().from(settings).where(eq(settings.key, 'last_icv')).get();
