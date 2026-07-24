@@ -1,0 +1,18 @@
+pre-commit:
+  commands:
+    format:
+      glob: '*.{js,ts,tsx,jsx,json,yaml,yml,css,html}'
+      run: pnpm exec prettier --write {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  commands:
+    format:
+      run: pnpm format
+    lint:
+      run: pnpm lint
+    typecheck:
+      run: pnpm typecheck
+    test:
+      run: pnpm --recursive test
