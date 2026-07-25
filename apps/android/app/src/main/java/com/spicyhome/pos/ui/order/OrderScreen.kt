@@ -41,7 +41,7 @@ fun OrderScreen(
     val state by viewModel.uiState.collectAsState()
 
     when (state.screenState) {
-        OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state)
+        OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onLogout)
         OrderScreenState.BUILDING_ORDER -> OrderBuildingPanel(viewModel, state, onViewOrders, onViewTables)
         OrderScreenState.ORDER_CREATED -> OrderCreatedPanel(viewModel, state)
         OrderScreenState.ORDER_SENT -> OrderSentPanel(viewModel, state)
@@ -92,9 +92,9 @@ private fun TopBar(
 }
 
 @Composable
-private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState) {
+private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState, onLogout: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "New Order", onLogout = { viewModel.closeDay() })
+        TopBar(title = "New Order", onLogout = { viewModel.logout(); onLogout() })
 
         Column(
             modifier = Modifier

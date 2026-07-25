@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { tables } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -15,13 +16,17 @@ export class TablesService {
   ) {}
 
   list(): any[] {
-    return this.db.select().from(tables).all();
+    return this.db
+      .select()
+      .from(tables)
+      .all()
+      .map((r) => mapBools(r, ['isActive']));
   }
 
   get(id: number): any {
     const table = this.db.select().from(tables).where(eq(tables.id, id)).get();
     if (!table) throw new NotFoundException('Table not found');
-    return table;
+    return mapBools(table, ['isActive']);
   }
 
   create(dto: any, userId: number): any {
@@ -38,7 +43,7 @@ export class TablesService {
       .run();
     const id = Number(result.lastInsertRowid);
     this.emitTableEvent('table.created', id, userId);
-    return { id, ...row };
+    return mapBools({ id, ...row }, ['isActive']);
   }
 
   update(id: number, dto: any, userId: number): any {
@@ -52,7 +57,7 @@ export class TablesService {
 
     this.db.update(tables).set(updates).where(eq(tables.id, id)).run();
     this.emitTableEvent('table.updated', id, userId);
-    return this.db.select().from(tables).where(eq(tables.id, id)).get();
+    return mapBools(this.db.select().from(tables).where(eq(tables.id, id)).get()!, ['isActive']);
   }
 
   private emitTableEvent(event: string, tableId: number, userId: number): void {

@@ -12,6 +12,8 @@ pre-push:
   commands:
     ensure-node24:
       run: pnpm ensure-node24
+    ensure-android-env:
+      run: pnpm ensure-android-env
     format:
       run: pnpm format
     lint:
@@ -19,4 +21,4 @@ pre-push:
     typecheck:
       run: pnpm typecheck
     test:
-      run: pnpm --recursive test
+      run: pnpm test

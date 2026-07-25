@@ -66,6 +66,57 @@ describe('seed', () => {
     expect(admin.pin_hash).not.toBe('1234');
   });
 
+  it('inserts 5 tables', () => {
+    seedRaw(sqlite);
+
+    const tables = sqlite.prepare('SELECT * FROM tables ORDER BY sort_order').all() as any[];
+    expect(tables.length).toBe(5);
+    expect(tables.map((t: any) => t.name)).toEqual(['T1', 'T2', 'T3', 'T4', 'T5']);
+    tables.forEach((t: any) => {
+      expect(t.is_active).toBe(1);
+      expect(t.created_by).toBe(1);
+    });
+  });
+
+  it('inserts 7 categories', () => {
+    seedRaw(sqlite);
+
+    const categories = sqlite
+      .prepare('SELECT * FROM item_categories ORDER BY sort_order')
+      .all() as any[];
+    expect(categories.length).toBe(7);
+    expect(categories.map((c: any) => c.name)).toEqual([
+      'Starters',
+      'Tandoori & Grill',
+      'Curries',
+      'Biryani & Rice',
+      'Breads',
+      'Beverages',
+      'Desserts',
+    ]);
+    categories.forEach((c: any) => {
+      expect(c.is_active).toBe(1);
+      expect(c.printer_id).toBeNull();
+    });
+  });
+
+  it('inserts 28 items across 7 categories', () => {
+    seedRaw(sqlite);
+
+    const items = sqlite
+      .prepare('SELECT * FROM items ORDER BY category_id, sort_order')
+      .all() as any[];
+    expect(items.length).toBe(28);
+
+    items.forEach((i: any) => {
+      expect(i.category_id).toBeGreaterThan(0);
+      expect(i.price_halalas).toBeGreaterThan(0);
+      expect(i.vat_rate_bp).toBe(1500);
+      expect(i.is_active).toBe(1);
+      expect(i.name_ar).toBeTruthy();
+    });
+  });
+
   it('is idempotent — running seed twice does not duplicate rows', () => {
     seedRaw(sqlite);
     seedRaw(sqlite);
@@ -77,5 +128,14 @@ describe('seed', () => {
       .prepare("SELECT COUNT(*) as cnt FROM users WHERE username = 'admin'")
       .get() as any;
     expect(admins.cnt).toBe(1);
+
+    const tables = sqlite.prepare('SELECT COUNT(*) as cnt FROM tables').get() as any;
+    expect(tables.cnt).toBe(5);
+
+    const categories = sqlite.prepare('SELECT COUNT(*) as cnt FROM item_categories').get() as any;
+    expect(categories.cnt).toBe(7);
+
+    const items = sqlite.prepare('SELECT COUNT(*) as cnt FROM items').get() as any;
+    expect(items.cnt).toBe(28);
   });
 });

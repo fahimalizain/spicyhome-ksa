@@ -81,6 +81,7 @@ export interface ZatcaReportingResult {
 export interface SpicyHomeClientConfig {
   baseUrl: string;
   getToken: () => string | null;
+  onUnauthorized?: () => void;
 }
 
 async function request<T>(
@@ -115,6 +116,9 @@ async function request<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && config.onUnauthorized) {
+      config.onUnauthorized();
+    }
     const errorBody = await response.text().catch(() => 'Unknown error');
     throw new Error(`HTTP ${response.status} ${response.statusText}: ${errorBody}`);
   }

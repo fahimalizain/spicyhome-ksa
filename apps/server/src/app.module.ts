@@ -1,4 +1,4 @@
-import { Module, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Module, ValidationPipe } from '@nestjs/common';
 import { APP_PIPE, APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -55,7 +55,24 @@ if (spaDist) {
 @Module({
   imports,
   providers: [
-    { provide: APP_PIPE, useClass: ValidationPipe },
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        exceptionFactory: (errors) => {
+          const detail = errors.map((err) => ({
+            field: err.property,
+            value: err.value,
+            constraints: err.constraints,
+          }));
+          return new BadRequestException({
+            statusCode: 400,
+            message: 'Validation failed',
+            errors: detail,
+          });
+        },
+      }),
+    },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

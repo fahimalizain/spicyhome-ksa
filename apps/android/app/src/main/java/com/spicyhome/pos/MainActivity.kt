@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
                     NavGraph(
                         preferencesManager = app.preferencesManager,
                         apiClientProvider = app.apiClientProvider,
+                        sessionManager = app.sessionManager,
                     )
                 }
             }

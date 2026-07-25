@@ -19,6 +19,7 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.apis.ZatcaApi
+import com.spicyhome.client.models.ZatcaConfigDto
 
 class ZatcaApiTest : ShouldSpec() {
     init {
@@ -29,6 +30,13 @@ class ZatcaApiTest : ShouldSpec() {
         should("test zatcaControllerGenerateCSR") {
             // uncomment below to test zatcaControllerGenerateCSR
             //apiInstance.zatcaControllerGenerateCSR()
+        }
+
+        // to test zatcaControllerGetConfig
+        should("test zatcaControllerGetConfig") {
+            // uncomment below to test zatcaControllerGetConfig
+            //val result : ZatcaConfigDto = apiInstance.zatcaControllerGetConfig()
+            //result shouldBe ("TODO")
         }
 
         // to test zatcaControllerGetInvoice
@@ -68,6 +76,20 @@ class ZatcaApiTest : ShouldSpec() {
         should("test zatcaControllerRetryReporting") {
             // uncomment below to test zatcaControllerRetryReporting
             //apiInstance.zatcaControllerRetryReporting()
+        }
+
+        // to test zatcaControllerRunComplianceCheck
+        should("test zatcaControllerRunComplianceCheck") {
+            // uncomment below to test zatcaControllerRunComplianceCheck
+            //apiInstance.zatcaControllerRunComplianceCheck()
+        }
+
+        // to test zatcaControllerUpdateConfig
+        should("test zatcaControllerUpdateConfig") {
+            // uncomment below to test zatcaControllerUpdateConfig
+            //val zatcaConfigDto : ZatcaConfigDto =  // ZatcaConfigDto | 
+            //val result : ZatcaConfigDto = apiInstance.zatcaControllerUpdateConfig(zatcaConfigDto)
+            //result shouldBe ("TODO")
         }
 
     }

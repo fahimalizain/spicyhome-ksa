@@ -2,9 +2,11 @@ import 'reflect-metadata';
 
 process.env.TZ = 'Asia/Riyadh';
 
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -31,13 +33,25 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  const logger = new Logger('HTTP');
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const { method, originalUrl } = req;
+    const start = Date.now();
+    _res.on('finish', () => {
+      const { statusCode } = _res;
+      const ms = Date.now() - start;
+      logger.log(`${method} ${originalUrl} → ${statusCode} (${ms}ms)`);
+    });
+    next();
+  });
+
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3742;
   await app.listen(port);
-  console.log(`SpicyHome server listening on port ${port}`);
-  console.log(`Swagger UI: http://localhost:${port}/api/docs`);
+  logger.log(`SpicyHome server listening on port ${port}`);
+  logger.log(`Swagger UI: http://localhost:${port}/api/docs`);
 }
 
 bootstrap().catch((err) => {
-  console.error('Failed to bootstrap:', err);
+  Logger.error('Failed to bootstrap', err instanceof Error ? err.stack : err);
   process.exit(1);
 });

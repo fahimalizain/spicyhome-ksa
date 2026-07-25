@@ -60,6 +60,13 @@ describe('ZATCA Integration', () => {
 
     const now = Math.floor(Date.now() / 1000);
 
+    // Replace seeded data with test-specific data
+    sqlite.exec(`
+      DELETE FROM items;
+      DELETE FROM item_categories;
+      DELETE FROM tables;
+    `);
+
     sqlite.exec(`
       INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
       VALUES (1, 'Counter', '192.168.1.50', 9100, 'receipt', 1, ${now}, ${now});

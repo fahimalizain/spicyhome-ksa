@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { itemCategories, items } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -11,13 +12,17 @@ export class MenuService {
   constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {}
 
   listCategories(): any[] {
-    return this.db.select().from(itemCategories).all();
+    return this.db
+      .select()
+      .from(itemCategories)
+      .all()
+      .map((r) => mapBools(r, ['isActive']));
   }
 
   getCategory(id: number): any {
     const cat = this.db.select().from(itemCategories).where(eq(itemCategories.id, id)).get();
     if (!cat) throw new NotFoundException('Category not found');
-    return cat;
+    return mapBools(cat, ['isActive']);
   }
 
   createCategory(dto: any, userId: number): any {
@@ -33,7 +38,7 @@ export class MenuService {
       .insert(itemCategories)
       .values(row as any)
       .run();
-    return { id: Number(result.lastInsertRowid), ...row };
+    return mapBools({ id: Number(result.lastInsertRowid), ...row }, ['isActive']);
   }
 
   updateCategory(id: number, dto: any, userId: number): any {
@@ -47,20 +52,25 @@ export class MenuService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(itemCategories).set(updates).where(eq(itemCategories.id, id)).run();
-    return this.db.select().from(itemCategories).where(eq(itemCategories.id, id)).get();
+    return mapBools(this.db.select().from(itemCategories).where(eq(itemCategories.id, id)).get()!, [
+      'isActive',
+    ]);
   }
 
   listItems(categoryId?: number): any[] {
+    let rows: any[];
     if (categoryId) {
-      return this.db.select().from(items).where(eq(items.categoryId, categoryId)).all();
+      rows = this.db.select().from(items).where(eq(items.categoryId, categoryId)).all();
+    } else {
+      rows = this.db.select().from(items).all();
     }
-    return this.db.select().from(items).all();
+    return rows.map((r) => mapBools(r, ['isActive']));
   }
 
   getItem(id: number): any {
     const item = this.db.select().from(items).where(eq(items.id, id)).get();
     if (!item) throw new NotFoundException('Item not found');
-    return item;
+    return mapBools(item, ['isActive']);
   }
 
   createItem(dto: any, userId: number): any {
@@ -79,7 +89,7 @@ export class MenuService {
       .insert(items)
       .values(row as any)
       .run();
-    return { id: Number(result.lastInsertRowid), ...row };
+    return mapBools({ id: Number(result.lastInsertRowid), ...row }, ['isActive']);
   }
 
   updateItem(id: number, dto: any, userId: number): any {
@@ -96,6 +106,6 @@ export class MenuService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(items).set(updates).where(eq(items.id, id)).run();
-    return this.db.select().from(items).where(eq(items.id, id)).get();
+    return mapBools(this.db.select().from(items).where(eq(items.id, id)).get()!, ['isActive']);
   }
 }

@@ -6,10 +6,13 @@ import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.apis.SettingsApi
 import com.spicyhome.client.infrastructure.ApiClient
+import android.util.Log
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-class ApiClientProvider {
+class ApiClientProvider(
+    private val onUnauthorized: () -> Unit = {},
+) {
 
     private var currentClient: ApiClient? = null
     private var currentBaseUrl: String? = null
@@ -19,19 +22,24 @@ class ApiClientProvider {
             return currentClient!!
         }
 
-        val okHttpClient = OkHttpClient.Builder()
+        val okHttpBuilder = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
+            .addInterceptor(UnauthorizedInterceptor(onUnauthorized))
 
-        val builder = ApiClient(
-            baseUrl = baseUrl,
-            okHttpClientBuilder = okHttpClient.newBuilder()
-        )
-
-        bearerToken?.let { token ->
-            builder.setBearerToken(token)
+        val builder = if (bearerToken != null && bearerToken.isNotBlank()) {
+            ApiClient(
+                baseUrl = baseUrl,
+                okHttpClientBuilder = okHttpBuilder,
+                authName = "bearer",
+                bearerToken = bearerToken,
+            )
+        } else {
+            ApiClient(
+                baseUrl = baseUrl,
+                okHttpClientBuilder = okHttpBuilder,
+            )
         }
 
         currentClient = builder
@@ -76,6 +84,7 @@ class ApiClientProvider {
             val response = client.newCall(request).execute()
             response.isSuccessful || response.code in 300..499
         } catch (e: Exception) {
+            Log.e("ApiClientProvider", "testConnectivity failed for $baseUrl", e)
             false
         }
     }

@@ -1,12 +1,15 @@
 package com.spicyhome.pos.ui.setup
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.pos.ui.theme.Accent
@@ -17,6 +20,12 @@ fun SetupScreen(
     onConnected: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(state.isConnected) {
+        if (state.isConnected) {
+            onConnected()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -47,7 +56,9 @@ fun SetupScreen(
             label = { Text("Server URL") },
             placeholder = { Text("http://192.168.1.50:3000") },
             singleLine = true,
+            enabled = !state.isAutoConnecting,
             modifier = Modifier.fillMaxWidth(0.6f),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Accent,
                 focusedLabelColor = Accent,
@@ -57,33 +68,32 @@ fun SetupScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = { viewModel.testConnection() },
-                enabled = !state.isTesting && state.serverUrl.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier.height(56.dp),
+        if (!state.isAutoConnecting) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (state.isTesting) "Testing..." else "Test Connection",
-                    fontSize = 18.sp,
-                )
+                Button(
+                    onClick = { viewModel.testConnection() },
+                    enabled = !state.isTesting && state.serverUrl.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    modifier = Modifier.height(56.dp),
+                ) {
+                    Text(
+                        text = if (state.isTesting) "Testing..." else "Connect",
+                        fontSize = 18.sp,
+                    )
+                }
             }
-
-            Button(
-                onClick = {
-                    viewModel.saveAndConnect()
-                    onConnected()
-                },
-                enabled = state.isConnected,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier.height(56.dp),
-            ) {
-                Text(text = "Connect", fontSize = 18.sp)
-            }
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+            CircularProgressIndicator(color = Accent)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Connecting...",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         if (state.testResult != null) {

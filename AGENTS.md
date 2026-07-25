@@ -87,12 +87,15 @@ Codebase conventions and constraints for all contributors and AI agents.
 
 All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
 
-- **`bazel test //...`** (6 non-Android targets) — run on every push/PR to master.
-- **Android** (APK build + unit tests) runs in a separate job — requires
-  `ANDROID_HOME` and `JAVA_HOME` passed via `--action_env` flags.
+- **Tests**: `pnpm test` runs `bazel test //...` (all 7 targets: server, pos,
+  shared, db, client-ts, client-kt, android unit_tests). Same command as
+  pre-push. CI splits non-Android and Android into two jobs; both must pass.
+  Android needs `ANDROID_HOME` / `JAVA_HOME`; `pnpm ensure-android-env`
+  (pre-push) fails fast if either is missing or invalid.
 - **Lint**: ESLint (flat config) + Prettier check + `tsc --noEmit` across all
   TS packages. Run locally:
   ```sh
+  pnpm test          # bazel test //... (full suite, matches pre-push)
   pnpm lint          # ESLint
   pnpm format        # Prettier check
   pnpm format:fix    # Prettier write

@@ -6,13 +6,14 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "pnpm --recursive test",
+    "test": "bazel test //... --test_output=errors --action_env=ANDROID_HOME --action_env=JAVA_HOME",
     "lint": "pnpm exec eslint .",
     "lint:fix": "pnpm exec eslint --fix .",
     "format": "pnpm exec prettier --check .",
     "format:fix": "pnpm exec prettier --write .",
     "typecheck": "pnpm --recursive typecheck",
     "ensure-node24": "node -e \"process.exit(process.version.startsWith('v24.') ? 0 : 1)\" || (echo 'ERROR: Node 24 required. Run: nvm use' && exit 1)",
+    "ensure-android-env": "node -e \"const a=process.env.ANDROID_HOME,j=process.env.JAVA_HOME,fs=require('fs'),p=require('path');if(!a||!fs.existsSync(p.join(a,'platforms'))){console.error('ERROR: ANDROID_HOME must point to a valid Android SDK');process.exit(1)}if(!j||!fs.existsSync(p.join(j,'bin','java'))){console.error('ERROR: JAVA_HOME must point to a valid JDK');process.exit(1)}\"",
     "check": "pnpm lint && pnpm format && pnpm typecheck",
     "package:win7": "bash packaging/build-package.sh",
     "postinstall": "lefthook install",

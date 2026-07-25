@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { printers, settings } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import {
   PrinterTransport,
   TcpPrinterTransport,
@@ -39,15 +40,18 @@ export class PrintersService {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
-  list(): PrinterRecord[] {
-    return this.db.select().from(printers).all() as PrinterRecord[];
+  list(): any[] {
+    return this.db
+      .select()
+      .from(printers)
+      .all()
+      .map((r) => mapBools(r, ['isActive']));
   }
 
-  get(id: number): PrinterRecord {
-    const p = this.db.select().from(printers).where(eq(printers.id, id)).get() as
-      PrinterRecord | undefined;
+  get(id: number): any {
+    const p = this.db.select().from(printers).where(eq(printers.id, id)).get();
     if (!p) throw new NotFoundException('Printer not found');
-    return p;
+    return mapBools(p, ['isActive']);
   }
 
   create(dto: any, userId: number) {
@@ -64,7 +68,7 @@ export class PrintersService {
       .insert(printers)
       .values(row as any)
       .run();
-    return { id: Number(result.lastInsertRowid), ...row };
+    return mapBools({ id: Number(result.lastInsertRowid), ...row }, ['isActive']);
   }
 
   update(id: number, dto: any, userId: number) {
@@ -79,7 +83,9 @@ export class PrintersService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(printers).set(updates).where(eq(printers.id, id)).run();
-    return this.db.select().from(printers).where(eq(printers.id, id)).get();
+    return mapBools(this.db.select().from(printers).where(eq(printers.id, id)).get()!, [
+      'isActive',
+    ]);
   }
 
   // ── Printing ─────────────────────────────────────────────────────────────────

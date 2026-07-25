@@ -23,6 +23,7 @@ class RealtimeClient(
     httpClient: OkHttpClient = OkHttpClient.Builder()
         .pingInterval(30, TimeUnit.SECONDS)
         .build(),
+    private val onAuthFailure: () -> Unit = {},
 ) {
     private val client = httpClient
 
@@ -114,7 +115,10 @@ class RealtimeClient(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 if (thisConnectionId != this@RealtimeClient.connectionId) return
-                if (code == AUTH_MISSING || code == AUTH_INVALID) return
+                if (code == AUTH_MISSING || code == AUTH_INVALID) {
+                    onAuthFailure()
+                    return
+                }
                 scheduleReconnect(baseUrl, token, thisConnectionId)
             }
 
