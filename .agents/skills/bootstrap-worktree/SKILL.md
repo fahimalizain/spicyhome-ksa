@@ -15,7 +15,7 @@ plus `pnpm install` on a cold tree.
 Both main and linked worktrees use `.env.worktree` — never a separate root `.env`.
 
 **Linked worktrees inherit Sentry DSNs from the main worktree's `.env.worktree`**
-automatically.  The bootstrap also syncs `apps/android/local.properties` from
+automatically. The bootstrap also syncs `apps/android/local.properties` from
 `SENTRY_ANDROID_DSN` so Android builds get the correct Sentry configuration.
 
 ## Defaults
@@ -41,18 +41,18 @@ automatically.  The bootstrap also syncs `apps/android/local.properties` from
 ## Sentry Inheritance
 
 Linked worktrees automatically inherit Sentry DSN keys from the main worktree's
-`.env.worktree`.  Environment tags (`SENTRY_ENVIRONMENT`, `VITE_SENTRY_ENVIRONMENT`)
+`.env.worktree`. Environment tags (`SENTRY_ENVIRONMENT`, `VITE_SENTRY_ENVIRONMENT`)
 are set to the **worktree slug** so each branch reports as a separate environment
 in Sentry.
 
 ### Android
 
 `SENTRY_ANDROID_DSN` from `.env.worktree` is synced into
-`apps/android/local.properties` (gitignored) as `SENTRY_DSN`.  The server
+`apps/android/local.properties` (gitignored) as `SENTRY_DSN`. The server
 `SENTRY_DSN` is never written into the Android build config.
 
 If `SENTRY_ANDROID_DSN` is not set in the main worktree, Android builds will
-not have Sentry configured.  Set it in main's `.env.worktree` first.
+not have Sentry configured. Set it in main's `.env.worktree` first.
 
 Agents running `android-adb-install` should bootstrap first to ensure
 `local.properties` is in sync.
