@@ -130,6 +130,7 @@ Source maps can be uploaded to Sentry via the dedicated workflow
 release. Run it manually from the Actions tab with `workflow_dispatch`.
 
 The workflow:
+
 - Builds the POS SPA (Vite) and server JS (Bazel) with source maps
 - Creates Sentry releases for server, POS, and Android
 - Uploads server source maps via `sentry-cli`
