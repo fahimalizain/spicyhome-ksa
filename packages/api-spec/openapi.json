@@ -1475,7 +1475,17 @@
         ],
         "responses": {
           "200": {
-            "description": "List of refunds with their items"
+            "description": "List of refunds with their items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderRefundResponse"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1504,7 +1514,17 @@
         ],
         "responses": {
           "200": {
-            "description": "List of order events"
+            "description": "List of order events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderEventResponse"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3575,6 +3595,154 @@
           "success",
           "refundId",
           "status"
+        ]
+      },
+      "RefundItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderItemId": {
+            "type": "number",
+            "example": 5
+          },
+          "itemName": {
+            "type": "string",
+            "example": "Burger"
+          },
+          "unitPriceHalalas": {
+            "type": "number",
+            "example": 2500
+          },
+          "vatRateBp": {
+            "type": "number",
+            "example": 1500
+          },
+          "qty": {
+            "type": "number",
+            "example": 2
+          },
+          "totalHalalas": {
+            "type": "number",
+            "example": 5000
+          }
+        },
+        "required": [
+          "id",
+          "orderItemId",
+          "itemName",
+          "unitPriceHalalas",
+          "vatRateBp",
+          "qty",
+          "totalHalalas"
+        ]
+      },
+      "OrderRefundResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderId": {
+            "type": "number",
+            "example": 10
+          },
+          "userId": {
+            "type": "number",
+            "example": 3
+          },
+          "subtotalHalalas": {
+            "type": "number",
+            "example": 4348
+          },
+          "vatHalalas": {
+            "type": "number",
+            "example": 652
+          },
+          "totalHalalas": {
+            "type": "number",
+            "example": 5000
+          },
+          "reason": {
+            "type": "object",
+            "example": "Customer changed mind"
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefundItemResponse"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "userId",
+          "subtotalHalalas",
+          "vatHalalas",
+          "totalHalalas",
+          "reason",
+          "createdAt",
+          "items"
+        ]
+      },
+      "OrderEventResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "orderId": {
+            "type": "number",
+            "example": 1
+          },
+          "eventIdx": {
+            "type": "number",
+            "example": 1
+          },
+          "userId": {
+            "type": "number",
+            "example": 1
+          },
+          "type": {
+            "type": "string",
+            "example": "item_added"
+          },
+          "payload": {
+            "type": "string",
+            "example": "{\"orderItemId\":1,\"itemName\":\"Burger\",\"qty\":1}"
+          },
+          "prevHash": {
+            "type": "string",
+            "example": ""
+          },
+          "hash": {
+            "type": "string",
+            "example": "abc123..."
+          },
+          "createdAt": {
+            "type": "number",
+            "example": 1700000000
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "eventIdx",
+          "userId",
+          "type",
+          "payload",
+          "prevHash",
+          "hash",
+          "createdAt"
         ]
       },
       "SettingResponse": {

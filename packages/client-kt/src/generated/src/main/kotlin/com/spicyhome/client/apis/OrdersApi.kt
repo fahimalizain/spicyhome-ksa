@@ -11,6 +11,8 @@ import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.CreateRefundDto
+import com.spicyhome.client.models.OrderEventResponse
+import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
@@ -68,10 +70,10 @@ interface OrdersApi {
      *  - 200: List of order events
      *
      * @param id 
-     * @return [Call]<[Unit]>
+     * @return [Call]<[kotlin.collections.List<OrderEventResponse>]>
      */
     @GET("orders/{id}/events")
-    fun ordersControllerGetOrderEvents(@Path("id") id: java.math.BigDecimal): Call<Unit>
+    fun ordersControllerGetOrderEvents(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderEventResponse>>
 
     /**
      * GET orders/{id}/refunds
@@ -81,10 +83,10 @@ interface OrdersApi {
      *  - 200: List of refunds with their items
      *
      * @param id 
-     * @return [Call]<[Unit]>
+     * @return [Call]<[kotlin.collections.List<OrderRefundResponse>]>
      */
     @GET("orders/{id}/refunds")
-    fun ordersControllerGetOrderRefunds(@Path("id") id: java.math.BigDecimal): Call<Unit>
+    fun ordersControllerGetOrderRefunds(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderRefundResponse>>
 
     /**
      * GET orders

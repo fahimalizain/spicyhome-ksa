@@ -24,7 +24,9 @@ docs/LoginResponse.md
 docs/MeResponse.md
 docs/MenuApi.md
 docs/OpenDayDto.md
+docs/OrderEventResponse.md
 docs/OrderItemResponse.md
+docs/OrderRefundResponse.md
 docs/OrderResponse.md
 docs/OrdersApi.md
 docs/PrintResponse.md
@@ -32,6 +34,7 @@ docs/PrinterResponse.md
 docs/PrinterStatusResponse.md
 docs/PrintersApi.md
 docs/RefundItemDto.md
+docs/RefundItemResponse.md
 docs/RefundResponse.md
 docs/ReportsApi.md
 docs/ReprintOrderDto.md
@@ -102,12 +105,15 @@ src/main/kotlin/com/spicyhome/client/models/LoginDto.kt
 src/main/kotlin/com/spicyhome/client/models/LoginResponse.kt
 src/main/kotlin/com/spicyhome/client/models/MeResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OpenDayDto.kt
+src/main/kotlin/com/spicyhome/client/models/OrderEventResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OrderItemResponse.kt
+src/main/kotlin/com/spicyhome/client/models/OrderRefundResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OrderResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrintResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterStatusResponse.kt
 src/main/kotlin/com/spicyhome/client/models/RefundItemDto.kt
+src/main/kotlin/com/spicyhome/client/models/RefundItemResponse.kt
 src/main/kotlin/com/spicyhome/client/models/RefundResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ReprintOrderDto.kt
 src/main/kotlin/com/spicyhome/client/models/RoleResponse.kt
@@ -126,7 +132,6 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
-src/test/kotlin/com/spicyhome/client/models/CreateRefundDtoTest.kt
-src/test/kotlin/com/spicyhome/client/models/RefundItemDtoTest.kt
-src/test/kotlin/com/spicyhome/client/models/RefundResponseTest.kt
-src/test/kotlin/com/spicyhome/client/models/UsernamesResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/OrderEventResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/OrderRefundResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/RefundItemResponseTest.kt

@@ -1388,6 +1388,61 @@ export interface components {
       /** @example paid */
       status: string;
     };
+    RefundItemResponse: {
+      /** @example 1 */
+      id: number;
+      /** @example 5 */
+      orderItemId: number;
+      /** @example Burger */
+      itemName: string;
+      /** @example 2500 */
+      unitPriceHalalas: number;
+      /** @example 1500 */
+      vatRateBp: number;
+      /** @example 2 */
+      qty: number;
+      /** @example 5000 */
+      totalHalalas: number;
+    };
+    OrderRefundResponse: {
+      /** @example 1 */
+      id: number;
+      /** @example 10 */
+      orderId: number;
+      /** @example 3 */
+      userId: number;
+      /** @example 4348 */
+      subtotalHalalas: number;
+      /** @example 652 */
+      vatHalalas: number;
+      /** @example 5000 */
+      totalHalalas: number;
+      /** @example Customer changed mind */
+      reason: Record<string, never>;
+      /** @example 1700000000 */
+      createdAt: number;
+      items: components['schemas']['RefundItemResponse'][];
+    };
+    OrderEventResponse: {
+      /** @example 1 */
+      id: number;
+      /** @example 1 */
+      orderId: number;
+      /** @example 1 */
+      eventIdx: number;
+      /** @example 1 */
+      userId: number;
+      /** @example item_added */
+      type: string;
+      /** @example {"orderItemId":1,"itemName":"Burger","qty":1} */
+      payload: string;
+      /** @example  */
+      prevHash: string;
+      /** @example abc123... */
+      hash: string;
+      /** @example 1700000000 */
+      createdAt: number;
+    };
     SettingResponse: {
       /** @example restaurant_name */
       key: string;
@@ -2444,7 +2499,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['OrderRefundResponse'][];
+        };
       };
     };
   };
@@ -2464,7 +2521,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['OrderEventResponse'][];
+        };
       };
     };
   };

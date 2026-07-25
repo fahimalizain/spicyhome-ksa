@@ -28,6 +28,8 @@ import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
+import { OrderEventResponse } from './dto/order-event-response.dto';
+import { OrderRefundResponse } from './dto/refund-response.dto';
 import { PrintResponse } from './dto/print-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -146,14 +148,14 @@ export class OrdersController {
 
   @Get(':id/refunds')
   @ApiOperation({ summary: 'Get all refunds for an order' })
-  @ApiOkResponse({ description: 'List of refunds with their items' })
+  @ApiOkResponse({ description: 'List of refunds with their items', type: [OrderRefundResponse] })
   getOrderRefunds(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrderRefunds(id);
   }
 
   @Get(':id/events')
   @ApiOperation({ summary: 'Get the complete event chain for an order' })
-  @ApiOkResponse({ description: 'List of order events' })
+  @ApiOkResponse({ description: 'List of order events', type: [OrderEventResponse] })
   getOrderEvents(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrderEvents(id);
   }

@@ -151,7 +151,7 @@ apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
 val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
 
-webService.ordersControllerGetOrderEvents(id)
+val result : kotlin.collections.List<OrderEventResponse> = webService.ordersControllerGetOrderEvents(id)
 ```
 
 ### Parameters
@@ -161,7 +161,7 @@ webService.ordersControllerGetOrderEvents(id)
 
 ### Return type
 
-null (empty response body)
+[**kotlin.collections.List&lt;OrderEventResponse&gt;**](OrderEventResponse.md)
 
 ### Authorization
 
@@ -172,7 +172,7 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 
 Get all refunds for an order
@@ -189,7 +189,7 @@ apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
 val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
 
-webService.ordersControllerGetOrderRefunds(id)
+val result : kotlin.collections.List<OrderRefundResponse> = webService.ordersControllerGetOrderRefunds(id)
 ```
 
 ### Parameters
@@ -199,7 +199,7 @@ webService.ordersControllerGetOrderRefunds(id)
 
 ### Return type
 
-null (empty response body)
+[**kotlin.collections.List&lt;OrderRefundResponse&gt;**](OrderRefundResponse.md)
 
 ### Authorization
 
@@ -210,7 +210,7 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 
 List orders with optional filters
