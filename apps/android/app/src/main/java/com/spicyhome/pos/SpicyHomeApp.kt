@@ -5,6 +5,8 @@ import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.SessionManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
+import io.sentry.Sentry
+import io.sentry.android.core.SentryAndroid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,6 +31,9 @@ class SpicyHomeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        initSentry()
+
         preferencesManager = PreferencesManager(this)
         sessionManager = SessionManager(preferencesManager, appScope)
         apiClientProvider = ApiClientProvider(onUnauthorized = sessionManager::onUnauthorized)
@@ -46,6 +51,21 @@ class SpicyHomeApp : Application() {
                     realtimeClient.disconnect()
                 }
             }
+        }
+    }
+
+    private fun initSentry() {
+        val dsn = BuildConfig.SENTRY_DSN
+        if (dsn.isBlank()) return
+
+        SentryAndroid.init(this) { options ->
+            options.dsn = dsn
+            options.environment = BuildConfig.SENTRY_ENVIRONMENT
+            options.release = "spicyhome-android@${BuildConfig.VERSION_NAME}"
+            options.tracesSampleRate = 1.0
+            // Breadcrumbs: navigation + OkHttp calls are captured automatically
+            // No PII scrubbing
+            // No Session Replay
         }
     }
 }

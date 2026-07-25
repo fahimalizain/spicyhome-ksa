@@ -95,10 +95,22 @@ jobs:
         run: |
           bazel build //apps/android:apk \
             --action_env=ANDROID_HOME=$ANDROID_HOME \
-            --action_env=JAVA_HOME=$JAVA_HOME
+            --action_env=JAVA_HOME=$JAVA_HOME \
+            --action_env=SENTRY_DSN=${{ secrets.SENTRY_ANDROID_DSN || '' }} \
+            --action_env=SENTRY_ENVIRONMENT=production
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_ANDROID_DSN || '' }}
+          SENTRY_ENVIRONMENT: production
 
       - name: Build package
         run: pnpm package:win7
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_POS_DSN || '' }}
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: spicyhome-pos@${{ steps.bump.outputs.next_version }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || '' }}
+          SENTRY_PROJECT: spicyhome-pos
 
       - name: Stage release assets
         run: |

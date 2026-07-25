@@ -1,5 +1,6 @@
 import { SpicyHomeClient } from '@spicyhome/client-ts';
 import type { MeResponse } from '@spicyhome/client-ts';
+import * as Sentry from '@sentry/react';
 
 const TOKEN_KEY = 'spicyhome_token';
 const ME_KEY = 'spicyhome_me';
@@ -22,6 +23,7 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
+  Sentry.setUser(null);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ME_KEY);
 }

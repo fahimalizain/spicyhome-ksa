@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.repository.AuthRepository
+import io.sentry.Sentry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -125,6 +126,14 @@ class LoginViewModel(
                     val token = response.body()!!.accessToken
                     preferencesManager.setAuthToken(token)
                     preferencesManager.setUsername(state.username)
+                    // Set Sentry user context.
+                    // The login API returns only an accessToken (no user id).
+                    // We set username now; id can be added later via getMe() if needed.
+                    Sentry.setUser(
+                        io.sentry.protocol.User().apply {
+                            username = state.username
+                        }
+                    )
                     _uiState.value = _uiState.value.copy(isLoading = false, isLoggedIn = true)
                 } else {
                     val errorMsg = when (response.code()) {
@@ -149,6 +158,7 @@ class LoginViewModel(
 
     fun logout() {
         viewModelScope.launch {
+            Sentry.setUser(null)
             preferencesManager.clearAuth()
             _uiState.value = LoginUiState()
         }

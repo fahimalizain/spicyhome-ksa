@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, UseFilters } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -11,6 +11,7 @@ import { Server, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { WS_EVENTS } from '@spicyhome/shared';
 import type { WsMessage } from '@spicyhome/shared';
+import { SentryExceptionFilter } from '../../common/filters/sentry-exception.filter';
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: number;
@@ -18,6 +19,7 @@ interface AuthenticatedSocket extends WebSocket {
 }
 
 @WebSocketGateway({ path: '/ws' })
+@UseFilters(SentryExceptionFilter)
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
   private clients = new Set<AuthenticatedSocket>();

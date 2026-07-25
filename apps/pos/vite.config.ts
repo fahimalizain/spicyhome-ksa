@@ -7,6 +7,21 @@ import react from '@vitejs/plugin-react';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
 
+/** Read VERSION from repo root. */
+function readVersion(): string {
+  try {
+    const candidate = path.resolve(repoRoot, 'VERSION');
+    if (fs.existsSync(candidate)) {
+      return fs.readFileSync(candidate, 'utf8').trim();
+    }
+  } catch {
+    // fall through
+  }
+  return '0.0.0';
+}
+
+const APP_VERSION = readVersion();
+
 /** Load repo-root .env.worktree into process.env (does not override existing). */
 function loadWorktreeEnv(): void {
   const envPath = path.join(repoRoot, '.env.worktree');
@@ -35,8 +50,36 @@ const vitePort = parseInt(process.env.VITE_PORT || '6124', 10);
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
 
+  const plugins: any[] = [react()];
+
+  // Sentry Vite plugin for source map upload — only when SENTRY_AUTH_TOKEN is set
+  const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+  if (sentryAuthToken) {
+    // Dynamic import to avoid dependency error when not installed
+    try {
+      const { sentryVitePlugin } = require('@sentry/vite-plugin');
+      // The Sentry Vite plugin soft-fails by default: if the upload fails
+      // (network error, missing auth, expired token), it logs a warning but
+      // does NOT fail the Vite build. This ensures releases are never blocked
+      // by source map upload issues.
+      plugins.push(
+        sentryVitePlugin({
+          authToken: sentryAuthToken,
+          org: process.env.SENTRY_ORG || undefined,
+          project: process.env.SENTRY_PROJECT || 'spicyhome-pos',
+          release: {
+            name: `spicyhome-pos@${APP_VERSION}`,
+          },
+        }),
+      );
+    } catch {
+      // @sentry/vite-plugin not installed — skip source map upload
+      console.warn('SENTRY_AUTH_TOKEN set but @sentry/vite-plugin not available');
+    }
+  }
+
   return {
-    plugins: [react()],
+    plugins,
     // Prefer TS sources over tsc-emitted CJS .js (server preLaunchTask writes
     // *.js next to *.ts). Default Vite order is .js before .ts, so bare imports
     // like `from './money'` would load CJS and break named ESM exports.
@@ -73,6 +116,13 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: './src/setupTests.ts',
       css: true,
+    },
+    // Bake Sentry release and version at build time
+    define: {
+      'import.meta.env.VITE_SENTRY_RELEASE': JSON.stringify(
+        process.env.VITE_SENTRY_RELEASE || `spicyhome-pos@${APP_VERSION}`,
+      ),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
     },
   };
 });
