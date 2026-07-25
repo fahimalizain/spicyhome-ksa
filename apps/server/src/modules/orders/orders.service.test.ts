@@ -101,7 +101,10 @@ afterAll(async () => {
 });
 
 describe('Order Refunds', () => {
-  async function createPaidOrder(): Promise<{ orderId: number; items: Array<{ id: number; itemName: string }> }> {
+  async function createPaidOrder(): Promise<{
+    orderId: number;
+    items: Array<{ id: number; itemName: string }>;
+  }> {
     // Create order
     const orderRes = await request(app.getHttpServer())
       .post('/orders')
@@ -206,7 +209,10 @@ describe('Order Refunds', () => {
       const { orderId, items } = await createPaidOrder();
 
       // Fully refund all items
-      const refundItems = items.map((i: any) => ({ orderItemId: i.id, qty: i.itemName === 'Zinger Burger' ? 2 : 1 }));
+      const refundItems = items.map((i: any) => ({
+        orderItemId: i.id,
+        qty: i.itemName === 'Zinger Burger' ? 2 : 1,
+      }));
 
       transport.sent = [];
 
@@ -393,9 +399,7 @@ describe('Order Refunds', () => {
       expect(types).toContain('receipt_print_succeeded');
 
       // The refund-related receipt_print_enqueued should have kickDrawer: false
-      const enqueuedEvent = eventsRes.body.find(
-        (e: any) => e.type === 'receipt_print_enqueued',
-      );
+      const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
       expect(enqueuedEvent).toBeDefined();
     });
   });

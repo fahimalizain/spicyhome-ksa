@@ -155,7 +155,12 @@ describe('RealtimeGateway', () => {
       const ws = await connect(token);
       await new Promise((r) => setTimeout(r, 50));
 
-      eventEmitter.emit('order.refund.issued', { orderId: 100, userId: 4, refundId: 1, totalHalalas: 5000 });
+      eventEmitter.emit('order.refund.issued', {
+        orderId: 100,
+        userId: 4,
+        refundId: 1,
+        totalHalalas: 5000,
+      });
 
       const msg = await waitForMessage(ws);
       expect(msg.type).toBe('order.refund.issued');

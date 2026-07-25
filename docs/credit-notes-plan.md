@@ -32,13 +32,13 @@ The doc specifically pairs "ZATCA credit note" with "receipt printed" and audit 
 
 ### Option A summary
 
-| Aspect | Design |
-|--------|--------|
-| Storage | New `credit_notes` table mirrors `invoices` but links to `refund_id`. |
-| Sequence | Single global `last_icv` counter; `allocateICV()` checks both tables. |
+| Aspect    | Design                                                                                |
+| --------- | ------------------------------------------------------------------------------------- |
+| Storage   | New `credit_notes` table mirrors `invoices` but links to `refund_id`.                 |
+| Sequence  | Single global `last_icv` counter; `allocateICV()` checks both tables.                 |
 | Reference | `related_invoice_uuid` stored; `billingReferenceId` in XML = original invoice `uuid`. |
-| Trigger | `@OnEvent('order.refund.issued')` in `ZatcaInvoiceService`. |
-| Failures | Caught and logged; refund transaction unaffected. |
+| Trigger   | `@OnEvent('order.refund.issued')` in `ZatcaInvoiceService`.                           |
+| Failures  | Caught and logged; refund transaction unaffected.                                     |
 
 ## Data Model
 
@@ -75,8 +75,12 @@ Drizzle schema export (`packages/db/src/schema.ts`):
 ```ts
 export const creditNotes = sqliteTable('credit_notes', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id').references(() => orders.id).notNull(),
-  refundId: integer('refund_id').references(() => orderRefunds.id).notNull(),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  refundId: integer('refund_id')
+    .references(() => orderRefunds.id)
+    .notNull(),
   relatedInvoiceUuid: text('related_invoice_uuid').notNull(),
   icv: integer('icv').notNull().unique(),
   uuid: text('uuid').notNull().unique(),
@@ -137,14 +141,14 @@ ZatcaInvoiceService.createCreditNote(orderId, refundId)
 
 ## Files to Touch
 
-| File | Change |
-|------|--------|
-| `packages/db/src/schema.ts` | Add `creditNotes` table export. |
-| `packages/db/drizzle/0000_initial.sql` | Add `credit_notes` DDL and indexes. |
-| `packages/db/src/schema.test.ts` | Add `credit_notes` to expected table list; add ICV/UUID/refund_id unique tests. |
-| `packages/db/src/audit-trigger.test.ts` | Include `credit_notes` in audit-field checks if applicable. |
-| `apps/server/src/modules/zatca/zatca-invoice.service.ts` | Update `allocateICV` to read both tables; add `createCreditNote()` and `onOrderRefundIssued()` listener. |
-| `apps/server/src/modules/zatca/zatca-invoice.service.test.ts` | *New file.* Assert listener catches missing-invoice errors; maybe assert happy-path row creation with a stored test key/cert. |
+| File                                                          | Change                                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/schema.ts`                                   | Add `creditNotes` table export.                                                                                               |
+| `packages/db/drizzle/0000_initial.sql`                        | Add `credit_notes` DDL and indexes.                                                                                           |
+| `packages/db/src/schema.test.ts`                              | Add `credit_notes` to expected table list; add ICV/UUID/refund_id unique tests.                                               |
+| `packages/db/src/audit-trigger.test.ts`                       | Include `credit_notes` in audit-field checks if applicable.                                                                   |
+| `apps/server/src/modules/zatca/zatca-invoice.service.ts`      | Update `allocateICV` to read both tables; add `createCreditNote()` and `onOrderRefundIssued()` listener.                      |
+| `apps/server/src/modules/zatca/zatca-invoice.service.test.ts` | _New file._ Assert listener catches missing-invoice errors; maybe assert happy-path row creation with a stored test key/cert. |
 
 No controller or OpenAPI changes are required — credit notes are driven entirely by the `order.refund.issued` event.
 
@@ -166,12 +170,12 @@ No controller or OpenAPI changes are required — credit notes are driven entire
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| ICV collision between invoices and credit notes | Single `last_icv` counter; `allocateICV` reads both tables for prev hash. |
-| Credit-note failure blocks refund | Listener wraps `createCreditNote` in try/catch and logs only, same pattern as `onOrderPaid`. |
-| Original invoice missing when refund happens | Listener logs and exits; refund still succeeds. |
-| Reports still only read `invoices` | Document that credit notes are not yet included in sales totals; they represent money returned, so the order’s paid total already reflects the pre-refund state. |
+| Risk                                            | Mitigation                                                                                                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ICV collision between invoices and credit notes | Single `last_icv` counter; `allocateICV` reads both tables for prev hash.                                                                                        |
+| Credit-note failure blocks refund               | Listener wraps `createCreditNote` in try/catch and logs only, same pattern as `onOrderPaid`.                                                                     |
+| Original invoice missing when refund happens    | Listener logs and exits; refund still succeeds.                                                                                                                  |
+| Reports still only read `invoices`              | Document that credit notes are not yet included in sales totals; they represent money returned, so the order’s paid total already reflects the pre-refund state. |
 
 ## Open Decisions
 

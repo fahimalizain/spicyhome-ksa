@@ -2,12 +2,12 @@
 
 ## Order States
 
-| Status | Meaning |
-|--------|---------|
-| `open` | Order is active. Items can be added, updated, or removed. Each item addition or qty increase prints to the kitchen immediately. |
-| `paid` | Payment completed on POS SPA. ZATCA invoice generated, receipt printed. Terminal for the happy path. |
-| `voided` | Order cancelled. Terminal. |
-| `refunded` | All items on the order have been fully refunded. Terminal. Only reachable from `paid`. |
+| Status     | Meaning                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `open`     | Order is active. Items can be added, updated, or removed. Each item addition or qty increase prints to the kitchen immediately. |
+| `paid`     | Payment completed on POS SPA. ZATCA invoice generated, receipt printed. Terminal for the happy path.                            |
+| `voided`   | Order cancelled. Terminal.                                                                                                      |
+| `refunded` | All items on the order have been fully refunded. Terminal. Only reachable from `paid`.                                          |
 
 There is no `sent` status. The kitchen is notified automatically as items are added or quantities increased — no separate "send to kitchen" step.
 
@@ -28,25 +28,25 @@ VALID_TRANSITIONS:
 
 ### Transition Details
 
-| Transition | Trigger | Allowed On | Side Effects |
-|------------|---------|------------|--------------|
-| (new) → `open` | `POST /orders` | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event |
-| `open` → `paid` | `POST /orders/:id/pay` | **POS SPA only** | Receipt printed (cash drawer kick), ZATCA invoice created, `order_events` entries for `paid` + `receipt_print_enqueued` + `receipt_print_succeeded`, `order.paid` event |
-| `open` → `voided` | `POST /orders/:id/void` | **POS SPA only** | `order_events` entry, `order.voided` event |
-| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only** | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded) |
+| Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                       |
+| ------------------- | ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                              |
+| `open` → `paid`     | `POST /orders/:id/pay`    | **POS SPA only**        | Receipt printed (cash drawer kick), ZATCA invoice created, `order_events` entries for `paid` + `receipt_print_enqueued` + `receipt_print_succeeded`, `order.paid` event                                                                                            |
+| `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                         |
+| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded) |
 
 ## Device Responsibilities
 
-| Capability | POS SPA (Windows) | Android Tablet |
-|------------|:---:|:---:|
-| Create order | Yes | Yes |
-| Add / update / remove items | Yes | Yes |
-| Make payment | **Yes** | **No** |
-| Issue refund | **Yes** | **No** |
-| Void order | **Yes** | **No** |
-| Reprint receipt / kitchen ticket | Yes | No |
-| Open / close business day | Yes | No |
-| Manage menu, tables, printers, users | Yes | No |
+| Capability                           | POS SPA (Windows) | Android Tablet |
+| ------------------------------------ | :---------------: | :------------: |
+| Create order                         |        Yes        |      Yes       |
+| Add / update / remove items          |        Yes        |      Yes       |
+| Make payment                         |      **Yes**      |     **No**     |
+| Issue refund                         |      **Yes**      |     **No**     |
+| Void order                           |      **Yes**      |     **No**     |
+| Reprint receipt / kitchen ticket     |        Yes        |       No       |
+| Open / close business day            |        Yes        |       No       |
+| Manage menu, tables, printers, users |        Yes        |       No       |
 
 > **Rule**: The Android tablet is exclusively for order item management. All payment, refund, void, and administrative operations happen on the POS SPA only. The Android app must not expose payment, refund, void, or admin endpoints in its UI.
 
@@ -55,11 +55,11 @@ VALID_TRANSITIONS:
 ### Items Are Mutable While `open`
 
 | Order Status | Add Item | Update Qty/Notes | Remove Item |
-|-------------|:---:|:---:|:---:|
-| `open` | Yes | Yes | Yes |
-| `paid` | No | No | No |
-| `voided` | No | No | No |
-| `refunded` | No | No | No |
+| ------------ | :------: | :--------------: | :---------: |
+| `open`       |   Yes    |       Yes        |     Yes     |
+| `paid`       |    No    |        No        |     No      |
+| `voided`     |    No    |        No        |     No      |
+| `refunded`   |    No    |        No        |     No      |
 
 ### Item Change History
 
@@ -117,53 +117,53 @@ Chain integrity is verified by recomputing hashes and checking `prev_hash` links
 
 #### Item Mutation Events
 
-| Type | Trigger | Payload |
-|------|---------|---------|
-| `item_added` | `POST /orders/:id/items` | `{ orderItemId, itemId, itemName, qty, unitPriceHalalas, totalHalalas, kitchenPrintedQty: <qty>, notes? }` |
-| `item_updated` | `PATCH /orders/:id/items/:itemId` | `{ orderItemId, itemName, oldQty, newQty, oldTotal, newTotal, kitchenPrintedQty: <delta or 0>, notes? }` |
-| `item_removed` | `DELETE /orders/:id/items/:itemId` | `{ orderItemId, itemName, oldQty, oldTotal }` |
+| Type           | Trigger                            | Payload                                                                                                    |
+| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `item_added`   | `POST /orders/:id/items`           | `{ orderItemId, itemId, itemName, qty, unitPriceHalalas, totalHalalas, kitchenPrintedQty: <qty>, notes? }` |
+| `item_updated` | `PATCH /orders/:id/items/:itemId`  | `{ orderItemId, itemName, oldQty, newQty, oldTotal, newTotal, kitchenPrintedQty: <delta or 0>, notes? }`   |
+| `item_removed` | `DELETE /orders/:id/items/:itemId` | `{ orderItemId, itemName, oldQty, oldTotal }`                                                              |
 
 #### Print Events (DISTINCT from item mutations)
 
 Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is written when the print is initiated (intent). The `_succeeded` event is written when the printer confirms success. An `_enqueued` event without a subsequent `_succeeded` event indicates a failed or pending print — enabling retry tracking and audit of printer failures.
 
-| Type | Trigger | Payload |
-|------|---------|---------|
-| `kitchen_print_enqueued` | Auto: item add / qty increase / reprint | `{ printer: "<name>", printerId: <id>, items: [{ orderItemId, itemName, printedQty }] }` |
-| `kitchen_print_succeeded` | Printer confirms kitchen ticket | `{ printer: "<name>", printerId: <id> }` |
-| `receipt_print_enqueued` | `POST /orders/:id/pay`, `POST /orders/:id/refund`, reprint | `{ printer: "<name>", printerId: <id>, totalHalalas, kickDrawer: bool }` |
-| `receipt_print_succeeded` | Printer confirms receipt | `{ printer: "<name>", printerId: <id> }` |
+| Type                      | Trigger                                                    | Payload                                                                                  |
+| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `kitchen_print_enqueued`  | Auto: item add / qty increase / reprint                    | `{ printer: "<name>", printerId: <id>, items: [{ orderItemId, itemName, printedQty }] }` |
+| `kitchen_print_succeeded` | Printer confirms kitchen ticket                            | `{ printer: "<name>", printerId: <id> }`                                                 |
+| `receipt_print_enqueued`  | `POST /orders/:id/pay`, `POST /orders/:id/refund`, reprint | `{ printer: "<name>", printerId: <id>, totalHalalas, kickDrawer: bool }`                 |
+| `receipt_print_succeeded` | Printer confirms receipt                                   | `{ printer: "<name>", printerId: <id> }`                                                 |
 
 > **Print events are separate from item mutation events.** A single item addition produces an `item_added` event (audit: what changed) AND a `kitchen_print_enqueued` + `kitchen_print_succeeded` pair (operational: what the printer received and whether it succeeded). Information is intentionally duplicated — `item_added` carries `kitchenPrintedQty` so per-item printed totals can be derived from item events alone without joining across event types.
 
 #### Status Transition Events
 
-| Type | Trigger | Payload |
-|------|---------|---------|
-| `created` | `POST /orders` | `{ type, tableId, orderNo, uuid }` |
-| `paid` | `POST /orders/:id/pay` | `{ fromStatus: "open", toStatus: "paid" }` |
-| `voided` | `POST /orders/:id/void` | `{ fromStatus: "open", toStatus: "voided" }` |
+| Type            | Trigger                   | Payload                                                                                      |
+| --------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid }`                                                           |
+| `paid`          | `POST /orders/:id/pay`    | `{ fromStatus: "open", toStatus: "paid" }`                                                   |
+| `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                 |
 | `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
-| `refunded` | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }` |
+| `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                               |
 
 ### Payload Fields for Item Mutations
 
 Every `item_added`, `item_updated`, and `item_removed` event carries enough data to reconstruct the full item history:
 
-| Field | `item_added` | `item_updated` | `item_removed` |
-|-------|:---:|:---:|:---:|
-| `orderItemId` | Yes | Yes | Yes |
-| `itemId` | Yes | — | — |
-| `itemName` | Yes | Yes | Yes |
-| `qty` | Yes | — | — |
-| `oldQty` | — | Yes | Yes |
-| `newQty` | — | Yes | — |
-| `oldTotal` | — | Yes | Yes |
-| `newTotal` | — | Yes | — |
-| `unitPriceHalalas` | Yes | — | — |
-| `totalHalalas` | Yes | — | — |
-| `notes` | Yes | Yes | — |
-| `kitchenPrintedQty` | Yes (full qty) | Yes (delta or 0) | — |
+| Field               |  `item_added`  |  `item_updated`  | `item_removed` |
+| ------------------- | :------------: | :--------------: | :------------: |
+| `orderItemId`       |      Yes       |       Yes        |      Yes       |
+| `itemId`            |      Yes       |        —         |       —        |
+| `itemName`          |      Yes       |       Yes        |      Yes       |
+| `qty`               |      Yes       |        —         |       —        |
+| `oldQty`            |       —        |       Yes        |      Yes       |
+| `newQty`            |       —        |       Yes        |       —        |
+| `oldTotal`          |       —        |       Yes        |      Yes       |
+| `newTotal`          |       —        |       Yes        |       —        |
+| `unitPriceHalalas`  |      Yes       |        —         |       —        |
+| `totalHalalas`      |      Yes       |        —         |       —        |
+| `notes`             |      Yes       |       Yes        |       —        |
+| `kitchenPrintedQty` | Yes (full qty) | Yes (delta or 0) |       —        |
 
 ### Deriving `kitchen_printed_qty` from the Ledger
 
@@ -194,12 +194,12 @@ Kitchen prints happen as a side effect of item mutations — no explicit "send t
 
 ### When Kitchen Prints
 
-| Trigger | What Prints |
-|---------|------------|
-| Item added (`item_added`) | Full qty of the new item |
+| Trigger                                           | What Prints                              |
+| ------------------------------------------------- | ---------------------------------------- |
+| Item added (`item_added`)                         | Full qty of the new item                 |
 | Qty increased (`item_updated`, `newQty > oldQty`) | Delta: `newQty - previouslyPrintedTotal` |
-| Qty decreased | Nothing |
-| Item removed | Nothing |
+| Qty decreased                                     | Nothing                                  |
+| Item removed                                      | Nothing                                  |
 
 > `previouslyPrintedTotal` is derived by summing `kitchenPrintedQty` from all prior `item_added` and `item_updated` events for that `orderItemId`.
 
@@ -273,33 +273,33 @@ refund (partial) → refund_issued + receipt_print_enqueued + receipt_print_succ
 
 **`order_refunds`** — one row per refund transaction:
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | integer PK | |
-| `order_id` | integer FK → orders.id | |
-| `user_id` | integer FK → users.id | |
-| `subtotal_halalas` | integer | Sum of refunded item subtotals (excl. VAT) |
-| `vat_halalas` | integer | VAT portion of the refund |
-| `total_halalas` | integer | Total amount refunded |
-| `reason` | text | Optional |
-| `created_at` | integer | Unix epoch |
-| `created_by` | integer FK | |
-| `updated_at` | integer | |
-| `updated_by` | integer FK | |
+| Column             | Type                   | Description                                |
+| ------------------ | ---------------------- | ------------------------------------------ |
+| `id`               | integer PK             |                                            |
+| `order_id`         | integer FK → orders.id |                                            |
+| `user_id`          | integer FK → users.id  |                                            |
+| `subtotal_halalas` | integer                | Sum of refunded item subtotals (excl. VAT) |
+| `vat_halalas`      | integer                | VAT portion of the refund                  |
+| `total_halalas`    | integer                | Total amount refunded                      |
+| `reason`           | text                   | Optional                                   |
+| `created_at`       | integer                | Unix epoch                                 |
+| `created_by`       | integer FK             |                                            |
+| `updated_at`       | integer                |                                            |
+| `updated_by`       | integer FK             |                                            |
 
 **`order_refund_items`** — one row per item/qty refunded:
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | integer PK | |
-| `refund_id` | integer FK → order_refunds.id (CASCADE) | |
-| `order_item_id` | integer FK → order_items.id | |
-| `item_name` | text | Snapshot at refund time |
-| `unit_price_halalas` | integer | Snapshot at refund time |
-| `vat_rate_bp` | integer | Snapshot at refund time |
-| `qty` | integer | Quantity being refunded |
-| `total_halalas` | integer | Refund amount for this line |
-| `created_at` | integer | |
+| Column               | Type                                    | Description                 |
+| -------------------- | --------------------------------------- | --------------------------- |
+| `id`                 | integer PK                              |                             |
+| `refund_id`          | integer FK → order_refunds.id (CASCADE) |                             |
+| `order_item_id`      | integer FK → order_items.id             |                             |
+| `item_name`          | text                                    | Snapshot at refund time     |
+| `unit_price_halalas` | integer                                 | Snapshot at refund time     |
+| `vat_rate_bp`        | integer                                 | Snapshot at refund time     |
+| `qty`                | integer                                 | Quantity being refunded     |
+| `total_halalas`      | integer                                 | Refund amount for this line |
+| `created_at`         | integer                                 |                             |
 
 ### API
 
@@ -330,73 +330,73 @@ Response: { success: true, refundId: number }
 
 ## Endpoint Summary
 
-| Endpoint | Permission | POS SPA | Android Tablet |
-|----------|-----------|:---:|:---:|
-| `POST /orders` | `create_order` | Yes | Yes |
-| `GET /orders` | none | Yes | Yes |
-| `GET /orders/:id` | none | Yes | Yes |
-| `GET /orders/:id/events` | none | Yes | No |
-| `GET /orders/:id/events/verify` | none | Yes | No |
-| `POST /orders/:id/items` | `update_order` | Yes | Yes |
-| `PATCH /orders/:orderId/items/:itemId` | `update_order` | Yes | Yes |
-| `DELETE /orders/:orderId/items/:itemId` | `delete_order_item` | Yes | Yes |
-| `POST /orders/:id/pay` | `pay_order` | **Yes** | **No** |
-| `POST /orders/:id/refund` | `refund_order` | **Yes** | **No** |
-| `GET /orders/:id/refunds` | none | Yes | No |
-| `POST /orders/:id/void` | `void_order` | **Yes** | **No** |
-| `POST /orders/:id/print` | `update_order` | Yes | No |
+| Endpoint                                | Permission          | POS SPA | Android Tablet |
+| --------------------------------------- | ------------------- | :-----: | :------------: |
+| `POST /orders`                          | `create_order`      |   Yes   |      Yes       |
+| `GET /orders`                           | none                |   Yes   |      Yes       |
+| `GET /orders/:id`                       | none                |   Yes   |      Yes       |
+| `GET /orders/:id/events`                | none                |   Yes   |       No       |
+| `GET /orders/:id/events/verify`         | none                |   Yes   |       No       |
+| `POST /orders/:id/items`                | `update_order`      |   Yes   |      Yes       |
+| `PATCH /orders/:orderId/items/:itemId`  | `update_order`      |   Yes   |      Yes       |
+| `DELETE /orders/:orderId/items/:itemId` | `delete_order_item` |   Yes   |      Yes       |
+| `POST /orders/:id/pay`                  | `pay_order`         | **Yes** |     **No**     |
+| `POST /orders/:id/refund`               | `refund_order`      | **Yes** |     **No**     |
+| `GET /orders/:id/refunds`               | none                |   Yes   |       No       |
+| `POST /orders/:id/void`                 | `void_order`        | **Yes** |     **No**     |
+| `POST /orders/:id/print`                | `update_order`      |   Yes   |       No       |
 
 > The Android app should only bind to endpoints for order creation and item management. The server enforces via permission guards; the Android client is a restricted UI surface.
 
 ## WebSocket Events
 
-| Event | When |
-|-------|------|
-| `order.created` | New order |
-| `order.item.added` | Item added (includes kitchen print) |
-| `order.item.updated` | Item qty/notes changed |
-| `order.item.removed` | Item removed |
-| `order.paid` | Payment completed |
-| `order.voided` | Order voided |
-| `order.refund.issued` | Refund issued (both partial and full refunds) |
-| `order.refunded` | Order fully refunded (status transition to `refunded` only) |
+| Event                 | When                                                        |
+| --------------------- | ----------------------------------------------------------- |
+| `order.created`       | New order                                                   |
+| `order.item.added`    | Item added (includes kitchen print)                         |
+| `order.item.updated`  | Item qty/notes changed                                      |
+| `order.item.removed`  | Item removed                                                |
+| `order.paid`          | Payment completed                                           |
+| `order.voided`        | Order voided                                                |
+| `order.refund.issued` | Refund issued (both partial and full refunds)               |
+| `order.refunded`      | Order fully refunded (status transition to `refunded` only) |
 
 ## Schema Changes Summary
 
 ### Removed
 
-| Item | Reason |
-|------|--------|
-| `order_audit_log` table | Replaced by `order_events`. |
-| `AuditLogService` | Logic moves into `OrderEventsService`. |
-| `orders.status = 'sent'` | Kitchen notified automatically on item mutations. |
-| `POST /orders/:id/send` endpoint | Replaced by automatic kitchen printing. |
-| `SENT` from `OrderStatus` enum | No longer a state. |
+| Item                                                 | Reason                                                                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `order_audit_log` table                              | Replaced by `order_events`.                                                                                                       |
+| `AuditLogService`                                    | Logic moves into `OrderEventsService`.                                                                                            |
+| `orders.status = 'sent'`                             | Kitchen notified automatically on item mutations.                                                                                 |
+| `POST /orders/:id/send` endpoint                     | Replaced by automatic kitchen printing.                                                                                           |
+| `SENT` from `OrderStatus` enum                       | No longer a state.                                                                                                                |
 | `SENT_TO_KITCHEN`, `PRINTED` from `AuditAction` enum | Replaced by `kitchen_print_enqueued`, `kitchen_print_succeeded`, `receipt_print_enqueued`, `receipt_print_succeeded` event types. |
 
 ### New
 
-| Item | Purpose |
-|------|---------|
-| `order_events` table | Unified immutable ledger: item mutations, kitchen prints, receipt prints, status transitions. |
-| `OrderEventsService` | Hash-chain management, event creation, chain verification, `kitchen_printed_qty` derivation. |
-| `order_refunds` table | Refund transaction headers. |
-| `order_refund_items` table | Individual items refunded per transaction. |
-| `pay_order` permission on `user_roles` | New permission for payment operations (was guarded by `create_order`). |
+| Item                                   | Purpose                                                                                       |
+| -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `order_events` table                   | Unified immutable ledger: item mutations, kitchen prints, receipt prints, status transitions. |
+| `OrderEventsService`                   | Hash-chain management, event creation, chain verification, `kitchen_printed_qty` derivation.  |
+| `order_refunds` table                  | Refund transaction headers.                                                                   |
+| `order_refund_items` table             | Individual items refunded per transaction.                                                    |
+| `pay_order` permission on `user_roles` | New permission for payment operations (was guarded by `create_order`).                        |
 
 ### Modified
 
-| Item | Change |
-|------|--------|
-| `VALID_TRANSITIONS` | `open → [paid, voided]`, `paid → [refunded]` |
-| `addItem` / `updateItem` / `removeItem` | Gate on `status NOT IN ('paid', 'voided', 'refunded')`. Emit kitchen print on add/increase. Write `order_events` entries. |
-| `payOrder` / `voidOrder` | Write `order_events` entries instead of `order_audit_log`. |
-| `reprintOrder` | Write `order_events` entry. |
-| `BusinessDayService.closeDay` | Block close if any `open` orders exist (was `open` or `sent`). |
-| `PrintJobService` | Remove `onOrderSent` listener. Kitchen prints happen inline during item mutations. Delta-only prints use ledger-derived `previouslyPrintedTotal`. |
-| `shared/src/enums.ts` | Remove `SENT`, `SENT_TO_KITCHEN`, `PRINTED`. Add `KITCHEN_PRINT_ENQUEUED`, `KITCHEN_PRINT_SUCCEEDED`, `RECEIPT_PRINT_ENQUEUED`, `RECEIPT_PRINT_SUCCEEDED`, `REFUND_ISSUED`, `ITEM_UPDATED`. |
-| `shared/src/types.ts` | Remove `order.sent` WS event. Add `order.refund.issued`. Update `WS_EVENTS`. |
-| `db/src/schema.ts` | Replace `order_audit_log` with `order_events` (add `event_idx` + `UNIQUE(order_id, event_idx)`). Add `order_refunds`, `order_refund_items`. Add `pay_order` boolean column to `user_roles`. |
+| Item                                    | Change                                                                                                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VALID_TRANSITIONS`                     | `open → [paid, voided]`, `paid → [refunded]`                                                                                                                                                |
+| `addItem` / `updateItem` / `removeItem` | Gate on `status NOT IN ('paid', 'voided', 'refunded')`. Emit kitchen print on add/increase. Write `order_events` entries.                                                                   |
+| `payOrder` / `voidOrder`                | Write `order_events` entries instead of `order_audit_log`.                                                                                                                                  |
+| `reprintOrder`                          | Write `order_events` entry.                                                                                                                                                                 |
+| `BusinessDayService.closeDay`           | Block close if any `open` orders exist (was `open` or `sent`).                                                                                                                              |
+| `PrintJobService`                       | Remove `onOrderSent` listener. Kitchen prints happen inline during item mutations. Delta-only prints use ledger-derived `previouslyPrintedTotal`.                                           |
+| `shared/src/enums.ts`                   | Remove `SENT`, `SENT_TO_KITCHEN`, `PRINTED`. Add `KITCHEN_PRINT_ENQUEUED`, `KITCHEN_PRINT_SUCCEEDED`, `RECEIPT_PRINT_ENQUEUED`, `RECEIPT_PRINT_SUCCEEDED`, `REFUND_ISSUED`, `ITEM_UPDATED`. |
+| `shared/src/types.ts`                   | Remove `order.sent` WS event. Add `order.refund.issued`. Update `WS_EVENTS`.                                                                                                                |
+| `db/src/schema.ts`                      | Replace `order_audit_log` with `order_events` (add `event_idx` + `UNIQUE(order_id, event_idx)`). Add `order_refunds`, `order_refund_items`. Add `pay_order` boolean column to `user_roles`. |
 
 ## Migration Plan
 

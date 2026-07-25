@@ -1,6 +1,14 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { orders, orderItems, orderRefunds, orderRefundItems, items, itemCategories, tables } from '@spicyhome/db';
+import {
+  orders,
+  orderItems,
+  orderRefunds,
+  orderRefundItems,
+  items,
+  itemCategories,
+  tables,
+} from '@spicyhome/db';
 import { PrinterRole } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService, PrinterRecord } from './printers.service';
@@ -180,18 +188,22 @@ export class PrintJobService {
     }
 
     // Group deltas by printer
-    const printerGroups = new Map<number, {
-      printer: PrinterRecord;
-      items: Array<{ orderItemId: number; printedQty: number; itemName: string; notes?: string | null }>;
-    }>();
+    const printerGroups = new Map<
+      number,
+      {
+        printer: PrinterRecord;
+        items: Array<{
+          orderItemId: number;
+          printedQty: number;
+          itemName: string;
+          notes?: string | null;
+        }>;
+      }
+    >();
 
     for (const d of deltas) {
       // Resolve printer by looking up the order item's source item
-      const oi = this.db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.id, d.orderItemId))
-        .get();
+      const oi = this.db.select().from(orderItems).where(eq(orderItems.id, d.orderItemId)).get();
 
       let printer: PrinterRecord | null = null;
       if (oi?.itemId) {
@@ -270,10 +282,13 @@ export class PrintJobService {
     }
 
     // Group items by kitchen printer
-    const printerGroups = new Map<number, {
-      printer: PrinterRecord;
-      items: Array<{ qty: number; name: string; notes?: string | null }>;
-    }>();
+    const printerGroups = new Map<
+      number,
+      {
+        printer: PrinterRecord;
+        items: Array<{ qty: number; name: string; notes?: string | null }>;
+      }
+    >();
 
     for (const oi of oiRows) {
       let printer: PrinterRecord | null = null;

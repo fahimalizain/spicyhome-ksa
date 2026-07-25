@@ -214,10 +214,14 @@ describe('OrderEventsService', () => {
 
   describe('getPrintedQty', () => {
     function insertOrderItem(id: number, orderId: number) {
-      sqlite.prepare(`
+      sqlite
+        .prepare(
+          `
         INSERT INTO order_items (id, order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
         VALUES (?, ?, 'Test Item', 1000, 1500, 1, 1000, 1000, 1000)
-      `).run(id, orderId);
+      `,
+        )
+        .run(id, orderId);
     }
 
     it('returns 0 when there are no events', () => {
@@ -230,27 +234,33 @@ describe('OrderEventsService', () => {
       const txn = db;
 
       // Simulate writing events directly (bypassing service to set specific payload)
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 1,
-        userId: 1,
-        type: 'item_added',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
-        prevHash: '',
-        hash: 'dummy1',
-        createdAt: 1000,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 2,
-        userId: 1,
-        type: 'item_updated',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 3 }),
-        prevHash: 'dummy1',
-        hash: 'dummy2',
-        createdAt: 1001,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'item_updated',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 3 }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
 
       expect(service.getPrintedQty(txn, 5)).toBe(8);
     });
@@ -259,27 +269,33 @@ describe('OrderEventsService', () => {
       insertOrder(1);
       const txn = db;
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 1,
-        userId: 1,
-        type: 'item_added',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
-        prevHash: '',
-        hash: 'dummy1',
-        createdAt: 1000,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 2,
-        userId: 1,
-        type: 'item_added',
-        payload: JSON.stringify({ orderItemId: 99, kitchenPrintedQty: 10 }),
-        prevHash: 'dummy1',
-        hash: 'dummy2',
-        createdAt: 1001,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 99, kitchenPrintedQty: 10 }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
 
       // Only item 5's qty should be counted
       expect(service.getPrintedQty(txn, 5)).toBe(5);
@@ -290,27 +306,33 @@ describe('OrderEventsService', () => {
       insertOrder(1);
       const txn = db;
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 1,
-        userId: 1,
-        type: 'item_added',
-        payload: JSON.stringify({ orderItemId: 5, itemName: 'Test' }),
-        prevHash: '',
-        hash: 'dummy1',
-        createdAt: 1000,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, itemName: 'Test' }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 2,
-        userId: 1,
-        type: 'item_updated',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 2 }),
-        prevHash: 'dummy1',
-        hash: 'dummy2',
-        createdAt: 1001,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'item_updated',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 2 }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
 
       // First event has no kitchenPrintedQty, second has 2
       expect(service.getPrintedQty(txn, 5)).toBe(2);
@@ -320,27 +342,33 @@ describe('OrderEventsService', () => {
       insertOrder(1);
       const txn = db;
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 1,
-        userId: 1,
-        type: 'item_added',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
-        prevHash: '',
-        hash: 'dummy1',
-        createdAt: 1000,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 2,
-        userId: 1,
-        type: 'item_removed',
-        payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 999 }),
-        prevHash: 'dummy1',
-        hash: 'dummy2',
-        createdAt: 1001,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'item_removed',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 999 }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
 
       // item_removed should not be counted even if it has kitchenPrintedQty
       expect(service.getPrintedQty(txn, 5)).toBe(5);
@@ -350,16 +378,19 @@ describe('OrderEventsService', () => {
       insertOrder(1);
       const txn = db;
 
-      txn.insert(orderEvents).values({
-        orderId: 1,
-        eventIdx: 1,
-        userId: 1,
-        type: 'item_added',
-        payload: 'not-valid-json{{{',
-        prevHash: '',
-        hash: 'dummy1',
-        createdAt: 1000,
-      }).run();
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: 'not-valid-json{{{',
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
 
       // Should not throw
       expect(service.getPrintedQty(txn, 5)).toBe(0);

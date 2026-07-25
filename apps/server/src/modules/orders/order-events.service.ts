@@ -45,7 +45,15 @@ export class OrderEventsService {
     const prevHash = lastHash?.hash ?? '';
 
     const payloadJson = JSON.stringify(payload);
-    const hash = this.computeHash(orderId, eventIdx, userId, type, payloadJson, prevHash, createdAt);
+    const hash = this.computeHash(
+      orderId,
+      eventIdx,
+      userId,
+      type,
+      payloadJson,
+      prevHash,
+      createdAt,
+    );
 
     const result = tx
       .insert(orderEvents)
@@ -73,10 +81,7 @@ export class OrderEventsService {
       .all();
   }
 
-  verifyChain(
-    _orderId: number,
-    entries: any[],
-  ): { valid: boolean; brokenAt?: number } {
+  verifyChain(_orderId: number, entries: any[]): { valid: boolean; brokenAt?: number } {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const expectedPrevHash = i === 0 ? '' : entries[i - 1].hash;
@@ -103,9 +108,7 @@ export class OrderEventsService {
     const rows = tx
       .select({ type: orderEvents.type, payload: orderEvents.payload })
       .from(orderEvents)
-      .where(
-        sql`${orderEvents.type} IN ('item_added', 'item_updated')`,
-      )
+      .where(sql`${orderEvents.type} IN ('item_added', 'item_updated')`)
       .all() as Array<{ type: string; payload: string }>;
 
     let total = 0;

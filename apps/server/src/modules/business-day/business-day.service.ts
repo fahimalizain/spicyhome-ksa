@@ -62,12 +62,7 @@ export class BusinessDayService {
     const openOrders = this.db
       .select({ id: orders.id, orderNo: orders.orderNo, status: orders.status })
       .from(orders)
-      .where(
-        and(
-          eq(orders.dayOpeningId, openDay.id),
-          eq(orders.status, 'open'),
-        ),
-      )
+      .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'open')))
       .all();
 
     if (openOrders.length > 0) {

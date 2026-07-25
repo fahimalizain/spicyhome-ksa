@@ -670,12 +670,7 @@ export class OrdersService {
           .select()
           .from(orderRefundItems)
           .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
-          .where(
-            and(
-              eq(orderRefunds.orderId, orderId),
-              eq(orderRefundItems.orderItemId, oi.id),
-            ),
-          )
+          .where(and(eq(orderRefunds.orderId, orderId), eq(orderRefundItems.orderItemId, oi.id)))
           .all();
         const totalRefundedQty = refRows.reduce(
           (s: number, row: any) => s + row.order_refund_items.qty,
@@ -863,13 +858,15 @@ export class OrdersService {
     const now = Math.floor(Date.now() / 1000);
 
     // Group order items by kitchen printer and write enqueued events
-    const oiRows = this.db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId))
-      .all();
+    const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
 
-    const printerGroups = new Map<number, { printer: PrinterRecord; items: Array<{ orderItemId: number; itemName: string; printedQty: number }> }>();
+    const printerGroups = new Map<
+      number,
+      {
+        printer: PrinterRecord;
+        items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+      }
+    >();
 
     for (const oi of oiRows) {
       if (!oi.itemId) continue;
