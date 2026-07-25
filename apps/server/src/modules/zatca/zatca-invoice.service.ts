@@ -20,7 +20,15 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { eq, desc, and } from 'drizzle-orm';
-import { orders, orderItems, invoices, creditNotes, orderRefunds, orderRefundItems, settings } from '@spicyhome/db';
+import {
+  orders,
+  orderItems,
+  invoices,
+  creditNotes,
+  orderRefunds,
+  orderRefundItems,
+  settings,
+} from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { createAuditFields } from '../../common/audit-fields.helper';
@@ -318,11 +326,7 @@ export class ZatcaInvoiceService {
     }
 
     // 2. Load refund row
-    const refund = this.db
-      .select()
-      .from(orderRefunds)
-      .where(eq(orderRefunds.id, refundId))
-      .get();
+    const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
     if (!refund) {
       throw new Error(`Refund ${refundId} not found`);
     }
@@ -368,13 +372,14 @@ export class ZatcaInvoiceService {
     };
 
     // 6. Load keys and certificate
-    const privateKeyHex = this.getPrivateKey();
+    const env = this.getEnv();
+    const privateKeyHex = this.getPrivateKey(env);
     if (!privateKeyHex) {
       throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
-    const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
-    const certBase64 = this.getCertificate();
+    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, 'public_key'), '');
+    const certBase64 = this.getCertificate(env);
 
     // 7. Build invoice items from refund items
     const invItems: InvoiceItemInput[] = refundItems.map((ri) => ({
@@ -395,7 +400,7 @@ export class ZatcaInvoiceService {
 
     // 9. Allocate ICV and get PIH atomically (checks both invoices and credit_notes)
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateICV(tx);
+      return this.allocateICV(tx, env);
     });
 
     // 10. Generate UUID

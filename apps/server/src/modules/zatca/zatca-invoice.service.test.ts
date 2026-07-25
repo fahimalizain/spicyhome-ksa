@@ -15,7 +15,8 @@ import { PrintersModule } from '../printers/printers.module';
 import { PrintersService } from '../printers/printers.service';
 import { DRIZZLE } from '../database/database.module';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
-import { generateKeyPair, encryptAtRest } from './zatca-crypto.service';
+import { generateKeyPair } from './zatca-crypto.service';
+import { zatcaKey } from '@spicyhome/shared';
 import * as forge from 'node-forge';
 
 // ── Test certificate helper ──────────────────────────────────────────────────
@@ -58,6 +59,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
   let service: ZatcaInvoiceService;
   let printersService: PrintersService;
   let now: number;
+  const LAST_ICV_KEY = zatcaKey('simulation', 'last_icv');
 
   beforeAll(async () => {
     sqlite = new Database(':memory:');
@@ -115,18 +117,15 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
     // Generate secp256k1 key pair for signing
     const keyPair = generateKeyPair();
-    const enc = encryptAtRest(keyPair.privateKeyHex, 'spicyhome-zatca-secret-change-me');
+    const testSecret = 'spicyhome-zatca-secret-change-me';
 
-    // Store encrypted private key
-    printersService.setSetting('zatca_private_key_encrypted', enc.ciphertext);
-    printersService.setSetting('zatca_private_key_iv', enc.iv);
-    printersService.setSetting('zatca_private_key_salt', enc.salt);
-    printersService.setSetting('zatca_private_key_auth_tag', enc.authTag);
-    printersService.setSetting('zatca_public_key', keyPair.publicKeyHex);
+    // Store encrypted private key parts using the simulation-scoped keys
+    service.storePrivateKey(keyPair.privateKeyHex, testSecret, 'simulation');
+    printersService.setSetting(zatcaKey('simulation', 'public_key'), keyPair.publicKeyHex);
 
     // Generate and store a test X.509 certificate
     const zatcaCert = createTestZatcaCert();
-    printersService.setSetting('zatca_compliance_cert', zatcaCert);
+    printersService.setSetting(zatcaKey('simulation', 'compliance_cert'), zatcaCert);
   });
 
   afterAll(async () => {
@@ -135,7 +134,11 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
   // ── Helper: create a paid order with invoice ──────────────────────────────
 
-  function createPaidOrderWithInvoice(): { orderId: number; invoiceId: number; invoiceUuid: string } {
+  function createPaidOrderWithInvoice(): {
+    orderId: number;
+    invoiceId: number;
+    invoiceUuid: string;
+  } {
     // create day_opening
     sqlite.exec(`
       INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
@@ -164,7 +167,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
     const invoiceId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
     // Set last_icv to match the invoice's ICV so the next allocateICV call gets 2
-    sqlite.exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('last_icv', '1')`);
+    sqlite.exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('${LAST_ICV_KEY}', '1')`);
 
     return { orderId, invoiceId, invoiceUuid: 'invoice-uuid-001' };
   }
@@ -221,15 +224,15 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Assert error was logged
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `Failed to create ZATCA credit note for refund ${refundId}`,
-        ),
+        expect.stringContaining(`Failed to create ZATCA credit note for refund ${refundId}`),
       );
 
       // No credit_note row should exist in the DB
-      const creditNoteCount = (sqlite
-        .prepare('SELECT COUNT(*) as cnt FROM credit_notes WHERE order_id = ?')
-        .get(orderId) as any).cnt;
+      const creditNoteCount = (
+        sqlite
+          .prepare('SELECT COUNT(*) as cnt FROM credit_notes WHERE order_id = ?')
+          .get(orderId) as any
+      ).cnt;
       expect(creditNoteCount).toBe(0);
 
       loggerErrorSpy.mockRestore();
@@ -251,9 +254,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-      await expect(
-        service.createCreditNote(orderId, 1),
-      ).rejects.toThrow(`No original invoice found for order ${orderId}`);
+      await expect(service.createCreditNote(orderId, 1)).rejects.toThrow(
+        `No original invoice found for order ${orderId}`,
+      );
     });
 
     it('produces a credit_notes row with correct data on happy path', async () => {
@@ -284,9 +287,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // XML assertions
       expect(row.xml).toContain('<Invoice');
-      expect(row.xml).toContain(
-        '<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>',
-      );
+      expect(row.xml).toContain('<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>');
       expect(row.xml).toContain('BillingReference');
       expect(row.xml).toContain(invoiceUuid);
       expect(row.xml).toContain('<cbc:InstructionNote>Item was cold</cbc:InstructionNote>');
@@ -317,12 +318,19 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       // Sync last_icv to match the latest state (previous tests may have incremented it)
-      sqlite.exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('last_icv', '2')`);
+      const lastIcvRowReason = sqlite
+        .prepare(`SELECT value FROM settings WHERE key = '${LAST_ICV_KEY}'`)
+        .get() as any;
+      const currentLastIcvReason = lastIcvRowReason ? parseInt(lastIcvRowReason.value, 10) : 0;
+      const invoiceIcvReason = currentLastIcvReason + 1;
 
       sqlite.exec(`
         INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-        VALUES (${orderId}, 3, 'invoice-uuid-003', 'hash-003', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+        VALUES (${orderId}, ${invoiceIcvReason}, 'invoice-uuid-003', 'hash-003', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
+      sqlite.exec(
+        `INSERT OR REPLACE INTO settings (key, value) VALUES ('${LAST_ICV_KEY}', '${invoiceIcvReason}')`,
+      );
 
       // Create refund with NULL reason
       sqlite.exec(`
@@ -362,9 +370,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       // Read the current last_icv to determine the next ICV for our invoice
-      const lastIcvRow = sqlite.prepare(
-        "SELECT value FROM settings WHERE key = 'last_icv'",
-      ).get() as any;
+      const lastIcvRow = sqlite
+        .prepare(`SELECT value FROM settings WHERE key = '${LAST_ICV_KEY}'`)
+        .get() as any;
       const currentLastIcv = lastIcvRow ? parseInt(lastIcvRow.value, 10) : 0;
       const nextIcv = currentLastIcv + 1;
 
@@ -374,7 +382,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
         VALUES (${orderId}, ${nextIcv}, 'invoice-uuid-seq', 'hash-seq', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
       // Update last_icv to reflect this invoice's ICV
-      sqlite.exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('last_icv', '${nextIcv}')`);
+      sqlite.exec(
+        `INSERT OR REPLACE INTO settings (key, value) VALUES ('${LAST_ICV_KEY}', '${nextIcv}')`,
+      );
 
       // Refund
       sqlite.exec(`
