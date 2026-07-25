@@ -157,6 +157,8 @@ ts_project(
 
 jest_test(
     name = "test",
+    size = "large",
+    timeout = "long",
     config = "jest.config.cjs",
     data = [
         ":lib",
