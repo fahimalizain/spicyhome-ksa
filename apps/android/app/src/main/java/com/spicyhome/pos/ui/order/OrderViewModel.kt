@@ -24,8 +24,8 @@ import java.math.BigDecimal
 
 data class CartItem(
     val item: ItemResponse,
-    var qty: Int = 1,
-    var notes: String = "",
+    val qty: Int = 1,
+    val notes: String = "",
 )
 
 enum class OrderType(val value: String) {
@@ -48,7 +48,7 @@ data class OrderUiState(
     val items: List<ItemResponse> = emptyList(),
     val tables: List<TableResponse> = emptyList(),
     val selectedCategoryId: Long? = null,
-    val cart: MutableList<CartItem> = mutableListOf(),
+    val cart: List<CartItem> = emptyList(),
     val orderType: OrderType = OrderType.DINE_IN,
     val selectedTableId: Long? = null,
     val currentOrderId: Long? = null,
@@ -225,10 +225,10 @@ class OrderViewModel(
     }
 
     fun addToCart(item: ItemResponse) {
-        val cart = _uiState.value.cart
-        val existing = cart.find { it.item.id == item.id }
-        if (existing != null) {
-            existing.qty++
+        val cart = _uiState.value.cart.toMutableList()
+        val idx = cart.indexOfFirst { it.item.id == item.id }
+        if (idx >= 0) {
+            cart[idx] = cart[idx].copy(qty = cart[idx].qty + 1)
         } else {
             cart.add(CartItem(item = item))
         }
@@ -236,7 +236,7 @@ class OrderViewModel(
     }
 
     fun removeFromCart(index: Int) {
-        val cart = _uiState.value.cart
+        val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
             cart.removeAt(index)
         }
@@ -244,19 +244,19 @@ class OrderViewModel(
     }
 
     fun increaseQty(index: Int) {
-        val cart = _uiState.value.cart
+        val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
-            cart[index].qty++
+            cart[index] = cart[index].copy(qty = cart[index].qty + 1)
         }
         _uiState.value = _uiState.value.copy(cart = cart)
     }
 
     fun decreaseQty(index: Int) {
-        val cart = _uiState.value.cart
+        val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
             val item = cart[index]
             if (item.qty > 1) {
-                item.qty--
+                cart[index] = item.copy(qty = item.qty - 1)
             } else {
                 cart.removeAt(index)
             }
@@ -265,9 +265,9 @@ class OrderViewModel(
     }
 
     fun updateItemNotes(index: Int, notes: String) {
-        val cart = _uiState.value.cart
+        val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
-            cart[index].notes = notes
+            cart[index] = cart[index].copy(notes = notes)
             _uiState.value = _uiState.value.copy(cart = cart)
         }
     }
@@ -454,7 +454,7 @@ class OrderViewModel(
         )
     }
 
-    fun closeDay() {
+    fun logout() {
         viewModelScope.launch {
             preferencesManager.clearAuth()
             _uiState.value = OrderUiState()

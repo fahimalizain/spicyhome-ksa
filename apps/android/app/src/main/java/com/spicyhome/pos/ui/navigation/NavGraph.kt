@@ -1,6 +1,7 @@
 package com.spicyhome.pos.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -10,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.spicyhome.pos.SpicyHomeApp
 import com.spicyhome.pos.data.PreferencesManager
+import com.spicyhome.pos.data.SessionManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.ui.login.LoginScreen
 import com.spicyhome.pos.ui.login.LoginViewModel
@@ -34,9 +36,18 @@ object NavRoutes {
 fun NavGraph(
     preferencesManager: PreferencesManager,
     apiClientProvider: ApiClientProvider,
+    sessionManager: SessionManager,
 ) {
     val navController = rememberNavController()
     val app = LocalContext.current.applicationContext as SpicyHomeApp
+
+    LaunchedEffect(sessionManager) {
+        sessionManager.unauthorized.collect {
+            navController.navigate(NavRoutes.LOGIN) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -74,20 +85,20 @@ fun NavGraph(
         composable(
             route = "order?tableId={tableId}&orderId={orderId}",
             arguments = listOf(
-                navArgument("tableId") { type = NavType.LongType; nullable = true; defaultValue = null },
-                navArgument("orderId") { type = NavType.LongType; nullable = true; defaultValue = null },
+                navArgument("tableId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("orderId") { type = NavType.StringType; nullable = true; defaultValue = null },
             ),
         ) { backStackEntry ->
             val args = backStackEntry.arguments
-            val initialTableId: Long? = args?.let { b -> if (b.containsKey("tableId") && b.get("tableId") != null) b.getLong("tableId") else null }
-            val initialOrderId: Long? = args?.let { b -> if (b.containsKey("orderId") && b.get("orderId") != null) b.getLong("orderId") else null }
+            val initialTableId: Long? = args?.getString("tableId")?.toLongOrNull()
+            val initialOrderId: Long? = args?.getString("orderId")?.toLongOrNull()
             val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider, initialTableId, initialOrderId))
             OrderScreen(
                 viewModel = vm,
                 onViewOrders = { navController.navigate(NavRoutes.ORDERS) },
                 onViewTables = { navController.navigate(NavRoutes.TABLES) },
                 onLogout = {
-                    navController.navigate(NavRoutes.SETUP) {
+                    navController.navigate(NavRoutes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 }

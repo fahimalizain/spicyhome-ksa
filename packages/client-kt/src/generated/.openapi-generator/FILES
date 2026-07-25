@@ -50,6 +50,7 @@ docs/UpdateTableDto.md
 docs/UpdateUserDto.md
 docs/UserResponse.md
 docs/ZatcaApi.md
+docs/ZatcaConfigDto.md
 gradle/wrapper/gradle-wrapper.jar
 gradle/wrapper/gradle-wrapper.properties
 gradlew
@@ -117,6 +118,7 @@ src/main/kotlin/com/spicyhome/client/models/UpdateRoleDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateTableDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
+src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
 src/test/kotlin/com/spicyhome/client/apis/AuthApiTest.kt
 src/test/kotlin/com/spicyhome/client/apis/DayApiTest.kt
 src/test/kotlin/com/spicyhome/client/apis/MenuApiTest.kt
@@ -166,3 +168,4 @@ src/test/kotlin/com/spicyhome/client/models/UpdateRoleDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateTableDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateUserDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UserResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/ZatcaConfigDtoTest.kt

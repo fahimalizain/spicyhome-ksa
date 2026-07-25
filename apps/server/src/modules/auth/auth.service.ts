@@ -13,6 +13,7 @@ import { users, userRoles } from '@spicyhome/db';
 import { MeResponse } from './dto/me-response.dto';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -28,6 +29,9 @@ const DTO_TO_DB_PERMISSIONS: Record<string, string> = {
   manageUsers: 'manage_users',
   manageSettings: 'manage_settings',
 };
+
+const USER_BOOL_FIELDS = ['isActive'] as const;
+const ROLE_BOOL_FIELDS = Object.keys(DTO_TO_DB_PERMISSIONS) as readonly string[];
 
 @Injectable()
 export class AuthService {
@@ -90,14 +94,15 @@ export class AuthService {
         updatedBy: users.updatedBy,
       })
       .from(users)
-      .all();
+      .all()
+      .map((r) => mapBools(r, USER_BOOL_FIELDS));
   }
 
   getUserById(id: number): any {
     const user = this.db.select().from(users).where(eq(users.id, id)).get();
     if (!user) throw new NotFoundException('User not found');
     const { pinHash: _pinHash, ...safe } = user;
-    return safe;
+    return mapBools(safe, USER_BOOL_FIELDS);
   }
 
   createUser(
@@ -159,11 +164,15 @@ export class AuthService {
 
     const updated = this.db.select().from(users).where(eq(users.id, id)).get()!;
     const { pinHash: _pinHash, ...safe } = updated;
-    return safe;
+    return mapBools(safe, USER_BOOL_FIELDS);
   }
 
   listRoles(): any[] {
-    return this.db.select().from(userRoles).all();
+    return this.db
+      .select()
+      .from(userRoles)
+      .all()
+      .map((r) => mapBools(r, ROLE_BOOL_FIELDS));
   }
 
   createRole(dto: Record<string, any>, createdBy: number): any {
@@ -181,7 +190,8 @@ export class AuthService {
       .values(row as any)
       .run();
     const id = Number(result.lastInsertRowid);
-    return this.db.select().from(userRoles).where(eq(userRoles.id, id)).get();
+    const created = this.db.select().from(userRoles).where(eq(userRoles.id, id)).get()!;
+    return mapBools(created, ROLE_BOOL_FIELDS);
   }
 
   updateRole(id: number, dto: Record<string, any>, updatedBy: number): any {
@@ -198,6 +208,7 @@ export class AuthService {
     }
 
     this.db.update(userRoles).set(updates).where(eq(userRoles.id, id)).run();
-    return this.db.select().from(userRoles).where(eq(userRoles.id, id)).get();
+    const updated = this.db.select().from(userRoles).where(eq(userRoles.id, id)).get()!;
+    return mapBools(updated, ROLE_BOOL_FIELDS);
   }
 }

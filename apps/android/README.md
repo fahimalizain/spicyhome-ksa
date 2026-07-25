@@ -124,8 +124,11 @@ Setup → Login → Order (category tabs, items, cart, create/send/pay) → Orde
 - **Dark theme only**: Material 3 dark color scheme, large touch targets.
 - **Landscape-first**: `screenOrientation="sensorLandscape"` in manifest.
 - **minSdk 26**: Targets all Android tablets from Android 8.0+.
-- **401 auto-logout**: Not wired yet — the client-kt `ResponseExt.kt` extension
-  could intercept 401s and clear the stored token.
+- **401 auto-logout**: `OkHttp` `UnauthorizedInterceptor` catches HTTP 401 responses
+  (except `/auth/login`) and triggers `SessionManager.onUnauthorized()`, which clears
+  the stored token and emits a `SharedFlow` event. `NavGraph` collects this event and
+  navigates to the Login screen, clearing the back stack. WebSocket auth close codes
+  (4001/4002) go through the same `SessionManager` path via `RealtimeClient.onAuthFailure`.
 
 ### Risks
 

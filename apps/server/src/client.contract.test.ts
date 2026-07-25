@@ -95,8 +95,8 @@ describe('Client contract test', () => {
       manageMenu: true,
     } as any);
     expect(created.id).toBeDefined();
-    expect(typeof created.createOrder).toBe('number');
-    expect(typeof created.manageMenu).toBe('number');
+    expect(typeof created.createOrder).toBe('boolean');
+    expect(typeof created.manageMenu).toBe('boolean');
     expect('create_order' in created).toBe(false);
 
     const roles: any = await client.auth.listRoles();
@@ -177,7 +177,7 @@ describe('Client contract test', () => {
 
   it('creates a table', async () => {
     const res: any = await client.tables.create({
-      name: 'T1',
+      name: 'CT-T1',
       sortOrder: 0,
       isActive: true,
     });

@@ -18,6 +18,7 @@ import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class RealtimeClientTest {
 
@@ -405,5 +406,76 @@ class RealtimeClientTest {
         assertThat(firstOpen.await(3, TimeUnit.SECONDS)).isTrue()
         assertThat(secondOpen.await(8, TimeUnit.SECONDS)).isTrue()
         assertThat(thirdOpen.await(8, TimeUnit.SECONDS)).isTrue()
+    }
+
+    // ── onAuthFailure callback ────────────────────────────────────────
+
+    @Test
+    fun `onAuthFailure called on WS close code 4001`(): Unit = runBlocking {
+        val wasCalled = AtomicBoolean(false)
+        client = RealtimeClient(onAuthFailure = { wasCalled.set(true) })
+
+        val opened = CountDownLatch(1)
+        server.enqueue(
+            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    opened.countDown()
+                    webSocket.close(4001, "Token missing")
+                }
+            })
+        )
+        server.start()
+
+        client.connect(server.url("").toString().trimEnd('/'), "token")
+        assertThat(opened.await(3, TimeUnit.SECONDS)).isTrue()
+
+        delay(500)
+        assertThat(wasCalled.get()).isTrue()
+    }
+
+    @Test
+    fun `onAuthFailure called on WS close code 4002`(): Unit = runBlocking {
+        val wasCalled = AtomicBoolean(false)
+        client = RealtimeClient(onAuthFailure = { wasCalled.set(true) })
+
+        val opened = CountDownLatch(1)
+        server.enqueue(
+            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    opened.countDown()
+                    webSocket.close(4002, "Invalid token")
+                }
+            })
+        )
+        server.start()
+
+        client.connect(server.url("").toString().trimEnd('/'), "token")
+        assertThat(opened.await(3, TimeUnit.SECONDS)).isTrue()
+
+        delay(500)
+        assertThat(wasCalled.get()).isTrue()
+    }
+
+    @Test
+    fun `onAuthFailure NOT called on normal WS close`(): Unit = runBlocking {
+        val wasCalled = AtomicBoolean(false)
+        client = RealtimeClient(onAuthFailure = { wasCalled.set(true) })
+
+        val opened = CountDownLatch(1)
+        server.enqueue(
+            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    opened.countDown()
+                    webSocket.close(1000, null)
+                }
+            })
+        )
+        server.start()
+
+        client.connect(server.url("").toString().trimEnd('/'), "token")
+        assertThat(opened.await(3, TimeUnit.SECONDS)).isTrue()
+
+        delay(500)
+        assertThat(wasCalled.get()).isFalse()
     }
 }

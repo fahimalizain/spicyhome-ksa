@@ -11,6 +11,10 @@ function getBaseUrl(): string {
 export const client = new SpicyHomeClient({
   baseUrl: getBaseUrl(),
   getToken: () => localStorage.getItem(TOKEN_KEY),
+  onUnauthorized: () => {
+    clearToken();
+    window.location.href = '/login';
+  },
 });
 
 export function setToken(token: string): void {

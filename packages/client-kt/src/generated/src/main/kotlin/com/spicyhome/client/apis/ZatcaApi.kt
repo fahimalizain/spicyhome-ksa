@@ -6,6 +6,7 @@ import retrofit2.Call
 import okhttp3.RequestBody
 import com.squareup.moshi.Json
 
+import com.spicyhome.client.models.ZatcaConfigDto
 
 interface ZatcaApi {
     /**
@@ -19,6 +20,18 @@ interface ZatcaApi {
      */
     @POST("zatca/onboard/csr")
     fun zatcaControllerGenerateCSR(): Call<Unit>
+
+    /**
+     * GET zatca/config
+     * Get ZATCA seller configuration
+     * 
+     * Responses:
+     *  - 200: ZATCA seller configuration
+     *
+     * @return [Call]<[ZatcaConfigDto]>
+     */
+    @GET("zatca/config")
+    fun zatcaControllerGetConfig(): Call<ZatcaConfigDto>
 
     /**
      * GET zatca/invoices/{id}
@@ -94,5 +107,30 @@ interface ZatcaApi {
      */
     @POST("zatca/reporting/retry")
     fun zatcaControllerRetryReporting(): Call<Unit>
+
+    /**
+     * POST zatca/onboard/compliance-check
+     * Run compliance check by submitting a signed invoice to ZATCA
+     * 
+     * Responses:
+     *  - 201: 
+     *
+     * @return [Call]<[Unit]>
+     */
+    @POST("zatca/onboard/compliance-check")
+    fun zatcaControllerRunComplianceCheck(): Call<Unit>
+
+    /**
+     * PUT zatca/config
+     * Update ZATCA seller configuration
+     * 
+     * Responses:
+     *  - 200: Updated configuration
+     *
+     * @param zatcaConfigDto 
+     * @return [Call]<[ZatcaConfigDto]>
+     */
+    @PUT("zatca/config")
+    fun zatcaControllerUpdateConfig(@Body zatcaConfigDto: ZatcaConfigDto): Call<ZatcaConfigDto>
 
 }

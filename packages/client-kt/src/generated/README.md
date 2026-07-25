@@ -97,12 +97,15 @@ All URIs are relative to *http://localhost*
 | *TablesApi* | [**tablesControllerList**](docs/TablesApi.md#tablescontrollerlist) | **GET** tables | List all tables |
 | *TablesApi* | [**tablesControllerUpdate**](docs/TablesApi.md#tablescontrollerupdate) | **PUT** tables/{id} | Update a table |
 | *ZatcaApi* | [**zatcaControllerGenerateCSR**](docs/ZatcaApi.md#zatcacontrollergeneratecsr) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
+| *ZatcaApi* | [**zatcaControllerGetConfig**](docs/ZatcaApi.md#zatcacontrollergetconfig) | **GET** zatca/config | Get ZATCA seller configuration |
 | *ZatcaApi* | [**zatcaControllerGetInvoice**](docs/ZatcaApi.md#zatcacontrollergetinvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | *ZatcaApi* | [**zatcaControllerGetStatus**](docs/ZatcaApi.md#zatcacontrollergetstatus) | **GET** zatca/status | Get ZATCA onboarding and status |
 | *ZatcaApi* | [**zatcaControllerListInvoices**](docs/ZatcaApi.md#zatcacontrollerlistinvoices) | **GET** zatca/invoices | List ZATCA invoices |
 | *ZatcaApi* | [**zatcaControllerOnboardCompliance**](docs/ZatcaApi.md#zatcacontrolleronboardcompliance) | **POST** zatca/onboard/compliance | Submit CSR with OTP to ZATCA compliance CSID endpoint |
 | *ZatcaApi* | [**zatcaControllerOnboardProduction**](docs/ZatcaApi.md#zatcacontrolleronboardproduction) | **POST** zatca/onboard/production | Exchange compliance CSID for production CSID |
 | *ZatcaApi* | [**zatcaControllerRetryReporting**](docs/ZatcaApi.md#zatcacontrollerretryreporting) | **POST** zatca/reporting/retry | Retry reporting for all pending or a specific invoice |
+| *ZatcaApi* | [**zatcaControllerRunComplianceCheck**](docs/ZatcaApi.md#zatcacontrollerruncompliancecheck) | **POST** zatca/onboard/compliance-check | Run compliance check by submitting a signed invoice to ZATCA |
+| *ZatcaApi* | [**zatcaControllerUpdateConfig**](docs/ZatcaApi.md#zatcacontrollerupdateconfig) | **PUT** zatca/config | Update ZATCA seller configuration |
 
 
 <a id="documentation-for-models"></a>
@@ -148,6 +151,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)
  - [com.spicyhome.client.models.UpdateUserDto](docs/UpdateUserDto.md)
  - [com.spicyhome.client.models.UserResponse](docs/UserResponse.md)
+ - [com.spicyhome.client.models.ZatcaConfigDto](docs/ZatcaConfigDto.md)
 
 
 <a id="documentation-for-authorization"></a>

@@ -5,12 +5,15 @@ All URIs are relative to *http://localhost*
 | Method | HTTP request | Description |
 | ------------- | ------------- | ------------- |
 | [**zatcaControllerGenerateCSR**](ZatcaApi.md#zatcaControllerGenerateCSR) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
+| [**zatcaControllerGetConfig**](ZatcaApi.md#zatcaControllerGetConfig) | **GET** zatca/config | Get ZATCA seller configuration |
 | [**zatcaControllerGetInvoice**](ZatcaApi.md#zatcaControllerGetInvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | [**zatcaControllerGetStatus**](ZatcaApi.md#zatcaControllerGetStatus) | **GET** zatca/status | Get ZATCA onboarding and status |
 | [**zatcaControllerListInvoices**](ZatcaApi.md#zatcaControllerListInvoices) | **GET** zatca/invoices | List ZATCA invoices |
 | [**zatcaControllerOnboardCompliance**](ZatcaApi.md#zatcaControllerOnboardCompliance) | **POST** zatca/onboard/compliance | Submit CSR with OTP to ZATCA compliance CSID endpoint |
 | [**zatcaControllerOnboardProduction**](ZatcaApi.md#zatcaControllerOnboardProduction) | **POST** zatca/onboard/production | Exchange compliance CSID for production CSID |
 | [**zatcaControllerRetryReporting**](ZatcaApi.md#zatcaControllerRetryReporting) | **POST** zatca/reporting/retry | Retry reporting for all pending or a specific invoice |
+| [**zatcaControllerRunComplianceCheck**](ZatcaApi.md#zatcaControllerRunComplianceCheck) | **POST** zatca/onboard/compliance-check | Run compliance check by submitting a signed invoice to ZATCA |
+| [**zatcaControllerUpdateConfig**](ZatcaApi.md#zatcaControllerUpdateConfig) | **PUT** zatca/config | Update ZATCA seller configuration |
 
 
 
@@ -24,6 +27,7 @@ Generate keypair and CSR for ZATCA onboarding
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 
 webService.zatcaControllerGenerateCSR()
@@ -38,12 +42,49 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
  - **Accept**: Not defined
+
+
+Get ZATCA seller configuration
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+
+val result : ZatcaConfigDto = webService.zatcaControllerGetConfig()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**ZatcaConfigDto**](ZatcaConfigDto.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
 
 
 Get invoice detail including XML
@@ -56,6 +97,7 @@ Get invoice detail including XML
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 val id : kotlin.String = id_example // kotlin.String | 
 
@@ -73,7 +115,9 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
@@ -91,6 +135,7 @@ Get ZATCA onboarding and status
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 
 webService.zatcaControllerGetStatus()
@@ -105,7 +150,9 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
@@ -123,6 +170,7 @@ List ZATCA invoices
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 val limit : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
 val offset : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
@@ -142,7 +190,9 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
@@ -160,6 +210,7 @@ Submit CSR with OTP to ZATCA compliance CSID endpoint
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 
 webService.zatcaControllerOnboardCompliance()
@@ -174,7 +225,9 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
@@ -192,6 +245,7 @@ Exchange compliance CSID for production CSID
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 
 webService.zatcaControllerOnboardProduction()
@@ -206,7 +260,9 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
@@ -224,6 +280,7 @@ Retry reporting for all pending or a specific invoice
 //import com.spicyhome.client.models.*
 
 val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
 
 webService.zatcaControllerRetryReporting()
@@ -238,10 +295,85 @@ null (empty response body)
 
 ### Authorization
 
-No authorization required
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
  - **Accept**: Not defined
+
+
+Run compliance check by submitting a signed invoice to ZATCA
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+
+webService.zatcaControllerRunComplianceCheck()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+null (empty response body)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+
+Update ZATCA seller configuration
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+val zatcaConfigDto : ZatcaConfigDto =  // ZatcaConfigDto | 
+
+val result : ZatcaConfigDto = webService.zatcaControllerUpdateConfig(zatcaConfigDto)
+```
+
+### Parameters
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **zatcaConfigDto** | [**ZatcaConfigDto**](ZatcaConfigDto.md)|  | |
+
+### Return type
+
+[**ZatcaConfigDto**](ZatcaConfigDto.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
 
