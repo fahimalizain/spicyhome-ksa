@@ -150,15 +150,20 @@ describe('RealtimeGateway', () => {
       ws.close();
     });
 
-    it('receives order.sent event', async () => {
-      const token = createToken(4, 'sentuser');
+    it('receives order.refund.issued event', async () => {
+      const token = createToken(4, 'refunduser');
       const ws = await connect(token);
       await new Promise((r) => setTimeout(r, 50));
 
-      eventEmitter.emit('order.sent', { orderId: 100, userId: 4 });
+      eventEmitter.emit('order.refund.issued', {
+        orderId: 100,
+        userId: 4,
+        refundId: 1,
+        totalHalalas: 5000,
+      });
 
       const msg = await waitForMessage(ws);
-      expect(msg.type).toBe('order.sent');
+      expect(msg.type).toBe('order.refund.issued');
       expect(msg.payload.orderId).toBe(100);
 
       ws.close();
@@ -250,10 +255,10 @@ describe('RealtimeGateway', () => {
       eventEmitter.emit('random.event', { foo: 'bar' });
 
       // Emit a valid event to ensure connection still works
-      eventEmitter.emit('order.sent', { orderId: 600, userId: 11 });
+      eventEmitter.emit('order.voided', { orderId: 600, userId: 11 });
 
       const msg = await waitForMessage(ws);
-      expect(msg.type).toBe('order.sent');
+      expect(msg.type).toBe('order.voided');
 
       ws.close();
     });

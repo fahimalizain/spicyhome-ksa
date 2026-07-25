@@ -15,6 +15,7 @@ export interface UserRole {
   deleteOrderItem: boolean;
   voidOrder: boolean;
   refundOrder: boolean;
+  payOrder: boolean;
   manageMenu: boolean;
   manageTables: boolean;
   managePrinters: boolean;
@@ -124,14 +125,41 @@ export interface OrderItem {
   updatedBy: number | null;
 }
 
-export interface OrderAuditLog {
+export interface OrderEvent {
   id: number;
   orderId: number;
+  eventIdx: number;
   userId: number;
-  action: AuditAction;
+  type: string;
   payload: string;
   prevHash: string;
   hash: string;
+  createdAt: number;
+}
+
+export interface OrderRefund {
+  id: number;
+  orderId: number;
+  userId: number;
+  subtotalHalalas: number;
+  vatHalalas: number;
+  totalHalalas: number;
+  reason: string | null;
+  createdAt: number;
+  createdBy: number | null;
+  updatedAt: number | null;
+  updatedBy: number | null;
+}
+
+export interface OrderRefundItem {
+  id: number;
+  refundId: number;
+  orderItemId: number | null;
+  itemName: string;
+  unitPriceHalalas: number;
+  vatRateBp: number;
+  qty: number;
+  totalHalalas: number;
   createdAt: number;
 }
 
@@ -185,9 +213,10 @@ export interface WsMessage {
 export const WS_EVENTS = {
   ORDER_CREATED: 'order.created',
   ORDER_UPDATED: 'order.updated',
-  ORDER_SENT: 'order.sent',
   ORDER_PAID: 'order.paid',
   ORDER_VOIDED: 'order.voided',
+  ORDER_REFUND_ISSUED: 'order.refund.issued',
+  ORDER_REFUNDED: 'order.refunded',
   ORDER_ITEM_ADDED: 'order.item.added',
   ORDER_ITEM_UPDATED: 'order.item.updated',
   ORDER_ITEM_REMOVED: 'order.item.removed',

@@ -4,14 +4,16 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
   orderItems,
-  orderAuditLog,
+  orderRefunds,
+  orderRefundItems,
   tables,
   dayOpenings,
   settings,
@@ -20,15 +22,15 @@ import {
 import { decomposeVat } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
-import { AuditLogService } from './audit-log.service';
+import { OrderEventsService } from './order-events.service';
 import { PrintJobService } from '../printers/print-job.service';
+import type { PrinterRecord } from '../printers/printers.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  open: ['sent', 'voided'],
-  sent: ['paid', 'voided'],
-  paid: [],
+  open: ['paid', 'voided'],
+  paid: ['refunded'],
   voided: [],
   refunded: [],
 };
@@ -57,15 +59,14 @@ function todayInRiyadh(): string {
 
 @Injectable()
 export class OrdersService {
-  private readonly auditLog: AuditLogService;
+  private readonly logger = new Logger(OrdersService.name);
 
   constructor(
     @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
     private eventEmitter: EventEmitter2,
     private printJobService: PrintJobService,
-  ) {
-    this.auditLog = new AuditLogService();
-  }
+    private orderEvents: OrderEventsService,
+  ) {}
 
   async createOrder(dto: { type: string; tableId?: number }, userId: number) {
     const now = Math.floor(Date.now() / 1000);
@@ -117,7 +118,7 @@ export class OrdersService {
 
       const orderId = Number(insertResult.lastInsertRowid);
 
-      this.auditLog.createEntry(
+      this.orderEvents.createEvent(
         tx,
         orderId,
         userId,
@@ -189,7 +190,13 @@ export class OrdersService {
   ) {
     const now = Math.floor(Date.now() / 1000);
 
-    return this.db.transaction((tx: any) => {
+    // Resolve kitchen printer pre-transaction (read-only, stable data)
+    const kitchenPrinter = this.printJobService.getKitchenPrinterForItem(dto.itemId);
+
+    let orderItemId = 0;
+    let itemName = '';
+
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
       if (order.status !== 'open') throw new BadRequestException('Order is not open');
@@ -199,7 +206,8 @@ export class OrdersService {
 
       const totalHalalas = item.priceHalalas * dto.qty;
 
-      tx.insert(orderItems)
+      const insertResult = tx
+        .insert(orderItems)
         .values({
           orderId,
           itemId: item.id,
@@ -213,26 +221,59 @@ export class OrdersService {
         })
         .run();
 
+      orderItemId = Number(insertResult.lastInsertRowid);
+      itemName = item.name;
+
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(
+      // item_added event with full payload
+      this.orderEvents.createEvent(
         tx,
         orderId,
         userId,
         'item_added',
         {
+          orderItemId,
           itemId: item.id,
-          itemName: item.name,
+          itemName,
           qty: dto.qty,
+          unitPriceHalalas: item.priceHalalas,
           totalHalalas,
+          kitchenPrintedQty: dto.qty,
+          ...(dto.notes ? { notes: dto.notes } : {}),
         },
         now,
       );
 
-      return { success: true };
+      // If a kitchen printer exists, write kitchen_print_enqueued
+      if (kitchenPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'kitchen_print_enqueued',
+          {
+            printer: kitchenPrinter.name,
+            printerId: kitchenPrinter.id,
+            items: [{ orderItemId, itemName, printedQty: dto.qty }],
+          },
+          now,
+        );
+      }
     });
 
+    // After transaction: non-blocking kitchen print
+    if (kitchenPrinter) {
+      this.runKitchenPrint(
+        orderId,
+        kitchenPrinter,
+        [{ orderItemId, printedQty: dto.qty, itemName }],
+        userId,
+      );
+    }
+
     this.emitDomainEvent('order.item.added', orderId, userId, { itemId: dto.itemId, qty: dto.qty });
+    return { success: true };
   }
 
   async updateItem(
@@ -243,7 +284,11 @@ export class OrdersService {
   ) {
     const now = Math.floor(Date.now() / 1000);
 
-    return this.db.transaction((tx: any) => {
+    let kitchenPrinter: PrinterRecord | null = null;
+    let kitchenPrintedQty = 0;
+    let itemName = '';
+
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
       if (order.status !== 'open') throw new BadRequestException('Order is not open');
@@ -251,10 +296,18 @@ export class OrdersService {
       const oi = tx.select().from(orderItems).where(eq(orderItems.id, orderItemId)).get();
       if (!oi || oi.orderId !== orderId) throw new NotFoundException('Order item not found');
 
+      const oldQty = oi.qty;
+      const oldTotal = oi.totalHalalas;
+      itemName = oi.itemName;
+
       const updates: Record<string, any> = { ...updateAuditFields(userId, now) };
+      let newQty = oldQty;
+      let newTotal = oldTotal;
       if (dto.qty !== undefined) {
+        newQty = dto.qty;
         updates.qty = dto.qty;
-        updates.totalHalalas = oi.unitPriceHalalas * dto.qty;
+        newTotal = oi.unitPriceHalalas * dto.qty;
+        updates.totalHalalas = newTotal;
       }
       if (dto.notes !== undefined) updates.notes = dto.notes;
 
@@ -262,29 +315,72 @@ export class OrdersService {
 
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(
+      // Compute kitchen delta: only if qty increased
+      if (dto.qty !== undefined && newQty > oldQty) {
+        const previousPrinted = this.orderEvents.getPrintedQty(tx, orderItemId);
+        kitchenPrintedQty = newQty > previousPrinted ? newQty - previousPrinted : 0;
+
+        if (kitchenPrintedQty > 0 && oi.itemId) {
+          kitchenPrinter = this.printJobService.getKitchenPrinterForItem(oi.itemId);
+        }
+      }
+
+      // item_updated event
+      this.orderEvents.createEvent(
         tx,
         orderId,
         userId,
         'item_updated',
         {
           orderItemId,
-          qty: dto.qty,
-          notes: dto.notes,
+          itemName,
+          oldQty,
+          newQty,
+          oldTotal,
+          newTotal,
+          kitchenPrintedQty,
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         },
         now,
       );
 
-      return { success: true };
+      // Kitchen print enqueued if delta > 0
+      if (kitchenPrintedQty > 0 && kitchenPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'kitchen_print_enqueued',
+          {
+            printer: kitchenPrinter.name,
+            printerId: kitchenPrinter.id,
+            items: [{ orderItemId, itemName, printedQty: kitchenPrintedQty }],
+          },
+          now,
+        );
+      }
     });
 
+    // After transaction: non-blocking kitchen print for the delta
+    if (kitchenPrintedQty > 0 && kitchenPrinter) {
+      this.runKitchenPrint(
+        orderId,
+        kitchenPrinter,
+        [{ orderItemId, printedQty: kitchenPrintedQty, itemName }],
+        userId,
+      );
+    }
+
     this.emitDomainEvent('order.item.updated', orderId, userId, { orderItemId });
+    return { success: true };
   }
 
   async removeItem(orderId: number, orderItemId: number, userId: number) {
     const now = Math.floor(Date.now() / 1000);
 
-    return this.db.transaction((tx: any) => {
+    let itemName: string;
+
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
       if (order.status !== 'open') throw new BadRequestException('Order is not open');
@@ -292,100 +388,589 @@ export class OrdersService {
       const oi = tx.select().from(orderItems).where(eq(orderItems.id, orderItemId)).get();
       if (!oi || oi.orderId !== orderId) throw new NotFoundException('Order item not found');
 
+      itemName = oi.itemName;
+      const oldQty = oi.qty;
+      const oldTotal = oi.totalHalalas;
+
       tx.delete(orderItems).where(eq(orderItems.id, orderItemId)).run();
 
       this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
 
-      this.auditLog.createEntry(
+      this.orderEvents.createEvent(
         tx,
         orderId,
         userId,
         'item_removed',
         {
           orderItemId,
-          itemName: oi.itemName,
-          totalHalalas: oi.totalHalalas,
+          itemName,
+          oldQty,
+          oldTotal,
         },
         now,
       );
-
-      return { success: true };
     });
 
     this.emitDomainEvent('order.item.removed', orderId, userId, { orderItemId });
-  }
-
-  async sendOrder(orderId: number, userId: number) {
-    const result = await this.transitionStatus(orderId, 'sent', 'sent_to_kitchen', userId);
-    // Non-blocking print — failure must NOT fail the order
-    this.emitPrintEvent('order.sent', orderId, userId);
-    return result;
+    return { success: true };
   }
 
   async payOrder(orderId: number, userId: number) {
-    const result = await this.transitionStatus(orderId, 'paid', 'paid', userId);
-    // Non-blocking print
-    this.emitPrintEvent('order.paid', orderId, userId);
-    return result;
-  }
-
-  async voidOrder(orderId: number, userId: number) {
-    const result = await this.transitionStatus(orderId, 'voided', 'voided', userId);
-    this.emitDomainEvent('order.voided', orderId, userId);
-    return result;
-  }
-
-  async reprintOrder(orderId: number, target: string, userId: number) {
-    // Direct call — reprint needs sync result
-    return this.printJobService.reprintOrder(orderId, target, userId);
-  }
-
-  private emitPrintEvent(event: string, orderId: number, userId: number): void {
-    try {
-      this.eventEmitter.emit(event, { orderId, userId });
-    } catch (_err: any) {
-      // Swallow — print events never fail the order operation
-    }
-  }
-
-  private transitionStatus(
-    orderId: number,
-    newStatus: string,
-    auditAction: string,
-    userId: number,
-  ) {
     const now = Math.floor(Date.now() / 1000);
+    const receiptPrinter = this.printJobService.getReceiptPrinter();
 
-    return this.db.transaction((tx: any) => {
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
 
-      const allowed = VALID_TRANSITIONS[order.status] || [];
-      if (!allowed.includes(newStatus)) {
+      if (order.status !== 'open') {
         throw new BadRequestException(
-          `Cannot change order status from '${order.status}' to '${newStatus}'`,
+          `Cannot pay order in '${order.status}' status. Only open orders can be paid.`,
         );
       }
 
       tx.update(orders)
-        .set({ status: newStatus, ...updateAuditFields(userId, now) })
+        .set({ status: 'paid', ...updateAuditFields(userId, now) })
         .where(eq(orders.id, orderId))
         .run();
 
-      this.auditLog.createEntry(
+      this.orderEvents.createEvent(
         tx,
         orderId,
         userId,
-        auditAction,
+        'paid',
         {
-          fromStatus: order.status,
-          toStatus: newStatus,
+          fromStatus: 'open',
+          toStatus: 'paid',
         },
         now,
       );
 
-      return { success: true, status: newStatus };
+      if (receiptPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'receipt_print_enqueued',
+          {
+            printer: receiptPrinter.name,
+            printerId: receiptPrinter.id,
+            totalHalalas: order.totalHalalas,
+            kickDrawer: true,
+          },
+          now,
+        );
+      }
     });
+
+    // After transaction: non-blocking receipt print
+    if (receiptPrinter) {
+      this.runReceiptPrint(orderId, receiptPrinter, userId);
+    }
+
+    this.emitDomainEvent('order.paid', orderId, userId);
+    return { success: true, status: 'paid' };
+  }
+
+  async voidOrder(orderId: number, userId: number) {
+    const now = Math.floor(Date.now() / 1000);
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      if (order.status !== 'open') {
+        throw new BadRequestException(
+          `Cannot void order in '${order.status}' status. Only open orders can be voided.`,
+        );
+      }
+
+      tx.update(orders)
+        .set({ status: 'voided', ...updateAuditFields(userId, now) })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        'voided',
+        {
+          fromStatus: 'open',
+          toStatus: 'voided',
+        },
+        now,
+      );
+    });
+
+    this.emitDomainEvent('order.voided', orderId, userId);
+    return { success: true, status: 'voided' };
+  }
+
+  async refundOrder(
+    orderId: number,
+    dto: { items: { orderItemId: number; qty: number }[]; reason?: string },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+
+    // ── Pre-transaction validation ──────────────────────────────────────────────
+
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundException('Order not found');
+
+    if (order.status !== 'paid') {
+      throw new BadRequestException(
+        `Cannot refund order in '${order.status}' status. Only paid orders can be refunded.`,
+      );
+    }
+
+    // Load all order items and validate each requested item belongs to the order
+    const allOrderItems = this.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId))
+      .all();
+    const itemMap = new Map(allOrderItems.map((oi) => [oi.id, oi]));
+
+    if (dto.items.length === 0) {
+      throw new BadRequestException('At least one item must be specified for refund.');
+    }
+
+    for (const item of dto.items) {
+      if (item.qty <= 0) {
+        throw new BadRequestException('Refund quantity must be positive.');
+      }
+      const oi = itemMap.get(item.orderItemId);
+      if (!oi) {
+        throw new BadRequestException(
+          `Order item ${item.orderItemId} does not belong to order ${orderId}.`,
+        );
+      }
+    }
+
+    const receiptPrinter = this.printJobService.getReceiptPrinter();
+
+    // ── Transaction ─────────────────────────────────────────────────────────────
+    let refundId = 0;
+    let refundTotalHalalas = 0;
+    let isFullyRefunded = false;
+    const refundItems: Array<{
+      orderItemId: number;
+      itemName: string;
+      qty: number;
+      totalHalalas: number;
+    }> = [];
+
+    this.db.transaction((tx: any) => {
+      const lineSubtotals: number[] = [];
+      const lineVats: number[] = [];
+      const lineTotals: number[] = [];
+
+      for (const item of dto.items) {
+        const oi = itemMap.get(item.orderItemId)!;
+
+        // Calculate already-refunded qty for this order item within this order
+        const refundedRows = tx
+          .select()
+          .from(orderRefundItems)
+          .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
+          .where(
+            and(
+              eq(orderRefunds.orderId, orderId),
+              eq(orderRefundItems.orderItemId, item.orderItemId),
+            ),
+          )
+          .all();
+        const alreadyRefundedQty = refundedRows.reduce(
+          (sum: number, row: any) => sum + row.order_refund_items.qty,
+          0,
+        );
+
+        if (alreadyRefundedQty + item.qty > oi.qty) {
+          throw new BadRequestException(
+            `Refund qty ${item.qty} exceeds remaining qty ${oi.qty - alreadyRefundedQty} for item "${oi.itemName}".`,
+          );
+        }
+
+        const lineTotal = oi.unitPriceHalalas * item.qty;
+        const d = decomposeVat(lineTotal, oi.vatRateBp);
+
+        lineSubtotals.push(d.priceExclHalalas);
+        lineVats.push(d.vatHalalas);
+        lineTotals.push(lineTotal);
+
+        refundItems.push({
+          orderItemId: item.orderItemId,
+          itemName: oi.itemName,
+          qty: item.qty,
+          totalHalalas: lineTotal,
+        });
+      }
+
+      const subtotalHalalas = lineSubtotals.reduce((a, b) => a + b, 0);
+      const vatHalalas = lineVats.reduce((a, b) => a + b, 0);
+      const totalHalalas = lineTotals.reduce((a, b) => a + b, 0);
+      refundTotalHalalas = totalHalalas;
+
+      // Insert order_refunds
+      const refundInsert = tx
+        .insert(orderRefunds)
+        .values({
+          orderId,
+          userId,
+          subtotalHalalas,
+          vatHalalas,
+          totalHalalas,
+          reason: dto.reason ?? null,
+          ...createAuditFields(userId, now),
+        })
+        .run();
+      refundId = Number(refundInsert.lastInsertRowid);
+
+      // Insert order_refund_items
+      for (let i = 0; i < dto.items.length; i++) {
+        const item = dto.items[i];
+        const oi = itemMap.get(item.orderItemId)!;
+        tx.insert(orderRefundItems)
+          .values({
+            refundId,
+            orderItemId: item.orderItemId,
+            itemName: oi.itemName,
+            unitPriceHalalas: oi.unitPriceHalalas,
+            vatRateBp: oi.vatRateBp,
+            qty: item.qty,
+            totalHalalas: lineTotals[i],
+            createdAt: now,
+          })
+          .run();
+      }
+
+      // Write refund_issued event
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        'refund_issued',
+        {
+          refundId,
+          items: refundItems,
+          totalHalalas,
+          ...(dto.reason ? { reason: dto.reason } : {}),
+        },
+        now,
+      );
+
+      // Determine if order is fully refunded
+      // For every row in order_items, originalQty == (sum of all refund qtys)
+      isFullyRefunded = true;
+      for (const oi of allOrderItems) {
+        // Refresh the sum including the items just inserted
+        const refRows = tx
+          .select()
+          .from(orderRefundItems)
+          .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
+          .where(and(eq(orderRefunds.orderId, orderId), eq(orderRefundItems.orderItemId, oi.id)))
+          .all();
+        const totalRefundedQty = refRows.reduce(
+          (s: number, row: any) => s + row.order_refund_items.qty,
+          0,
+        );
+        if (totalRefundedQty < oi.qty) {
+          isFullyRefunded = false;
+          break;
+        }
+      }
+
+      if (isFullyRefunded) {
+        tx.update(orders)
+          .set({ status: 'refunded', ...updateAuditFields(userId, now) })
+          .where(eq(orders.id, orderId))
+          .run();
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'refunded',
+          {
+            fromStatus: 'paid',
+            toStatus: 'refunded',
+          },
+          now,
+        );
+      }
+
+      // Receipt print enqueued event
+      if (receiptPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'receipt_print_enqueued',
+          {
+            printer: receiptPrinter.name,
+            printerId: receiptPrinter.id,
+            totalHalalas: refundTotalHalalas,
+            kickDrawer: false,
+          },
+          now,
+        );
+      }
+    });
+
+    // ── After transaction: non-blocking refund receipt print ───────────────────
+    if (receiptPrinter) {
+      this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId);
+    }
+
+    // ── Emit WebSocket events ───────────────────────────────────────────────────
+    this.emitDomainEvent('order.refund.issued', orderId, userId, { refundId, userId });
+    if (isFullyRefunded) {
+      this.emitDomainEvent('order.refunded', orderId, userId);
+    }
+
+    const updatedOrder = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    return { success: true, refundId, status: updatedOrder!.status };
+  }
+
+  async getOrderRefunds(orderId: number) {
+    const refunds = this.db
+      .select()
+      .from(orderRefunds)
+      .where(eq(orderRefunds.orderId, orderId))
+      .all();
+
+    return refunds.map((refund) => {
+      const rifItems = this.db
+        .select()
+        .from(orderRefundItems)
+        .where(eq(orderRefundItems.refundId, refund.id))
+        .all();
+
+      return {
+        id: refund.id,
+        orderId: refund.orderId,
+        userId: refund.userId,
+        subtotalHalalas: refund.subtotalHalalas,
+        vatHalalas: refund.vatHalalas,
+        totalHalalas: refund.totalHalalas,
+        reason: refund.reason,
+        createdAt: refund.createdAt,
+        items: rifItems.map((ri) => ({
+          id: ri.id,
+          orderItemId: ri.orderItemId,
+          itemName: ri.itemName,
+          unitPriceHalalas: ri.unitPriceHalalas,
+          vatRateBp: ri.vatRateBp,
+          qty: ri.qty,
+          totalHalalas: ri.totalHalalas,
+        })),
+      };
+    });
+  }
+
+  async reprintOrder(orderId: number, target: string, userId: number) {
+    if (target === 'kitchen') {
+      return this.reprintKitchen(orderId, userId);
+    }
+    return this.reprintReceipt(orderId, userId);
+  }
+
+  // ── Non-blocking print helpers ───────────────────────────────────────────────
+
+  private async runKitchenPrint(
+    orderId: number,
+    printer: PrinterRecord,
+    deltas: Array<{ orderItemId: number; printedQty: number; itemName: string }>,
+    userId: number,
+  ): Promise<void> {
+    try {
+      const { printed } = await this.printJobService.printKitchenDeltas(orderId, deltas);
+
+      const now = Math.floor(Date.now() / 1000);
+      for (const p of printed) {
+        this.orderEvents.createEvent(
+          this.db,
+          orderId,
+          userId,
+          'kitchen_print_succeeded',
+          { printer: p.name, printerId: p.id },
+          now,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Kitchen print failed for order ${orderId}: ${err.message}`);
+    }
+  }
+
+  private async runReceiptPrint(
+    orderId: number,
+    printer: PrinterRecord,
+    userId: number,
+  ): Promise<void> {
+    try {
+      await this.printJobService.printReceipt(orderId, { kickDrawer: true });
+
+      const now = Math.floor(Date.now() / 1000);
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: printer.name, printerId: printer.id },
+        now,
+      );
+    } catch (err: any) {
+      this.logger.error(`Receipt print failed for order ${orderId}: ${err.message}`);
+    }
+  }
+
+  private async runRefundReceiptPrint(
+    orderId: number,
+    refundId: number,
+    printer: PrinterRecord,
+    userId: number,
+  ): Promise<void> {
+    try {
+      await this.printJobService.printRefundReceipt(refundId);
+
+      const now = Math.floor(Date.now() / 1000);
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: printer.name, printerId: printer.id },
+        now,
+      );
+    } catch (err: any) {
+      this.logger.error(`Refund receipt print failed for order ${orderId}: ${err.message}`);
+    }
+  }
+
+  // ── Reprint helpers ──────────────────────────────────────────────────────────
+
+  private async reprintKitchen(
+    orderId: number,
+    userId: number,
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Group order items by kitchen printer and write enqueued events
+    const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+
+    const printerGroups = new Map<
+      number,
+      {
+        printer: PrinterRecord;
+        items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+      }
+    >();
+
+    for (const oi of oiRows) {
+      if (!oi.itemId) continue;
+      const printer = this.printJobService.getKitchenPrinterForItem(oi.itemId);
+      if (!printer) continue;
+
+      let group = printerGroups.get(printer.id);
+      if (!group) {
+        group = { printer, items: [] };
+        printerGroups.set(printer.id, group);
+      }
+      group.items.push({
+        orderItemId: oi.id,
+        itemName: oi.itemName,
+        printedQty: oi.qty,
+      });
+    }
+
+    // Write kitchen_print_enqueued events
+    for (const [, group] of printerGroups) {
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'kitchen_print_enqueued',
+        {
+          printer: group.printer.name,
+          printerId: group.printer.id,
+          items: group.items,
+        },
+        now,
+      );
+    }
+
+    // Print full kitchen tickets (one call handles routing/fallback internally)
+    const result = await this.printJobService.printKitchenTickets(orderId);
+
+    // Write succeeded events for each printer that actually printed
+    for (const p of result.printed) {
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'kitchen_print_succeeded',
+        { printer: p.name, printerId: p.id },
+        now,
+      );
+    }
+
+    // Log any errors (do not throw up)
+    for (const err of result.errors) {
+      this.logger.error(`Kitchen reprint error for order ${orderId}: ${err}`);
+    }
+
+    return { success: result.errors.length === 0, errors: result.errors };
+  }
+
+  private async reprintReceipt(
+    orderId: number,
+    userId: number,
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const now = Math.floor(Date.now() / 1000);
+    const errors: string[] = [];
+
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundException('Order not found');
+
+    const receiptPrinter = this.printJobService.getReceiptPrinter();
+    if (!receiptPrinter) {
+      return { success: false, errors: ['No active receipt printer configured'] };
+    }
+
+    this.orderEvents.createEvent(
+      this.db,
+      orderId,
+      userId,
+      'receipt_print_enqueued',
+      {
+        printer: receiptPrinter.name,
+        printerId: receiptPrinter.id,
+        totalHalalas: order.totalHalalas,
+        kickDrawer: false,
+      },
+      now,
+    );
+
+    try {
+      await this.printJobService.printReceipt(orderId, { kickDrawer: false });
+
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: receiptPrinter.name, printerId: receiptPrinter.id },
+        now,
+      );
+    } catch (err: any) {
+      const msg = `Receipt reprint: ${err.message}`;
+      this.logger.error(msg);
+      errors.push(msg);
+    }
+
+    return { success: errors.length === 0, errors };
   }
 
   private recomputeAndUpdateOrderTotals(tx: any, orderId: number, now: number, userId: number) {
@@ -415,22 +1000,21 @@ export class OrdersService {
     const order = this.db.select().from(orders).where(eq(orders.id, id)).get();
     if (!order) throw new NotFoundException('Order not found');
     const itemsList = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
-    const logs = this.db
-      .select()
-      .from(orderAuditLog)
-      .where(eq(orderAuditLog.orderId, id))
-      .orderBy(orderAuditLog.id)
-      .all();
+    const logs = this.orderEvents.getEvents(this.db, id);
     return { ...order, items: itemsList, auditLog: logs };
   }
 
   verifyAuditChain(orderId: number): any {
-    const logs = this.db
-      .select()
-      .from(orderAuditLog)
-      .where(eq(orderAuditLog.orderId, orderId))
-      .orderBy(orderAuditLog.id)
-      .all();
-    return this.auditLog.verifyChain(orderId, logs);
+    const logs = this.orderEvents.getEvents(this.db, orderId);
+    return this.orderEvents.verifyChain(orderId, logs);
+  }
+
+  getOrderEvents(orderId: number): any[] {
+    return this.orderEvents.getEvents(this.db, orderId);
+  }
+
+  verifyOrderChain(orderId: number): any {
+    const logs = this.orderEvents.getEvents(this.db, orderId);
+    return this.orderEvents.verifyChain(orderId, logs);
   }
 }

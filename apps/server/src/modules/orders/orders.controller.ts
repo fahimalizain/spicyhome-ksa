@@ -22,10 +22,11 @@ import {
   AddOrderItemDto,
   UpdateOrderItemDto,
   ReprintOrderDto,
+  CreateRefundDto,
 } from './dto/create-order.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
-import { SuccessResponse, StatusResponse } from './dto/success-response.dto';
+import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { PrintResponse } from './dto/print-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
@@ -103,17 +104,9 @@ export class OrdersController {
     return this.ordersService.removeItem(orderId, itemId, user.sub);
   }
 
-  @Post(':id/send')
-  @RequiresPermission('update_order')
-  @ApiOperation({ summary: 'Send order to kitchen (open → sent)' })
-  @ApiCreatedResponse({ description: 'Order sent', type: StatusResponse })
-  sendOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
-    return this.ordersService.sendOrder(orderId, user.sub);
-  }
-
   @Post(':id/pay')
-  @RequiresPermission('create_order')
-  @ApiOperation({ summary: 'Mark order as paid (sent → paid)' })
+  @RequiresPermission('pay_order')
+  @ApiOperation({ summary: 'Mark order as paid (open → paid)' })
   @ApiCreatedResponse({ description: 'Order paid', type: StatusResponse })
   payOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
     return this.ordersService.payOrder(orderId, user.sub);
@@ -121,7 +114,7 @@ export class OrdersController {
 
   @Post(':id/void')
   @RequiresPermission('void_order')
-  @ApiOperation({ summary: 'Void an order (open|sent → voided)' })
+  @ApiOperation({ summary: 'Void an order (open → voided)' })
   @ApiCreatedResponse({ description: 'Order voided', type: StatusResponse })
   voidOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
     return this.ordersService.voidOrder(orderId, user.sub);
@@ -137,5 +130,38 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.reprintOrder(orderId, dto.target, user.sub);
+  }
+
+  @Post(':id/refund')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Refund items on a paid order' })
+  @ApiCreatedResponse({ description: 'Refund processed', type: RefundResponse })
+  refundOrder(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: CreateRefundDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.refundOrder(orderId, dto, user.sub);
+  }
+
+  @Get(':id/refunds')
+  @ApiOperation({ summary: 'Get all refunds for an order' })
+  @ApiOkResponse({ description: 'List of refunds with their items' })
+  getOrderRefunds(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.getOrderRefunds(id);
+  }
+
+  @Get(':id/events')
+  @ApiOperation({ summary: 'Get the complete event chain for an order' })
+  @ApiOkResponse({ description: 'List of order events' })
+  getOrderEvents(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.getOrderEvents(id);
+  }
+
+  @Get(':id/events/verify')
+  @ApiOperation({ summary: 'Verify the hash chain integrity for an order' })
+  @ApiOkResponse({ description: 'Chain verification result', type: AuditVerifyResponse })
+  verifyOrderChain(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.verifyOrderChain(id);
   }
 }

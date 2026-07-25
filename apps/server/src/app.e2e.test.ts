@@ -174,15 +174,7 @@ describe('Orders (e2e)', () => {
     expect(res.body.valid).toBe(true);
   });
 
-  it('POST /orders/:id/send transitions to sent', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/send`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .expect(201);
-    expect(res.body.status).toBe('sent');
-  });
-
-  it('POST /orders/:id/pay transitions to paid', async () => {
+  it('POST /orders/:id/pay transitions to paid (from open)', async () => {
     const res = await request(app.getHttpServer())
       .post(`/orders/${orderId}/pay`)
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -200,8 +192,8 @@ describe('Orders (e2e)', () => {
     expect(res.body.totalSalesHalalas).toBeGreaterThanOrEqual(4600);
   });
 
-  it('POST /day/close fails when open/sent orders exist', async () => {
-    // Create a sent order that blocks close
+  it('POST /day/close fails when open orders exist', async () => {
+    // Create an open order that blocks close
     const createRes = await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -209,11 +201,7 @@ describe('Orders (e2e)', () => {
       .expect(201);
     secondOrderId = createRes.body.id;
 
-    await request(app.getHttpServer())
-      .post(`/orders/${secondOrderId}/send`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .expect(201);
-
+    // Leave it open — should block close
     await request(app.getHttpServer())
       .post('/day/close')
       .set('Authorization', `Bearer ${jwtToken}`)

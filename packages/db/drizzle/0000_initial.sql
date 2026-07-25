@@ -74,17 +74,50 @@ CREATE TABLE `items` (
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE TABLE `order_audit_log` (
+CREATE TABLE `order_events` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`order_id` integer NOT NULL,
+	`event_idx` integer NOT NULL,
 	`user_id` integer NOT NULL,
-	`action` text NOT NULL,
+	`type` text NOT NULL,
 	`payload` text NOT NULL,
 	`prev_hash` text NOT NULL,
 	`hash` text NOT NULL,
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `order_refunds` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`user_id` integer NOT NULL,
+	`subtotal_halalas` integer NOT NULL,
+	`vat_halalas` integer NOT NULL,
+	`total_halalas` integer NOT NULL,
+	`reason` text,
+	`created_at` integer NOT NULL,
+	`created_by` integer,
+	`updated_at` integer,
+	`updated_by` integer,
+	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `order_refund_items` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`refund_id` integer NOT NULL,
+	`order_item_id` integer,
+	`item_name` text NOT NULL,
+	`unit_price_halalas` integer NOT NULL,
+	`vat_rate_bp` integer NOT NULL,
+	`qty` integer NOT NULL,
+	`total_halalas` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`order_item_id`) REFERENCES `order_items`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE TABLE `order_items` (
@@ -170,6 +203,7 @@ CREATE TABLE `user_roles` (
 	`delete_order_item` integer DEFAULT 0 NOT NULL,
 	`void_order` integer DEFAULT 0 NOT NULL,
 	`refund_order` integer DEFAULT 0 NOT NULL,
+	`pay_order` integer DEFAULT 0 NOT NULL,
 	`manage_menu` integer DEFAULT 0 NOT NULL,
 	`manage_tables` integer DEFAULT 0 NOT NULL,
 	`manage_printers` integer DEFAULT 0 NOT NULL,
@@ -199,6 +233,39 @@ CREATE TABLE `users` (
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `credit_notes` (
+  `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  `order_id` integer NOT NULL,
+  `refund_id` integer NOT NULL,
+  `related_invoice_uuid` text NOT NULL,
+  `icv` integer NOT NULL,
+  `uuid` text NOT NULL,
+  `invoice_hash` text NOT NULL,
+  `prev_invoice_hash` text NOT NULL,
+  `xml` text NOT NULL,
+  `qr_tlv` text NOT NULL,
+  `status` text NOT NULL,
+  `total_halalas` integer NOT NULL,
+  `vat_halalas` integer NOT NULL,
+  `reason` text,
+  `created_at` integer NOT NULL,
+  `updated_at` integer NOT NULL,
+  `created_by` integer,
+  `updated_by` integer,
+  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `credit_notes_refund_id_unique` ON `credit_notes` (`refund_id`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `credit_notes_icv_unique` ON `credit_notes` (`icv`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `credit_notes_uuid_unique` ON `credit_notes` (`uuid`);
+--> statement-breakpoint
+CREATE INDEX `credit_notes_order_id_idx` ON `credit_notes` (`order_id`);
+--> statement-breakpoint
 CREATE UNIQUE INDEX `invoices_order_id_unique` ON `invoices` (`order_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `invoices_icv_unique` ON `invoices` (`icv`);--> statement-breakpoint
 CREATE UNIQUE INDEX `invoices_uuid_unique` ON `invoices` (`uuid`);--> statement-breakpoint
@@ -212,16 +279,19 @@ CREATE UNIQUE INDEX `user_roles_name_unique` ON `user_roles` (`name`);--> statem
 CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);
 
 --> statement-breakpoint
--- Immutable order_audit_log: prevent UPDATE and DELETE via triggers
-CREATE TRIGGER order_audit_log_no_update
-BEFORE UPDATE ON order_audit_log
+CREATE UNIQUE INDEX `order_events_order_id_event_idx_unique` ON `order_events` (`order_id`, `event_idx`);
+
+--> statement-breakpoint
+-- Immutable order_events: prevent UPDATE and DELETE via triggers
+CREATE TRIGGER order_events_no_update
+BEFORE UPDATE ON order_events
 BEGIN
-  SELECT RAISE(FAIL, 'UPDATE not allowed on order_audit_log');
+  SELECT RAISE(FAIL, 'UPDATE not allowed on order_events');
 END;
 
 --> statement-breakpoint
-CREATE TRIGGER order_audit_log_no_delete
-BEFORE DELETE ON order_audit_log
+CREATE TRIGGER order_events_no_delete
+BEFORE DELETE ON order_events
 BEGIN
-  SELECT RAISE(FAIL, 'DELETE not allowed on order_audit_log');
+  SELECT RAISE(FAIL, 'DELETE not allowed on order_events');
 END;

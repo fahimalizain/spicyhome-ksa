@@ -35,11 +35,11 @@ export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): voi
 
   if (existingRoles.cnt === 0) {
     effectiveSqlite.exec(`
-      INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
-      VALUES ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ${now}, ${now});
+      INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, pay_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
+      VALUES ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ${now}, ${now});
 
-      INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
-      VALUES ('staff', 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
+      INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, pay_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
+      VALUES ('staff', 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
     `);
   }
 

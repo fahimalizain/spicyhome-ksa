@@ -1,6 +1,5 @@
 export const OrderStatus = {
   OPEN: 'open',
-  SENT: 'sent',
   PAID: 'paid',
   VOIDED: 'voided',
   REFUNDED: 'refunded',
@@ -9,7 +8,6 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export const ALL_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.OPEN,
-  OrderStatus.SENT,
   OrderStatus.PAID,
   OrderStatus.VOIDED,
   OrderStatus.REFUNDED,
@@ -30,12 +28,16 @@ export type PrinterRole = (typeof PrinterRole)[keyof typeof PrinterRole];
 export const AuditAction = {
   CREATED: 'created',
   ITEM_ADDED: 'item_added',
+  ITEM_UPDATED: 'item_updated',
   ITEM_REMOVED: 'item_removed',
-  SENT_TO_KITCHEN: 'sent_to_kitchen',
   PAID: 'paid',
-  PRINTED: 'printed',
   VOIDED: 'voided',
   REFUNDED: 'refunded',
+  REFUND_ISSUED: 'refund_issued',
+  KITCHEN_PRINT_ENQUEUED: 'kitchen_print_enqueued',
+  KITCHEN_PRINT_SUCCEEDED: 'kitchen_print_succeeded',
+  RECEIPT_PRINT_ENQUEUED: 'receipt_print_enqueued',
+  RECEIPT_PRINT_SUCCEEDED: 'receipt_print_succeeded',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 
