@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'node:module';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -52,16 +53,18 @@ export default defineConfig(({ mode }) => {
 
   const plugins: any[] = [react()];
 
-  // Sentry Vite plugin for source map upload — only when SENTRY_AUTH_TOKEN is set
+  // Sentry Vite plugin for source map upload — only when SENTRY_AUTH_TOKEN is set.
+  // createRequire works under package.json "type":"module". try/catch keeps
+  // Bazel runfiles working when @sentry/vite-plugin is not linked into the
+  // test/build sandbox (pnpm/CI local builds still load it from node_modules).
+  // Plugin soft-fails upload errors by default (does not fail the Vite build).
   const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
   if (sentryAuthToken) {
-    // Dynamic import to avoid dependency error when not installed
     try {
-      const { sentryVitePlugin } = require('@sentry/vite-plugin');
-      // The Sentry Vite plugin soft-fails by default: if the upload fails
-      // (network error, missing auth, expired token), it logs a warning but
-      // does NOT fail the Vite build. This ensures releases are never blocked
-      // by source map upload issues.
+      const require = createRequire(import.meta.url);
+      const { sentryVitePlugin } = require('@sentry/vite-plugin') as {
+        sentryVitePlugin: (opts: Record<string, unknown>) => unknown;
+      };
       plugins.push(
         sentryVitePlugin({
           authToken: sentryAuthToken,
@@ -72,9 +75,11 @@ export default defineConfig(({ mode }) => {
           },
         }),
       );
-    } catch {
-      // @sentry/vite-plugin not installed — skip source map upload
-      console.warn('SENTRY_AUTH_TOKEN set but @sentry/vite-plugin not available');
+    } catch (err) {
+      console.warn(
+        'SENTRY_AUTH_TOKEN set but @sentry/vite-plugin could not be loaded:',
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 

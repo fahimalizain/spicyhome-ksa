@@ -135,14 +135,14 @@ jobs:
           sentry-cli --version
 
       # ──────────────────────────────────────────────
-      # 8. Validate Sentry auth
+      # 8. Validate Sentry auth (projects list; info returns 404 on EU)
       # ──────────────────────────────────────────────
       - name: Validate Sentry auth
         if: ${{ !inputs.dry_run }}
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
-          sentry-cli info
+          sentry-cli projects list
           echo "Sentry auth validated successfully."
 
       - name: Validate Sentry auth (dry_run)
@@ -151,7 +151,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN || '' }}
         run: |
           if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-            sentry-cli info
+            sentry-cli projects list
             echo "Sentry auth validated successfully."
           else
             echo "::notice::SENTRY_AUTH_TOKEN not set — skipping auth check"
@@ -192,7 +192,13 @@ jobs:
           sentry-cli releases new "$ANDROID_RELEASE" --project spicyhome-android
 
           # ── Upload server source maps ──
+          # Copy from read-only bazel-bin to a writable temp dir so that
+          # sentry-cli sourcemaps inject can write debug IDs into the maps.
           echo "Uploading server source maps..."
+          SENTRY_TMP="/tmp/sentry-server-maps"
+          rm -rf "$SENTRY_TMP"
+          mkdir -p "$SENTRY_TMP"
+
           SERVER_SRC="bazel-bin/apps/server/src"
           SHARED_SRC="bazel-bin/packages/shared/src"
           DB_SRC="bazel-bin/packages/db/src"
@@ -202,14 +208,18 @@ jobs:
               echo "::warning::Directory not found: $dir — skipping"
               continue
             fi
-            echo "  Injecting debug IDs into $dir..."
-            sentry-cli sourcemaps inject "$dir"
-            echo "  Uploading source maps from $dir..."
+            DEST="$SENTRY_TMP/$(echo "$dir" | tr '/' '_')"
+            mkdir -p "$DEST"
+            echo "  Copying $dir to $DEST ..."
+            cp -R "$dir"/* "$DEST"/
+            echo "  Injecting debug IDs into $DEST ..."
+            sentry-cli sourcemaps inject "$DEST"
+            echo "  Uploading source maps from $DEST ..."
             sentry-cli sourcemaps upload \
               --release "$SERVER_RELEASE" \
               --project spicyhome-server \
               --strip-prefix "$(dirname "$dir")" \
-              "$dir"
+              "$DEST"
           done
 
           # ── Associate commits (best-effort) ──
