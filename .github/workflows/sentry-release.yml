@@ -1,0 +1,275 @@
+name: Sentry Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (default: contents of VERSION file)'
+        required: false
+        type: string
+      dry_run:
+        description: 'If true, build artifacts but skip sentry-cli uploads'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  sentry-release:
+    name: Create Sentry releases + upload source maps
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Riyadh
+      SENTRY_URL: https://de.sentry.io
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+    steps:
+      # ──────────────────────────────────────────────
+      # 1. Checkout
+      # ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ──────────────────────────────────────────────
+      # 2. Setup toolchain
+      # ──────────────────────────────────────────────
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --ignore-scripts
+
+      # ──────────────────────────────────────────────
+      # 3. Resolve version
+      # ──────────────────────────────────────────────
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(cat VERSION | tr -d '[:space:]')
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_server=spicyhome-server@$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_pos=spicyhome-pos@$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_android=spicyhome-android@$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+      # ──────────────────────────────────────────────
+      # 4. Require Sentry credentials (not dry_run)
+      # ──────────────────────────────────────────────
+      - name: Require Sentry credentials
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if [ -z "${{ secrets.SENTRY_AUTH_TOKEN }}" ]; then
+            echo "::error::Missing required secret: SENTRY_AUTH_TOKEN"
+            exit 1
+          fi
+          if [ -z "${{ vars.SENTRY_ORG }}" ]; then
+            echo "::error::Missing required variable: vars.SENTRY_ORG"
+            exit 1
+          fi
+          echo "Sentry credentials present."
+
+      # ──────────────────────────────────────────────
+      # 5. Build POS SPA with source maps + upload
+      # ──────────────────────────────────────────────
+      - name: Build POS SPA
+        working-directory: apps/pos
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_POS_DSN || '' }}
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: spicyhome-pos@${{ steps.version.outputs.version }}
+          SENTRY_AUTH_TOKEN: ${{ inputs.dry_run == 'true' && '' || secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || '' }}
+          SENTRY_PROJECT: spicyhome-pos
+        run: |
+          pnpm exec vite build \
+            --outDir dist
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "::notice::dry_run enabled — skipping source map upload for POS"
+            echo "Would upload POS source maps to: spicyhome-pos@${{ steps.version.outputs.version }}"
+          else
+            echo "POS source maps uploaded via @sentry/vite-plugin"
+          fi
+
+      # ──────────────────────────────────────────────
+      # 6. Build server JS + source maps (Bazel)
+      # ──────────────────────────────────────────────
+      - name: Setup Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-sentry-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-sentry-${{ runner.os }}-
+
+      - name: Build server with Bazel
+        run: |
+          bazel build \
+            //apps/server:lib \
+            //packages/shared:lib \
+            //packages/db:lib
+          echo "Server JS + source maps built in bazel-bin/"
+
+      # ──────────────────────────────────────────────
+      # 7. Install sentry-cli
+      # ──────────────────────────────────────────────
+      - name: Install sentry-cli
+        run: |
+          curl -sL https://sentry.io/get-cli/ | SENTRY_CLI_VERSION="2.42.4" bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sentry-cli --version
+
+      # ──────────────────────────────────────────────
+      # 8. Validate Sentry auth
+      # ──────────────────────────────────────────────
+      - name: Validate Sentry auth
+        if: ${{ !inputs.dry_run }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          sentry-cli info
+          echo "Sentry auth validated successfully."
+
+      - name: Validate Sentry auth (dry_run)
+        if: ${{ inputs.dry_run }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN || '' }}
+        run: |
+          if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+            sentry-cli info
+            echo "Sentry auth validated successfully."
+          else
+            echo "::notice::SENTRY_AUTH_TOKEN not set — skipping auth check"
+          fi
+
+      # ──────────────────────────────────────────────
+      # 9. Create and finalize Sentry releases + upload server source maps
+      # ──────────────────────────────────────────────
+      - name: Create Sentry releases (dry_run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "== Dry run — would create releases =="
+          echo "  spicyhome-server@${{ steps.version.outputs.version }}  (server)"
+          echo "  spicyhome-pos@${{ steps.version.outputs.version }}       (pos)"
+          echo "  spicyhome-android@${{ steps.version.outputs.version }}   (android)"
+          echo ""
+          echo "Server sourcemaps would be uploaded from:"
+          echo "  bazel-bin/apps/server/src/**/*.js.map"
+          echo "  bazel-bin/packages/shared/src/**/*.js.map"
+          echo "  bazel-bin/packages/db/src/**/*.js.map"
+
+      - name: Create and upload Sentry releases
+        if: ${{ !inputs.dry_run }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          SERVER_RELEASE="spicyhome-server@$VERSION"
+          POS_RELEASE="spicyhome-pos@$VERSION"
+          ANDROID_RELEASE="spicyhome-android@$VERSION"
+
+          # ── Create all three releases ──
+          echo "Creating releases..."
+          sentry-cli releases new "$SERVER_RELEASE" --project spicyhome-server
+          sentry-cli releases new "$POS_RELEASE" --project spicyhome-pos
+          sentry-cli releases new "$ANDROID_RELEASE" --project spicyhome-android
+
+          # ── Upload server source maps ──
+          echo "Uploading server source maps..."
+          SERVER_SRC="bazel-bin/apps/server/src"
+          SHARED_SRC="bazel-bin/packages/shared/src"
+          DB_SRC="bazel-bin/packages/db/src"
+
+          for dir in "$SERVER_SRC" "$SHARED_SRC" "$DB_SRC"; do
+            if [ ! -d "$dir" ]; then
+              echo "::warning::Directory not found: $dir — skipping"
+              continue
+            fi
+            echo "  Injecting debug IDs into $dir..."
+            sentry-cli sourcemaps inject "$dir"
+            echo "  Uploading source maps from $dir..."
+            sentry-cli sourcemaps upload \
+              --release "$SERVER_RELEASE" \
+              --project spicyhome-server \
+              --strip-prefix "$(dirname "$dir")" \
+              "$dir"
+          done
+
+          # ── Associate commits (best-effort) ──
+          echo "Associating commits..."
+          for release in "$SERVER_RELEASE" "$POS_RELEASE" "$ANDROID_RELEASE"; do
+            sentry-cli releases set-commits "$release" --auto || \
+              echo "::warning::set-commits failed for $release (may need repo integration)"
+          done
+
+          # ── Finalize releases ──
+          echo "Finalizing releases..."
+          sentry-cli releases finalize "$SERVER_RELEASE"
+          sentry-cli releases finalize "$POS_RELEASE"
+          sentry-cli releases finalize "$ANDROID_RELEASE"
+
+      # ──────────────────────────────────────────────
+      # 10. Verify releases exist in Sentry
+      # ──────────────────────────────────────────────
+      - name: Verify releases
+        if: ${{ !inputs.dry_run }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "== Verifying Sentry releases =="
+
+          for project_release in \
+            "spicyhome-server:spicyhome-server@$VERSION" \
+            "spicyhome-pos:spicyhome-pos@$VERSION" \
+            "spicyhome-android:spicyhome-android@$VERSION"; do
+
+            PROJECT="${project_release%%:*}"
+            RELEASE="${project_release##*:}"
+
+            echo -n "  $RELEASE ... "
+            if sentry-cli releases info "$RELEASE" --project "$PROJECT" > /dev/null 2>&1; then
+              echo "OK"
+            else
+              echo "MISSING"
+              echo "::error::Release $RELEASE not found in project $PROJECT"
+              exit 1
+            fi
+          done
+
+          echo ""
+          echo "=============================================="
+          echo "  Sentry releases created and verified:"
+          echo "    spicyhome-server@$VERSION"
+          echo "    spicyhome-pos@$VERSION"
+          echo "    spicyhome-android@$VERSION"
+          echo "=============================================="
+
+      - name: Verify step skipped (dry_run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "::notice::dry_run enabled — verification skipped"
+          echo "Built artifacts:"
+          echo "  POS dist:    apps/pos/dist/"
+          echo "  Server src:  bazel-bin/apps/server/src/"
+          echo "  Shared src:  bazel-bin/packages/shared/src/"
+          echo "  DB src:      bazel-bin/packages/db/src/"
+          ls -la apps/pos/dist/index.html 2>/dev/null && echo "  POS build: OK" || echo "  POS build: MISSING"
+          ls bazel-bin/apps/server/src/main.js 2>/dev/null && echo "  Server build: OK" || echo "  Server build: MISSING"

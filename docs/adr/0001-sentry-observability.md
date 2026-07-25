@@ -91,9 +91,17 @@ Excluded from Swagger/OpenAPI to avoid drift test noise.
 
 ### Source Map Upload
 
-SPA source maps are uploaded in CI only when `SENTRY_AUTH_TOKEN` is set, via
-`@sentry/vite-plugin`. The upload is soft-fail — if the token is missing (e.g.
-before Sentry secrets are configured), the release is not blocked.
+SPA source maps are uploaded via `@sentry/vite-plugin` during Vite builds when
+`SENTRY_AUTH_TOKEN` is set. Server source maps are uploaded via `sentry-cli`
+after Bazel `ts_project` (which outputs `.js.map` alongside `.js` files).
+
+A dedicated `sentry-release.yml` workflow (`workflow_dispatch`) handles source
+map uploads independently of the full product release. This workflow creates
+releases, uploads server source maps via `sentry-cli`, injects debug IDs, and
+verifies the releases exist in Sentry. It supports a `dry_run` mode to validate
+credentials without mutating Sentry state. The upload is a soft-fail during
+the product release workflow but a hard-fail in the dedicated workflow (i.e.
+missing token blocks the job).
 
 ### Profiling on Windows 7
 

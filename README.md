@@ -73,6 +73,13 @@ any telemetry.
 
 #### Local / Runtime
 
+Copy `.env.example` to `.env.worktree` (gitignored) and fill in real values:
+
+```sh
+cp .env.example .env.worktree
+# Edit .env.worktree with your Sentry DSNs and other settings
+```
+
 Set these environment variables (or uncomment in `.env.worktree`):
 
 ```sh
@@ -118,9 +125,18 @@ spicyhome-pos, spicyhome-android) under one Sentry organization.
 
 ### Source Maps
 
-SPA source maps are uploaded to Sentry during the release CI workflow when
-`SENTRY_AUTH_TOKEN` is set. Upload is a soft-fail — missing token does not
-block releases. Source maps are not shipped to end-user machines.
+Source maps can be uploaded to Sentry via the dedicated workflow
+(`.github/workflows/sentry-release.yml`), independent of the full product
+release. Run it manually from the Actions tab with `workflow_dispatch`.
+
+The workflow:
+- Builds the POS SPA (Vite) and server JS (Bazel) with source maps
+- Creates Sentry releases for server, POS, and Android
+- Uploads server source maps via `sentry-cli`
+- SPA source maps are uploaded by `@sentry/vite-plugin` during the Vite build
+- Supports `dry_run` mode to validate credentials without mutating Sentry
+
+Source maps are never shipped to end-user machines.
 
 ### Health Endpoint
 
