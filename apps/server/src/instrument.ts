@@ -18,16 +18,36 @@ if (SENTRY_DSN) {
 
   const release = `spicyhome-server@${VERSION}`;
 
-  // Start with the NestJS integration (auto-instruments NestJS apps)
-  const integrations: unknown[] = [Sentry.nestIntegration()];
+  // Max detail — cost is not a concern (same intent as Android).
+  const integrations: unknown[] = [
+    // NestJS instrumentation (auto-instruments controllers, providers, etc.)
+    Sentry.nestIntegration(),
+    // Express instrumentation — adds request-scoped isolation and HTTP semantics
+    Sentry.expressIntegration(),
+    // Node HTTP module instrumentation — captures outgoing HTTP calls
+    Sentry.httpIntegration(),
+    // Extra error data (attaches additional error properties to events)
+    Sentry.extraErrorDataIntegration(),
+    // Capture console.error as Sentry events (console.warn → breadcrumbs)
+    Sentry.captureConsoleIntegration({ levels: ['error', 'warn'] }),
+  ];
 
   const initOptions: Record<string, unknown> = {
     dsn: SENTRY_DSN,
     environment,
     release,
+    sendDefaultPii: true,
+    maxBreadcrumbs: 200,
+    attachStacktrace: true,
+    sampleRate: 1.0,
     tracesSampleRate,
+    // Raise maxValueLength so request/response bodies aren't clipped too soon.
+    maxValueLength: 8192,
+    // Node 18 supports includeLocalVariables — adds source-level context to stack traces.
+    // Safe on Node 18 which is our minimum server runtime.
+    includeLocalVariables: true,
     integrations,
-    // Capture all exceptions — do NOT filter out HttpExceptions
+    // Capture all exceptions — do NOT filter out HttpExceptions.
     // The default Sentry filter skips many 4xx responses.
     // We use a custom global filter instead (SentryExceptionFilter).
   };
@@ -39,7 +59,7 @@ if (SENTRY_DSN) {
     initOptions.profilesSampleRate = profilesSampleRate;
   } catch {
     // Profiling not available (npm install --ignore-scripts may omit native module).
-    // Errors and traces will still work.
+    // Errors, traces, and local variables will still work.
     delete initOptions.profilesSampleRate;
   }
 

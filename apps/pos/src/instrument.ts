@@ -27,12 +27,20 @@ if (SENTRY_DSN) {
     (import.meta.env.VITE_SENTRY_ENVIRONMENT as string) ||
     (import.meta.env.DEV ? 'development' : 'production');
 
+  // Max detail — cost is not a concern for this deployment (same intent as Android).
   Sentry.init({
     dsn: SENTRY_DSN,
     environment,
     release: getRelease(),
+    sendDefaultPii: true,
+    maxBreadcrumbs: 200,
+    attachStacktrace: true,
+    sampleRate: 1.0,
     tracesSampleRate,
+    // Raise maxValueLength so bodies and payloads aren't truncated aggressively.
+    maxValueLength: 8192,
     integrations: [
+      // React Router v6 instrumentation for transaction names
       Sentry.reactRouterV6BrowserTracingIntegration({
         useEffect: React.useEffect,
         useLocation,
@@ -40,7 +48,20 @@ if (SENTRY_DSN) {
         createRoutesFromChildren,
         matchRoutes,
       }),
+      // Browser tracing — pageload, navigation, and fetch/XHR performance spans
+      Sentry.browserTracingIntegration(),
+      // Fetch/XHR breadcrumbs (method, URL, status) — bodies are captured via
+      // the onRequestComplete hook in api.ts (SpicyHomeClient config)
+      Sentry.httpClientIntegration(),
+      // Capture console.error/warn as Sentry events/breadcrumbs
+      Sentry.captureConsoleIntegration({ levels: ['error', 'warn'] }),
+      // Browser API errors (e.g. unhandled promise rejections, script errors)
+      Sentry.browserApiErrorsIntegration(),
     ],
-    // No Session Replay — Chrome 109 target
+    // No Session Replay — Chrome 109 does not support rrweb (requires
+    // MutationObserver additions from Chrome 127+). Android has Replay
+    // because WebView on Android 10+ supports it.
+    //
+    // No replayIntegration() here intentionally.
   });
 }

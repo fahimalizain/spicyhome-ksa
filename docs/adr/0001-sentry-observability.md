@@ -43,12 +43,32 @@ Three conceptual projects, each with its own DSN:
 
 ### Telemetry
 
-- **Errors**: Captured unconditionally when DSN is present.
+- **Errors**: Captured unconditionally when DSN is present. All three apps use
+  `sendDefaultPii: true` (no PII scrubbing — same product decision across
+  platforms; see Rejected Alternatives below).
+- **Max detail posture**: All three apps use `maxBreadcrumbs: 200`,
+  `attachStacktrace: true`, and `sampleRate: 1.0`. The server additionally
+  enables `includeLocalVariables: true` (Node 18 support). The POS and server
+  both use `maxValueLength: 8192` to avoid aggressive data truncation.
 - **Traces**: `tracesSampleRate = 1.0`, env-overridable via
   `SENTRY_TRACES_SAMPLE_RATE` / `VITE_SENTRY_TRACES_SAMPLE_RATE`.
 - **Profiling** (server only): `profilesSampleRate = 1.0`, graceful fallback if
   `@sentry/profiling-node` native module is unavailable (e.g. after
   `npm install --ignore-scripts`).
+- **HTTP request/response context**:
+  - **Server**: `expressIntegration()` and `httpIntegration()` capture request
+    semantics. The `SentryExceptionFilter` additionally attaches method, URL,
+    query, and truncated body (up to 64KB) to every error event's isolation
+    scope. `sendDefaultPii` ensures headers (including Authorization) are
+    captured.
+  - **POS**: `browserTracingIntegration()` and `httpClientIntegration()` capture
+    fetch/XHR performance traces and breadcrumbs. The client-ts `request()`
+    function fires an `onRequestComplete` hook; `api.ts` wires it to
+    `Sentry.addBreadcrumb()` with method, URL, status, and truncated
+    request/response bodies (up to 32KB). This mirrors Android's
+    `SentryHttpBodyInterceptor` / `beforeSend` body attachment.
+  - **Android**: OkHttp interceptor + `beforeSend` attaches full bodies
+    (100KB limit).
 
 ### Enablement Rule
 
@@ -160,6 +180,11 @@ environment variables, then baked into `BuildConfig` at compile time.
 - Chrome 109 does not support `rrweb` used by Sentry Replay (requires
   `MutationObserver` features added in Chrome 127+).
 - Privacy concerns with recording POS order data and customer information.
+
+Note: Session Replay IS enabled on Android (onError + session sample rate
+1.0) because WebView on Android 10+ supports rrweb. The POS running on
+Windows 7 Chrome 109 has it deliberately omitted — see the comment in
+`apps/pos/src/instrument.ts`.
 
 ### PII Scrubbing
 
