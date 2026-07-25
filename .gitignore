@@ -18,4 +18,5 @@ MODULE.bazel.lock
 # Android build artifacts
 apps/android/**/build/
 apps/android/.gradle/
+apps/android/.kotlin/
 apps/android/local.properties
