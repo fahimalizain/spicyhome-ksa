@@ -3,9 +3,9 @@
   "tasks": [
     {
       "label": "Compile shared & db packages for ts-node",
-      "detail": "Runs tsc in packages/shared and packages/db to emit .js/.d.ts files needed by ts-node (VSCode launch configs).",
+      "detail": "Ensures .env.worktree exists, then runs tsc in packages/shared and packages/db for ts-node launch configs.",
       "type": "shell",
-      "command": "pnpm exec tsc -p packages/shared/tsconfig.json && pnpm exec tsc -p packages/db/tsconfig.json",
+      "command": "bash scripts/worktree/env.sh && pnpm exec tsc -p packages/shared/tsconfig.json && pnpm exec tsc -p packages/db/tsconfig.json",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -14,10 +14,36 @@
         "isDefault": true
       },
       "presentation": {
-        "reveal": "always",
-        "panel": "shared"
+        "reveal": "silent",
+        "panel": "shared",
+        "showReuseMessage": false
       },
       "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Ensure worktree env",
+      "detail": "Create .env.worktree with stable ports/DB if missing (scripts/worktree/env.sh).",
+      "type": "shell",
+      "command": "bash scripts/worktree/env.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Print worktree ports",
+      "detail": "Show PORT / VITE_PORT / DB for this checkout.",
+      "type": "shell",
+      "command": "bash scripts/worktree/env.sh --print",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ]
 }

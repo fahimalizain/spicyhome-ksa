@@ -10,6 +10,7 @@ release/
 *.db-shm
 .env
 .env.local
+.env.worktree
 .DS_Store
 Thumbs.db
 MODULE.bazel.lock
