@@ -36,9 +36,6 @@ class OrderRepositoryTest {
     private lateinit var addItemCall: Call<SuccessResponse>
 
     @MockK
-    private lateinit var sendCall: Call<StatusResponse>
-
-    @MockK
     private lateinit var payCall: Call<StatusResponse>
 
     @MockK
@@ -155,15 +152,6 @@ class OrderRepositoryTest {
     }
 
     @Test
-    fun `sendOrder delegates correctly`() {
-        every { ordersApi.ordersControllerSendOrder(any()) } returns sendCall
-
-        repository.sendOrder(42)
-
-        verify { ordersApi.ordersControllerSendOrder(BigDecimal.valueOf(42)) }
-    }
-
-    @Test
     fun `payOrder delegates correctly`() {
         every { ordersApi.ordersControllerPayOrder(any()) } returns payCall
 
@@ -182,7 +170,7 @@ class OrderRepositoryTest {
     }
 
     @Test
-    fun `order lifecycle create send pay`() {
+    fun `order lifecycle create pay`() {
         // Create
         val created = CreateOrderResponse(
             id = BigDecimal.ONE,
@@ -195,16 +183,6 @@ class OrderRepositoryTest {
         val createResult = repository.createOrder("dine_in", 1).execute()
         assertThat(createResult.isSuccessful).isTrue()
         assertThat(createResult.body()?.orderNo?.toLong()).isEqualTo(100)
-
-        // Send
-        every { ordersApi.ordersControllerSendOrder(any()) } returns sendCall
-        every { sendCall.execute() } returns Response.success(
-            StatusResponse(status = "sent", success = true)
-        )
-
-        val sendResult = repository.sendOrder(1).execute()
-        assertThat(sendResult.isSuccessful).isTrue()
-        assertThat(sendResult.body()?.status).isEqualTo("sent")
 
         // Pay
         every { ordersApi.ordersControllerPayOrder(any()) } returns payCall

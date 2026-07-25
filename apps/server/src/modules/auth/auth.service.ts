@@ -41,6 +41,16 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  listUsernames(): { usernames: string[] } {
+    const rows = this.db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.isActive, 1))
+      .orderBy(users.username)
+      .all();
+    return { usernames: rows.map((r) => r.username) };
+  }
+
   async login(username: string, pin: string): Promise<{ accessToken: string }> {
     const user = this.db.select().from(users).where(eq(users.username, username)).get();
     if (!user) throw new UnauthorizedException('Invalid credentials');

@@ -85,6 +85,7 @@ describe('api module', () => {
       deleteOrderItem: false,
       voidOrder: false,
       refundOrder: false,
+      payOrder: false,
       manageTables: false,
       managePrinters: false,
       manageSettings: false,

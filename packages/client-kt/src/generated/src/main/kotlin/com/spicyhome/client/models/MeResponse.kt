@@ -33,6 +33,7 @@ import com.squareup.moshi.JsonClass
  * @param deleteOrderItem 
  * @param voidOrder 
  * @param refundOrder 
+ * @param payOrder 
  * @param manageMenu 
  * @param manageTables 
  * @param managePrinters 
@@ -75,6 +76,9 @@ data class MeResponse (
 
     @Json(name = "refundOrder")
     val refundOrder: kotlin.Boolean,
+
+    @Json(name = "payOrder")
+    val payOrder: kotlin.Boolean,
 
     @Json(name = "manageMenu")
     val manageMenu: kotlin.Boolean,

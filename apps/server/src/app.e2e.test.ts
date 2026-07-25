@@ -97,6 +97,33 @@ describe('Auth (e2e)', () => {
     expect(res.body.manageMenu).toBe(true);
     expect(res.body.manageUsers).toBe(true);
   });
+
+  it('GET /auth/usernames without auth returns active usernames', async () => {
+    const res = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    expect(res.body.usernames).toBeDefined();
+    expect(Array.isArray(res.body.usernames)).toBe(true);
+    expect(res.body.usernames).toContain('admin');
+    // Response must not contain sensitive fields
+    expect(res.body.usernames.every((u: string) => typeof u === 'string')).toBe(true);
+    expect(Object.keys(res.body)).toEqual(['usernames']);
+    // Must not contain PII beyond usernames
+    expect(res.body).not.toHaveProperty('ids');
+    expect(res.body).not.toHaveProperty('roles');
+    expect(res.body).not.toHaveProperty('pinHashes');
+  });
+
+  it('GET /auth/usernames excludes inactive users', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    // Create an inactive user, then update to inactive
+    sqlite.exec(`
+      INSERT INTO users (username, pin_hash, name, role_id, is_active, created_at, updated_at)
+      VALUES ('inactive_user', '$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'Inactive', 2, 0, ${now}, ${now});
+    `);
+
+    const res = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    expect(res.body.usernames).toContain('admin');
+    expect(res.body.usernames).not.toContain('inactive_user');
+  });
 });
 
 describe('Business Day (e2e)', () => {

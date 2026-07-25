@@ -59,10 +59,6 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         )
     }
 
-    fun sendOrder(orderId: Long): Call<StatusResponse> {
-        return ordersApi.ordersControllerSendOrder(BigDecimal.valueOf(orderId))
-    }
-
     fun payOrder(orderId: Long): Call<StatusResponse> {
         return ordersApi.ordersControllerPayOrder(BigDecimal.valueOf(orderId))
     }

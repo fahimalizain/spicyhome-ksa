@@ -1,15 +1,55 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { client, setToken, setMe } from '../api';
 
 const PIN_LENGTH = 4;
 
+type UsernameMode = 'loading' | 'select' | 'input';
+
 export function LoginPage() {
+  const [usernames, setUsernames] = useState<string[]>([]);
+  const [usernameMode, setUsernameMode] = useState<UsernameMode>('loading');
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    client.auth.listUsernames().then(
+      (res) => {
+        if (res.usernames.length > 0) {
+          setUsernames(res.usernames);
+          setUsernameMode('select');
+        } else {
+          setUsernameMode('input');
+        }
+      },
+      () => {
+        setUsernameMode('input');
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (usernameMode === 'select') {
+      selectRef.current?.focus();
+    } else if (usernameMode === 'input') {
+      inputRef.current?.focus();
+    }
+  }, [usernameMode]);
+
+  const handleSelectChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setUsername(e.target.value);
+    setError('');
+  }, []);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value);
+    setError('');
+  }, []);
 
   const handleDigit = useCallback((digit: string) => {
     setError('');
@@ -59,15 +99,41 @@ export function LoginPage() {
 
         <div className="mb-6">
           <label className="block text-sm text-gray-400 mb-1">Username</label>
-          <input
-            type="text"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-brand-500"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
-            autoComplete="username"
-            disabled={loading}
-          />
+          {usernameMode === 'loading' && (
+            <div className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-500 text-lg">
+              Loading users...
+            </div>
+          )}
+          {usernameMode === 'select' && (
+            <select
+              ref={selectRef}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-brand-500 appearance-none"
+              value={username}
+              onChange={handleSelectChange}
+              disabled={loading}
+            >
+              <option value="" disabled>
+                Select user
+              </option>
+              {usernames.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          )}
+          {usernameMode === 'input' && (
+            <input
+              ref={inputRef}
+              type="text"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-brand-500"
+              value={username}
+              onChange={handleInputChange}
+              placeholder="Enter username"
+              autoComplete="username"
+              disabled={loading}
+            />
+          )}
         </div>
 
         <div className="mb-4">
