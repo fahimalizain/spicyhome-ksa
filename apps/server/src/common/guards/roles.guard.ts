@@ -22,6 +22,7 @@ const DB_TO_CAMEL: Record<string, keyof typeof userRoles.$inferSelect> = {
   delete_order_item: 'deleteOrderItem',
   void_order: 'voidOrder',
   refund_order: 'refundOrder',
+  pay_order: 'payOrder',
   manage_menu: 'manageMenu',
   manage_tables: 'manageTables',
   manage_printers: 'managePrinters',

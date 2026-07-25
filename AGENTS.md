@@ -43,9 +43,22 @@ Codebase conventions and constraints for all contributors and AI agents.
 - All timestamps are **integer Unix epochs**.
 - All booleans are **integer 0/1** columns.
 - **Audit fields** (`created_by`/`updated_by`, `created_at`/`updated_at`) on
-  every table except `order_audit_log` and `settings`.
-- `order_audit_log` is **immutable** — a SQLite trigger blocks UPDATE/DELETE.
+  every table except `order_events` and `settings`.
+- `order_events` is **immutable** — a SQLite trigger blocks UPDATE/DELETE. It is the
+  single append-only ledger for all order events: item mutations, kitchen prints,
+  status transitions, and reprints.
 - Order items **snapshot** item name, price, and VAT rate at order time.
+
+## Device Responsibilities
+
+- **POS SPA (Windows 7)**: Full control — create orders, manage items, make
+  payments, issue refunds, void orders, reprint receipts/tickets, open/close
+  business days, manage menu/tables/printers/users/settings. Kitchen prints
+  happen automatically as items are added or quantities increased.
+- **Android Tablet**: Order item management only — create orders, add/update/remove
+  items. **No payments, no refunds, no void, no reprints, no
+  administrative functions.** The Android app must not expose payment, refund,
+  or admin endpoints in its UI.
 
 ## Frontend (SPA)
 

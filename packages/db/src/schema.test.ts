@@ -42,8 +42,11 @@ describe('schema — invariants', () => {
       'items',
       'orders',
       'order_items',
-      'order_audit_log',
+      'order_events',
+      'order_refunds',
+      'order_refund_items',
       'invoices',
+      'credit_notes',
       'day_openings',
       'settings',
     ];
@@ -201,6 +204,152 @@ describe('schema — invariants', () => {
         sqlite.exec(`
           INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
           VALUES (${orderId}, 2, 'inv-uuid-2', 'hash2', 'prevhash', '<xml/>', 'tlv', 'signed', ${now}, ${now})
+        `),
+      ).toThrow();
+    });
+
+    it('credit_notes.refund_id is unique', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      // Create an order
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (200, 'uuid-cn-1', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Create a refund
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-uuid-x', 1, 'cn-uuid-1', 'hash1', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+      `);
+
+      // Second credit_note for same refund_id should fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId}, ${refundId}, 'inv-uuid-y', 2, 'cn-uuid-2', 'hash2', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        `),
+      ).toThrow();
+    });
+
+    it('credit_notes.icv is unique', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      // Create orders and refunds for two separate credit notes
+      for (let i = 0; i < 2; i++) {
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+          VALUES (${201 + i}, 'uuid-cn-icv-${i}', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+        `);
+        const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+        sqlite.exec(`
+          INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+          VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+        `);
+        const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId}, ${refundId}, 'inv-uuid-icv', ${10 + i}, 'cn-uuid-icv-${i}', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        `);
+      }
+
+      // ICV 10 already used, inserting another with ICV 10 should fail
+      // Need a new order + refund first
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (203, 'uuid-cn-icv-dup', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId3}, ${userId}, 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId3}, ${refundId3}, 'inv-uuid-icv-dup', 10, 'cn-uuid-icv-dup', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        `),
+      ).toThrow();
+    });
+
+    it('credit_notes.uuid is unique', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (300, 'uuid-cn-uu-1', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-uuid-uu', 20, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+      `);
+
+      // Same UUID with different order/refund should fail
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (301, 'uuid-cn-uu-2', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId2}, ${userId}, 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId2}, ${refundId2}, 'inv-uuid-uu-2', 21, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        `),
+      ).toThrow();
+    });
+
+    it('credit_notes FK to orders and order_refunds are enforced', () => {
+      const now = Math.floor(Date.now() / 1000);
+
+      // FK to non-existent order_id should fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (99999, 99999, 'inv-uuid-fk', 30, 'cn-uuid-fk', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        `),
+      ).toThrow();
+
+      // FK to non-existent refund_id should fail
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (400, 'uuid-cn-fk', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId}, 99999, 'inv-uuid-fk2', 31, 'cn-uuid-fk2', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });

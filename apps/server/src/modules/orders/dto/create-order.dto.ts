@@ -1,4 +1,5 @@
-import { IsString, IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsString, IsIn, IsInt, IsOptional, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderType } from '@spicyhome/shared';
 
@@ -48,4 +49,27 @@ export class ReprintOrderDto {
   @IsString()
   @IsIn(['receipt', 'kitchen'])
   target!: string;
+}
+
+export class RefundItemDto {
+  @ApiProperty({ example: 1 })
+  @IsInt()
+  orderItemId!: number;
+
+  @ApiProperty({ example: 1 })
+  @IsInt()
+  @Min(1)
+  qty!: number;
+}
+
+export class CreateRefundDto {
+  @ApiProperty({ type: [RefundItemDto], description: 'Items and quantities to refund' })
+  @ValidateNested({ each: true })
+  @Type(() => RefundItemDto)
+  items!: RefundItemDto[];
+
+  @ApiPropertyOptional({ example: 'Customer changed mind' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

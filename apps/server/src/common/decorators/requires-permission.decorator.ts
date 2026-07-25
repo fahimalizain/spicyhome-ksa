@@ -8,6 +8,7 @@ export type PermissionName =
   | 'delete_order_item'
   | 'void_order'
   | 'refund_order'
+  | 'pay_order'
   | 'manage_menu'
   | 'manage_tables'
   | 'manage_printers'

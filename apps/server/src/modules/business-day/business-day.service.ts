@@ -1,5 +1,5 @@
 import { Injectable, Inject, ConflictException, NotFoundException } from '@nestjs/common';
-import { eq, and, ne, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { dayOpenings, orders } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
@@ -58,16 +58,14 @@ export class BusinessDayService {
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Validate no orders still in open|sent
+    // Validate no orders still open
     const openOrders = this.db
       .select({ id: orders.id, orderNo: orders.orderNo, status: orders.status })
       .from(orders)
       .where(
         and(
           eq(orders.dayOpeningId, openDay.id),
-          ne(orders.status, 'paid'),
-          ne(orders.status, 'voided'),
-          ne(orders.status, 'refunded'),
+          eq(orders.status, 'open'),
         ),
       )
       .all();
@@ -75,7 +73,7 @@ export class BusinessDayService {
     if (openOrders.length > 0) {
       const offending = openOrders.map((o) => `#${o.orderNo}`).join(', ');
       throw new ConflictException(
-        `Cannot close day — ${openOrders.length} order(s) still open or sent: ${offending}. Pay or void them first.`,
+        `Cannot close day — ${openOrders.length} order(s) still open: ${offending}. Pay or void them first.`,
       );
     }
 

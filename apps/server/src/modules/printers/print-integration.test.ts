@@ -125,8 +125,8 @@ afterAll(async () => {
 });
 
 describe('Print Integration', () => {
-  describe('order send → kitchen printing', () => {
-    it('routes items to the correct kitchen printers by category', async () => {
+  describe('automatic kitchen printing on item add', () => {
+    it('routes items to the correct kitchen printers by category on add', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
@@ -135,35 +135,28 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      // Add burger item (→ kitchen printer 2)
+      // Clear transport log before items
+      transport.sent = [];
+
+      // Add burger item (→ kitchen printer 2) — triggers auto kitchen print
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/items`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ itemId: zingerItemId, qty: 2 })
         .expect(201);
 
-      // Add drink item (→ cold station printer 3)
+      // Add drink item (→ cold station printer 3) — triggers auto kitchen print
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/items`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ itemId: pepsiItemId, qty: 1 })
         .expect(201);
 
-      // Clear transport log
-      transport.sent = [];
-
-      // Send order
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .expect(201);
-
-      // Non-blocking: give event a moment to process
-      await new Promise((r) => setTimeout(r, 200));
+      // Non-blocking: give kitchen print a moment to process
+      await new Promise((r) => setTimeout(r, 300));
 
       // Should have printed to 2 different kitchen printers
       const kitchenPrinters = transport.sent.filter((s) => s.ip !== '192.168.1.50'); // exclude receipt
-      // We expect at least 2 kitchen prints (one per category)
       expect(kitchenPrinters.length).toBeGreaterThanOrEqual(2);
 
       // Verify kitchen ticket content for burger
@@ -179,7 +172,7 @@ describe('Print Integration', () => {
       expect(pepsiPrint).toBeDefined();
     });
 
-    it('order send succeeds even when printer is unreachable', async () => {
+    it('item add succeeds even when kitchen printer is unreachable', async () => {
       transport.nextError = new Error('Connection refused');
 
       const orderRes = await request(app.getHttpServer())
@@ -189,26 +182,65 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
+      transport.sent = [];
+
+      // Add item should still succeed — kitchen print failure doesn't break order
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/items`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ itemId: zingerItemId, qty: 1 })
         .expect(201);
 
-      transport.sent = [];
-
-      // Send should still succeed — print failure doesn't break order
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .expect(201);
-
       await new Promise((r) => setTimeout(r, 200));
     });
   });
 
+  describe('automatic kitchen printing on item qty increase', () => {
+    it('prints delta when item qty is increased', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'dine_in', tableId: 1 })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      // Add zinger with qty 2
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/items`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ itemId: zingerItemId, qty: 2 })
+        .expect(201);
+
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Get the order item ID
+      const orderRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const itemId = orderRes2.body.items[0].id;
+
+      // Increase qty to 5 (delta = 3)
+      await request(app.getHttpServer())
+        .patch(`/orders/${orderId}/items/${itemId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ qty: 5 })
+        .expect(200);
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Should have printed the delta (3) to the kitchen
+      const kitchenPrints = transport.sent.filter(
+        (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+      );
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+    });
+  });
+
   describe('order pay → receipt printing', () => {
-    it('prints receipt with drawer kick on pay', async () => {
+    it('prints receipt with drawer kick on pay (from open)', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
@@ -223,16 +255,11 @@ describe('Print Integration', () => {
         .send({ itemId: zingerItemId, qty: 2 })
         .expect(201);
 
-      // Send order
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .expect(201);
-
+      // Wait for kitchen prints to finish
       await new Promise((r) => setTimeout(r, 200));
       transport.sent = [];
 
-      // Pay order
+      // Pay order (open → paid)
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
         .set('Authorization', `Bearer ${jwtToken}`)
@@ -275,11 +302,7 @@ describe('Print Integration', () => {
         .send({ itemId: zingerItemId, qty: 1 })
         .expect(201);
 
-      // Pay the order first (just to set status)
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`);
-
+      // Pay the order (open → paid)
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
         .set('Authorization', `Bearer ${jwtToken}`);
@@ -338,7 +361,7 @@ describe('Print Integration', () => {
   });
 
   describe('audit log entries for printing', () => {
-    it('writes printed audit entries on successful print', async () => {
+    it('writes item_added, kitchen_print_enqueued/succeeded, paid, receipt_print_enqueued/succeeded events', async () => {
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
@@ -352,16 +375,15 @@ describe('Print Integration', () => {
         .send({ itemId: zingerItemId, qty: 1 })
         .expect(201);
 
-      // Send → kitchen print
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`);
+      // Wait for async kitchen print
+      await new Promise((r) => setTimeout(r, 300));
 
       // Pay → receipt print
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
         .set('Authorization', `Bearer ${jwtToken}`);
 
+      // Wait for async receipt print
       await new Promise((r) => setTimeout(r, 300));
 
       // Check audit log
@@ -371,8 +393,22 @@ describe('Print Integration', () => {
         .expect(200);
 
       const auditLog = orderRes2.body.auditLog;
-      const printedEntries = auditLog.filter((e: any) => e.action === 'printed');
-      expect(printedEntries.length).toBeGreaterThanOrEqual(1);
+
+      // Verify event types
+      const types = auditLog.map((e: any) => e.type);
+
+      // created event
+      expect(types).toContain('created');
+
+      // item_added + kitchen print events
+      expect(types).toContain('item_added');
+      expect(types).toContain('kitchen_print_enqueued');
+      expect(types).toContain('kitchen_print_succeeded');
+
+      // paid + receipt print events
+      expect(types).toContain('paid');
+      expect(types).toContain('receipt_print_enqueued');
+      expect(types).toContain('receipt_print_succeeded');
 
       // Verify chain is still valid
       const verifyRes = await request(app.getHttpServer())

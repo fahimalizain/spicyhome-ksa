@@ -220,12 +220,7 @@ describe('Client contract test', () => {
     expect(res.valid).toBe(true);
   });
 
-  it('sends order to kitchen', async () => {
-    const res: any = await client.orders.send(orderId);
-    expect(res.status).toBe('sent');
-  });
-
-  it('pays order', async () => {
+  it('pays order (from open)', async () => {
     const res: any = await client.orders.pay(orderId);
     expect(res.status).toBe('paid');
   });

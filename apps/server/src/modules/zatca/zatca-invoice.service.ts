@@ -19,8 +19,8 @@
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { eq, desc } from 'drizzle-orm';
-import { orders, orderItems, invoices, settings } from '@spicyhome/db';
+import { eq, desc, and } from 'drizzle-orm';
+import { orders, orderItems, invoices, creditNotes, orderRefunds, orderRefundItems, settings } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { createAuditFields } from '../../common/audit-fields.helper';
@@ -46,6 +46,7 @@ import {
   SellerInfo,
 } from './zatca-xml-builder.service';
 import {
+  decomposeVat,
   zatcaKey,
   ZATCA_INITIAL_PIH,
   ZATCAInvoiceDocumentType,
@@ -81,6 +82,21 @@ export class ZatcaInvoiceService {
     } catch (err: any) {
       this.logger.error(
         `Failed to create ZATCA invoice for order ${payload.orderId}: ${err.message}`,
+      );
+    }
+  }
+
+  @OnEvent('order.refund.issued')
+  async onOrderRefundIssued(payload: {
+    orderId: number;
+    refundId: number;
+    userId: number;
+  }): Promise<void> {
+    try {
+      await this.createCreditNote(payload.orderId, payload.refundId);
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to create ZATCA credit note for refund ${payload.refundId}: ${err.message}`,
       );
     }
   }
@@ -285,6 +301,181 @@ export class ZatcaInvoiceService {
   }
 
   /**
+   * Create a signed ZATCA credit note for a refunded order.
+   *
+   * This creates a credit_note referencing the original invoice for the order.
+   * Must be called after a refund has been recorded. Fails gracefully if
+   * the original invoice does not exist.
+   */
+  async createCreditNote(
+    orderId: number,
+    refundId: number,
+  ): Promise<{ id: number; icv: number; uuid: string }> {
+    // 1. Load the original invoice
+    const originalInvoice = this.getByOrderId(orderId);
+    if (!originalInvoice) {
+      throw new Error(`No original invoice found for order ${orderId}`);
+    }
+
+    // 2. Load refund row
+    const refund = this.db
+      .select()
+      .from(orderRefunds)
+      .where(eq(orderRefunds.id, refundId))
+      .get();
+    if (!refund) {
+      throw new Error(`Refund ${refundId} not found`);
+    }
+
+    // 3. Load refund items
+    const refundItems = this.db
+      .select()
+      .from(orderRefundItems)
+      .where(eq(orderRefundItems.refundId, refundId))
+      .all();
+
+    // 4. Compute refund totals from refund items
+    let subtotalHalalas = 0;
+    let vatHalalas = 0;
+    let totalHalalas = 0;
+    for (const ri of refundItems) {
+      const lineTotal = ri.unitPriceHalalas * ri.qty;
+      totalHalalas += lineTotal;
+      const decomposed = decomposeVat(lineTotal, ri.vatRateBp);
+      subtotalHalalas += decomposed.priceExclHalalas;
+      vatHalalas += decomposed.vatHalalas;
+    }
+
+    // 5. Load seller config
+    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
+    const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
+    const crNumber = this.printersService.getSetting('cr_number', '');
+    const sellerStreet = this.printersService.getSetting('seller_street', '');
+    const sellerBuilding = this.printersService.getSetting('seller_building', '');
+    const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
+    const sellerPostal = this.printersService.getSetting('seller_postal', '');
+    const sellerCountry = this.printersService.getSetting('seller_country', 'SA');
+
+    const seller: SellerInfo = {
+      name: sellerName,
+      vatNumber,
+      crNumber: crNumber || undefined,
+      street: sellerStreet || undefined,
+      buildingNumber: sellerBuilding || undefined,
+      city: sellerCity,
+      postalCode: sellerPostal || undefined,
+      country: sellerCountry,
+    };
+
+    // 6. Load keys and certificate
+    const privateKeyHex = this.getPrivateKey();
+    if (!privateKeyHex) {
+      throw new Error('ZATCA private key not configured. Run onboarding first.');
+    }
+
+    const publicKeyHex = this.printersService.getSetting('zatca_public_key', '');
+    const certBase64 = this.getCertificate();
+
+    // 7. Build invoice items from refund items
+    const invItems: InvoiceItemInput[] = refundItems.map((ri) => ({
+      name: ri.itemName,
+      unitPriceHalalas: ri.unitPriceHalalas,
+      vatRateBp: ri.vatRateBp,
+      qty: ri.qty,
+    }));
+
+    // 8. Timestamps
+    const now = Math.floor(Date.now() / 1000);
+    const nowDate = new Date(now * 1000);
+    const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+      timeZone: 'Asia/Riyadh',
+      hour12: false,
+    });
+
+    // 9. Allocate ICV and get PIH atomically (checks both invoices and credit_notes)
+    const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
+      return this.allocateICV(tx);
+    });
+
+    // 10. Generate UUID
+    const invUuid = require('crypto').randomUUID();
+
+    // 11. Build unsigned XML
+    const xmlInput: InvoiceXMLInput = {
+      type: 'credit_note',
+      icv,
+      uuid: invUuid,
+      issueDate,
+      issueTime,
+      seller,
+      items: invItems,
+      prevInvoiceHash,
+      billingReferenceId: originalInvoice.uuid,
+      paymentNote: refund.reason || 'Refund',
+    };
+
+    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+
+    // 12. Compute invoice hash and sign
+    const invoiceHashB64 = computeInvoiceHash(unsignedXml);
+    const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
+    const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
+    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
+    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+
+    // 13. QR TLV
+    const timestampIso = `${issueDate}T${issueTime}`;
+    const certSigB64 = extractCertSignature(certForXml);
+    const tlvInput: TLVInput = {
+      sellerName,
+      vatNumber,
+      timestamp: timestampIso,
+      totalHalalas,
+      vatHalalas,
+      invoiceHashBase64: invoiceHashB64,
+      signatureBase64: signatureB64,
+      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      certificateSignatureBase64: certSigB64,
+    };
+    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+
+    // 14. Inject QR into signed XML
+    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+
+    const finalInvoiceHash = invoiceHashB64;
+
+    // 15. Insert credit note
+    const result = this.db
+      .insert(creditNotes)
+      .values({
+        orderId,
+        refundId,
+        relatedInvoiceUuid: originalInvoice.uuid,
+        icv,
+        uuid: invUuid,
+        invoiceHash: finalInvoiceHash,
+        prevInvoiceHash,
+        xml: finalSignedXml,
+        qrTlv: qrTlvBase64,
+        status: 'signed',
+        totalHalalas,
+        vatHalalas,
+        reason: refund.reason || 'Refund',
+        ...createAuditFields(1, now),
+      } as any)
+      .run();
+
+    const creditNoteId = Number(result.lastInsertRowid);
+
+    this.logger.log(
+      `Credit note created: ICV=${icv}, order=${orderId}, refund=${refundId}, hash=${finalInvoiceHash.slice(0, 20)}...`,
+    );
+
+    return { id: creditNoteId, icv, uuid: invUuid };
+  }
+
+  /**
    * Get invoice by order ID.
    */
   getByOrderId(orderId: number): any {
@@ -474,7 +665,7 @@ export class ZatcaInvoiceService {
       tx.insert(settings).values({ key: lastIcvKey, value: '1' }).run();
     }
 
-    // Get PIH from the previous invoice
+    // Get PIH from the previous document (invoice or credit note)
     let prevInvoiceHash = '';
     if (icv > 1) {
       const prevInvoice = tx
@@ -482,7 +673,16 @@ export class ZatcaInvoiceService {
         .from(invoices)
         .where(eq(invoices.icv, icv - 1))
         .get();
-      prevInvoiceHash = prevInvoice?.invoiceHash ?? '';
+      if (prevInvoice) {
+        prevInvoiceHash = prevInvoice.invoiceHash;
+      } else {
+        const prevCreditNote = tx
+          .select()
+          .from(creditNotes)
+          .where(eq(creditNotes.icv, icv - 1))
+          .get();
+        prevInvoiceHash = prevCreditNote?.invoiceHash ?? '';
+      }
     }
 
     return { icv, prevInvoiceHash };
