@@ -11,7 +11,7 @@ const now = Math.floor(Date.now() / 1000);
  *
  * Roles:
  *   - admin: all permissions = 1
- *   - staff: create_order = 1, update_order = 1, rest = 0
+ *   - staff: create_order = 1, update_order = 1, rest = 0 (incl. pay_order)
  *
  * Admin user:
  *   - username: admin
@@ -51,11 +51,11 @@ function seedRoles(sqlite: Database.Database): void {
   if (existing.cnt > 0) return;
 
   sqlite.exec(`
-    INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
-    VALUES ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ${now}, ${now});
+    INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, pay_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
+    VALUES ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ${now}, ${now});
 
-    INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
-    VALUES ('staff', 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
+    INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, pay_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
+    VALUES ('staff', 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
   `);
 }
 

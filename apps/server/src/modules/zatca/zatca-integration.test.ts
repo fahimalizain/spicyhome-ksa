@@ -200,11 +200,6 @@ describe('ZATCA Integration', () => {
         .expect(201);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .expect(201);
-
-      await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(201);
@@ -480,10 +475,6 @@ describe('ZATCA Integration', () => {
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ itemId: 1, qty: 1 })
           .expect(201);
-
-        await request(app.getHttpServer())
-          .post(`/orders/${orderId}/send`)
-          .set('Authorization', `Bearer ${jwtToken}`);
 
         await request(app.getHttpServer())
           .post(`/orders/${orderId}/pay`)

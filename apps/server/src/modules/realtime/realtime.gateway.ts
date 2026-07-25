@@ -78,11 +78,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.broadcast({ type: WS_EVENTS.ORDER_UPDATED, payload, at: Math.floor(Date.now() / 1000) });
   }
 
-  @OnEvent(WS_EVENTS.ORDER_SENT)
-  handleOrderSent(payload: Record<string, unknown>): void {
-    this.broadcast({ type: WS_EVENTS.ORDER_SENT, payload, at: Math.floor(Date.now() / 1000) });
-  }
-
   @OnEvent(WS_EVENTS.ORDER_PAID)
   handleOrderPaid(payload: Record<string, unknown>): void {
     this.broadcast({ type: WS_EVENTS.ORDER_PAID, payload, at: Math.floor(Date.now() / 1000) });
@@ -91,6 +86,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   @OnEvent(WS_EVENTS.ORDER_VOIDED)
   handleOrderVoided(payload: Record<string, unknown>): void {
     this.broadcast({ type: WS_EVENTS.ORDER_VOIDED, payload, at: Math.floor(Date.now() / 1000) });
+  }
+
+  @OnEvent(WS_EVENTS.ORDER_REFUND_ISSUED)
+  handleOrderRefundIssued(payload: Record<string, unknown>): void {
+    this.broadcast({
+      type: WS_EVENTS.ORDER_REFUND_ISSUED,
+      payload,
+      at: Math.floor(Date.now() / 1000),
+    });
+  }
+
+  @OnEvent(WS_EVENTS.ORDER_REFUNDED)
+  handleOrderRefunded(payload: Record<string, unknown>): void {
+    this.broadcast({
+      type: WS_EVENTS.ORDER_REFUNDED,
+      payload,
+      at: Math.floor(Date.now() / 1000),
+    });
   }
 
   @OnEvent(WS_EVENTS.ORDER_ITEM_ADDED)

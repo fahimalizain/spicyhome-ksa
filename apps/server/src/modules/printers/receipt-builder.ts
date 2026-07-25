@@ -19,6 +19,10 @@ export interface ReceiptOptions {
   qrTlvPayload?: string;
   /** Whether to prepend a cash-drawer kick command (for paid receipts). */
   kickDrawer?: boolean;
+  /** Optional title printed centered bold before restaurant name. */
+  title?: string;
+  /** Optional footer printed centered instead of the default "Thank you! Visit again." */
+  footer?: string;
 }
 
 export interface ReceiptItem {
@@ -44,6 +48,15 @@ export class ReceiptBuilder {
     }
 
     eb.init();
+
+    // Title (optional, e.g. "REFUND")
+    if (opts.title) {
+      eb.align(Align.Center);
+      eb.bold(true);
+      eb.text(opts.title);
+      eb.bold(false);
+      eb.blankLine();
+    }
 
     // Header
     eb.align(Align.Center);
@@ -90,7 +103,7 @@ export class ReceiptBuilder {
 
     // Footer
     eb.align(Align.Center);
-    eb.text('Thank you! Visit again.');
+    eb.text(opts.footer ?? 'Thank you! Visit again.');
     eb.blankLine();
 
     // ZATCA QR (optional slot)

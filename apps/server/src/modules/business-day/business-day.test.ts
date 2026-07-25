@@ -174,13 +174,13 @@ describe('BusinessDayService', () => {
       );
     });
 
-    it('throws conflict when open/sent orders exist', async () => {
+    it('throws conflict when open orders exist', async () => {
       await service.openDay({ openingCashHalalas: 0 }, 1);
       const day = service.getOpenDay()!;
 
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
-        VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'sent', 2000, 300, 2300, ${now}, ${now});
+        VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'open', 2000, 300, 2300, ${now}, ${now});
       `);
 
       await expect(service.closeDay({ closingCashHalalas: 0 }, 1)).rejects.toThrow(

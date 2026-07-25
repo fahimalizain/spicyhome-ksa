@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { createTestDb, findMigrationsDir } from './migrate';
 
-describe('order_audit_log immutability trigger', () => {
+describe('order_events immutability trigger', () => {
   let sqlite: Database.Database;
 
   beforeAll(() => {
@@ -13,7 +13,7 @@ describe('order_audit_log immutability trigger', () => {
     sqlite.close();
   });
 
-  it('blocks UPDATE on order_audit_log', () => {
+  it('blocks UPDATE on order_events', () => {
     const now = Math.floor(Date.now() / 1000);
 
     // Set up dependencies: user_roles, users, day_openings, orders
@@ -41,43 +41,43 @@ describe('order_audit_log immutability trigger', () => {
     `);
     const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-    // Insert an audit log row
+    // Insert an order_events row
     sqlite.exec(`
-      INSERT INTO order_audit_log (order_id, user_id, action, payload, prev_hash, hash, created_at)
-      VALUES (${orderId}, ${userId}, 'created', '{}', '', 'abc123', ${now})
+      INSERT INTO order_events (order_id, event_idx, user_id, type, payload, prev_hash, hash, created_at)
+      VALUES (${orderId}, 1, ${userId}, 'created', '{}', '', 'abc123', ${now})
     `);
     const logId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
     // Attempt UPDATE — should throw due to trigger
     expect(() =>
-      sqlite.exec(`UPDATE order_audit_log SET action = 'paid' WHERE id = ${logId}`),
+      sqlite.exec(`UPDATE order_events SET type = 'paid' WHERE id = ${logId}`),
     ).toThrow();
   });
 
-  it('blocks DELETE on order_audit_log', () => {
+  it('blocks DELETE on order_events', () => {
     // Insert another row
     const now = Math.floor(Date.now() / 1000);
     const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
     const orderId = (sqlite.prepare('SELECT id FROM orders LIMIT 1').get() as any).id;
 
     sqlite.exec(`
-      INSERT INTO order_audit_log (order_id, user_id, action, payload, prev_hash, hash, created_at)
-      VALUES (${orderId}, ${userId}, 'item_added', '{}', 'def456', 'ghi789', ${now})
+      INSERT INTO order_events (order_id, event_idx, user_id, type, payload, prev_hash, hash, created_at)
+      VALUES (${orderId}, 2, ${userId}, 'item_added', '{}', 'def456', 'ghi789', ${now})
     `);
     const logId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-    expect(() => sqlite.exec(`DELETE FROM order_audit_log WHERE id = ${logId}`)).toThrow();
+    expect(() => sqlite.exec(`DELETE FROM order_events WHERE id = ${logId}`)).toThrow();
   });
 
-  it('allows INSERT on order_audit_log', () => {
+  it('allows INSERT on order_events', () => {
     const now = Math.floor(Date.now() / 1000);
     const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
     const orderId = (sqlite.prepare('SELECT id FROM orders LIMIT 1').get() as any).id;
 
     expect(() =>
       sqlite.exec(`
-        INSERT INTO order_audit_log (order_id, user_id, action, payload, prev_hash, hash, created_at)
-        VALUES (${orderId}, ${userId}, 'sent_to_kitchen', '{}', 'jkl012', 'mno345', ${now})
+        INSERT INTO order_events (order_id, event_idx, user_id, type, payload, prev_hash, hash, created_at)
+        VALUES (${orderId}, 3, ${userId}, 'item_updated', '{}', 'jkl012', 'mno345', ${now})
       `),
     ).not.toThrow();
   });

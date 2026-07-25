@@ -1273,46 +1273,10 @@
         ]
       }
     },
-    "/orders/{id}/send": {
-      "post": {
-        "operationId": "OrdersController_sendOrder",
-        "summary": "Send order to kitchen (open → sent)",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Order sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "orders"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/orders/{id}/pay": {
       "post": {
         "operationId": "OrdersController_payOrder",
-        "summary": "Mark order as paid (sent → paid)",
+        "summary": "Mark order as paid (open → paid)",
         "parameters": [
           {
             "name": "id",
@@ -1348,7 +1312,7 @@
     "/orders/{id}/void": {
       "post": {
         "operationId": "OrdersController_voidOrder",
-        "summary": "Void an order (open|sent → voided)",
+        "summary": "Void an order (open → voided)",
         "parameters": [
           {
             "name": "id",
@@ -1412,6 +1376,146 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PrintResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/refund": {
+      "post": {
+        "operationId": "OrdersController_refundOrder",
+        "summary": "Refund items on a paid order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRefundDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Refund processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/refunds": {
+      "get": {
+        "operationId": "OrdersController_getOrderRefunds",
+        "summary": "Get all refunds for an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of refunds with their items"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/events": {
+      "get": {
+        "operationId": "OrdersController_getOrderEvents",
+        "summary": "Get the complete event chain for an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of order events"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/events/verify": {
+      "get": {
+        "operationId": "OrdersController_verifyOrderChain",
+        "summary": "Verify the hash chain integrity for an order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chain verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerifyResponse"
                 }
               }
             }
@@ -2222,6 +2326,10 @@
             "type": "boolean",
             "example": false
           },
+          "payOrder": {
+            "type": "boolean",
+            "example": false
+          },
           "manageMenu": {
             "type": "boolean",
             "example": false
@@ -2255,6 +2363,7 @@
           "deleteOrderItem",
           "voidOrder",
           "refundOrder",
+          "payOrder",
           "manageMenu",
           "manageTables",
           "managePrinters",
@@ -3326,7 +3435,7 @@
           },
           "status": {
             "type": "string",
-            "example": "sent"
+            "example": "paid"
           }
         },
         "required": [
@@ -3368,6 +3477,64 @@
         "required": [
           "success",
           "errors"
+        ]
+      },
+      "RefundItemDto": {
+        "type": "object",
+        "properties": {
+          "orderItemId": {
+            "type": "number",
+            "example": 1
+          },
+          "qty": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "orderItemId",
+          "qty"
+        ]
+      },
+      "CreateRefundDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Items and quantities to refund",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefundItemDto"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "example": "Customer changed mind"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "RefundResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "refundId": {
+            "type": "number",
+            "example": 1
+          },
+          "status": {
+            "type": "string",
+            "example": "paid"
+          }
+        },
+        "required": [
+          "success",
+          "refundId",
+          "status"
         ]
       },
       "SettingResponse": {

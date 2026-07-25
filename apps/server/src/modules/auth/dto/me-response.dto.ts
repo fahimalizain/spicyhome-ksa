@@ -35,6 +35,9 @@ export class MeResponse {
   refundOrder!: boolean;
 
   @ApiProperty({ example: false })
+  payOrder!: boolean;
+
+  @ApiProperty({ example: false })
   manageMenu!: boolean;
 
   @ApiProperty({ example: false })

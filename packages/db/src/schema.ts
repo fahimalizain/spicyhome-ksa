@@ -10,6 +10,7 @@ export const userRoles = sqliteTable('user_roles', {
   deleteOrderItem: integer('delete_order_item').notNull().default(0),
   voidOrder: integer('void_order').notNull().default(0),
   refundOrder: integer('refund_order').notNull().default(0),
+  payOrder: integer('pay_order').notNull().default(0),
   manageMenu: integer('manage_menu').notNull().default(0),
   manageTables: integer('manage_tables').notNull().default(0),
   managePrinters: integer('manage_printers').notNull().default(0),
@@ -135,7 +136,7 @@ export const orders = sqliteTable(
     dayOpeningId: integer('day_opening_id')
       .references(() => dayOpenings.id)
       .notNull(),
-    status: text('status').notNull(), // 'open' | 'sent' | 'paid' | 'voided' | 'refunded'
+    status: text('status').notNull(), // 'open' | 'paid' | 'voided' | 'refunded'
     subtotalHalalas: integer('subtotal_halalas').notNull().default(0),
     vatHalalas: integer('vat_halalas').notNull().default(0),
     totalHalalas: integer('total_halalas').notNull().default(0),
@@ -174,9 +175,27 @@ export const orderItems = sqliteTable('order_items', {
   updatedBy: integer('updated_by').references(() => users.id),
 });
 
-// ── order_audit_log ────────────────────────────────────────────────────────────
+// ── order_events ───────────────────────────────────────────────────────────────
 
-export const orderAuditLog = sqliteTable('order_audit_log', {
+export const orderEvents = sqliteTable('order_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  eventIdx: integer('event_idx').notNull(),
+  userId: integer('user_id')
+    .references(() => users.id)
+    .notNull(),
+  type: text('type').notNull(),
+  payload: text('payload').notNull(),
+  prevHash: text('prev_hash').notNull(),
+  hash: text('hash').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+// ── order_refunds ──────────────────────────────────────────────────────────────
+
+export const orderRefunds = sqliteTable('order_refunds', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   orderId: integer('order_id')
     .references(() => orders.id)
@@ -184,10 +203,29 @@ export const orderAuditLog = sqliteTable('order_audit_log', {
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
-  action: text('action').notNull(),
-  payload: text('payload').notNull(),
-  prevHash: text('prev_hash').notNull(),
-  hash: text('hash').notNull(),
+  subtotalHalalas: integer('subtotal_halalas').notNull(),
+  vatHalalas: integer('vat_halalas').notNull(),
+  totalHalalas: integer('total_halalas').notNull(),
+  reason: text('reason'),
+  createdAt: integer('created_at').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  updatedAt: integer('updated_at'),
+  updatedBy: integer('updated_by').references(() => users.id),
+});
+
+// ── order_refund_items ─────────────────────────────────────────────────────────
+
+export const orderRefundItems = sqliteTable('order_refund_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  refundId: integer('refund_id')
+    .references(() => orderRefunds.id, { onDelete: 'cascade' })
+    .notNull(),
+  orderItemId: integer('order_item_id').references(() => orderItems.id),
+  itemName: text('item_name').notNull(),
+  unitPriceHalalas: integer('unit_price_halalas').notNull(),
+  vatRateBp: integer('vat_rate_bp').notNull(),
+  qty: integer('qty').notNull(),
+  totalHalalas: integer('total_halalas').notNull(),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -207,6 +245,34 @@ export const invoices = sqliteTable('invoices', {
   qrTlv: text('qr_tlv').notNull(),
   status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
   reportedAt: integer('reported_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  updatedBy: integer('updated_by').references(() => users.id),
+});
+
+// ── credit_notes ─────────────────────────────────────────────────────────────
+
+export const creditNotes = sqliteTable('credit_notes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  refundId: integer('refund_id')
+    .references(() => orderRefunds.id)
+    .notNull()
+    .unique(),
+  relatedInvoiceUuid: text('related_invoice_uuid').notNull(),
+  icv: integer('icv').notNull().unique(),
+  uuid: text('uuid').notNull().unique(),
+  invoiceHash: text('invoice_hash').notNull(),
+  prevInvoiceHash: text('prev_invoice_hash').notNull(),
+  xml: text('xml').notNull(),
+  qrTlv: text('qr_tlv').notNull(),
+  status: text('status').notNull(),
+  totalHalalas: integer('total_halalas').notNull(),
+  vatHalalas: integer('vat_halalas').notNull(),
+  reason: text('reason'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   createdBy: integer('created_by').references(() => users.id),
