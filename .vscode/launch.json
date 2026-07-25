@@ -8,15 +8,31 @@
       "runtimeArgs": ["-r", "ts-node/register/transpile-only"],
       "args": ["${workspaceFolder}/apps/server/src/main.ts"],
       "cwd": "${workspaceFolder}/apps/server",
+      "envFile": "${workspaceFolder}/.env.worktree",
       "env": {
-        "TZ": "Asia/Riyadh",
-        "SPICYHOME_DB": "${workspaceFolder}/data/spicyhome.db",
-        "PORT": "3742",
         "TS_NODE_SCOPE": "false",
         "TS_NODE_PREFER_TS_EXTS": "true"
       },
       "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "Compile shared & db packages for ts-node"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug POS (Vite)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "vite"],
+      "cwd": "${workspaceFolder}/apps/pos",
+      "envFile": "${workspaceFolder}/.env.worktree",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "Ensure worktree env",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+https?://\\S+:([0-9]+)/?",
+        "uriFormat": "http://localhost:%s",
+        "action": "openExternally"
+      }
     },
     {
       "type": "node",
@@ -29,6 +45,16 @@
       "skipFiles": ["<node_internals>/**"],
       "restart": false,
       "timeout": 30000
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Server + POS",
+      "configurations": ["Debug Server (ts-node)", "Debug POS (Vite)"],
+      "stopAll": true,
+      "presentation": {
+        "order": 1
+      }
     }
   ]
 }

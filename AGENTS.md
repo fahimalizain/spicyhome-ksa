@@ -67,6 +67,14 @@ Codebase conventions and constraints for all contributors and AI agents.
 - **Tailwind v3 only** — v4 requires Chrome 111+.
 - Touch-friendly, dark theme, large touch targets, landscape-first.
 
+## Parallel worktrees
+
+- Use skill **setup-worktree** (or `bash scripts/setup-worktree.sh <branch>`).
+- Per-checkout `.env.worktree` (gitignored): `PORT`, `VITE_PORT`, `SPICYHOME_DB`.
+- Main worktree keeps `3742` / `6124` / `data/spicyhome.db`. Linked worktrees
+  get a stable hash offset and `data/spicyhome-<slug>.db`.
+- VS Code: **Debug Server + POS** compound reads `envFile` `.env.worktree`.
+
 ## Commits
 
 - **Conventional Commits**: `feat:`, `fix:`, `docs:`, `chore:`, `test:`, etc.
