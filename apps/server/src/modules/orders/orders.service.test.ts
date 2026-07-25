@@ -42,6 +42,13 @@ beforeAll(async () => {
 
   const now = Math.floor(Date.now() / 1000);
 
+  // Replace seeded data with test-specific data
+  sqlite.exec(`
+    DELETE FROM items;
+    DELETE FROM item_categories;
+    DELETE FROM tables;
+  `);
+
   // Seed: receipt printer
   sqlite.exec(`
     INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
