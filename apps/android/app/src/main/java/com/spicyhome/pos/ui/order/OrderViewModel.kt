@@ -10,6 +10,7 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
+import io.sentry.Sentry
 import com.spicyhome.pos.data.repository.MenuRepository
 import com.spicyhome.pos.data.repository.OrderRepository
 import com.spicyhome.pos.data.repository.TableRepository
@@ -322,12 +323,14 @@ class OrderViewModel(
                         error = "No open business day. Please open a day first.",
                     )
                 } else {
+                    // HTTP 4xx/5xx are captured by SentryOkHttpInterceptor (with bodies).
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = "Failed to create order (${response.code()})",
                     )
                 }
             } catch (e: Exception) {
+                Sentry.captureException(e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Order creation failed",

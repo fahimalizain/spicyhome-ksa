@@ -65,7 +65,7 @@ fi
 
 echo "Bootstrapping worktree: $ROOT"
 
-env_args=()
+env_args=(--sync-android)
 if $FORCE_ENV; then
   env_args+=(--force)
 fi

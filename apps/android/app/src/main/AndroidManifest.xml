@@ -13,6 +13,19 @@
         android:theme="@style/Theme.SpicyHome"
         android:usesCleartextTraffic="true">
 
+        <!-- Sentry config (placeholders filled by Gradle). auto-init off → SpicyHomeApp.initSentry. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+        <meta-data android:name="io.sentry.dsn" android:value="${sentryDsn}" />
+        <meta-data android:name="io.sentry.environment" android:value="${sentryEnvironment}" />
+        <meta-data android:name="io.sentry.release" android:value="${sentryRelease}" />
+        <meta-data android:name="io.sentry.debug" android:value="${sentryDebug}" />
+        <meta-data android:name="io.sentry.send-default-pii" android:value="true" />
+        <meta-data android:name="io.sentry.traces-sample-rate" android:value="1.0" />
+        <meta-data android:name="io.sentry.profiles-sample-rate" android:value="1.0" />
+        <meta-data android:name="io.sentry.max-breadcrumbs" android:value="200" />
+        <meta-data android:name="io.sentry.attach-stacktrace" android:value="true" />
+        <meta-data android:name="io.sentry.max-request-body-size" android:value="always" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

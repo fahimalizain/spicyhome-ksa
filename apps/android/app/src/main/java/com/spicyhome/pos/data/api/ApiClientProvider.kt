@@ -7,6 +7,9 @@ import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.apis.SettingsApi
 import com.spicyhome.client.infrastructure.ApiClient
 import android.util.Log
+import io.sentry.HttpStatusCodeRange
+import io.sentry.okhttp.SentryOkHttpEventListener
+import io.sentry.okhttp.SentryOkHttpInterceptor
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -26,6 +29,15 @@ class ApiClientProvider(
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            // Outermost: buffer bodies for breadcrumbs + replayable request body.
+            .addInterceptor(SentryHttpBodyInterceptor())
+            .addInterceptor(
+                SentryOkHttpInterceptor(
+                    captureFailedRequests = true,
+                    failedRequestStatusCodes = listOf(HttpStatusCodeRange(400, 599)),
+                ),
+            )
+            .eventListener(SentryOkHttpEventListener())
             .addInterceptor(UnauthorizedInterceptor(onUnauthorized))
 
         val builder = if (bearerToken != null && bearerToken.isNotBlank()) {

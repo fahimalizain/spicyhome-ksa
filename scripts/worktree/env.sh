@@ -13,7 +13,8 @@
 # Usage:
 #   scripts/worktree/env.sh              # write .env.worktree in cwd/repo root
 #   scripts/worktree/env.sh --print      # print env without writing
-#   scripts/worktree/env.sh --force      # overwrite existing .env.worktree
+#   scripts/worktree/env.sh --force         # overwrite existing .env.worktree
+#   scripts/worktree/env.sh --sync-android  # also refresh apps/android/local.properties
 #   scripts/worktree/env.sh /path/to/wt  # target another checkout
 
 set -euo pipefail
@@ -173,6 +174,10 @@ sync_android_local_properties() {
   local props="$ROOT/apps/android/local.properties"
   local android_dsn="${SENTRY_ANDROID_DSN:-}"
   local sentry_env="${SENTRY_ENVIRONMENT:-${WORKTREE_SLUG:-development}}"
+  # Unique temp name: compound VS Code launch can run env.sh twice in parallel
+  # (server + POS preLaunchTasks). A fixed *.tmp races on mv.
+  local tmp
+  tmp="$(mktemp "${props}.XXXXXX")"
 
   mkdir -p "$(dirname "$props")"
 
@@ -211,7 +216,8 @@ sync_android_local_properties() {
       echo "SENTRY_DSN=${android_dsn}"
       echo "SENTRY_ENVIRONMENT=${sentry_env}"
     fi
-  } > "${props}.tmp" && mv "${props}.tmp" "$props"
+  } > "$tmp"
+  mv -f "$tmp" "$props"
 }
 
 print_android_status() {
@@ -249,14 +255,16 @@ print_sentry_status() {
 
 PRINT_ONLY=false
 FORCE=false
+SYNC_ANDROID=false
 TARGET=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --print) PRINT_ONLY=true; shift ;;
     --force) FORCE=true; shift ;;
+    --sync-android) SYNC_ANDROID=true; shift ;;
     -h|--help)
-      sed -n '2,15p' "$0" | sed 's/^# \?//'
+      sed -n '2,18p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
     *)
@@ -372,9 +380,13 @@ if [[ -f "$ENV_FILE" ]] && ! $FORCE; then
     merge_sentry_from_main
   fi
 
-  # Sync Android local.properties
-  sync_android_local_properties
-  print_android_status
+  # Android local.properties: only on bootstrap / explicit --sync-android / --force.
+  # VS Code compound launch runs env.sh twice (server + POS preLaunchTasks); touching
+  # Android props on every Server/POS start is unnecessary and raced on a shared .tmp.
+  if $SYNC_ANDROID; then
+    sync_android_local_properties
+    print_android_status
+  fi
   exit 0
 fi
 

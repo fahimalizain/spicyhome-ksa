@@ -42,18 +42,25 @@ android {
         versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
-        buildConfigField("String", "SENTRY_ENVIRONMENT", "\"$sentryEnvironment\"")
-        buildConfigField("String", "VERSION_NAME", "\"$appVersion\"")
+        // Sentry auto-init reads these from the merged manifest (not BuildConfig).
+        // Values come from local.properties / env — never committed.
+        manifestPlaceholders["sentryDsn"] = sentryDsn
+        manifestPlaceholders["sentryEnvironment"] = sentryEnvironment
+        manifestPlaceholders["sentryRelease"] = "spicyhome-android@$appVersion"
+        manifestPlaceholders["sentryDebug"] = "false"
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["sentryDebug"] = "true"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["sentryDebug"] = "false"
         }
     }
 
@@ -115,6 +122,7 @@ dependencies {
 
     // Sentry error monitoring
     implementation("io.sentry:sentry-android:7.22.1")
+    implementation("io.sentry:sentry-android-okhttp:7.22.1")
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")
