@@ -14,6 +14,7 @@ import com.spicyhome.pos.data.repository.MenuRepository
 import com.spicyhome.pos.data.repository.OrderRepository
 import com.spicyhome.pos.data.repository.TableRepository
 import com.spicyhome.pos.util.MoneyFormatter
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,6 +92,7 @@ class OrderViewModel(
     private val apiClientProvider: ApiClientProvider,
     private val initialTableId: Long? = null,
     private val initialOrderId: Long? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrderUiState())
@@ -124,7 +126,7 @@ class OrderViewModel(
         if (initialOrderId != null) {
             viewModelScope.launch {
                 try {
-                    val response = withContext(Dispatchers.IO) {
+                    val response = withContext(ioDispatcher) {
                         orderRepo!!.getOrder(initialOrderId).execute()
                     }
                     if (response.isSuccessful) {
@@ -152,7 +154,7 @@ class OrderViewModel(
     private fun loadCategories() {
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     menuRepo!!.listCategories().execute()
                 }
                 if (response.isSuccessful) {
@@ -175,7 +177,7 @@ class OrderViewModel(
     private fun loadTables() {
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     tableRepo!!.listTables().execute()
                 }
                 if (response.isSuccessful) {
@@ -196,7 +198,7 @@ class OrderViewModel(
         )
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     menuRepo!!.listItems(categoryId?.toString() ?: "").execute()
                 }
                 if (response.isSuccessful) {
@@ -299,7 +301,7 @@ class OrderViewModel(
 
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.createOrder(
                         type = state.orderType.value,
                         tableId = state.selectedTableId,
@@ -343,7 +345,7 @@ class OrderViewModel(
 
         for (ci in cart) {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.addItem(
                         orderId = orderId,
                         itemId = ci.item.id.toLong(),
@@ -377,7 +379,7 @@ class OrderViewModel(
         val orderId = _uiState.value.currentOrderId ?: return
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.getOrder(orderId).execute()
                 }
                 if (response.isSuccessful) {
@@ -395,7 +397,7 @@ class OrderViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true)
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.sendOrder(orderId).execute()
                 }
                 if (response.isSuccessful) {
@@ -423,7 +425,7 @@ class OrderViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true)
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.payOrder(orderId).execute()
                 }
                 if (response.isSuccessful) {
@@ -466,10 +468,17 @@ class OrderViewModel(
         private val apiClientProvider: ApiClientProvider,
         private val initialTableId: Long? = null,
         private val initialOrderId: Long? = null,
+        private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return OrderViewModel(preferencesManager, apiClientProvider, initialTableId, initialOrderId) as T
+            return OrderViewModel(
+                preferencesManager,
+                apiClientProvider,
+                initialTableId,
+                initialOrderId,
+                ioDispatcher,
+            ) as T
         }
     }
 }
