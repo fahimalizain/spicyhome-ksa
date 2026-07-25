@@ -90,12 +90,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --ignore-scripts
 
-      - name: Build & test Android
+      - name: Run Android unit tests
         run: |
           bazel test //apps/android:unit_tests \
             --action_env=ANDROID_HOME=$ANDROID_HOME \
             --action_env=JAVA_HOME=$JAVA_HOME \
             --test_output=errors
+
+      - name: Build Android APK
+        run: |
+          bazel build //apps/android:apk \
+            --action_env=ANDROID_HOME=$ANDROID_HOME \
+            --action_env=JAVA_HOME=$JAVA_HOME
 
   lint:
     name: Lint & Format Check
