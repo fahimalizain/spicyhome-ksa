@@ -10,8 +10,12 @@ import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
+import com.spicyhome.client.models.CreateRefundDto
+import com.spicyhome.client.models.OrderEventResponse
+import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.PrintResponse
+import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
@@ -59,6 +63,32 @@ interface OrdersApi {
     fun ordersControllerGetOrder(@Path("id") id: java.math.BigDecimal): Call<OrderResponse>
 
     /**
+     * GET orders/{id}/events
+     * Get the complete event chain for an order
+     * 
+     * Responses:
+     *  - 200: List of order events
+     *
+     * @param id 
+     * @return [Call]<[kotlin.collections.List<OrderEventResponse>]>
+     */
+    @GET("orders/{id}/events")
+    fun ordersControllerGetOrderEvents(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderEventResponse>>
+
+    /**
+     * GET orders/{id}/refunds
+     * Get all refunds for an order
+     * 
+     * Responses:
+     *  - 200: List of refunds with their items
+     *
+     * @param id 
+     * @return [Call]<[kotlin.collections.List<OrderRefundResponse>]>
+     */
+    @GET("orders/{id}/refunds")
+    fun ordersControllerGetOrderRefunds(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderRefundResponse>>
+
+    /**
      * GET orders
      * List orders with optional filters
      * 
@@ -74,7 +104,7 @@ interface OrdersApi {
 
     /**
      * POST orders/{id}/pay
-     * Mark order as paid (sent → paid)
+     * Mark order as paid (open → paid)
      * 
      * Responses:
      *  - 201: Order paid
@@ -84,6 +114,20 @@ interface OrdersApi {
      */
     @POST("orders/{id}/pay")
     fun ordersControllerPayOrder(@Path("id") id: java.math.BigDecimal): Call<StatusResponse>
+
+    /**
+     * POST orders/{id}/refund
+     * Refund items on a paid order
+     * 
+     * Responses:
+     *  - 201: Refund processed
+     *
+     * @param id 
+     * @param createRefundDto 
+     * @return [Call]<[RefundResponse]>
+     */
+    @POST("orders/{id}/refund")
+    fun ordersControllerRefundOrder(@Path("id") id: java.math.BigDecimal, @Body createRefundDto: CreateRefundDto): Call<RefundResponse>
 
     /**
      * DELETE orders/{orderId}/items/{itemId}
@@ -114,19 +158,6 @@ interface OrdersApi {
     fun ordersControllerReprintOrder(@Path("id") id: java.math.BigDecimal, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
 
     /**
-     * POST orders/{id}/send
-     * Send order to kitchen (open → sent)
-     * 
-     * Responses:
-     *  - 201: Order sent
-     *
-     * @param id 
-     * @return [Call]<[StatusResponse]>
-     */
-    @POST("orders/{id}/send")
-    fun ordersControllerSendOrder(@Path("id") id: java.math.BigDecimal): Call<StatusResponse>
-
-    /**
      * PATCH orders/{orderId}/items/{itemId}
      * Update an order item (qty or notes)
      * 
@@ -155,8 +186,21 @@ interface OrdersApi {
     fun ordersControllerVerifyAuditChain(@Path("id") id: java.math.BigDecimal): Call<AuditVerifyResponse>
 
     /**
+     * GET orders/{id}/events/verify
+     * Verify the hash chain integrity for an order
+     * 
+     * Responses:
+     *  - 200: Chain verification result
+     *
+     * @param id 
+     * @return [Call]<[AuditVerifyResponse]>
+     */
+    @GET("orders/{id}/events/verify")
+    fun ordersControllerVerifyOrderChain(@Path("id") id: java.math.BigDecimal): Call<AuditVerifyResponse>
+
+    /**
      * POST orders/{id}/void
-     * Void an order (open|sent → voided)
+     * Void an order (open → voided)
      * 
      * Responses:
      *  - 201: Order voided

@@ -15,6 +15,7 @@
 | **deleteOrderItem** | **kotlin.Boolean** |  |  |
 | **voidOrder** | **kotlin.Boolean** |  |  |
 | **refundOrder** | **kotlin.Boolean** |  |  |
+| **payOrder** | **kotlin.Boolean** |  |  |
 | **manageMenu** | **kotlin.Boolean** |  |  |
 | **manageTables** | **kotlin.Boolean** |  |  |
 | **managePrinters** | **kotlin.Boolean** |  |  |

@@ -50,6 +50,7 @@ All URIs are relative to *http://localhost*
 | *AuthApi* | [**authControllerGetMe**](docs/AuthApi.md#authcontrollergetme) | **GET** auth/me | Get current user info with role permissions |
 | *AuthApi* | [**authControllerGetUser**](docs/AuthApi.md#authcontrollergetuser) | **GET** auth/users/{id} | Get user by ID |
 | *AuthApi* | [**authControllerListRoles**](docs/AuthApi.md#authcontrollerlistroles) | **GET** auth/roles | List all roles |
+| *AuthApi* | [**authControllerListUsernames**](docs/AuthApi.md#authcontrollerlistusernames) | **GET** auth/usernames | List active usernames for login dropdown |
 | *AuthApi* | [**authControllerListUsers**](docs/AuthApi.md#authcontrollerlistusers) | **GET** auth/users | List all users |
 | *AuthApi* | [**authControllerLogin**](docs/AuthApi.md#authcontrollerlogin) | **POST** auth/login | Login with username and PIN |
 | *AuthApi* | [**authControllerUpdateRole**](docs/AuthApi.md#authcontrollerupdaterole) | **PUT** auth/roles/{id} | Update a role |
@@ -70,14 +71,17 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerAddItem**](docs/OrdersApi.md#orderscontrolleradditem) | **POST** orders/{id}/items | Add an item to an order |
 | *OrdersApi* | [**ordersControllerCreateOrder**](docs/OrdersApi.md#orderscontrollercreateorder) | **POST** orders | Create a new order |
 | *OrdersApi* | [**ordersControllerGetOrder**](docs/OrdersApi.md#orderscontrollergetorder) | **GET** orders/{id} | Get order by ID with items and audit log |
+| *OrdersApi* | [**ordersControllerGetOrderEvents**](docs/OrdersApi.md#orderscontrollergetorderevents) | **GET** orders/{id}/events | Get the complete event chain for an order |
+| *OrdersApi* | [**ordersControllerGetOrderRefunds**](docs/OrdersApi.md#orderscontrollergetorderrefunds) | **GET** orders/{id}/refunds | Get all refunds for an order |
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
-| *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid (sent → paid) |
+| *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid (open → paid) |
+| *OrdersApi* | [**ordersControllerRefundOrder**](docs/OrdersApi.md#orderscontrollerrefundorder) | **POST** orders/{id}/refund | Refund items on a paid order |
 | *OrdersApi* | [**ordersControllerRemoveItem**](docs/OrdersApi.md#orderscontrollerremoveitem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
 | *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
-| *OrdersApi* | [**ordersControllerSendOrder**](docs/OrdersApi.md#orderscontrollersendorder) | **POST** orders/{id}/send | Send order to kitchen (open → sent) |
 | *OrdersApi* | [**ordersControllerUpdateItem**](docs/OrdersApi.md#orderscontrollerupdateitem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
 | *OrdersApi* | [**ordersControllerVerifyAuditChain**](docs/OrdersApi.md#orderscontrollerverifyauditchain) | **GET** orders/{id}/audit/verify | Verify audit log hash chain for an order |
-| *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open|sent → voided) |
+| *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
+| *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
 | *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer TCP reachability |
 | *PrintersApi* | [**printersControllerCreate**](docs/PrintersApi.md#printerscontrollercreate) | **POST** printers | Create a printer |
 | *PrintersApi* | [**printersControllerGet**](docs/PrintersApi.md#printerscontrollerget) | **GET** printers/{id} | Get printer by ID |
@@ -122,6 +126,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateOrderDto](docs/CreateOrderDto.md)
  - [com.spicyhome.client.models.CreateOrderResponse](docs/CreateOrderResponse.md)
  - [com.spicyhome.client.models.CreatePrinterDto](docs/CreatePrinterDto.md)
+ - [com.spicyhome.client.models.CreateRefundDto](docs/CreateRefundDto.md)
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
  - [com.spicyhome.client.models.CreateTableDto](docs/CreateTableDto.md)
  - [com.spicyhome.client.models.CreateUserDto](docs/CreateUserDto.md)
@@ -131,11 +136,16 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.LoginResponse](docs/LoginResponse.md)
  - [com.spicyhome.client.models.MeResponse](docs/MeResponse.md)
  - [com.spicyhome.client.models.OpenDayDto](docs/OpenDayDto.md)
+ - [com.spicyhome.client.models.OrderEventResponse](docs/OrderEventResponse.md)
  - [com.spicyhome.client.models.OrderItemResponse](docs/OrderItemResponse.md)
+ - [com.spicyhome.client.models.OrderRefundResponse](docs/OrderRefundResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
  - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
  - [com.spicyhome.client.models.PrinterResponse](docs/PrinterResponse.md)
  - [com.spicyhome.client.models.PrinterStatusResponse](docs/PrinterStatusResponse.md)
+ - [com.spicyhome.client.models.RefundItemDto](docs/RefundItemDto.md)
+ - [com.spicyhome.client.models.RefundItemResponse](docs/RefundItemResponse.md)
+ - [com.spicyhome.client.models.RefundResponse](docs/RefundResponse.md)
  - [com.spicyhome.client.models.ReprintOrderDto](docs/ReprintOrderDto.md)
  - [com.spicyhome.client.models.RoleResponse](docs/RoleResponse.md)
  - [com.spicyhome.client.models.SetSettingDto](docs/SetSettingDto.md)
@@ -151,6 +161,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)
  - [com.spicyhome.client.models.UpdateUserDto](docs/UpdateUserDto.md)
  - [com.spicyhome.client.models.UserResponse](docs/UserResponse.md)
+ - [com.spicyhome.client.models.UsernamesResponse](docs/UsernamesResponse.md)
  - [com.spicyhome.client.models.ZatcaConfigDto](docs/ZatcaConfigDto.md)
 
 

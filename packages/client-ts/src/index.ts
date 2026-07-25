@@ -4,6 +4,7 @@ export type {
   LoginDto,
   LoginResponse,
   MeResponse,
+  UsernamesResponse,
   CreateUserDto,
   UpdateUserDto,
   UserResponse,

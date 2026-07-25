@@ -5,6 +5,7 @@ import com.spicyhome.client.apis.AuthApi
 import com.spicyhome.client.models.LoginDto
 import com.spicyhome.client.models.LoginResponse
 import com.spicyhome.client.models.MeResponse
+import com.spicyhome.client.models.UsernamesResponse
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -25,6 +26,9 @@ class AuthRepositoryTest {
 
     @MockK
     private lateinit var meCall: Call<MeResponse>
+
+    @MockK
+    private lateinit var usernamesCall: Call<UsernamesResponse>
 
     private lateinit var repository: AuthRepository
 
@@ -99,6 +103,7 @@ class AuthRepositoryTest {
             deleteOrderItem = true,
             voidOrder = true,
             refundOrder = true,
+            payOrder = true,
             manageMenu = true,
             manageTables = true,
             managePrinters = true,
@@ -113,5 +118,40 @@ class AuthRepositoryTest {
         assertThat(result.isSuccessful).isTrue()
         assertThat(result.body()?.username).isEqualTo("admin")
         assertThat(result.body()?.roleName).isEqualTo("manager")
+    }
+
+    @Test
+    fun `listUsernames delegates to authApi`() {
+        every { authApi.authControllerListUsernames() } returns usernamesCall
+
+        val result = repository.listUsernames()
+
+        assertThat(result).isSameInstanceAs(usernamesCall)
+        verify { authApi.authControllerListUsernames() }
+    }
+
+    @Test
+    fun `listUsernames success returns usernames`() {
+        val usernames = UsernamesResponse(usernames = listOf("admin", "cashier1"))
+        every { authApi.authControllerListUsernames() } returns usernamesCall
+        every { usernamesCall.execute() } returns Response.success(usernames)
+
+        val result = repository.listUsernames().execute()
+
+        assertThat(result.isSuccessful).isTrue()
+        assertThat(result.body()?.usernames).containsExactly("admin", "cashier1")
+    }
+
+    @Test
+    fun `listUsernames failure returns error`() {
+        val response = Response.error<UsernamesResponse>(500, okhttp3.ResponseBody.create(null, ""))
+
+        every { authApi.authControllerListUsernames() } returns usernamesCall
+        every { usernamesCall.execute() } returns response
+
+        val result = repository.listUsernames().execute()
+
+        assertThat(result.isSuccessful).isFalse()
+        assertThat(result.code()).isEqualTo(500)
     }
 }

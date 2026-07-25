@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.repository.AuthRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,11 +22,20 @@ data class LoginUiState(
     val error: String? = null,
     val isLoggedIn: Boolean = false,
     val savedServerUrl: String = "",
+    val usernames: List<String> = emptyList(),
+    val usernameMode: UsernameMode = UsernameMode.LOADING,
 )
+
+enum class UsernameMode {
+    LOADING,
+    SELECT,
+    INPUT,
+}
 
 class LoginViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -35,6 +45,50 @@ class LoginViewModel(
         viewModelScope.launch {
             val url = preferencesManager.serverUrl.first() ?: ""
             _uiState.value = _uiState.value.copy(savedServerUrl = url)
+            loadUsernames()
+        }
+    }
+
+    private fun loadUsernames() {
+        val baseUrl = _uiState.value.savedServerUrl
+        if (baseUrl.isBlank()) {
+            _uiState.value = _uiState.value.copy(usernameMode = UsernameMode.INPUT)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(usernameMode = UsernameMode.LOADING)
+
+        viewModelScope.launch {
+            try {
+                val api = apiClientProvider.createAuthApi(baseUrl)
+                val repo = AuthRepository(api)
+
+                val response = withContext(ioDispatcher) {
+                    repo.listUsernames().execute()
+                }
+
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body != null && body.usernames.isNotEmpty()) {
+                        _uiState.value = _uiState.value.copy(
+                            usernames = body.usernames,
+                            usernameMode = UsernameMode.SELECT,
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            usernameMode = UsernameMode.INPUT,
+                        )
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        usernameMode = UsernameMode.INPUT,
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    usernameMode = UsernameMode.INPUT,
+                )
+            }
         }
     }
 
@@ -63,7 +117,7 @@ class LoginViewModel(
                 val api = apiClientProvider.createAuthApi(baseUrl)
                 val repo = AuthRepository(api)
 
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     repo.login(state.username, state.pin).execute()
                 }
 

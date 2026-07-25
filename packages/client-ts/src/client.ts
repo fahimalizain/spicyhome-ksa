@@ -22,6 +22,7 @@ export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
 export type LoginResponse = Schemas['LoginResponse'];
 export type MeResponse = Schemas['MeResponse'];
 export type UserResponse = Schemas['UserResponse'];
+export type UsernamesResponse = Schemas['UsernamesResponse'];
 export type RoleResponse = Schemas['RoleResponse'];
 export type CategoryResponse = Schemas['CategoryResponse'];
 export type ItemResponse = Schemas['ItemResponse'];
@@ -145,6 +146,8 @@ export class SpicyHomeClient {
     login: (dto: LoginDto) => request<LoginResponse>(this.config, 'POST', '/auth/login', dto),
 
     me: () => request<MeResponse>(this.config, 'GET', '/auth/me'),
+
+    listUsernames: () => request<UsernamesResponse>(this.config, 'GET', '/auth/usernames'),
 
     listUsers: () => request<UserResponse[]>(this.config, 'GET', '/auth/users'),
 
