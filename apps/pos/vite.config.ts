@@ -37,6 +37,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // Prefer TS sources over tsc-emitted CJS .js (server preLaunchTask writes
+    // *.js next to *.ts). Default Vite order is .js before .ts, so bare imports
+    // like `from './money'` would load CJS and break named ESM exports.
+    resolve: {
+      extensions: ['.mts', '.ts', '.tsx', '.mjs', '.js', '.jsx', '.json'],
+      alias: {
+        '@spicyhome/shared': path.resolve(repoRoot, 'packages/shared/src/index.ts'),
+        '@spicyhome/client-ts': path.resolve(repoRoot, 'packages/client-ts/src/index.ts'),
+      },
+    },
     build: {
       target: 'chrome109',
       outDir: 'dist',
