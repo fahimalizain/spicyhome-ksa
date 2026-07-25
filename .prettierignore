@@ -11,3 +11,14 @@ MODULE.bazel.lock
 packages/client-kt/src/generated/
 packages/api-spec/openapi.json
 apps/android/**/build/
+# tsc emit next to sources (gitignored) — do not format
+**/*.js
+!**/.prettierrc.js
+!**/eslint.config.mjs
+!**/*.config.js
+!**/*.config.cjs
+!**/*.config.mjs
+apps/**/src/**/*.d.ts
+packages/**/src/**/*.d.ts
+packages/**/drizzle.config.d.ts
+packages/**/drizzle.config.js
