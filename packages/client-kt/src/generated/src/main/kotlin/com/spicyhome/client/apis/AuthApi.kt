@@ -15,6 +15,7 @@ import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
 import com.spicyhome.client.models.UserResponse
+import com.spicyhome.client.models.UsernamesResponse
 
 interface AuthApi {
     /**
@@ -79,6 +80,18 @@ interface AuthApi {
      */
     @GET("auth/roles")
     fun authControllerListRoles(): Call<kotlin.collections.List<RoleResponse>>
+
+    /**
+     * GET auth/usernames
+     * List active usernames for login dropdown
+     * 
+     * Responses:
+     *  - 200: Active usernames
+     *
+     * @return [Call]<[UsernamesResponse]>
+     */
+    @GET("auth/usernames")
+    fun authControllerListUsernames(): Call<UsernamesResponse>
 
     /**
      * GET auth/users

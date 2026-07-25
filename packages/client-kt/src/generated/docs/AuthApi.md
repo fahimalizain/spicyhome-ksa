@@ -9,6 +9,7 @@ All URIs are relative to *http://localhost*
 | [**authControllerGetMe**](AuthApi.md#authControllerGetMe) | **GET** auth/me | Get current user info with role permissions |
 | [**authControllerGetUser**](AuthApi.md#authControllerGetUser) | **GET** auth/users/{id} | Get user by ID |
 | [**authControllerListRoles**](AuthApi.md#authControllerListRoles) | **GET** auth/roles | List all roles |
+| [**authControllerListUsernames**](AuthApi.md#authControllerListUsernames) | **GET** auth/usernames | List active usernames for login dropdown |
 | [**authControllerListUsers**](AuthApi.md#authControllerListUsers) | **GET** auth/users | List all users |
 | [**authControllerLogin**](AuthApi.md#authControllerLogin) | **POST** auth/login | Login with username and PIN |
 | [**authControllerUpdateRole**](AuthApi.md#authControllerUpdateRole) | **PUT** auth/roles/{id} | Update a role |
@@ -193,6 +194,38 @@ This endpoint does not need any parameter.
 
 Configure bearer:
     ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+List active usernames for login dropdown
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+val webService = apiClient.createWebservice(AuthApi::class.java)
+
+val result : UsernamesResponse = webService.authControllerListUsernames()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**UsernamesResponse**](UsernamesResponse.md)
+
+### Authorization
+
+No authorization required
 
 ### HTTP request headers
 

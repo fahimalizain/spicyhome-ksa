@@ -33,6 +33,28 @@
         ]
       }
     },
+    "/auth/usernames": {
+      "get": {
+        "operationId": "AuthController_listUsernames",
+        "summary": "List active usernames for login dropdown",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active usernames",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernamesResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/me": {
       "get": {
         "operationId": "AuthController_getMe",
@@ -2277,6 +2299,24 @@
         },
         "required": [
           "accessToken"
+        ]
+      },
+      "UsernamesResponse": {
+        "type": "object",
+        "properties": {
+          "usernames": {
+            "example": [
+              "admin",
+              "cashier1"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "usernames"
         ]
       },
       "MeResponse": {

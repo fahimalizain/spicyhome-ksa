@@ -37,7 +37,6 @@ enum class OrderScreenState {
     SELECTING_TYPE,  // choose dine-in/takeaway + table if dine-in
     BUILDING_ORDER,  // add items to cart
     ORDER_CREATED,   // order created, items being added/removed
-    ORDER_SENT,      // order sent to kitchen
     ORDER_PAID,      // order paid
     DAY_NOT_OPEN,    // no open business day — must open day first
 }
@@ -386,34 +385,6 @@ class OrderViewModel(
                 }
             } catch (_: Exception) {
                 // Silently fail refresh
-            }
-        }
-    }
-
-    fun sendOrder() {
-        val orderId = _uiState.value.currentOrderId ?: return
-        _uiState.value = _uiState.value.copy(isLoading = true)
-        viewModelScope.launch {
-            try {
-                val response = withContext(Dispatchers.IO) {
-                    orderRepo!!.sendOrder(orderId).execute()
-                }
-                if (response.isSuccessful) {
-                    _uiState.value = _uiState.value.copy(
-                        screenState = OrderScreenState.ORDER_SENT,
-                        isLoading = false,
-                    )
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "Failed to send order (${response.code()})",
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message,
-                )
             }
         }
     }

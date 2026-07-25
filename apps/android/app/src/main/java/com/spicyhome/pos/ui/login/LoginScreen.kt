@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -15,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.pos.ui.theme.Accent
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
@@ -53,18 +57,74 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                OutlinedTextField(
-                    value = state.username,
-                    onValueChange = { viewModel.onUsernameChange(it) },
-                    label = { Text("Username") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Accent,
-                        focusedLabelColor = Accent,
-                        cursorColor = Accent,
-                    ),
-                )
+                when (state.usernameMode) {
+                    UsernameMode.LOADING -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Accent,
+                            )
+                        }
+                    }
+
+                    UsernameMode.SELECT -> {
+                        var expanded by remember { mutableStateOf(false) }
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = it },
+                        ) {
+                            OutlinedTextField(
+                                value = state.username,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Username") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Accent,
+                                    focusedLabelColor = Accent,
+                                    cursorColor = Accent,
+                                ),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false },
+                            ) {
+                                state.usernames.forEach { username ->
+                                    DropdownMenuItem(
+                                        text = { Text(username) },
+                                        onClick = {
+                                            viewModel.onUsernameChange(username)
+                                            expanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    UsernameMode.INPUT -> {
+                        OutlinedTextField(
+                            value = state.username,
+                            onValueChange = { viewModel.onUsernameChange(it) },
+                            label = { Text("Username") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Accent,
+                                focusedLabelColor = Accent,
+                                cursorColor = Accent,
+                            ),
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

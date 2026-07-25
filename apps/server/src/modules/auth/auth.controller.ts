@@ -9,6 +9,7 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponse } from './dto/login-response.dto';
+import { UsernamesResponse } from './dto/usernames-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponse } from './dto/user-response.dto';
@@ -30,6 +31,14 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'JWT access token', type: LoginResponse })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.username, dto.pin);
+  }
+
+  @Public()
+  @Get('usernames')
+  @ApiOperation({ summary: 'List active usernames for login dropdown' })
+  @ApiOkResponse({ description: 'Active usernames', type: UsernamesResponse })
+  listUsernames() {
+    return this.authService.listUsernames();
   }
 
   @Get('me')

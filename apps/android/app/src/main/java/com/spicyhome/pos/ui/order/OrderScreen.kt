@@ -44,7 +44,6 @@ fun OrderScreen(
         OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onLogout)
         OrderScreenState.BUILDING_ORDER -> OrderBuildingPanel(viewModel, state, onViewOrders, onViewTables)
         OrderScreenState.ORDER_CREATED -> OrderCreatedPanel(viewModel, state)
-        OrderScreenState.ORDER_SENT -> OrderSentPanel(viewModel, state)
         OrderScreenState.ORDER_PAID -> OrderPaidPanel(viewModel, state)
         OrderScreenState.DAY_NOT_OPEN -> DayNotOpenPanel(viewModel, state)
     }
@@ -548,64 +547,19 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = { viewModel.sendOrder() },
-                    enabled = !state.isLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = Success),
-                    modifier = Modifier.height(64.dp),
-                ) {
-                    Text("Send to Kitchen", fontSize = 20.sp)
-                }
+            OutlinedButton(
+                onClick = { viewModel.newOrder() },
+                enabled = !state.isLoading,
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(64.dp),
+            ) {
+                Text("New Order", fontSize = 20.sp)
             }
 
             if (state.error != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(state.error, color = Error, fontSize = 14.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun OrderSentPanel(viewModel: OrderViewModel, state: OrderUiState) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "Order #${state.currentOrder?.orderNo ?: ""}")
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("Sent to Kitchen", fontSize = 28.sp, color = Success)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Total: ${MoneyFormatter.halalasToSar(state.currentOrder?.totalHalalas ?: BigDecimal.ZERO)}",
-                fontSize = 22.sp,
-                color = OnDark,
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = { viewModel.payOrder() },
-                    enabled = !state.isLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                    modifier = Modifier
-                        .width(200.dp)
-                        .height(64.dp),
-                ) {
-                    Text(if (state.isLoading) "Paying..." else "Mark as Paid", fontSize = 20.sp)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.newOrder() },
-                    modifier = Modifier
-                        .width(200.dp)
-                        .height(64.dp),
-                ) {
-                    Text("New Order", fontSize = 20.sp)
-                }
             }
         }
     }

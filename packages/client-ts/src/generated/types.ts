@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/usernames': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List active usernames for login dropdown */
+    get: operations['AuthController_listUsernames'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/me': {
     parameters: {
       query?: never;
@@ -374,23 +391,6 @@ export interface paths {
     patch: operations['OrdersController_updateItem'];
     trace?: never;
   };
-  '/orders/{id}/send': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Send order to kitchen (open → sent) */
-    post: operations['OrdersController_sendOrder'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   '/orders/{id}/pay': {
     parameters: {
       query?: never;
@@ -400,7 +400,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Mark order as paid (sent → paid) */
+    /** Mark order as paid (open → paid) */
     post: operations['OrdersController_payOrder'];
     delete?: never;
     options?: never;
@@ -417,7 +417,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Void an order (open|sent → voided) */
+    /** Void an order (open → voided) */
     post: operations['OrdersController_voidOrder'];
     delete?: never;
     options?: never;
@@ -436,6 +436,74 @@ export interface paths {
     put?: never;
     /** Reprint receipt or kitchen ticket for an order */
     post: operations['OrdersController_reprintOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refund': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Refund items on a paid order */
+    post: operations['OrdersController_refundOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refunds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get all refunds for an order */
+    get: operations['OrdersController_getOrderRefunds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the complete event chain for an order */
+    get: operations['OrdersController_getOrderEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/events/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Verify the hash chain integrity for an order */
+    get: operations['OrdersController_verifyOrderChain'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -488,6 +556,23 @@ export interface paths {
     put?: never;
     /** Submit CSR with OTP to ZATCA compliance CSID endpoint */
     post: operations['ZatcaController_onboardCompliance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/compliance-check': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Run compliance check by submitting a signed invoice to ZATCA */
+    post: operations['ZatcaController_runComplianceCheck'];
     delete?: never;
     options?: never;
     head?: never;
@@ -798,6 +883,15 @@ export interface components {
       /** @example eyJhbGciOiJIUzI1NiIs... */
       accessToken: string;
     };
+    UsernamesResponse: {
+      /**
+       * @example [
+       *       "admin",
+       *       "cashier1"
+       *     ]
+       */
+      usernames: string[];
+    };
     MeResponse: {
       /** @example 1 */
       id: number;
@@ -821,6 +915,8 @@ export interface components {
       voidOrder: boolean;
       /** @example false */
       refundOrder: boolean;
+      /** @example false */
+      payOrder: boolean;
       /** @example false */
       manageMenu: boolean;
       /** @example false */
@@ -1256,7 +1352,7 @@ export interface components {
     StatusResponse: {
       /** @example true */
       success: boolean;
-      /** @example sent */
+      /** @example paid */
       status: string;
     };
     ReprintOrderDto: {
@@ -1271,6 +1367,26 @@ export interface components {
       success: boolean;
       /** @example [] */
       errors: string[];
+    };
+    RefundItemDto: {
+      /** @example 1 */
+      orderItemId: number;
+      /** @example 1 */
+      qty: number;
+    };
+    CreateRefundDto: {
+      /** @description Items and quantities to refund */
+      items: components['schemas']['RefundItemDto'][];
+      /** @example Customer changed mind */
+      reason?: string;
+    };
+    RefundResponse: {
+      /** @example true */
+      success: boolean;
+      /** @example 1 */
+      refundId: number;
+      /** @example paid */
+      status: string;
     };
     SettingResponse: {
       /** @example restaurant_name */
@@ -1338,6 +1454,7 @@ export interface components {
       /**
        * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)
        * @example production
+       * @enum {string}
        */
       environment?: 'sandbox' | 'simulation' | 'production';
     };
@@ -1428,6 +1545,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['LoginResponse'];
+        };
+      };
+    };
+  };
+  AuthController_listUsernames: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Active usernames */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UsernamesResponse'];
         };
       };
     };
@@ -2195,28 +2332,6 @@ export interface operations {
       };
     };
   };
-  OrdersController_sendOrder: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Order sent */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['StatusResponse'];
-        };
-      };
-    };
-  };
   OrdersController_payOrder: {
     parameters: {
       query?: never;
@@ -2287,6 +2402,94 @@ export interface operations {
       };
     };
   };
+  OrdersController_refundOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateRefundDto'];
+      };
+    };
+    responses: {
+      /** @description Refund processed */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RefundResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_getOrderRefunds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of refunds with their items */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  OrdersController_getOrderEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of order events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  OrdersController_verifyOrderChain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Chain verification result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuditVerifyResponse'];
+        };
+      };
+    };
+  };
   SettingsController_getAll: {
     parameters: {
       query?: never;
@@ -2349,6 +2552,23 @@ export interface operations {
     };
   };
   ZatcaController_onboardCompliance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_runComplianceCheck: {
     parameters: {
       query?: never;
       header?: never;
