@@ -4,6 +4,10 @@
 # Does NOT create worktrees — your worktree manager owns checkout creation.
 # This script only prepares the open checkout: .env.worktree + deps.
 #
+# Linked worktrees auto-inherit Sentry DSNs from the main worktree's
+# .env.worktree.  Android apps/android/local.properties is synced from
+# SENTRY_ANDROID_DSN (never server SENTRY_DSN).
+#
 # Usage:
 #   scripts/worktree/bootstrap.sh              # current repo / worktree
 #   scripts/worktree/bootstrap.sh /path/to/wt  # explicit checkout
@@ -61,7 +65,7 @@ fi
 
 echo "Bootstrapping worktree: $ROOT"
 
-env_args=()
+env_args=(--sync-android)
 if $FORCE_ENV; then
   env_args+=(--force)
 fi

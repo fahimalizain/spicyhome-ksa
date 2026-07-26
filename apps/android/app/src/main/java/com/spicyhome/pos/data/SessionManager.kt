@@ -1,5 +1,6 @@
 package com.spicyhome.pos.data
 
+import io.sentry.Sentry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,6 +25,7 @@ class SessionManager(
         if (!handling.compareAndSet(false, true)) return
         scope.launch {
             try {
+                Sentry.setUser(null)
                 preferencesManager.clearAuth()
                 _unauthorized.emit(Unit)
             } finally {

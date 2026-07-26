@@ -4,6 +4,32 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Read version from root VERSION file
+val versionFile = file("${rootDir}/../../VERSION")
+val appVersion = if (versionFile.exists()) {
+    versionFile.readLines().firstOrNull()?.trim() ?: "0.0.1"
+} else {
+    "0.0.1"
+}
+
+// Read Sentry DSN from local.properties (gitignored) or environment
+fun getLocalProperty(key: String, default: String = ""): String {
+    val localProps = file("${rootDir}/local.properties")
+    if (localProps.exists()) {
+        for (line in localProps.readLines()) {
+            val trimmed = line.trim()
+            if (!trimmed.startsWith("#") && "=" in trimmed) {
+                val parts = trimmed.split("=", limit = 2)
+                if (parts[0].trim() == key) return parts[1].trim()
+            }
+        }
+    }
+    return System.getenv(key) ?: default
+}
+
+val sentryDsn = getLocalProperty("SENTRY_DSN")
+val sentryEnvironment = getLocalProperty("SENTRY_ENVIRONMENT", "development")
+
 android {
     namespace = "com.spicyhome.pos"
     compileSdk = 36
@@ -13,17 +39,28 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.0.1"
+        versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Sentry auto-init reads these from the merged manifest (not BuildConfig).
+        // Values come from local.properties / env — never committed.
+        manifestPlaceholders["sentryDsn"] = sentryDsn
+        manifestPlaceholders["sentryEnvironment"] = sentryEnvironment
+        manifestPlaceholders["sentryRelease"] = "spicyhome-android@$appVersion"
+        manifestPlaceholders["sentryDebug"] = "false"
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["sentryDebug"] = "true"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["sentryDebug"] = "false"
         }
     }
 
@@ -38,6 +75,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     sourceSets {
@@ -81,6 +119,10 @@ dependencies {
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     implementation("com.squareup.moshi:moshi-adapters:1.15.1")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Sentry error monitoring
+    implementation("io.sentry:sentry-android:7.22.1")
+    implementation("io.sentry:sentry-android-okhttp:7.22.1")
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")

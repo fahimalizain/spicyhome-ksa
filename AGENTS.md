@@ -77,6 +77,10 @@ Codebase conventions and constraints for all contributors and AI agents.
   get a stable hash offset and `data/spicyhome-<slug>.db`.
 - Host bootstrap needs **Node 24** (`.nvmrc`); then `pnpm install`.
 - VS Code: **Debug Server + POS** compound reads `envFile` `.env.worktree`.
+- **Sentry inheritance**: linked worktrees inherit Sentry DSNs (not auth tokens)
+  from the main worktree's `.env.worktree`. Environment tags are set to the
+  worktree slug. `apps/android/local.properties` is auto-synced from
+  `SENTRY_ANDROID_DSN`.
 
 ## Commits
 

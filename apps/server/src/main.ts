@@ -1,3 +1,6 @@
+// Sentry must be initialized before any other imports
+import './instrument';
+
 import 'reflect-metadata';
 
 process.env.TZ = 'Asia/Riyadh';
@@ -7,6 +10,7 @@ import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/nestjs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -51,7 +55,12 @@ async function bootstrap() {
   logger.log(`Swagger UI: http://localhost:${port}/api/docs`);
 }
 
-bootstrap().catch((err) => {
+bootstrap().catch(async (err) => {
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureException(err);
+    // Give Sentry time to flush before exiting
+    await Sentry.close(2000);
+  }
   Logger.error('Failed to bootstrap', err instanceof Error ? err.stack : err);
   process.exit(1);
 });

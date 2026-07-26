@@ -1,6 +1,7 @@
 export { SpicyHomeClient } from './client';
 export type {
   SpicyHomeClientConfig,
+  RequestCompleteInfo,
   LoginDto,
   LoginResponse,
   MeResponse,

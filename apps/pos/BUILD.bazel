@@ -6,6 +6,7 @@ npm_link_all_packages(name = "node_modules")
 DEPS = [
     ":node_modules/vite",
     ":node_modules/@vitejs/plugin-react",
+    ":node_modules/@sentry/react",
     ":node_modules/@spicyhome/client-ts",
     ":node_modules/@spicyhome/shared",
     ":node_modules/react",

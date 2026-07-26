@@ -79,3 +79,16 @@ To run the server automatically on boot, use NSSM
 7. Start the service: nssm start SpicyHomePOS
 
 The server will now start automatically on system boot.
+
+Error Monitoring (Sentry)
+-------------------------
+Optional Sentry error monitoring can be enabled by setting these
+environment variables before starting the server:
+
+  SENTRY_DSN=https://...
+  SENTRY_ENVIRONMENT=production|development
+  SENTRY_TRACES_SAMPLE_RATE=1.0
+  SENTRY_PROFILES_SAMPLE_RATE=1.0
+
+When SENTRY_DSN is not set, the server runs without error monitoring.
+Sentry is never required — the system works offline without it.

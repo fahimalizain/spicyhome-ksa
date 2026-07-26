@@ -193,6 +193,13 @@ $env:SPA_DIST = Join-Path $scriptDir "pos"
 $env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
 $env:PORT = "3742"
 $env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
+$env:APP_VERSION = "__PACKAGE_VERSION__"
+
+# Optional Sentry error monitoring:
+# $env:SENTRY_DSN = "https://..."
+# $env:SENTRY_ENVIRONMENT = "production"
+# $env:SENTRY_TRACES_SAMPLE_RATE = "1.0"
+# $env:SENTRY_PROFILES_SAMPLE_RATE = "1.0"
 
 Write-Host "=========================================="
 Write-Host "  SpicyHome POS Server"
@@ -282,6 +289,10 @@ if ($exitCode -ne 0) {
     Read-Host "Press Enter to exit"
 }
 PSEOF
+
+# Inject the actual package version into the PowerShell script
+sed -i.bak "s/__PACKAGE_VERSION__/$PACKAGE_VERSION/g" "$PACKAGE_DIR/start-server.ps1"
+rm -f "$PACKAGE_DIR/start-server.ps1.bak"
 
 cat > "$PACKAGE_DIR/start-server.bat" << 'BATEOF'
 @echo off

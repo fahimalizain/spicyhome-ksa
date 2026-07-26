@@ -1,5 +1,5 @@
 import { BadRequestException, Module, ValidationPipe } from '@nestjs/common';
-import { APP_PIPE, APP_GUARD } from '@nestjs/core';
+import { APP_PIPE, APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from './modules/database/database.module';
@@ -13,8 +13,11 @@ import { ZatcaModule } from './modules/zatca/zatca.module';
 import { BusinessDayModule } from './modules/business-day/business-day.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { HealthModule } from './health/health.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { SentryUserInterceptor } from './common/interceptors/sentry-user.interceptor';
 
 const spaDist = process.env.SPA_DIST;
 const imports: any[] = [
@@ -30,6 +33,7 @@ const imports: any[] = [
   BusinessDayModule,
   ReportsModule,
   RealtimeModule,
+  HealthModule,
 ];
 
 if (spaDist) {
@@ -47,6 +51,7 @@ if (spaDist) {
         '/zatca/(.*)',
         '/day/(.*)',
         '/reports/(.*)',
+        '/health',
       ],
     }),
   );
@@ -75,6 +80,8 @@ if (spaDist) {
     },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_INTERCEPTOR, useClass: SentryUserInterceptor },
+    { provide: APP_FILTER, useClass: SentryExceptionFilter },
   ],
 })
 export class AppModule {}

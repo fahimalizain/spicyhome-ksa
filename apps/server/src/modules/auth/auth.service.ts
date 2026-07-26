@@ -59,6 +59,10 @@ export class AuthService {
     const valid = compareSync(pin, user.pinHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
+    // User context for Sentry is now set per-request by SentryUserInterceptor
+    // (apps/server/src/common/interceptors/sentry-user.interceptor.ts).
+    // This avoids cross-contamination when multiple cashiers use the same server.
+
     const payload = { sub: user.id, username: user.username, roleId: user.roleId };
     const accessToken = this.jwtService.sign(payload);
     return { accessToken };

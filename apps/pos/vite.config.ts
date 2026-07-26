@@ -1,11 +1,27 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'node:module';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
+
+/** Read VERSION from repo root. */
+function readVersion(): string {
+  try {
+    const candidate = path.resolve(repoRoot, 'VERSION');
+    if (fs.existsSync(candidate)) {
+      return fs.readFileSync(candidate, 'utf8').trim();
+    }
+  } catch {
+    // fall through
+  }
+  return '0.0.0';
+}
+
+const APP_VERSION = readVersion();
 
 /** Load repo-root .env.worktree into process.env (does not override existing). */
 function loadWorktreeEnv(): void {
@@ -35,8 +51,40 @@ const vitePort = parseInt(process.env.VITE_PORT || '6124', 10);
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
 
+  const plugins: any[] = [react()];
+
+  // Sentry Vite plugin for source map upload — only when SENTRY_AUTH_TOKEN is set.
+  // createRequire works under package.json "type":"module". try/catch keeps
+  // Bazel runfiles working when @sentry/vite-plugin is not linked into the
+  // test/build sandbox (pnpm/CI local builds still load it from node_modules).
+  // Plugin soft-fails upload errors by default (does not fail the Vite build).
+  const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+  if (sentryAuthToken) {
+    try {
+      const require = createRequire(import.meta.url);
+      const { sentryVitePlugin } = require('@sentry/vite-plugin') as {
+        sentryVitePlugin: (opts: Record<string, unknown>) => unknown;
+      };
+      plugins.push(
+        sentryVitePlugin({
+          authToken: sentryAuthToken,
+          org: process.env.SENTRY_ORG || undefined,
+          project: process.env.SENTRY_PROJECT || 'spicyhome-pos',
+          release: {
+            name: `spicyhome-pos@${APP_VERSION}`,
+          },
+        }),
+      );
+    } catch (err) {
+      console.warn(
+        'SENTRY_AUTH_TOKEN set but @sentry/vite-plugin could not be loaded:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
   return {
-    plugins: [react()],
+    plugins,
     // Prefer TS sources over tsc-emitted CJS .js (server preLaunchTask writes
     // *.js next to *.ts). Default Vite order is .js before .ts, so bare imports
     // like `from './money'` would load CJS and break named ESM exports.
@@ -73,6 +121,13 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: './src/setupTests.ts',
       css: true,
+    },
+    // Bake Sentry release and version at build time
+    define: {
+      'import.meta.env.VITE_SENTRY_RELEASE': JSON.stringify(
+        process.env.VITE_SENTRY_RELEASE || `spicyhome-pos@${APP_VERSION}`,
+      ),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
     },
   };
 });

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as Sentry from '@sentry/react';
 import { client, setToken, setMe } from '../api';
 
 const PIN_LENGTH = 4;
@@ -77,6 +78,8 @@ export function LoginPage() {
       setToken(res.accessToken);
       const me = await client.auth.me();
       setMe(me);
+      // Set Sentry user context
+      Sentry.setUser({ id: String(me.id), username: me.username });
       navigate('/', { replace: true });
     } catch {
       setError('Invalid credentials');

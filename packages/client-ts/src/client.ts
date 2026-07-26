@@ -79,10 +79,31 @@ export interface ZatcaReportingResult {
   failed: number;
 }
 
+/** Info passed to onRequestComplete for observability (e.g. Sentry breadcrumbs). */
+export interface RequestCompleteInfo {
+  method: string;
+  url: string;
+  requestBody: string | undefined;
+  responseStatus: number;
+  responseBody: string | undefined;
+}
+
 export interface SpicyHomeClientConfig {
   baseUrl: string;
   getToken: () => string | null;
   onUnauthorized?: () => void;
+  /** Called after every fetch (success or error) for observability. */
+  onRequestComplete?: (info: RequestCompleteInfo) => void;
+}
+
+/**
+ * Truncate a string to maxLength, adding a truncation marker.
+ * Mirrors Android SentryHttpBodyInterceptor.MAX_BODY_CHARS (100KB limit for
+ * server ↔ POS traffic; 32KB used here to keep Envelope sizes reasonable).
+ */
+function truncateBody(s: string, maxLength: number = 32000): string {
+  if (s.length <= maxLength) return s;
+  return s.slice(0, maxLength) + '…[truncated]';
 }
 
 async function request<T>(
@@ -110,11 +131,33 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const requestBodyStr = body ? JSON.stringify(body) : undefined;
+
   const response = await fetch(url.toString(), {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: requestBodyStr,
   });
+
+  // Notify observability hook (e.g. Sentry breadcrumbs) after every request.
+  if (config.onRequestComplete) {
+    const responseBodyStr = await response
+      .clone()
+      .text()
+      .catch(() => undefined);
+    // Fire-and-forget — don't let breadcrumb logic throw or block the caller.
+    try {
+      config.onRequestComplete({
+        method,
+        url: url.toString(),
+        requestBody: requestBodyStr ? truncateBody(requestBodyStr) : undefined,
+        responseStatus: response.status,
+        responseBody: responseBodyStr ? truncateBody(responseBodyStr) : undefined,
+      });
+    } catch {
+      // Silently swallow — observability must not break the app.
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401 && config.onUnauthorized) {

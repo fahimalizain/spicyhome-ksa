@@ -12,6 +12,12 @@ already exists on disk.
 Parallel checkouts need **isolated ports + DB** via `.env.worktree` (gitignored),
 plus `pnpm install` on a cold tree.
 
+Both main and linked worktrees use `.env.worktree` — never a separate root `.env`.
+
+**Linked worktrees inherit Sentry DSNs from the main worktree's `.env.worktree`**
+automatically. The bootstrap also syncs `apps/android/local.properties` from
+`SENTRY_ANDROID_DSN` so Android builds get the correct Sentry configuration.
+
 ## Defaults
 
 |                   | Main worktree (directory `.git`) | Linked worktree            |
@@ -31,6 +37,25 @@ plus `pnpm install` on a cold tree.
 - Node 18 often fails modern package `engines`; Node 26+ often fails
   `better-sqlite3` native builds. Prefer `nvm use` so PATH is Node 24 before
   bootstrap.
+
+## Sentry Inheritance
+
+Linked worktrees automatically inherit Sentry DSN keys from the main worktree's
+`.env.worktree`. Environment tags (`SENTRY_ENVIRONMENT`, `VITE_SENTRY_ENVIRONMENT`)
+are set to the **worktree slug** so each branch reports as a separate environment
+in Sentry.
+
+### Android
+
+`SENTRY_ANDROID_DSN` from `.env.worktree` is synced into
+`apps/android/local.properties` (gitignored) as `SENTRY_DSN`. The server
+`SENTRY_DSN` is never written into the Android build config.
+
+If `SENTRY_ANDROID_DSN` is not set in the main worktree, Android builds will
+not have Sentry configured. Set it in main's `.env.worktree` first.
+
+Agents running `android-adb-install` should bootstrap first to ensure
+`local.properties` is in sync.
 
 ## Scripts
 
@@ -106,9 +131,10 @@ Vite reads `.env.worktree` from the repo root (`apps/pos/vite.config.ts`).
 
 - Run `git worktree add` or choose sibling checkout paths.
 - Hardcode ports in launch configs — read `PORT` / `VITE_PORT`.
-- Commit `.env.worktree`.
+- Commit `.env.worktree`, `local.properties`, or any real DSNs/tokens.
 - Share one SQLite file across linked worktrees when testing writes.
 - Assume Bazel attach `remoteRoot` works outside the machine that generated it.
+- Put server `SENTRY_DSN` into Android `local.properties` — use `SENTRY_ANDROID_DSN`.
 
 ## Repo pieces
 
