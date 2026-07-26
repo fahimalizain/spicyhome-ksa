@@ -36,6 +36,7 @@ class OrderViewModelTest {
 
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var apiClientProvider: ApiClientProvider
+    private lateinit var menuApi: MenuApi
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
@@ -51,7 +52,7 @@ class OrderViewModelTest {
         every { preferencesManager.authToken } returns authTokenFlow
 
         // Stable stubs for API factories — no NPEs, no swallowed exceptions
-        val menuApi = mockk<MenuApi>(relaxed = true)
+        menuApi = mockk(relaxed = true)
         val ordersApi = mockk<OrdersApi>(relaxed = true)
         val tablesApi = mockk<TablesApi>(relaxed = true)
 
@@ -59,10 +60,14 @@ class OrderViewModelTest {
         every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
         every { apiClientProvider.createTablesApi(any(), any()) } returns tablesApi
 
-        // Stub API calls so loadCategories/loadTables succeed without IO races
+        // Stub API calls so loadMenu/loadTables succeed without IO races
         val catCall = mockk<Call<List<CategoryResponse>>>(relaxed = true)
         every { menuApi.menuControllerListCategories() } returns catCall
         every { catCall.execute() } returns Response.success(emptyList())
+
+        val itemCall = mockk<Call<List<ItemResponse>>>(relaxed = true)
+        every { menuApi.menuControllerListItems(any()) } returns itemCall
+        every { itemCall.execute() } returns Response.success(emptyList())
 
         val tblCall = mockk<Call<List<TableResponse>>>(relaxed = true)
         every { tablesApi.tablesControllerList() } returns tblCall
@@ -243,20 +248,101 @@ class OrderViewModelTest {
         assertThat(vm.uiState.value.cart[0].notes).isEqualTo("no onions, extra spicy")
     }
 
+    // --- Category / item filtering tests (client-side) ---
+
+    @Test
+    fun `initial load with All selected shows all active items`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000, 1500, categoryId = 2)
+        val item3 = createItem(3, "Salad", 800, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        val state = vm.uiState.value
+
+        assertThat(state.selectedCategoryId).isNull()
+        assertThat(state.filteredItems).containsExactly(item1, item2, item3).inOrder()
+    }
+
+    @Test
+    fun `selectCategory filters to that category active items`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000, 1500, categoryId = 2)
+        val item3 = createItem(3, "Salad", 800, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        // After load, selectedCategoryId is null (All)
+        assertThat(vm.uiState.value.filteredItems).hasSize(3)
+
+        // Select category 2
+        vm.selectCategory(2)
+        val state = vm.uiState.value
+
+        assertThat(state.selectedCategoryId).isEqualTo(2)
+        assertThat(state.filteredItems).containsExactly(item2, item3).inOrder()
+    }
+
+    @Test
+    fun `selectCategory null after a category shows full list again`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        assertThat(vm.uiState.value.filteredItems).hasSize(1)
+
+        // Switch back to All
+        vm.selectCategory(null)
+        val state = vm.uiState.value
+
+        assertThat(state.selectedCategoryId).isNull()
+        assertThat(state.filteredItems).containsExactly(item1, item2).inOrder()
+    }
+
+    @Test
+    fun `inactive items are excluded from All and category views`() = runTest(testDispatcher) {
+        val active1 = createItem(1, "Active A", 1000, 1500, categoryId = 1, isActive = true)
+        val inactive = createItem(2, "Inactive", 2000, 1500, categoryId = 1, isActive = false)
+        val active2 = createItem(3, "Active B", 800, 1500, categoryId = 2, isActive = true)
+        stubMenuItems(listOf(active1, inactive, active2))
+
+        val vm = createViewModel()
+        val state = vm.uiState.value
+
+        // All view: only active items
+        assertThat(state.filteredItems).containsExactly(active1, active2).inOrder()
+        // Items list should have filtered inactive out
+        assertThat(state.items).containsExactly(active1, active2).inOrder()
+
+        // Category 1: only active items in that category
+        vm.selectCategory(1)
+        assertThat(vm.uiState.value.filteredItems).containsExactly(active1)
+    }
+
+    private fun stubMenuItems(items: List<ItemResponse>) {
+        val call = mockk<Call<List<ItemResponse>>>(relaxed = true)
+        every { menuApi.menuControllerListItems(any()) } returns call
+        every { call.execute() } returns Response.success(items)
+    }
+
     private fun createItem(
         id: Long,
         name: String,
         priceHalalas: Long,
         vatRateBp: Long,
+        categoryId: Long = 1,
+        isActive: Boolean = true,
     ): ItemResponse = ItemResponse(
         id = BigDecimal.valueOf(id),
-        categoryId = BigDecimal.ONE,
+        categoryId = BigDecimal.valueOf(categoryId),
         name = name,
         nameAr = null,
         priceHalalas = BigDecimal.valueOf(priceHalalas),
         vatRateBp = BigDecimal.valueOf(vatRateBp),
         sortOrder = BigDecimal.ZERO,
-        isActive = true,
+        isActive = isActive,
         createdAt = BigDecimal.ZERO,
         updatedAt = BigDecimal.ZERO,
         createdBy = null,

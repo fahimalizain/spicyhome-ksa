@@ -246,7 +246,7 @@ private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, o
                     contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(state.items, key = { it.id }) { item ->
+                    items(state.filteredItems, key = { it.id }) { item ->
                         ItemCard(item = item, onClick = { viewModel.addToCart(item) })
                     }
                 }
