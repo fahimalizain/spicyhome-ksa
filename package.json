@@ -6,7 +6,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "bazel test //... --build_tests_only --test_output=errors --action_env=ANDROID_HOME --action_env=JAVA_HOME",
+    "test": "bazel test //... --test_output=errors --action_env=ANDROID_HOME --action_env=JAVA_HOME",
     "lint": "pnpm exec eslint .",
     "lint:fix": "pnpm exec eslint --fix .",
     "format": "pnpm exec prettier --check .",
