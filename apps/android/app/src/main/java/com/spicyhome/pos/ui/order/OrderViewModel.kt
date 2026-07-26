@@ -17,11 +17,13 @@ import com.spicyhome.pos.data.repository.TableRepository
 import com.spicyhome.pos.util.MoneyFormatter
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 
 data class CartItem(
@@ -61,6 +63,14 @@ data class OrderUiState(
     val openingCash: String = "",
     val dayOpeningError: String? = null,
 ) {
+    // Filtered items — client-side filtering based on selected category
+    val filteredItems: List<ItemResponse>
+        get() = if (selectedCategoryId == null) {
+            items
+        } else {
+            items.filter { it.categoryId.toLong() == selectedCategoryId }
+        }
+
     // Cart totals — computed from cart state
     val cartTotalHalalas: Long
         get() = cart.sumOf { it.item.priceHalalas.toLong() * it.qty }
@@ -110,7 +120,7 @@ class OrderViewModel(
             bearerToken = preferencesManager.authToken.first() ?: ""
             baseUrl = preferencesManager.serverUrl.first() ?: ""
             initRepos()
-            loadCategories()
+            loadMenu()
             loadTables()
             applyInitialTableContext()
         }
@@ -151,26 +161,47 @@ class OrderViewModel(
         }
     }
 
-    private fun loadCategories() {
-        viewModelScope.launch {
-            try {
-                val response = withContext(ioDispatcher) {
+    private suspend fun loadMenu() {
+        try {
+            coroutineScope {
+                val catsDeferred = async(ioDispatcher) {
                     menuRepo!!.listCategories().execute()
                 }
-                if (response.isSuccessful) {
-                    val cats = response.body() ?: emptyList()
-                    _uiState.value = _uiState.value.copy(
-                        categories = cats,
-                        categoriesLoaded = true,
-                    )
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        error = "Failed to load categories (${response.code()})",
-                    )
+                val itemsDeferred = async(ioDispatcher) {
+                    menuRepo!!.listItems().execute()
                 }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
+
+                val catsResponse = catsDeferred.await()
+                val itemsResponse = itemsDeferred.await()
+
+                val cats = if (catsResponse.isSuccessful) {
+                    (catsResponse.body() ?: emptyList()).filter { it.isActive }
+                } else {
+                    emptyList()
+                }
+                val allItems = if (itemsResponse.isSuccessful) {
+                    (itemsResponse.body() ?: emptyList()).filter { it.isActive }
+                } else {
+                    emptyList()
+                }
+
+                var error: String? = null
+                if (!catsResponse.isSuccessful) {
+                    error = "Failed to load categories (${catsResponse.code()})"
+                }
+                if (!itemsResponse.isSuccessful) {
+                    error = "Failed to load items (${itemsResponse.code()})"
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    categories = cats,
+                    items = allItems,
+                    categoriesLoaded = true,
+                    error = error,
+                )
             }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(error = e.message)
         }
     }
 
@@ -194,28 +225,7 @@ class OrderViewModel(
     fun selectCategory(categoryId: Long?) {
         _uiState.value = _uiState.value.copy(
             selectedCategoryId = categoryId,
-            isLoading = true,
         )
-        viewModelScope.launch {
-            try {
-                val response = withContext(ioDispatcher) {
-                    menuRepo!!.listItems(categoryId?.toString() ?: "").execute()
-                }
-                if (response.isSuccessful) {
-                    _uiState.value = _uiState.value.copy(
-                        items = response.body() ?: emptyList(),
-                        isLoading = false,
-                    )
-                } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message,
-                )
-            }
-        }
     }
 
     fun setOrderType(type: OrderType) {
@@ -425,6 +435,7 @@ class OrderViewModel(
     fun newOrder() {
         _uiState.value = OrderUiState(
             categories = _uiState.value.categories,
+            items = _uiState.value.items,
             tables = _uiState.value.tables,
             categoriesLoaded = _uiState.value.categoriesLoaded,
         )
