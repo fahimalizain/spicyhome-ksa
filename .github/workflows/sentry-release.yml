@@ -12,6 +12,17 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version override (default: contents of VERSION file)'
+        required: false
+        type: string
+      dry_run:
+        description: 'If true, build artifacts but skip sentry-cli uploads'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -89,7 +100,7 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_POS_DSN || '' }}
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: spicyhome-pos@${{ steps.version.outputs.version }}
-          SENTRY_AUTH_TOKEN: ${{ inputs.dry_run == 'true' && '' || secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ !inputs.dry_run && secrets.SENTRY_AUTH_TOKEN || '' }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG || '' }}
           SENTRY_PROJECT: spicyhome-pos
         run: |

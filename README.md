@@ -132,6 +132,12 @@ Source maps can be uploaded to Sentry via the dedicated workflow
 (`.github/workflows/sentry-release.yml`), independent of the full product
 release. Run it manually from the Actions tab with `workflow_dispatch`.
 
+The workflow also runs **automatically** after a successful product release
+(if not a dry run) via `workflow_call`. Source map upload is a **soft-fail**
+during the product release — a missing Sentry auth token or Sentry API failure
+will not block the product release. Use the dedicated `workflow_dispatch` to
+retry if needed.
+
 The workflow:
 
 - Builds the POS SPA (Vite) and server JS (Bazel) with source maps

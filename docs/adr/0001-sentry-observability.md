@@ -115,13 +115,18 @@ SPA source maps are uploaded via `@sentry/vite-plugin` during Vite builds when
 `SENTRY_AUTH_TOKEN` is set. Server source maps are uploaded via `sentry-cli`
 after Bazel `ts_project` (which outputs `.js.map` alongside `.js` files).
 
-A dedicated `sentry-release.yml` workflow (`workflow_dispatch`) handles source
-map uploads independently of the full product release. This workflow creates
-releases, uploads server source maps via `sentry-cli`, injects debug IDs, and
-verifies the releases exist in Sentry. It supports a `dry_run` mode to validate
-credentials without mutating Sentry state. The upload is a soft-fail during
-the product release workflow but a hard-fail in the dedicated workflow (i.e.
-missing token blocks the job).
+A dedicated `sentry-release.yml` workflow handles source map uploads. It
+supports both `workflow_dispatch` (manual) and `workflow_call` (invoked from
+product release). The workflow creates releases, uploads server source maps
+via `sentry-cli`, injects debug IDs, and verifies the releases exist in
+Sentry. It supports a `dry_run` mode to validate credentials without mutating
+Sentry state.
+
+When triggered automatically from the product release workflow
+(`release.yml`) via `workflow_call`, source map upload is a **soft-fail**
+(`continue-on-error: true`) — a missing Sentry auth token or Sentry API
+failure will not block the product release. The dedicated `workflow_dispatch`
+path is a **hard-fail** — missing credentials block the job.
 
 ### Profiling on Windows 7
 
