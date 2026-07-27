@@ -87,3 +87,31 @@ export function stripZeroPayments(
 export function calcCashChange(amountHalalas: number, tenderedHalalas?: number): number {
   return (tenderedHalalas ?? amountHalalas) - amountHalalas;
 }
+
+/**
+ * Append a numpad key to a SAR display string.
+ * Returns the next display string, or null if the key is rejected.
+ *
+ * Rules:
+ * - C → ''
+ * - ⌫ → remove last character
+ * - '.' only if no '.' already exists
+ * - Digits: max 2 decimal places after '.'
+ * - Allows leading empty string + digits
+ */
+export function applyNumpadKey(current: string, key: string): string | null {
+  if (key === 'C') return '';
+  if (key === '⌫') return current.slice(0, -1);
+  if (key === '.') {
+    if (current.includes('.')) return null;
+    return current + '.';
+  }
+  // Digit key (0-9)
+  const next = current + key;
+  const dotIndex = next.indexOf('.');
+  if (dotIndex >= 0) {
+    const decimalPlaces = next.length - dotIndex - 1;
+    if (decimalPlaces > 2) return null;
+  }
+  return next;
+}

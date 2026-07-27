@@ -5,6 +5,7 @@ import {
   tapToFill,
   stripZeroPayments,
   calcCashChange,
+  applyNumpadKey,
   type PayModalState,
   type PaymentMethod,
 } from '../components/orders/pay-modal-logic';
@@ -151,5 +152,53 @@ describe('calcCashChange', () => {
 
   it('defaults tendered to amount when not provided', () => {
     expect(calcCashChange(4600)).toBe(0);
+  });
+});
+
+describe('applyNumpadKey', () => {
+  it('C clears the input', () => {
+    expect(applyNumpadKey('12.50', 'C')).toBe('');
+    expect(applyNumpadKey('', 'C')).toBe('');
+  });
+
+  it('⌫ removes last character', () => {
+    expect(applyNumpadKey('12.50', '⌫')).toBe('12.5');
+    expect(applyNumpadKey('1', '⌫')).toBe('');
+    expect(applyNumpadKey('', '⌫')).toBe('');
+  });
+
+  it('appends digits', () => {
+    expect(applyNumpadKey('', '1')).toBe('1');
+    expect(applyNumpadKey('1', '2')).toBe('12');
+    expect(applyNumpadKey('12', '3')).toBe('123');
+  });
+
+  it('allows a single decimal point', () => {
+    expect(applyNumpadKey('12', '.')).toBe('12.');
+    expect(applyNumpadKey('12.', '5')).toBe('12.5');
+  });
+
+  it('rejects a second decimal point', () => {
+    expect(applyNumpadKey('12.50', '.')).toBeNull();
+  });
+
+  it('caps decimal places at 2', () => {
+    expect(applyNumpadKey('12.50', '1')).toBeNull();
+    expect(applyNumpadKey('12.5', '0')).toBe('12.50');
+    expect(applyNumpadKey('12.', '5')).toBe('12.5');
+  });
+
+  it('allows leading zeros', () => {
+    expect(applyNumpadKey('0', '5')).toBe('05');
+    expect(applyNumpadKey('00', '.')).toBe('00.');
+    expect(applyNumpadKey('00.', '5')).toBe('00.5');
+  });
+
+  it('allows decimal on empty string', () => {
+    expect(applyNumpadKey('', '.')).toBe('.');
+  });
+
+  it('rejects extra decimal digits after .00', () => {
+    expect(applyNumpadKey('1.00', '1')).toBeNull();
   });
 });
