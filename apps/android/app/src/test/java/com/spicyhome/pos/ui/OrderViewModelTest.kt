@@ -584,6 +584,7 @@ class OrderViewModelTest {
             createdBy = 1L, updatedBy = 1L,
         )
         val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
         vm.hydrateFromOrder(order)
 
         // Simulate: user added one locally
@@ -627,6 +628,7 @@ class OrderViewModelTest {
             createdBy = 1L, updatedBy = 1L,
         )
         val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
         vm.hydrateFromOrder(order)
 
         // Add local changes
@@ -665,6 +667,7 @@ class OrderViewModelTest {
             createdBy = 1L, updatedBy = 1L,
         )
         val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
         vm.hydrateFromOrder(order)
 
         // Make local changes
