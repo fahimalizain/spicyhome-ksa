@@ -157,7 +157,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -191,7 +192,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -302,7 +304,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -413,7 +416,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -447,7 +451,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -567,7 +572,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -601,7 +607,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -712,7 +719,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -746,7 +754,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -857,7 +866,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -891,7 +901,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -937,7 +948,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -973,7 +985,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1091,7 +1104,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1127,7 +1141,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1163,7 +1178,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1209,7 +1225,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           },
           {
@@ -1217,7 +1234,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1261,7 +1279,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           },
           {
@@ -1269,7 +1288,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1305,7 +1325,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1341,7 +1362,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1377,7 +1399,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1423,7 +1446,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1469,7 +1493,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1508,7 +1533,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1547,7 +1573,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -1745,18 +1772,20 @@
         "parameters": [
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "integer",
+              "format": "int32"
             }
           },
           {
             "name": "offset",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -1999,7 +2028,8 @@
             "required": false,
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "integer",
+              "format": "int32"
             }
           },
           {
@@ -2007,7 +2037,8 @@
             "required": false,
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -2036,7 +2067,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -2095,7 +2127,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -2198,7 +2231,8 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "format": "int64",
+              "type": "integer"
             }
           }
         ],
@@ -2343,7 +2377,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "username": {
@@ -2355,7 +2390,8 @@
             "example": "Ahmed"
           },
           "roleId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2
           },
           "isActive": {
@@ -2435,7 +2471,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "username": {
@@ -2447,7 +2484,8 @@
             "example": "Ahmed"
           },
           "roleId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2
           },
           "isActive": {
@@ -2455,20 +2493,24 @@
             "example": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -2501,7 +2543,8 @@
             "example": "Ahmed"
           },
           "roleId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2,
             "description": "role_id — 1 for admin, 2 for staff"
           }
@@ -2521,7 +2564,8 @@
             "example": "Ahmed Ali"
           },
           "roleId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2
           },
           "isActive": {
@@ -2539,7 +2583,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -2587,20 +2632,24 @@
             "example": false
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -2719,7 +2768,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -2727,11 +2777,13 @@
             "example": "Burgers"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 0
           },
           "printerId": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
@@ -2740,20 +2792,24 @@
             "example": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -2778,11 +2834,13 @@
             "example": "Burgers"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "default": 0
           },
           "printerId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Printer ID for kitchen routing"
           },
           "isActive": {
@@ -2802,10 +2860,12 @@
             "example": "Burgers"
           },
           "sortOrder": {
-            "type": "number"
+            "type": "integer",
+            "format": "int32"
           },
           "printerId": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "isActive": {
             "type": "boolean"
@@ -2816,11 +2876,13 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "categoryId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -2828,22 +2890,25 @@
             "example": "Zinger Burger"
           },
           "nameAr": {
-            "type": "object",
+            "type": "string",
             "example": "زنجر برجر",
             "nullable": true
           },
           "priceHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2300,
             "description": "VAT-inclusive price in halalas"
           },
           "vatRateBp": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 1500,
             "description": "VAT rate in basis points"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 0
           },
           "isActive": {
@@ -2851,20 +2916,24 @@
             "example": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -2888,7 +2957,8 @@
         "type": "object",
         "properties": {
           "categoryId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -2900,17 +2970,20 @@
             "example": "زنجر برجر"
           },
           "priceHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2300,
             "description": "VAT-inclusive price in halalas (23.00 SAR)"
           },
           "vatRateBp": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "default": 1500,
             "description": "VAT rate in basis points (1500 = 15%)"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "default": 0
           },
           "isActive": {
@@ -2928,7 +3001,8 @@
         "type": "object",
         "properties": {
           "categoryId": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "name": {
             "type": "string"
@@ -2937,13 +3011,16 @@
             "type": "string"
           },
           "priceHalalas": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "vatRateBp": {
-            "type": "number"
+            "type": "integer",
+            "format": "int32"
           },
           "sortOrder": {
-            "type": "number"
+            "type": "integer",
+            "format": "int32"
           },
           "isActive": {
             "type": "boolean"
@@ -2954,7 +3031,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -2962,7 +3040,8 @@
             "example": "T1"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 0
           },
           "isActive": {
@@ -2970,20 +3049,24 @@
             "example": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -3007,7 +3090,8 @@
             "example": "T1"
           },
           "sortOrder": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "default": 0
           },
           "isActive": {
@@ -3027,7 +3111,8 @@
             "example": "T1"
           },
           "sortOrder": {
-            "type": "number"
+            "type": "integer",
+            "format": "int32"
           },
           "isActive": {
             "type": "boolean"
@@ -3038,7 +3123,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "name": {
@@ -3050,7 +3136,8 @@
             "example": "192.168.1.100"
           },
           "port": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 9100
           },
           "role": {
@@ -3062,20 +3149,24 @@
             "example": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -3105,7 +3196,8 @@
             "example": "192.168.1.100"
           },
           "port": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "default": 9100
           },
           "role": {
@@ -3137,7 +3229,8 @@
             "type": "string"
           },
           "port": {
-            "type": "number"
+            "type": "integer",
+            "format": "int32"
           },
           "role": {
             "type": "string",
@@ -3179,15 +3272,18 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "itemId": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
@@ -3196,41 +3292,49 @@
             "example": "Zinger Burger"
           },
           "unitPriceHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2300
           },
           "vatRateBp": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 1500
           },
           "qty": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 2
           },
           "totalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 4600
           },
           "notes": {
-            "type": "object",
+            "type": "string",
             "example": "no onion",
             "nullable": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           }
@@ -3255,15 +3359,18 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "userId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "action": {
@@ -3283,7 +3390,8 @@
             "example": "abc123..."
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           }
         },
@@ -3302,11 +3410,13 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderNo": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "uuid": {
@@ -3318,12 +3428,14 @@
             "example": "dine_in"
           },
           "tableId": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "dayOpeningId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "status": {
@@ -3331,36 +3443,44 @@
             "example": "open"
           },
           "subtotalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 4000
           },
           "vatHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 600
           },
           "totalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 4600
           },
           "discountHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 0
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "updatedAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "nullable": true
           },
@@ -3421,7 +3541,8 @@
             "example": "dine_in"
           },
           "tableId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1,
             "description": "Required for dine_in"
           }
@@ -3434,7 +3555,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "uuid": {
@@ -3442,7 +3564,8 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "orderNo": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           }
         },
@@ -3456,11 +3579,13 @@
         "type": "object",
         "properties": {
           "itemId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "qty": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 2
           },
           "notes": {
@@ -3477,7 +3602,8 @@
         "type": "object",
         "properties": {
           "qty": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 3
           },
           "notes": {
@@ -3543,11 +3669,13 @@
         "type": "object",
         "properties": {
           "orderItemId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "qty": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 1
           }
         },
@@ -3583,7 +3711,8 @@
             "example": true
           },
           "refundId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "status": {
@@ -3601,11 +3730,13 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderItemId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 5
           },
           "itemName": {
@@ -3613,19 +3744,23 @@
             "example": "Burger"
           },
           "unitPriceHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 2500
           },
           "vatRateBp": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 1500
           },
           "qty": {
-            "type": "number",
+            "type": "integer",
+            "format": "int32",
             "example": 2
           },
           "totalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 5000
           }
         },
@@ -3643,35 +3778,43 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 10
           },
           "userId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 3
           },
           "subtotalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 4348
           },
           "vatHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 652
           },
           "totalHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 5000
           },
           "reason": {
-            "type": "object",
-            "example": "Customer changed mind"
+            "type": "string",
+            "example": "Customer changed mind",
+            "nullable": true
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           },
           "items": {
@@ -3697,19 +3840,23 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "orderId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "eventIdx": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "userId": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "type": {
@@ -3729,7 +3876,8 @@
             "example": "abc123..."
           },
           "createdAt": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1700000000
           }
         },
@@ -3859,7 +4007,8 @@
         "type": "object",
         "properties": {
           "openingCashHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Opening cash counted in halalas",
             "example": 50000
           }
@@ -3872,7 +4021,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "businessDate": {
@@ -3884,51 +4034,64 @@
             "example": "open"
           },
           "openingCashHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 50000
           },
           "openedAt": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "openedBy": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "closedAt": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "closedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "closingCashHalalas": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "totalSalesHalalas": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "totalVatHalalas": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "orderCount": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "createdAt": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "updatedAt": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "createdBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "updatedBy": {
-            "type": "object",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         },
@@ -3947,7 +4110,8 @@
         "type": "object",
         "properties": {
           "closingCashHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Closing cash counted in halalas",
             "example": 125000
           }
@@ -3960,7 +4124,8 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1
           },
           "businessDate": {
@@ -3972,35 +4137,44 @@
             "example": "closed"
           },
           "openingCashHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 50000
           },
           "openedAt": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "openedBy": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "closedAt": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "closedBy": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "closingCashHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 125000
           },
           "totalSalesHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 46000
           },
           "totalVatHalalas": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 6000
           },
           "orderCount": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 5
           }
         },

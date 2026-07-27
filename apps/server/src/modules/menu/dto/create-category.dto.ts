@@ -1,5 +1,6 @@
 import { IsString, MinLength, IsInt, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 
 export class CreateCategoryDto {
   @ApiProperty({ example: 'Burgers' })
@@ -7,12 +8,12 @@ export class CreateCategoryDto {
   @MinLength(1)
   name!: string;
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({ ...ApiInt32, default: 0 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;
 
-  @ApiPropertyOptional({ description: 'Printer ID for kitchen routing' })
+  @ApiPropertyOptional({ ...ApiInt64, description: 'Printer ID for kitchen routing' })
   @IsOptional()
   @IsInt()
   printerId?: number;
@@ -24,18 +25,18 @@ export class CreateCategoryDto {
 }
 
 export class UpdateCategoryDto {
-  @ApiPropertyOptional({ example: 'Burgers' })
+  @ApiPropertyOptional({ type: String, example: 'Burgers' })
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt32 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt64 })
   @IsOptional()
   @IsInt()
   printerId?: number;

@@ -34,7 +34,7 @@ data class CreateTableDto (
     val name: kotlin.String,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = java.math.BigDecimal("0"),
+    val sortOrder: kotlin.Int? = 0,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = true

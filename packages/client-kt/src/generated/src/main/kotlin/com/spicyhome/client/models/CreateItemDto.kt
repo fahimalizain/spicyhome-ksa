@@ -35,24 +35,24 @@ import com.squareup.moshi.JsonClass
 data class CreateItemDto (
 
     @Json(name = "categoryId")
-    val categoryId: java.math.BigDecimal,
+    val categoryId: kotlin.Long,
 
     @Json(name = "name")
     val name: kotlin.String,
 
     /* VAT-inclusive price in halalas (23.00 SAR) */
     @Json(name = "priceHalalas")
-    val priceHalalas: java.math.BigDecimal,
+    val priceHalalas: kotlin.Long,
 
     @Json(name = "nameAr")
     val nameAr: kotlin.String? = null,
 
     /* VAT rate in basis points (1500 = 15%) */
     @Json(name = "vatRateBp")
-    val vatRateBp: java.math.BigDecimal? = java.math.BigDecimal("1500"),
+    val vatRateBp: kotlin.Int? = 1500,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = java.math.BigDecimal("0"),
+    val sortOrder: kotlin.Int? = 0,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = true

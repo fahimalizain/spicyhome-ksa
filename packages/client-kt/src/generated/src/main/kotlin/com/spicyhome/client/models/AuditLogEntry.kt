@@ -36,13 +36,13 @@ import com.squareup.moshi.JsonClass
 data class AuditLogEntry (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "orderId")
-    val orderId: java.math.BigDecimal,
+    val orderId: kotlin.Long,
 
     @Json(name = "userId")
-    val userId: java.math.BigDecimal,
+    val userId: kotlin.Long,
 
     @Json(name = "action")
     val action: kotlin.String,
@@ -57,7 +57,7 @@ data class AuditLogEntry (
     val hash: kotlin.String,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal
+    val createdAt: kotlin.Long
 
 ) {
 

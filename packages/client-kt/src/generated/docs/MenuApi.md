@@ -103,7 +103,7 @@ Get category by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(MenuApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : CategoryResponse = webService.menuControllerGetCategory(id)
 ```
@@ -111,7 +111,7 @@ val result : CategoryResponse = webService.menuControllerGetCategory(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -141,7 +141,7 @@ Get item by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(MenuApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : ItemResponse = webService.menuControllerGetItem(id)
 ```
@@ -149,7 +149,7 @@ val result : ItemResponse = webService.menuControllerGetItem(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -252,14 +252,14 @@ Update a category
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(MenuApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updateCategoryDto : UpdateCategoryDto =  // UpdateCategoryDto | 
 
 val result : CategoryResponse = webService.menuControllerUpdateCategory(id, updateCategoryDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateCategoryDto** | [**UpdateCategoryDto**](UpdateCategoryDto.md)|  | |
@@ -292,14 +292,14 @@ Update an item
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(MenuApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updateItemDto : UpdateItemDto =  // UpdateItemDto | 
 
 val result : ItemResponse = webService.menuControllerUpdateItem(id, updateItemDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateItemDto** | [**UpdateItemDto**](UpdateItemDto.md)|  | |

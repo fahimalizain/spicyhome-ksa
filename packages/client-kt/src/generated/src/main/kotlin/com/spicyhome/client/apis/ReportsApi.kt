@@ -59,7 +59,7 @@ interface ReportsApi {
      * @return [Call]<[Unit]>
      */
     @GET("reports/z/{dayId}")
-    fun reportsControllerGetZReport(@Path("dayId") dayId: java.math.BigDecimal): Call<Unit>
+    fun reportsControllerGetZReport(@Path("dayId") dayId: kotlin.Long): Call<Unit>
 
     /**
      * POST reports/x/print
@@ -84,6 +84,6 @@ interface ReportsApi {
      * @return [Call]<[Unit]>
      */
     @POST("reports/z/{dayId}/print")
-    fun reportsControllerPrintZReport(@Path("dayId") dayId: java.math.BigDecimal): Call<Unit>
+    fun reportsControllerPrintZReport(@Path("dayId") dayId: kotlin.Long): Call<Unit>
 
 }

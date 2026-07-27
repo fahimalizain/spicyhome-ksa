@@ -1,5 +1,6 @@
 import { IsString, MinLength, IsInt, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiInt32 } from '../../../common/api-property-helpers';
 
 export class CreateTableDto {
   @ApiProperty({ example: 'T1' })
@@ -7,7 +8,7 @@ export class CreateTableDto {
   @MinLength(1)
   name!: string;
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({ ...ApiInt32, default: 0 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;
@@ -19,13 +20,13 @@ export class CreateTableDto {
 }
 
 export class UpdateTableDto {
-  @ApiPropertyOptional({ example: 'T1' })
+  @ApiPropertyOptional({ type: String, example: 'T1' })
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt32 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;

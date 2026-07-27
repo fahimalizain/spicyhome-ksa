@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { MenuService } from './menu.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/create-category.dto';
@@ -29,6 +30,7 @@ export class MenuController {
 
   @Get('categories/:id')
   @ApiOperation({ summary: 'Get category by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Category details', type: CategoryResponse })
   getCategory(@Param('id', ParseIntPipe) id: number) {
     return this.menuService.getCategory(id);
@@ -45,6 +47,7 @@ export class MenuController {
   @Put('categories/:id')
   @RequiresPermission('manage_menu')
   @ApiOperation({ summary: 'Update a category' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated category', type: CategoryResponse })
   updateCategory(
     @Param('id', ParseIntPipe) id: number,
@@ -64,6 +67,7 @@ export class MenuController {
 
   @Get('items/:id')
   @ApiOperation({ summary: 'Get item by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Item details', type: ItemResponse })
   getItem(@Param('id', ParseIntPipe) id: number) {
     return this.menuService.getItem(id);
@@ -80,6 +84,7 @@ export class MenuController {
   @Put('items/:id')
   @RequiresPermission('manage_menu')
   @ApiOperation({ summary: 'Update an item' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated item', type: ItemResponse })
   updateItem(
     @Param('id', ParseIntPipe) id: number,

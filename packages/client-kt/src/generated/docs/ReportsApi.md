@@ -140,7 +140,7 @@ Z-report for a closed day
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ReportsApi::class.java)
-val dayId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val dayId : kotlin.Long = 789 // kotlin.Long | 
 
 webService.reportsControllerGetZReport(dayId)
 ```
@@ -148,7 +148,7 @@ webService.reportsControllerGetZReport(dayId)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **dayId** | **java.math.BigDecimal**|  | |
+| **dayId** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -213,7 +213,7 @@ Print Z-report on receipt printer
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ReportsApi::class.java)
-val dayId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val dayId : kotlin.Long = 789 // kotlin.Long | 
 
 webService.reportsControllerPrintZReport(dayId)
 ```
@@ -221,7 +221,7 @@ webService.reportsControllerPrintZReport(dayId)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **dayId** | **java.math.BigDecimal**|  | |
+| **dayId** | **kotlin.Long**|  | |
 
 ### Return type
 

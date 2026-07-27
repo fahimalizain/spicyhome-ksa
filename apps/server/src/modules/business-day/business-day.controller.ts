@@ -6,6 +6,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiQuery,
+  ApiParam,
   ApiConflictResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
@@ -52,8 +53,8 @@ export class BusinessDayController {
 
   @Get()
   @ApiOperation({ summary: 'List past business days (paged)' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', format: 'int32' } })
+  @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', format: 'int32' } })
   @ApiOkResponse({ description: 'Paged list of business days' })
   list(
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
@@ -64,6 +65,7 @@ export class BusinessDayController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a business day by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Business day', type: DayOpeningResponse })
   @ApiNotFoundResponse({ description: 'Business day not found' })
   getDay(@Param('id', ParseIntPipe) id: number) {

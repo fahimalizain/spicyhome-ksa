@@ -4,7 +4,7 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **qty** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  [optional] |
+| **qty** | **kotlin.Int** |  |  [optional] |
 | **notes** | **kotlin.String** |  |  [optional] |
 
 

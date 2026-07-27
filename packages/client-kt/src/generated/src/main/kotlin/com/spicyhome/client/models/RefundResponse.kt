@@ -34,7 +34,7 @@ data class RefundResponse (
     val success: kotlin.Boolean,
 
     @Json(name = "refundId")
-    val refundId: java.math.BigDecimal,
+    val refundId: kotlin.Long,
 
     @Json(name = "status")
     val status: kotlin.String

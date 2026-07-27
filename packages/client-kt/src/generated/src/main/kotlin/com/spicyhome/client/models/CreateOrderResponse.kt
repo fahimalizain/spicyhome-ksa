@@ -31,13 +31,13 @@ import com.squareup.moshi.JsonClass
 data class CreateOrderResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "uuid")
     val uuid: kotlin.String,
 
     @Json(name = "orderNo")
-    val orderNo: java.math.BigDecimal
+    val orderNo: kotlin.Long
 
 ) {
 

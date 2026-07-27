@@ -35,7 +35,7 @@ import com.squareup.moshi.JsonClass
 data class UpdateItemDto (
 
     @Json(name = "categoryId")
-    val categoryId: java.math.BigDecimal? = null,
+    val categoryId: kotlin.Long? = null,
 
     @Json(name = "name")
     val name: kotlin.String? = null,
@@ -44,13 +44,13 @@ data class UpdateItemDto (
     val nameAr: kotlin.String? = null,
 
     @Json(name = "priceHalalas")
-    val priceHalalas: java.math.BigDecimal? = null,
+    val priceHalalas: kotlin.Long? = null,
 
     @Json(name = "vatRateBp")
-    val vatRateBp: java.math.BigDecimal? = null,
+    val vatRateBp: kotlin.Int? = null,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = null,
+    val sortOrder: kotlin.Int? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = null

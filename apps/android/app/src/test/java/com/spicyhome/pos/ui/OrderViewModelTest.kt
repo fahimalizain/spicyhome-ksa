@@ -26,7 +26,6 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Call
 import retrofit2.Response
-import java.math.BigDecimal
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OrderViewModelTest {
@@ -331,20 +330,20 @@ class OrderViewModelTest {
         id: Long,
         name: String,
         priceHalalas: Long,
-        vatRateBp: Long,
+        vatRateBp: Int,
         categoryId: Long = 1,
         isActive: Boolean = true,
     ): ItemResponse = ItemResponse(
-        id = BigDecimal.valueOf(id),
-        categoryId = BigDecimal.valueOf(categoryId),
+        id = id,
+        categoryId = categoryId,
         name = name,
         nameAr = null,
-        priceHalalas = BigDecimal.valueOf(priceHalalas),
-        vatRateBp = BigDecimal.valueOf(vatRateBp),
-        sortOrder = BigDecimal.ZERO,
+        priceHalalas = priceHalalas,
+        vatRateBp = vatRateBp,
+        sortOrder = 0,
         isActive = isActive,
-        createdAt = BigDecimal.ZERO,
-        updatedAt = BigDecimal.ZERO,
+        createdAt = 0L,
+        updatedAt = 0L,
         createdBy = null,
         updatedBy = null,
     )

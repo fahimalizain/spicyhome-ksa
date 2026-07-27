@@ -42,7 +42,7 @@ data class CreatePrinterDto (
     val role: CreatePrinterDto.Role,
 
     @Json(name = "port")
-    val port: java.math.BigDecimal? = java.math.BigDecimal("9100"),
+    val port: kotlin.Int? = 9100,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = true

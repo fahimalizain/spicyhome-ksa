@@ -37,16 +37,16 @@ import com.squareup.moshi.JsonClass
 data class OrderEventResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "orderId")
-    val orderId: java.math.BigDecimal,
+    val orderId: kotlin.Long,
 
     @Json(name = "eventIdx")
-    val eventIdx: java.math.BigDecimal,
+    val eventIdx: kotlin.Long,
 
     @Json(name = "userId")
-    val userId: java.math.BigDecimal,
+    val userId: kotlin.Long,
 
     @Json(name = "type")
     val type: kotlin.String,
@@ -61,7 +61,7 @@ data class OrderEventResponse (
     val hash: kotlin.String,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal
+    val createdAt: kotlin.Long
 
 ) {
 

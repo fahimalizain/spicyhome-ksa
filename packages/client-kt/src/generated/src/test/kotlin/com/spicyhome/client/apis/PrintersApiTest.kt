@@ -33,7 +33,7 @@ class PrintersApiTest : ShouldSpec() {
         // to test printersControllerCheckStatus
         should("test printersControllerCheckStatus") {
             // uncomment below to test printersControllerCheckStatus
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : PrinterStatusResponse = apiInstance.printersControllerCheckStatus(id)
             //result shouldBe ("TODO")
         }
@@ -49,7 +49,7 @@ class PrintersApiTest : ShouldSpec() {
         // to test printersControllerGet
         should("test printersControllerGet") {
             // uncomment below to test printersControllerGet
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : PrinterResponse = apiInstance.printersControllerGet(id)
             //result shouldBe ("TODO")
         }
@@ -64,7 +64,7 @@ class PrintersApiTest : ShouldSpec() {
         // to test printersControllerTestPrint
         should("test printersControllerTestPrint") {
             // uncomment below to test printersControllerTestPrint
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : SuccessResponse = apiInstance.printersControllerTestPrint(id)
             //result shouldBe ("TODO")
         }
@@ -72,7 +72,7 @@ class PrintersApiTest : ShouldSpec() {
         // to test printersControllerUpdate
         should("test printersControllerUpdate") {
             // uncomment below to test printersControllerUpdate
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updatePrinterDto : UpdatePrinterDto =  // UpdatePrinterDto | 
             //val result : PrinterResponse = apiInstance.printersControllerUpdate(id, updatePrinterDto)
             //result shouldBe ("TODO")

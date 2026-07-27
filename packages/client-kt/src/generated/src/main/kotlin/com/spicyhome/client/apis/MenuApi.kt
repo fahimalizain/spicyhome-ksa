@@ -51,7 +51,7 @@ interface MenuApi {
      * @return [Call]<[CategoryResponse]>
      */
     @GET("menu/categories/{id}")
-    fun menuControllerGetCategory(@Path("id") id: java.math.BigDecimal): Call<CategoryResponse>
+    fun menuControllerGetCategory(@Path("id") id: kotlin.Long): Call<CategoryResponse>
 
     /**
      * GET menu/items/{id}
@@ -64,7 +64,7 @@ interface MenuApi {
      * @return [Call]<[ItemResponse]>
      */
     @GET("menu/items/{id}")
-    fun menuControllerGetItem(@Path("id") id: java.math.BigDecimal): Call<ItemResponse>
+    fun menuControllerGetItem(@Path("id") id: kotlin.Long): Call<ItemResponse>
 
     /**
      * GET menu/categories
@@ -103,7 +103,7 @@ interface MenuApi {
      * @return [Call]<[CategoryResponse]>
      */
     @PUT("menu/categories/{id}")
-    fun menuControllerUpdateCategory(@Path("id") id: java.math.BigDecimal, @Body updateCategoryDto: UpdateCategoryDto): Call<CategoryResponse>
+    fun menuControllerUpdateCategory(@Path("id") id: kotlin.Long, @Body updateCategoryDto: UpdateCategoryDto): Call<CategoryResponse>
 
     /**
      * PUT menu/items/{id}
@@ -117,6 +117,6 @@ interface MenuApi {
      * @return [Call]<[ItemResponse]>
      */
     @PUT("menu/items/{id}")
-    fun menuControllerUpdateItem(@Path("id") id: java.math.BigDecimal, @Body updateItemDto: UpdateItemDto): Call<ItemResponse>
+    fun menuControllerUpdateItem(@Path("id") id: kotlin.Long, @Body updateItemDto: UpdateItemDto): Call<ItemResponse>
 
 }

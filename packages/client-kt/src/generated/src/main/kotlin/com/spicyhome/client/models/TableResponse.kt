@@ -36,28 +36,28 @@ import com.squareup.moshi.JsonClass
 data class TableResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "name")
     val name: kotlin.String,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal,
+    val sortOrder: kotlin.Int,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "updatedAt")
-    val updatedAt: java.math.BigDecimal,
+    val updatedAt: kotlin.Long,
 
     @Json(name = "createdBy")
-    val createdBy: kotlin.Any?,
+    val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Any?
+    val updatedBy: kotlin.Long?
 
 ) {
 

@@ -1,13 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class AuditLogEntry {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   orderId!: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   userId!: number;
 
   @ApiProperty({ example: 'created' })
@@ -22,6 +23,6 @@ export class AuditLogEntry {
   @ApiProperty({ example: 'abc123...' })
   hash!: string;
 
-  @ApiProperty({ example: 1700000000 })
+  @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 }

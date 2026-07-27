@@ -65,12 +65,12 @@ interface ZatcaApi {
      * Responses:
      *  - 200: 
      *
-     * @param limit 
-     * @param offset 
+     * @param limit  (optional)
+     * @param offset  (optional)
      * @return [Call]<[Unit]>
      */
     @GET("zatca/invoices")
-    fun zatcaControllerListInvoices(@Query("limit") limit: java.math.BigDecimal, @Query("offset") offset: java.math.BigDecimal): Call<Unit>
+    fun zatcaControllerListInvoices(@Query("limit") limit: kotlin.Int? = null, @Query("offset") offset: kotlin.Int? = null): Call<Unit>
 
     /**
      * POST zatca/onboard/compliance

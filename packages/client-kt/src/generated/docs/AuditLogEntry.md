@@ -4,14 +4,14 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **orderId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **userId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
+| **orderId** | **kotlin.Long** |  |  |
+| **userId** | **kotlin.Long** |  |  |
 | **action** | **kotlin.String** |  |  |
 | **payload** | **kotlin.String** |  |  |
 | **prevHash** | **kotlin.String** |  |  |
 | **hash** | **kotlin.String** |  |  |
-| **createdAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **createdAt** | **kotlin.Long** |  |  |
 
 
 

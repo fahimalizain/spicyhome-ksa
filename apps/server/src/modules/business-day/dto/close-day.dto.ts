@@ -1,15 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, Min } from 'class-validator';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class CloseDayDto {
-  @ApiProperty({ description: 'Closing cash counted in halalas', example: 125000 })
+  @ApiProperty({ ...ApiInt64, description: 'Closing cash counted in halalas', example: 125000 })
   @IsInt()
   @Min(0)
   closingCashHalalas!: number;
 }
 
 export class CloseDayResponse {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
   @ApiProperty({ example: '2026-07-22' })
@@ -18,30 +19,30 @@ export class CloseDayResponse {
   @ApiProperty({ example: 'closed' })
   status!: string;
 
-  @ApiProperty({ example: 50000 })
+  @ApiProperty({ ...ApiInt64, example: 50000 })
   openingCashHalalas!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   openedAt!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   openedBy!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   closedAt!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   closedBy!: number;
 
-  @ApiProperty({ example: 125000 })
+  @ApiProperty({ ...ApiInt64, example: 125000 })
   closingCashHalalas!: number;
 
-  @ApiProperty({ example: 46000 })
+  @ApiProperty({ ...ApiInt64, example: 46000 })
   totalSalesHalalas!: number;
 
-  @ApiProperty({ example: 6000 })
+  @ApiProperty({ ...ApiInt64, example: 6000 })
   totalVatHalalas!: number;
 
-  @ApiProperty({ example: 5 })
+  @ApiProperty({ ...ApiInt64, example: 5 })
   orderCount!: number;
 }

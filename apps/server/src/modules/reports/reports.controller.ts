@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
@@ -24,6 +25,7 @@ export class ReportsController {
 
   @Get('z/:dayId')
   @ApiOperation({ summary: 'Z-report for a closed day' })
+  @ApiParam({ name: 'dayId', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Z-report detail' })
   getZReport(@Param('dayId', ParseIntPipe) dayId: number) {
     return this.reportsService.getZReport(dayId);
@@ -46,6 +48,7 @@ export class ReportsController {
   @Post('z/:dayId/print')
   @RequiresPermission('create_order')
   @ApiOperation({ summary: 'Print Z-report on receipt printer' })
+  @ApiParam({ name: 'dayId', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Print result' })
   printZReport(@Param('dayId', ParseIntPipe) dayId: number) {
     return this.reportsService.printZReport(dayId);

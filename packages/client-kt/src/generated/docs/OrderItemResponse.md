@@ -4,19 +4,19 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **orderId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **itemId** | [**kotlin.Any**](.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
+| **orderId** | **kotlin.Long** |  |  |
+| **itemId** | **kotlin.Long** |  |  |
 | **itemName** | **kotlin.String** |  |  |
-| **unitPriceHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **vatRateBp** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **qty** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **totalHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **notes** | [**kotlin.Any**](.md) |  |  |
-| **createdAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **updatedAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **createdBy** | [**kotlin.Any**](.md) |  |  |
-| **updatedBy** | [**kotlin.Any**](.md) |  |  |
+| **unitPriceHalalas** | **kotlin.Long** |  |  |
+| **vatRateBp** | **kotlin.Int** |  |  |
+| **qty** | **kotlin.Int** |  |  |
+| **totalHalalas** | **kotlin.Long** |  |  |
+| **notes** | **kotlin.String** |  |  |
+| **createdAt** | **kotlin.Long** |  |  |
+| **updatedAt** | **kotlin.Long** |  |  |
+| **createdBy** | **kotlin.Long** |  |  |
+| **updatedBy** | **kotlin.Long** |  |  |
 
 
 

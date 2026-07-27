@@ -51,7 +51,7 @@ interface DayApi {
      * @return [Call]<[DayOpeningResponse]>
      */
     @GET("day/{id}")
-    fun businessDayControllerGetDay(@Path("id") id: java.math.BigDecimal): Call<DayOpeningResponse>
+    fun businessDayControllerGetDay(@Path("id") id: kotlin.Long): Call<DayOpeningResponse>
 
     /**
      * GET day
@@ -65,7 +65,7 @@ interface DayApi {
      * @return [Call]<[Unit]>
      */
     @GET("day")
-    fun businessDayControllerList(@Query("page") page: java.math.BigDecimal? = null, @Query("limit") limit: java.math.BigDecimal? = null): Call<Unit>
+    fun businessDayControllerList(@Query("page") page: kotlin.Int? = null, @Query("limit") limit: kotlin.Int? = null): Call<Unit>
 
     /**
      * POST day/open

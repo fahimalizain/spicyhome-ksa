@@ -1,8 +1,9 @@
 import { IsString, MinLength, IsInt, IsOptional, IsBoolean, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 
 export class CreateItemDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   @IsInt()
   categoryId!: number;
 
@@ -11,23 +12,31 @@ export class CreateItemDto {
   @MinLength(1)
   name!: string;
 
-  @ApiPropertyOptional({ example: 'زنجر برجر' })
+  @ApiPropertyOptional({ type: String, example: 'زنجر برجر' })
   @IsOptional()
   @IsString()
   nameAr?: string;
 
-  @ApiProperty({ example: 2300, description: 'VAT-inclusive price in halalas (23.00 SAR)' })
+  @ApiProperty({
+    ...ApiInt64,
+    example: 2300,
+    description: 'VAT-inclusive price in halalas (23.00 SAR)',
+  })
   @IsInt()
   @Min(0)
   priceHalalas!: number;
 
-  @ApiPropertyOptional({ default: 1500, description: 'VAT rate in basis points (1500 = 15%)' })
+  @ApiPropertyOptional({
+    ...ApiInt32,
+    default: 1500,
+    description: 'VAT rate in basis points (1500 = 15%)',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   vatRateBp?: number;
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({ ...ApiInt32, default: 0 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;
@@ -39,35 +48,35 @@ export class CreateItemDto {
 }
 
 export class UpdateItemDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt64 })
   @IsOptional()
   @IsInt()
   categoryId?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String })
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String })
   @IsOptional()
   @IsString()
   nameAr?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt64 })
   @IsOptional()
   @IsInt()
   @Min(0)
   priceHalalas?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt32 })
   @IsOptional()
   @IsInt()
   @Min(0)
   vatRateBp?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt32 })
   @IsOptional()
   @IsInt()
   sortOrder?: number;

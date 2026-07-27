@@ -172,17 +172,17 @@ List ZATCA invoices
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(ZatcaApi::class.java)
-val limit : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-val offset : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val limit : kotlin.Int = 56 // kotlin.Int | 
+val offset : kotlin.Int = 56 // kotlin.Int | 
 
 webService.zatcaControllerListInvoices(limit, offset)
 ```
 
 ### Parameters
-| **limit** | **java.math.BigDecimal**|  | |
+| **limit** | **kotlin.Int**|  | [optional] |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **offset** | **java.math.BigDecimal**|  | |
+| **offset** | **kotlin.Int**|  | [optional] |
 
 ### Return type
 

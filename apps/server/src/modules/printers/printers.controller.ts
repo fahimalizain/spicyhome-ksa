@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
@@ -33,6 +34,7 @@ export class PrintersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get printer by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Printer details', type: PrinterResponse })
   get(@Param('id', ParseIntPipe) id: number) {
     return this.printersService.get(id);
@@ -49,6 +51,7 @@ export class PrintersController {
   @Put(':id')
   @RequiresPermission('manage_printers')
   @ApiOperation({ summary: 'Update a printer' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated printer', type: PrinterResponse })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -60,6 +63,7 @@ export class PrintersController {
 
   @Get(':id/status')
   @ApiOperation({ summary: 'Check printer TCP reachability' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Printer reachability status', type: PrinterStatusResponse })
   async checkStatus(@Param('id', ParseIntPipe) id: number) {
     return this.printersService.checkPrinter(id);
@@ -68,6 +72,7 @@ export class PrintersController {
   @Post(':id/test')
   @RequiresPermission('manage_printers')
   @ApiOperation({ summary: 'Print a test ticket' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Test ticket sent', type: SuccessResponse })
   async testPrint(@Param('id', ParseIntPipe) id: number) {
     await this.printJobService.printTestTicket(id);

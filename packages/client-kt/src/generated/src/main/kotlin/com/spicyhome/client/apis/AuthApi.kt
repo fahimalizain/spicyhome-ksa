@@ -67,7 +67,7 @@ interface AuthApi {
      * @return [Call]<[UserResponse]>
      */
     @GET("auth/users/{id}")
-    fun authControllerGetUser(@Path("id") id: java.math.BigDecimal): Call<UserResponse>
+    fun authControllerGetUser(@Path("id") id: kotlin.Long): Call<UserResponse>
 
     /**
      * GET auth/roles
@@ -130,7 +130,7 @@ interface AuthApi {
      * @return [Call]<[RoleResponse]>
      */
     @PUT("auth/roles/{id}")
-    fun authControllerUpdateRole(@Path("id") id: java.math.BigDecimal, @Body updateRoleDto: UpdateRoleDto): Call<RoleResponse>
+    fun authControllerUpdateRole(@Path("id") id: kotlin.Long, @Body updateRoleDto: UpdateRoleDto): Call<RoleResponse>
 
     /**
      * PUT auth/users/{id}
@@ -144,6 +144,6 @@ interface AuthApi {
      * @return [Call]<[UserResponse]>
      */
     @PUT("auth/users/{id}")
-    fun authControllerUpdateUser(@Path("id") id: java.math.BigDecimal, @Body updateUserDto: UpdateUserDto): Call<UserResponse>
+    fun authControllerUpdateUser(@Path("id") id: kotlin.Long, @Body updateUserDto: UpdateUserDto): Call<UserResponse>
 
 }

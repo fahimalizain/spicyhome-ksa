@@ -1,5 +1,6 @@
 import { IsString, MinLength, IsInt } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'cashier1' })
@@ -17,7 +18,7 @@ export class CreateUserDto {
   @MinLength(1)
   name!: string;
 
-  @ApiProperty({ example: 2, description: 'role_id — 1 for admin, 2 for staff' })
+  @ApiProperty({ ...ApiInt64, example: 2, description: 'role_id — 1 for admin, 2 for staff' })
   @IsInt()
   roleId!: number;
 }

@@ -30,10 +30,10 @@ import com.squareup.moshi.JsonClass
 data class RefundItemDto (
 
     @Json(name = "orderItemId")
-    val orderItemId: java.math.BigDecimal,
+    val orderItemId: kotlin.Long,
 
     @Json(name = "qty")
-    val qty: java.math.BigDecimal
+    val qty: kotlin.Int
 
 ) {
 
