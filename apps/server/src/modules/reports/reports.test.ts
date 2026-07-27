@@ -125,6 +125,27 @@ describe('ReportsService', () => {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS payment_methods (
+        id TEXT PRIMARY KEY NOT NULL,
+        title TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id)
+      );
+      CREATE TABLE IF NOT EXISTS order_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id),
+        method_id TEXT NOT NULL REFERENCES payment_methods(id),
+        method_title TEXT NOT NULL,
+        amount_halalas INTEGER NOT NULL,
+        tendered_halalas INTEGER,
+        change_halalas INTEGER,
+        created_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id)
+      );
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -132,6 +153,13 @@ describe('ReportsService', () => {
     `);
 
     now = Math.floor(Date.now() / 1000);
+
+    // Seed payment methods
+    sqlite.exec(`
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('card', 'Card', 1, 1, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+    `);
 
     sqlite.exec(`
       INSERT INTO user_roles (id, name, create_order, created_at, updated_at)
@@ -162,15 +190,19 @@ describe('ReportsService', () => {
       expect((report as any).error).toBe('No open business day');
     });
 
-    it('returns X-report with correct totals', async () => {
+    it('returns X-report with correct totals and paymentTotals', async () => {
       dayService.openDay({ openingCashHalalas: 50000 }, 1);
       const day = dayService.getOpenDay()!;
 
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'paid', 2000, 300, 2300, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (1, 'card', 'Card', 2300, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'paid', 4000, 600, 4600, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (2, 'cash', 'Cash', 4600, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
         VALUES (3, 3, 'c', 'dine_in', ${day.id}, 'open', 1000, 150, 1150, ${now}, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
@@ -183,6 +215,40 @@ describe('ReportsService', () => {
       expect(report.paidOrderCount).toBe(2);
       expect(report.openOrderCount).toBe(1);
       expect(report.voidedOrderCount).toBe(1);
+
+      // Payment totals should be per-method
+      expect(Array.isArray(report.paymentTotals)).toBe(true);
+      expect(report.paymentTotals.length).toBe(2);
+      const cardTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'card');
+      const cashTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'cash');
+      expect(cardTotal).toBeDefined();
+      expect(cardTotal.totalHalalas).toBe(2300);
+      expect(cashTotal).toBeDefined();
+      expect(cashTotal.totalHalalas).toBe(4600);
+    });
+
+    it('handles split-tender paid orders with multiple payment methods', async () => {
+      // Open day for split-tender test
+      dayService.openDay({ openingCashHalalas: 10000 }, 1);
+      const day = dayService.getOpenDay()!;
+
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
+        VALUES (10, 10, 'split', 'dine_in', ${day.id}, 'paid', 8250, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (10, 'card', 'Card', 5000, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, tendered_halalas, change_halalas, created_at)
+        VALUES (10, 'cash', 'Cash', 3250, 10000, 6750, ${now});
+      `);
+
+      const report: any = await service.getXReport();
+      expect(Array.isArray(report.paymentTotals)).toBe(true);
+      expect(report.paymentTotals.length).toBe(2);
+
+      const cardTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'card');
+      const cashTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'cash');
+      expect(cardTotal.totalHalalas).toBe(5000);
+      expect(cashTotal.totalHalalas).toBe(3250);
     });
 
     it('computes sales by type', async () => {
