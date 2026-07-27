@@ -23,6 +23,78 @@ import { zatcaKey, slugifyOrgUnit } from '@spicyhome/shared';
 import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
 
+// ── Compliance Request ID helpers ────────────────────────────────────────────
+
+/**
+ * Normalize a compliance request ID for use in ZATCA API calls.
+ *
+ * Compliance request IDs must be exactly 13 digits (ZATCA requirement).
+ * This handles the edge case where `JSON.parse` returns a number that gets
+ * stringified as e.g. `"1234567890123.0"` through SQLite persistence.
+ *
+ * @throws Error if the value cannot be normalized to a 13-digit string.
+ */
+export function normalizeComplianceRequestId(raw: unknown): string {
+  let str: string;
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    // 13-digit IDs are within Number.MAX_SAFE_INTEGER (9,007,199,254,740,991).
+    // Use Math.trunc so that a float like 1234567890123.7 never passes.
+    str = String(Math.trunc(raw));
+  } else if (typeof raw === 'string') {
+    str = raw.trim();
+  } else if (raw === null || raw === undefined) {
+    throw new Error('Compliance request ID is required but received null/undefined.');
+  } else {
+    throw new Error(
+      `Compliance request ID must be a number or string, received type "${typeof raw}".`,
+    );
+  }
+
+  // Strip a ".0" suffix that arises from float coercion
+  // (e.g. "1234567890123.0" → "1234567890123").
+  if (/^\d+\.0+$/.test(str)) {
+    str = str.replace(/\.0+$/, '');
+  }
+
+  // ZATCA requires exactly 13 digits.
+  if (!/^\d{13}$/.test(str)) {
+    throw new Error(`Compliance request ID must be exactly 13 digits, got "${str}".`);
+  }
+
+  return str;
+}
+
+/**
+ * Soft-coerce a request ID to a clean string for display / return values.
+ *
+ * Strips a trailing `.0` suffix (float representation) but does **not**
+ * enforce any length constraint — production CSIDs may have a different
+ * format than the 13-digit compliance ID.
+ */
+export function formatRequestId(raw: unknown): string {
+  if (raw === null || raw === undefined) {
+    return 'unknown';
+  }
+
+  let str: string;
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    str = String(Math.trunc(raw));
+  } else if (typeof raw === 'string') {
+    str = raw.trim();
+  } else {
+    return 'unknown';
+  }
+
+  // Strip .0 suffix from float coercion.
+  if (/^\d+\.0+$/.test(str)) {
+    str = str.replace(/\.0+$/, '');
+  }
+
+  return str || 'unknown';
+}
+
 export interface ComplianceResultEntry {
   /** 'invoice' | 'credit_note' | 'debit_note' or `invoice_<id>` for real invoices */
   key: string;
@@ -201,17 +273,16 @@ export class ZatcaOnboardingService {
       throw new Error(`ZATCA compliance response missing certificate or secret: ${response.body}`);
     }
 
+    const requestId = normalizeComplianceRequestId(result.requestID);
+
     this.printersService.setSetting(zatcaKey(env, orgUnit, 'compliance_cert'), certBase64);
     this.printersService.setSetting(zatcaKey(env, orgUnit, 'compliance_secret'), secret);
-    this.printersService.setSetting(
-      zatcaKey(env, orgUnit, 'compliance_request_id'),
-      result.requestID || '',
-    );
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'compliance_request_id'), requestId);
     this.invoiceService.setOnboardingState('compliance', env, orgUnit);
 
-    this.logger.log(`Compliance CSID obtained: requestID=${result.requestID || 'unknown'}`);
+    this.logger.log(`Compliance CSID obtained: requestID=${requestId}`);
 
-    return { success: true, requestId: result.requestID || 'unknown' };
+    return { success: true, requestId };
   }
 
   /**
@@ -247,20 +318,24 @@ export class ZatcaOnboardingService {
       );
     }
 
-    const complianceRequestId = this.printersService.getSetting(
+    const complianceRequestIdRaw = this.printersService.getSetting(
       zatcaKey(env, orgUnit, 'compliance_request_id'),
       '',
     );
-    if (!complianceRequestId) {
+    if (!complianceRequestIdRaw) {
       throw new BadRequestException(
         'Compliance request ID not found. Run compliance onboarding first.',
       );
     }
 
+    const complianceRequestId = normalizeComplianceRequestId(complianceRequestIdRaw);
+
     const baseUrl = this.getApiBaseUrl();
     const url = `${baseUrl}/production/csids`;
 
-    const body = JSON.stringify({ compliance_request_id: complianceRequestId });
+    // Send as a JSON number — ZATCA validates digit count on a numeric id and
+    // a 13-digit number is well within Number.MAX_SAFE_INTEGER.
+    const body = JSON.stringify({ compliance_request_id: Number(complianceRequestId) });
 
     this.logger.log(
       `Production POST ${url} requestId=${complianceRequestId} certLen=${complianceCert.length} secret=***`,
@@ -300,9 +375,9 @@ export class ZatcaOnboardingService {
     this.printersService.setSetting(zatcaKey(env, orgUnit, 'production_secret'), secret);
     this.invoiceService.setOnboardingState('production', env, orgUnit);
 
-    this.logger.log(`Production CSID obtained: requestID=${result.requestID || 'unknown'}`);
+    this.logger.log(`Production CSID obtained: requestID=${formatRequestId(result.requestID)}`);
 
-    return { success: true, requestId: result.requestID || 'unknown' };
+    return { success: true, requestId: formatRequestId(result.requestID) };
   }
 
   /**
