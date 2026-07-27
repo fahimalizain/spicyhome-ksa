@@ -14,6 +14,7 @@ import com.spicyhome.client.models.CreateRefundDto
 import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
@@ -97,10 +98,10 @@ interface OrdersApi {
      *
      * @param status 
      * @param date 
-     * @return [Call]<[kotlin.collections.List<OrderResponse>]>
+     * @return [Call]<[kotlin.collections.List<OrderSummaryResponse>]>
      */
     @GET("orders")
-    fun ordersControllerListOrders(@Query("status") status: kotlin.String, @Query("date") date: kotlin.String): Call<kotlin.collections.List<OrderResponse>>
+    fun ordersControllerListOrders(@Query("status") status: kotlin.String, @Query("date") date: kotlin.String): Call<kotlin.collections.List<OrderSummaryResponse>>
 
     /**
      * POST orders/{id}/pay

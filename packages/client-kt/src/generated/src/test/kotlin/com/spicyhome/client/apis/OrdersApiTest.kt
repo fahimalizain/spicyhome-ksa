@@ -27,6 +27,7 @@ import com.spicyhome.client.models.CreateRefundDto
 import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
@@ -85,7 +86,7 @@ class OrdersApiTest : ShouldSpec() {
             // uncomment below to test ordersControllerListOrders
             //val status : kotlin.String = status_example // kotlin.String | 
             //val date : kotlin.String = date_example // kotlin.String | 
-            //val result : kotlin.collections.List<OrderResponse> = apiInstance.ordersControllerListOrders(status, date)
+            //val result : kotlin.collections.List<OrderSummaryResponse> = apiInstance.ordersControllerListOrders(status, date)
             //result shouldBe ("TODO")
         }
 

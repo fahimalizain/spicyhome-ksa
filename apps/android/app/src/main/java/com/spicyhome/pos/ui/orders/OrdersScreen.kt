@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
 
@@ -26,11 +27,38 @@ fun OrdersScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    if (state.showDetail && state.selectedOrder != null) {
-        OrderDetailView(
-            order = state.selectedOrder!!,
-            onBack = { viewModel.closeDetail() },
-        )
+    if (state.showDetail) {
+        if (state.detailLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Accent)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Loading order details...", color = OnDarkSecondary, fontSize = 16.sp)
+                }
+            }
+        } else if (state.selectedOrder != null) {
+            OrderDetailView(
+                order = state.selectedOrder!!,
+                onBack = { viewModel.closeDetail() },
+            )
+        } else {
+            // Detail failed to load, show error
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.error ?: "Failed to load", color = Error, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = { viewModel.closeDetail() }) {
+                        Text("Back")
+                    }
+                }
+            }
+        }
         return
     }
 
@@ -100,7 +128,7 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrderCard(order: OrderResponse, onClick: () -> Unit) {
+private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
     val statusColor = when (order.status) {
         "paid" -> Success
         "sent" -> StatusSent
@@ -134,13 +162,6 @@ private fun OrderCard(order: OrderResponse, onClick: () -> Unit) {
                     fontSize = 13.sp,
                     color = OnDarkSecondary,
                 )
-                if (order.items.isNotEmpty()) {
-                    Text(
-                        text = "${order.items.size} items",
-                        fontSize = 13.sp,
-                        color = OnDarkSecondary,
-                    )
-                }
             }
 
             Column(horizontalAlignment = Alignment.End) {

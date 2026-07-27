@@ -96,6 +96,21 @@ describe('Kotlin client verification', () => {
     expect(content).toContain('Call<OrderResponse>');
   });
 
+  it('OrdersApi listOrders returns OrderSummaryResponse', () => {
+    const content = fs.readFileSync(path.join(GENERATED_ROOT, 'apis', 'OrdersApi.kt'), 'utf-8');
+    expect(content).toContain('fun ordersControllerListOrders');
+    expect(content).toContain('Call<kotlin.collections.List<OrderSummaryResponse>>');
+  });
+
+  it('generated model exists: OrderSummaryResponse', () => {
+    const filePath = path.join(GENERATED_ROOT, 'models', 'OrderSummaryResponse.kt');
+    expect(fs.existsSync(filePath)).toBe(true);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    expect(content).toContain('data class OrderSummaryResponse');
+    expect(content).not.toContain('items');
+    expect(content).not.toContain('auditLog');
+  });
+
   it('no API method returns Call<Unit>', () => {
     const apiFiles = [
       path.join(GENERATED_ROOT, 'apis', 'AuthApi.kt'),

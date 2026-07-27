@@ -3,7 +3,7 @@ package com.spicyhome.pos.ui.tables
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
 
 data class TableCard(
     val table: TableResponse,
-    val openOrder: OrderResponse?,
+    val openOrder: OrderSummaryResponse?,
 )
 
 data class TablesUiState(

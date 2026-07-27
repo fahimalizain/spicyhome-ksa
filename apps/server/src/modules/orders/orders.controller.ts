@@ -27,6 +27,7 @@ import {
 } from './dto/create-order.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
+import { OrderSummaryResponse } from './dto/order-summary-response.dto';
 import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { OrderEventResponse } from './dto/order-event-response.dto';
@@ -43,7 +44,7 @@ export class OrdersController {
 
   @Get()
   @ApiOperation({ summary: 'List orders with optional filters' })
-  @ApiOkResponse({ description: 'List of orders', type: [OrderResponse] })
+  @ApiOkResponse({ description: 'List of orders', type: [OrderSummaryResponse] })
   listOrders(@Query('status') status?: string, @Query('date') date?: string) {
     return this.ordersService.listOrders({ status, date });
   }

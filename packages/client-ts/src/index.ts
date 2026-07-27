@@ -29,6 +29,7 @@ export type {
   AddOrderItemDto,
   UpdateOrderItemDto,
   OrderResponse,
+  OrderSummaryResponse,
   SuccessResponse,
   StatusResponse,
   AuditVerifyResponse,

@@ -1382,6 +1382,74 @@ export interface components {
       /** @example true */
       success: boolean;
     };
+    OrderSummaryResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderNo: number;
+      /** @example 550e8400-e29b-41d4-a716-446655440000 */
+      uuid: string;
+      /** @example dine_in */
+      type: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      tableId: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      dayOpeningId: number;
+      /** @example open */
+      status: string;
+      /**
+       * Format: int64
+       * @example 4000
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @example 600
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @example 4600
+       */
+      totalHalalas: number;
+      /**
+       * Format: int64
+       * @example 0
+       */
+      discountHalalas: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
     OrderItemResponse: {
       /**
        * Format: int64
@@ -2591,7 +2659,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['OrderResponse'][];
+          'application/json': components['schemas']['OrderSummaryResponse'][];
         };
       };
     };
