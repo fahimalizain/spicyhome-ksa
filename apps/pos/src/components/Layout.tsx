@@ -43,8 +43,7 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
           to="/"
           className="flex items-center gap-2 text-lg font-bold text-brand-500 touch-target"
         >
-          <img src="/logo.svg" alt="SpicyHome" className="h-8 w-8 object-contain" />
-          <span>POS</span>
+          <img src="/logo.svg" alt="SpicyHome" className="h-12 w-12 object-contain" />
         </Link>
         <Link to="/" className="text-sm text-gray-300 hover:text-white touch-target">
           Order
