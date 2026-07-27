@@ -20,8 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -240,7 +244,27 @@ private fun OrderEditingPanel(
                     }
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                val density = LocalDensity.current
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .drawWithContent {
+                            drawContent()
+                            if (showRightFade) {
+                                val fadeW = with(density) { 32.dp.toPx() }
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color.Transparent, DarkSurfaceVariant),
+                                        startX = size.width - fadeW,
+                                        endX = size.width,
+                                    ),
+                                    topLeft = Offset(size.width - fadeW, 0f),
+                                    size = Size(fadeW, size.height),
+                                )
+                            }
+                        },
+                ) {
                     LazyRow(
                         state = listState,
                         modifier = Modifier.fillMaxWidth(),
@@ -272,24 +296,6 @@ private fun OrderEditingPanel(
                                 ),
                             )
                         }
-                    }
-
-                    // Right-edge fade toward search field
-                    if (showRightFade) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .fillMaxHeight()
-                                .width(32.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            Color.Transparent,
-                                            DarkSurfaceVariant,
-                                        ),
-                                    ),
-                                ),
-                        )
                     }
                 }
 
