@@ -208,19 +208,19 @@ export function useCart() {
 
   const loadOrder = useCallback((order: OrderResponse) => {
     const items: CartItem[] = (order.items || []).map((oi) => ({
-      itemId: (oi.itemId as unknown as number) || 0,
+      itemId: oi.itemId ?? 0,
       orderItemId: oi.id,
       name: oi.itemName,
       unitPriceHalalas: oi.unitPriceHalalas,
       vatRateBp: oi.vatRateBp,
       qty: oi.qty,
-      notes: (oi.notes as unknown as string) || '',
+      notes: oi.notes ?? '',
     }));
     dispatch({
       type: 'LOAD_ORDER',
       items,
       orderType: order.type as 'dine_in' | 'takeaway',
-      tableId: (order.tableId as unknown as number) || null,
+      tableId: order.tableId,
     });
   }, []);
 

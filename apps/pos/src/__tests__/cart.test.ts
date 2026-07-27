@@ -11,11 +11,11 @@ const mockItem: ItemResponse = {
   vatRateBp: 1500,
   sortOrder: 0,
   isActive: true,
-  nameAr: null as any,
+  nameAr: null,
   createdAt: 1000,
   updatedAt: 1000,
-  createdBy: null as any,
-  updatedBy: null as any,
+  createdBy: null,
+  updatedBy: null,
 };
 
 const mockItem2: ItemResponse = {
@@ -31,7 +31,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     orderNo: 42,
     uuid: 'test-uuid',
     type: 'dine_in',
-    tableId: null as any,
+    tableId: null,
     dayOpeningId: 1,
     status: 'open',
     subtotalHalalas: 0,
@@ -40,8 +40,8 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     discountHalalas: 0,
     createdAt: 1000,
     updatedAt: 1000,
-    createdBy: null as any,
-    updatedBy: null as any,
+    createdBy: null,
+    updatedBy: null,
     items: [],
     auditLog: [],
     ...overrides,
@@ -52,17 +52,17 @@ function makeOrderItem(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     orderId: 1,
-    itemId: 1 as unknown as Record<string, never>,
+    itemId: 1,
     itemName: 'Burger',
     unitPriceHalalas: 2300,
     vatRateBp: 1500,
     qty: 2,
     totalHalalas: 4600,
-    notes: null as any,
+    notes: null,
     createdAt: 1000,
     updatedAt: 1000,
-    createdBy: null as any,
-    updatedBy: null as any,
+    createdBy: null,
+    updatedBy: null,
     ...overrides,
   };
 }
@@ -206,25 +206,25 @@ describe('useCart', () => {
     const { result } = renderHook(() => useCart());
     const order = makeOrderResponse({
       type: 'takeaway',
-      tableId: null as any,
+      tableId: null,
       items: [
         makeOrderItem({
           id: 101,
-          itemId: 5 as unknown as Record<string, never>,
+          itemId: 5,
           itemName: 'Burger',
           unitPriceHalalas: 2300,
           vatRateBp: 1500,
           qty: 3,
-          notes: 'extra cheese' as unknown as Record<string, never>,
+          notes: 'extra cheese',
         }),
         makeOrderItem({
           id: 102,
-          itemId: 7 as unknown as Record<string, never>,
+          itemId: 7,
           itemName: 'Fries',
           unitPriceHalalas: 1150,
           vatRateBp: 1500,
           qty: 1,
-          notes: null as any,
+          notes: null,
         }),
       ],
     });
@@ -263,7 +263,7 @@ describe('useCart', () => {
 
   it('loadOrder handles null tableId', () => {
     const { result } = renderHook(() => useCart());
-    const order = makeOrderResponse({ tableId: null as any });
+    const order = makeOrderResponse({ tableId: null });
 
     act(() => {
       result.current.loadOrder(order);
@@ -317,13 +317,13 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 201,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 2,
         }),
         makeOrderItem({
           id: 202,
-          itemId: 2 as unknown as Record<string, never>,
+          itemId: 2,
           itemName: 'Fries',
           qty: 1,
         }),
@@ -348,7 +348,7 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 301,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 1,
         }),
@@ -371,13 +371,13 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 401,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 2,
         }),
         makeOrderItem({
           id: 402,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 3,
         }),
@@ -403,19 +403,19 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 501,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 1,
         }),
         makeOrderItem({
           id: 502,
-          itemId: 2 as unknown as Record<string, never>,
+          itemId: 2,
           itemName: 'Fries',
           qty: 1,
         }),
         makeOrderItem({
           id: 503,
-          itemId: 3 as unknown as Record<string, never>,
+          itemId: 3,
           itemName: 'Cola',
           qty: 1,
         }),
@@ -440,7 +440,7 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 601,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 1,
         }),
@@ -465,17 +465,17 @@ describe('useCart', () => {
       items: [
         makeOrderItem({
           id: 701,
-          itemId: 1 as unknown as Record<string, never>,
+          itemId: 1,
           itemName: 'Burger',
           qty: 1,
-          notes: null as any,
+          notes: null,
         }),
         makeOrderItem({
           id: 702,
-          itemId: 2 as unknown as Record<string, never>,
+          itemId: 2,
           itemName: 'Fries',
           qty: 1,
-          notes: 'no salt' as unknown as Record<string, never>,
+          notes: 'no salt',
         }),
       ],
     });
