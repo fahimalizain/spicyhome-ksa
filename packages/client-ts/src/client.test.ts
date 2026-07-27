@@ -1,4 +1,4 @@
-import { SpicyHomeClient } from './client';
+import { SpicyHomeClient, type PayOrderDto } from './client';
 
 describe('SpicyHomeClient', () => {
   it('can be instantiated', () => {
@@ -121,5 +121,12 @@ describe('SpicyHomeClient', () => {
 
     // Verify the client exists with token
     expect(client).toBeDefined();
+  });
+
+  it('PayOrderDto type is constructable', () => {
+    const dto: PayOrderDto = {
+      payments: [{ methodId: 'cash', amountHalalas: 4600 }],
+    };
+    expect(dto.payments).toHaveLength(1);
   });
 });

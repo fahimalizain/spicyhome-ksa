@@ -18,6 +18,8 @@ export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type AddOrderItemDto = Schemas['AddOrderItemDto'];
 export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
+export type PayOrderDto = Schemas['PayOrderDto'];
+export type PaymentLineDto = Schemas['PaymentLineDto'];
 
 export type AddOrderItemResponse = Schemas['AddOrderItemResponse'];
 export type CreateRefundDto = Schemas['CreateRefundDto'];
@@ -266,7 +268,7 @@ export class SpicyHomeClient {
     removeItem: (orderId: number, itemId: number) =>
       request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
 
-    pay: (orderId: number, dto?: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> }) =>
+    pay: (orderId: number, dto: PayOrderDto) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),
 
     void: (orderId: number) =>
