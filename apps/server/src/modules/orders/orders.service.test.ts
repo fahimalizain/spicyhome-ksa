@@ -553,15 +553,17 @@ describe('Pay with payment methods', () => {
       .expect(200);
     const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
     expect(paidEvent).toBeDefined();
-    const paidPayload = typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+    const paidPayload =
+      typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
     expect(paidPayload.payments).toBeDefined();
     expect(paidPayload.payments[0].methodId).toBe('cash');
 
-    const enqueuedEvent = eventsRes.body.find(
-      (e: any) => e.type === 'receipt_print_enqueued',
-    );
+    const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
     expect(enqueuedEvent).toBeDefined();
-    const enqueuedPayload = typeof enqueuedEvent.payload === 'string' ? JSON.parse(enqueuedEvent.payload) : enqueuedEvent.payload;
+    const enqueuedPayload =
+      typeof enqueuedEvent.payload === 'string'
+        ? JSON.parse(enqueuedEvent.payload)
+        : enqueuedEvent.payload;
     expect(enqueuedPayload.kickDrawer).toBe(true);
   });
 
@@ -596,11 +598,12 @@ describe('Pay with payment methods', () => {
       .get(`/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
-    const enqueuedEvent = eventsRes.body.find(
-      (e: any) => e.type === 'receipt_print_enqueued',
-    );
+    const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
     expect(enqueuedEvent).toBeDefined();
-    const enqueuedPayload = typeof enqueuedEvent.payload === 'string' ? JSON.parse(enqueuedEvent.payload) : enqueuedEvent.payload;
+    const enqueuedPayload =
+      typeof enqueuedEvent.payload === 'string'
+        ? JSON.parse(enqueuedEvent.payload)
+        : enqueuedEvent.payload;
     expect(enqueuedPayload.kickDrawer).toBe(false);
   });
 

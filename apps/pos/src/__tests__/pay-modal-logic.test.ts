@@ -9,9 +9,7 @@ import {
   type PaymentMethod,
 } from '../components/orders/pay-modal-logic';
 
-function makeState(
-  overrides: Partial<PayModalState> = {},
-): PayModalState {
+function makeState(overrides: Partial<PayModalState> = {}): PayModalState {
   const methods: PaymentMethod[] = [
     { id: 'cash', title: 'Cash' },
     { id: 'card', title: 'Card' },

@@ -210,9 +210,7 @@ describe('PaymentMethodsService', () => {
     });
 
     it('rejects updating unknown id (404)', () => {
-      expect(() => service.update('nonexistent', { title: 'Test' }, 1)).toThrow(
-        NotFoundException,
-      );
+      expect(() => service.update('nonexistent', { title: 'Test' }, 1)).toThrow(NotFoundException);
     });
 
     it('slug is immutable — slug not changeable even if title changes', () => {

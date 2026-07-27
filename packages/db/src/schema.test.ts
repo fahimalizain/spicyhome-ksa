@@ -361,7 +361,9 @@ describe('schema — invariants', () => {
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
 
       // Ensure payment methods exist (seeded by migration)
-      const pmCash = sqlite.prepare("SELECT id FROM payment_methods WHERE id = 'cash'").get() as any;
+      const pmCash = sqlite
+        .prepare("SELECT id FROM payment_methods WHERE id = 'cash'")
+        .get() as any;
       expect(pmCash).toBeDefined();
 
       sqlite.exec(`

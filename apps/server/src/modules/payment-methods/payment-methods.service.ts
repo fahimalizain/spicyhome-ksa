@@ -54,11 +54,7 @@ export class PaymentMethodsService {
 
   /** Get a single payment method by slug */
   get(id: string): any {
-    const method = this.db
-      .select()
-      .from(paymentMethods)
-      .where(eq(paymentMethods.id, id))
-      .get();
+    const method = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get();
     if (!method) throw new NotFoundException('Payment method not found');
     return mapBools(method, ['enabled']);
   }
@@ -71,11 +67,7 @@ export class PaymentMethodsService {
     }
 
     // Check for duplicate slug
-    const existing = this.db
-      .select()
-      .from(paymentMethods)
-      .where(eq(paymentMethods.id, slug))
-      .get();
+    const existing = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, slug)).get();
     if (existing) {
       throw new ConflictException(`A payment method with slug "${slug}" already exists`);
     }
@@ -89,7 +81,10 @@ export class PaymentMethodsService {
       ...createAuditFields(userId, now),
     };
 
-    this.db.insert(paymentMethods).values(row as any).run();
+    this.db
+      .insert(paymentMethods)
+      .values(row as any)
+      .run();
 
     return mapBools(
       this.db.select().from(paymentMethods).where(eq(paymentMethods.id, slug)).get()!,
@@ -103,11 +98,7 @@ export class PaymentMethodsService {
     dto: { title?: string; enabled?: boolean; sortOrder?: number },
     userId: number,
   ): any {
-    const method = this.db
-      .select()
-      .from(paymentMethods)
-      .where(eq(paymentMethods.id, id))
-      .get();
+    const method = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get();
     if (!method) throw new NotFoundException('Payment method not found');
 
     // Cash lock: reject title change and enabled=false
@@ -133,9 +124,8 @@ export class PaymentMethodsService {
 
     this.db.update(paymentMethods).set(updates).where(eq(paymentMethods.id, id)).run();
 
-    return mapBools(
-      this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get()!,
-      ['enabled'],
-    );
+    return mapBools(this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get()!, [
+      'enabled',
+    ]);
   }
 }

@@ -47,11 +47,7 @@ export class PaymentMethodsController {
   @ApiOperation({ summary: 'Update a payment method' })
   @ApiParam({ name: 'id', type: 'string', description: 'Payment method slug' })
   @ApiOkResponse({ description: 'Updated payment method', type: PaymentMethodResponse })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdatePaymentMethodDto,
-    @CurrentUser() user: any,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdatePaymentMethodDto, @CurrentUser() user: any) {
     return this.paymentMethodsService.update(id, dto, user.sub);
   }
 }

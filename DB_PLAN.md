@@ -198,28 +198,28 @@ One row per business day. Orders belong to the `day_openings` row that was
 
 ## payment_methods
 
-| col                     | type                         | notes                                  |
-| ----------------------- | ---------------------------- | -------------------------------------- |
-| id                      | text PK                      | immutable slug (e.g. "cash", "card")   |
-| title                   | text not null                | display name                           |
-| enabled                 | int bool not null, default 1 | soft-disable (0 = hidden)              |
-| sort_order              | int not null, default 0      | display order in pay modal             |
-| created_at / updated_at | int not null                 |                                        |
-| created_by / updated_by | int FK → users               |                                        |
+| col                     | type                         | notes                                |
+| ----------------------- | ---------------------------- | ------------------------------------ |
+| id                      | text PK                      | immutable slug (e.g. "cash", "card") |
+| title                   | text not null                | display name                         |
+| enabled                 | int bool not null, default 1 | soft-disable (0 = hidden)            |
+| sort_order              | int not null, default 0      | display order in pay modal           |
+| created_at / updated_at | int not null                 |                                      |
+| created_by / updated_by | int FK → users               |                                      |
 
 ## order_payments
 
-| col               | type                          | notes                                      |
-| ----------------- | ----------------------------- | ------------------------------------------ |
-| id                | int PK autoincrement          |                                            |
-| order_id          | int FK → orders not null      |                                            |
-| method_id         | text FK → payment_methods not null |                                      |
-| method_title      | text not null                 | snapshot of method title at pay time       |
-| amount_halalas    | int not null                  | applied portion of order total (VAT-incl.) |
-| tendered_halalas  | int nullable                  | cash only: what customer handed over       |
-| change_halalas    | int nullable                  | cash only: auto = tendered - amount        |
-| created_at        | int not null                  |                                            |
-| created_by        | int FK → users                |                                            |
+| col              | type                               | notes                                      |
+| ---------------- | ---------------------------------- | ------------------------------------------ |
+| id               | int PK autoincrement               |                                            |
+| order_id         | int FK → orders not null           |                                            |
+| method_id        | text FK → payment_methods not null |                                            |
+| method_title     | text not null                      | snapshot of method title at pay time       |
+| amount_halalas   | int not null                       | applied portion of order total (VAT-incl.) |
+| tendered_halalas | int nullable                       | cash only: what customer handed over       |
+| change_halalas   | int nullable                       | cash only: auto = tendered - amount        |
+| created_at       | int not null                       |                                            |
+| created_by       | int FK → users                     |                                            |
 
 - **UNIQUE(order_id, method_id)** — at most one row per method per order.
 - **No updated_at/updated_by** — insert-only immutable ledger.

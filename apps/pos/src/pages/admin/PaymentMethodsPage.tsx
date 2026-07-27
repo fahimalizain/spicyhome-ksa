@@ -141,9 +141,7 @@ export function PaymentMethodsPage() {
                   <input
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                     value={editForm.title}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, title: e.target.value }))
-                    }
+                    onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                     required
                     disabled={m.id === 'cash'}
                   />
@@ -164,9 +162,7 @@ export function PaymentMethodsPage() {
                     <input
                       type="checkbox"
                       checked={editForm.enabled}
-                      onChange={(e) =>
-                        setEditForm((f) => ({ ...f, enabled: e.target.checked }))
-                      }
+                      onChange={(e) => setEditForm((f) => ({ ...f, enabled: e.target.checked }))}
                       disabled={m.id === 'cash'}
                       className="rounded"
                     />

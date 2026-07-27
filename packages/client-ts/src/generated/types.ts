@@ -4,3614 +4,3614 @@
  */
 
 export interface paths {
-    "/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login with username and PIN */
-        post: operations["AuthController_login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  '/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/usernames": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List active usernames for login dropdown */
-        get: operations["AuthController_listUsernames"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Login with username and PIN */
+    post: operations['AuthController_login'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/usernames': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current user info with role permissions */
-        get: operations["AuthController_getMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List active usernames for login dropdown */
+    get: operations['AuthController_listUsernames'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all users */
-        get: operations["AuthController_listUsers"];
-        put?: never;
-        /** Create a new user */
-        post: operations["AuthController_createUser"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get current user info with role permissions */
+    get: operations['AuthController_getMe'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/users/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get user by ID */
-        get: operations["AuthController_getUser"];
-        /** Update a user */
-        put: operations["AuthController_updateUser"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all users */
+    get: operations['AuthController_listUsers'];
+    put?: never;
+    /** Create a new user */
+    post: operations['AuthController_createUser'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/users/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all roles */
-        get: operations["AuthController_listRoles"];
-        put?: never;
-        /** Create a new role */
-        post: operations["AuthController_createRole"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get user by ID */
+    get: operations['AuthController_getUser'];
+    /** Update a user */
+    put: operations['AuthController_updateUser'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/roles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/auth/roles/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update a role */
-        put: operations["AuthController_updateRole"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all roles */
+    get: operations['AuthController_listRoles'];
+    put?: never;
+    /** Create a new role */
+    post: operations['AuthController_createRole'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/roles/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/menu/categories": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all categories */
-        get: operations["MenuController_listCategories"];
-        put?: never;
-        /** Create a category */
-        post: operations["MenuController_createCategory"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    /** Update a role */
+    put: operations['AuthController_updateRole'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/menu/categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/menu/categories/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get category by ID */
-        get: operations["MenuController_getCategory"];
-        /** Update a category */
-        put: operations["MenuController_updateCategory"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all categories */
+    get: operations['MenuController_listCategories'];
+    put?: never;
+    /** Create a category */
+    post: operations['MenuController_createCategory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/menu/categories/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/menu/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all items, optionally filtered by category */
-        get: operations["MenuController_listItems"];
-        put?: never;
-        /** Create an item */
-        post: operations["MenuController_createItem"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get category by ID */
+    get: operations['MenuController_getCategory'];
+    /** Update a category */
+    put: operations['MenuController_updateCategory'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/menu/items': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/menu/items/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get item by ID */
-        get: operations["MenuController_getItem"];
-        /** Update an item */
-        put: operations["MenuController_updateItem"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all items, optionally filtered by category */
+    get: operations['MenuController_listItems'];
+    put?: never;
+    /** Create an item */
+    post: operations['MenuController_createItem'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/menu/items/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/tables": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all tables */
-        get: operations["TablesController_list"];
-        put?: never;
-        /** Create a table */
-        post: operations["TablesController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get item by ID */
+    get: operations['MenuController_getItem'];
+    /** Update an item */
+    put: operations['MenuController_updateItem'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tables': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/tables/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get table by ID */
-        get: operations["TablesController_get"];
-        /** Update a table */
-        put: operations["TablesController_update"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all tables */
+    get: operations['TablesController_list'];
+    put?: never;
+    /** Create a table */
+    post: operations['TablesController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tables/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/printers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all printers */
-        get: operations["PrintersController_list"];
-        put?: never;
-        /** Create a printer */
-        post: operations["PrintersController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get table by ID */
+    get: operations['TablesController_get'];
+    /** Update a table */
+    put: operations['TablesController_update'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/printers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/printers/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get printer by ID */
-        get: operations["PrintersController_get"];
-        /** Update a printer */
-        put: operations["PrintersController_update"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all printers */
+    get: operations['PrintersController_list'];
+    put?: never;
+    /** Create a printer */
+    post: operations['PrintersController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/printers/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/printers/{id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Check printer TCP reachability */
-        get: operations["PrintersController_checkStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get printer by ID */
+    get: operations['PrintersController_get'];
+    /** Update a printer */
+    put: operations['PrintersController_update'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/printers/{id}/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/printers/{id}/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Print a test ticket */
-        post: operations["PrintersController_testPrint"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Check printer TCP reachability */
+    get: operations['PrintersController_checkStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/printers/{id}/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List orders with optional filters */
-        get: operations["OrdersController_listOrders"];
-        put?: never;
-        /** Create a new order */
-        post: operations["OrdersController_createOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Print a test ticket */
+    post: operations['PrintersController_testPrint'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get order by ID with items and events */
-        get: operations["OrdersController_getOrder"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List orders with optional filters */
+    get: operations['OrdersController_listOrders'];
+    put?: never;
+    /** Create a new order */
+    post: operations['OrdersController_createOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add an item to an order */
-        post: operations["OrdersController_addItem"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get order by ID with items and events */
+    get: operations['OrdersController_getOrder'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/items': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{orderId}/items/{itemId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove an item from an order */
-        delete: operations["OrdersController_removeItem"];
-        options?: never;
-        head?: never;
-        /** Update an order item (qty or notes) */
-        patch: operations["OrdersController_updateItem"];
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Add an item to an order */
+    post: operations['OrdersController_addItem'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{orderId}/items/{itemId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/pay": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark order as paid with payment methods (open → paid) */
-        post: operations["OrdersController_payOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove an item from an order */
+    delete: operations['OrdersController_removeItem'];
+    options?: never;
+    head?: never;
+    /** Update an order item (qty or notes) */
+    patch: operations['OrdersController_updateItem'];
+    trace?: never;
+  };
+  '/orders/{id}/pay': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/void": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Void an order (open → voided) */
-        post: operations["OrdersController_voidOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Mark order as paid with payment methods (open → paid) */
+    post: operations['OrdersController_payOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/void': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/print": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reprint receipt or kitchen ticket for an order */
-        post: operations["OrdersController_reprintOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Void an order (open → voided) */
+    post: operations['OrdersController_voidOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/refund": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refund items on a paid order */
-        post: operations["OrdersController_refundOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Reprint receipt or kitchen ticket for an order */
+    post: operations['OrdersController_reprintOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refund': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/refunds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get all refunds for an order */
-        get: operations["OrdersController_getOrderRefunds"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Refund items on a paid order */
+    post: operations['OrdersController_refundOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refunds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get the complete event chain for an order */
-        get: operations["OrdersController_getOrderEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get all refunds for an order */
+    get: operations['OrdersController_getOrderRefunds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/orders/{id}/events/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Verify the hash chain integrity for an order */
-        get: operations["OrdersController_verifyOrderChain"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get the complete event chain for an order */
+    get: operations['OrdersController_getOrderEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/events/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get all settings */
-        get: operations["SettingsController_getAll"];
-        /** Set a setting value */
-        put: operations["SettingsController_set"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Verify the hash chain integrity for an order */
+    get: operations['OrdersController_verifyOrderChain'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/onboard/csr": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Generate keypair and CSR for ZATCA onboarding */
-        post: operations["ZatcaController_generateCSR"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get all settings */
+    get: operations['SettingsController_getAll'];
+    /** Set a setting value */
+    put: operations['SettingsController_set'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/csr': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/onboard/compliance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit CSR with OTP to ZATCA compliance CSID endpoint */
-        post: operations["ZatcaController_onboardCompliance"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Generate keypair and CSR for ZATCA onboarding */
+    post: operations['ZatcaController_generateCSR'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/compliance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/onboard/compliance-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run compliance check by submitting a signed invoice to ZATCA */
-        post: operations["ZatcaController_runComplianceCheck"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Submit CSR with OTP to ZATCA compliance CSID endpoint */
+    post: operations['ZatcaController_onboardCompliance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/compliance-check': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/onboard/production": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Exchange compliance CSID for production CSID */
-        post: operations["ZatcaController_onboardProduction"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Run compliance check by submitting a signed invoice to ZATCA */
+    post: operations['ZatcaController_runComplianceCheck'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/onboard/production': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get ZATCA onboarding and status */
-        get: operations["ZatcaController_getStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Exchange compliance CSID for production CSID */
+    post: operations['ZatcaController_onboardProduction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/invoices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List ZATCA invoices */
-        get: operations["ZatcaController_listInvoices"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get ZATCA onboarding and status */
+    get: operations['ZatcaController_getStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/invoices/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get invoice detail including XML */
-        get: operations["ZatcaController_getInvoice"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List ZATCA invoices */
+    get: operations['ZatcaController_listInvoices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/invoices/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get ZATCA seller configuration */
-        get: operations["ZatcaController_getConfig"];
-        /** Update ZATCA seller configuration */
-        put: operations["ZatcaController_updateConfig"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get invoice detail including XML */
+    get: operations['ZatcaController_getInvoice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/zatca/reporting/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Retry reporting for all pending or a specific invoice */
-        post: operations["ZatcaController_retryReporting"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get ZATCA seller configuration */
+    get: operations['ZatcaController_getConfig'];
+    /** Update ZATCA seller configuration */
+    put: operations['ZatcaController_updateConfig'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/reporting/retry': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/day/open": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open a new business day */
-        post: operations["BusinessDayController_openDay"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Retry reporting for all pending or a specific invoice */
+    post: operations['ZatcaController_retryReporting'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/open': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/day/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close the current open business day */
-        post: operations["BusinessDayController_closeDay"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Open a new business day */
+    post: operations['BusinessDayController_openDay'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/day/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current open day with live X-report totals */
-        get: operations["BusinessDayController_getCurrent"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Close the current open business day */
+    post: operations['BusinessDayController_closeDay'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/day": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List past business days (paged) */
-        get: operations["BusinessDayController_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get current open day with live X-report totals */
+    get: operations['BusinessDayController_getCurrent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/day/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a business day by ID */
-        get: operations["BusinessDayController_getDay"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List past business days (paged) */
+    get: operations['BusinessDayController_list'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/day/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/x": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Live X-report for the current open day */
-        get: operations["ReportsController_getXReport"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get a business day by ID */
+    get: operations['BusinessDayController_getDay'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/x': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/z/{dayId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Z-report for a closed day */
-        get: operations["ReportsController_getZReport"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Live X-report for the current open day */
+    get: operations['ReportsController_getXReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/z/{dayId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/sales": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Daily sales totals over a date range */
-        get: operations["ReportsController_getSales"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Z-report for a closed day */
+    get: operations['ReportsController_getZReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/sales': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/vat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** VAT summary over a date range (for VAT return) */
-        get: operations["ReportsController_getVat"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Daily sales totals over a date range */
+    get: operations['ReportsController_getSales'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/vat': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/z/{dayId}/print": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Print Z-report on receipt printer */
-        post: operations["ReportsController_printZReport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** VAT summary over a date range (for VAT return) */
+    get: operations['ReportsController_getVat'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/z/{dayId}/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/reports/x/print": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Print X-report on receipt printer */
-        post: operations["ReportsController_printXReport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Print Z-report on receipt printer */
+    post: operations['ReportsController_printZReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/x/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/payment-methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all payment methods (including disabled) */
-        get: operations["PaymentMethodsController_list"];
-        put?: never;
-        /** Create a payment method */
-        post: operations["PaymentMethodsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Print X-report on receipt printer */
+    post: operations['ReportsController_printXReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/payment-methods': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/payment-methods/enabled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List enabled payment methods (no special permission required) */
-        get: operations["PaymentMethodsController_listEnabled"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List all payment methods (including disabled) */
+    get: operations['PaymentMethodsController_list'];
+    put?: never;
+    /** Create a payment method */
+    post: operations['PaymentMethodsController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/payment-methods/enabled': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/payment-methods/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a payment method */
-        patch: operations["PaymentMethodsController_update"];
-        trace?: never;
+    /** List enabled payment methods (no special permission required) */
+    get: operations['PaymentMethodsController_listEnabled'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/payment-methods/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a payment method */
+    patch: operations['PaymentMethodsController_update'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        LoginDto: {
-            /** @example admin */
-            username: string;
-            /** @example 1234 */
-            pin: string;
-        };
-        LoginResponse: {
-            /** @example eyJhbGciOiJIUzI1NiIs... */
-            accessToken: string;
-        };
-        UsernamesResponse: {
-            /**
-             * @example [
-             *       "admin",
-             *       "cashier1"
-             *     ]
-             */
-            usernames: string[];
-        };
-        MeResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example cashier1 */
-            username: string;
-            /** @example Ahmed */
-            name: string;
-            /**
-             * Format: int64
-             * @example 2
-             */
-            roleId: number;
-            /** @example true */
-            isActive: boolean;
-            /** @example staff */
-            roleName: string;
-            /** @example true */
-            createOrder: boolean;
-            /** @example true */
-            updateOrder: boolean;
-            /** @example false */
-            deleteOrderItem: boolean;
-            /** @example false */
-            voidOrder: boolean;
-            /** @example false */
-            refundOrder: boolean;
-            /** @example false */
-            payOrder: boolean;
-            /** @example false */
-            manageMenu: boolean;
-            /** @example false */
-            manageTables: boolean;
-            /** @example false */
-            managePrinters: boolean;
-            /** @example false */
-            manageUsers: boolean;
-            /** @example false */
-            manageSettings: boolean;
-        };
-        UserResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example cashier1 */
-            username: string;
-            /** @example Ahmed */
-            name: string;
-            /**
-             * Format: int64
-             * @example 2
-             */
-            roleId: number;
-            /** @example true */
-            isActive: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreateUserDto: {
-            /** @example cashier1 */
-            username: string;
-            /** @example 1234 */
-            pin: string;
-            /** @example Ahmed */
-            name: string;
-            /**
-             * Format: int64
-             * @description role_id — 1 for admin, 2 for staff
-             * @example 2
-             */
-            roleId: number;
-        };
-        UpdateUserDto: {
-            /** @example Ahmed Ali */
-            name?: string;
-            /**
-             * Format: int64
-             * @example 2
-             */
-            roleId?: number;
-            /** @example false */
-            isActive?: boolean;
-            /**
-             * @description New PIN (4-6 digits)
-             * @example 5678
-             */
-            pin?: string;
-        };
-        RoleResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example staff */
-            name: string;
-            /** @example true */
-            createOrder: boolean;
-            /** @example true */
-            updateOrder: boolean;
-            /** @example false */
-            deleteOrderItem: boolean;
-            /** @example false */
-            voidOrder: boolean;
-            /** @example false */
-            refundOrder: boolean;
-            /** @example false */
-            manageMenu: boolean;
-            /** @example false */
-            manageTables: boolean;
-            /** @example false */
-            managePrinters: boolean;
-            /** @example false */
-            manageUsers: boolean;
-            /** @example false */
-            manageSettings: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreateRoleDto: {
-            /** @example manager */
-            name: string;
-            /** @default false */
-            createOrder: boolean;
-            /** @default false */
-            updateOrder: boolean;
-            /** @default false */
-            deleteOrderItem: boolean;
-            /** @default false */
-            voidOrder: boolean;
-            /** @default false */
-            refundOrder: boolean;
-            /** @default false */
-            manageMenu: boolean;
-            /** @default false */
-            manageTables: boolean;
-            /** @default false */
-            managePrinters: boolean;
-            /** @default false */
-            manageUsers: boolean;
-            /** @default false */
-            manageSettings: boolean;
-        };
-        UpdateRoleDto: {
-            /** @example manager */
-            name?: string;
-            createOrder?: boolean;
-            updateOrder?: boolean;
-            deleteOrderItem?: boolean;
-            voidOrder?: boolean;
-            refundOrder?: boolean;
-            manageMenu?: boolean;
-            manageTables?: boolean;
-            managePrinters?: boolean;
-            manageUsers?: boolean;
-            manageSettings?: boolean;
-        };
-        CategoryResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example Burgers */
-            name: string;
-            /**
-             * Format: int32
-             * @example 0
-             */
-            sortOrder: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            printerId: number | null;
-            /** @example true */
-            isActive: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreateCategoryDto: {
-            /** @example Burgers */
-            name: string;
-            /**
-             * Format: int32
-             * @default 0
-             */
-            sortOrder: number;
-            /**
-             * Format: int64
-             * @description Printer ID for kitchen routing
-             */
-            printerId?: number;
-            /** @default true */
-            isActive: boolean;
-        };
-        UpdateCategoryDto: {
-            /** @example Burgers */
-            name?: string;
-            /** Format: int32 */
-            sortOrder?: number;
-            /** Format: int64 */
-            printerId?: number;
-            isActive?: boolean;
-        };
-        ItemResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            categoryId: number;
-            /** @example Zinger Burger */
-            name: string;
-            /** @example زنجر برجر */
-            nameAr: string | null;
-            /**
-             * Format: int64
-             * @description VAT-inclusive price in halalas
-             * @example 2300
-             */
-            priceHalalas: number;
-            /**
-             * Format: int32
-             * @description VAT rate in basis points
-             * @example 1500
-             */
-            vatRateBp: number;
-            /**
-             * Format: int32
-             * @example 0
-             */
-            sortOrder: number;
-            /** @example true */
-            isActive: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreateItemDto: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            categoryId: number;
-            /** @example Zinger Burger */
-            name: string;
-            /** @example زنجر برجر */
-            nameAr?: string;
-            /**
-             * Format: int64
-             * @description VAT-inclusive price in halalas (23.00 SAR)
-             * @example 2300
-             */
-            priceHalalas: number;
-            /**
-             * Format: int32
-             * @description VAT rate in basis points (1500 = 15%)
-             * @default 1500
-             */
-            vatRateBp: number;
-            /**
-             * Format: int32
-             * @default 0
-             */
-            sortOrder: number;
-            /** @default true */
-            isActive: boolean;
-        };
-        UpdateItemDto: {
-            /** Format: int64 */
-            categoryId?: number;
-            name?: string;
-            nameAr?: string;
-            /** Format: int64 */
-            priceHalalas?: number;
-            /** Format: int32 */
-            vatRateBp?: number;
-            /** Format: int32 */
-            sortOrder?: number;
-            isActive?: boolean;
-        };
-        TableResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example T1 */
-            name: string;
-            /**
-             * Format: int32
-             * @example 0
-             */
-            sortOrder: number;
-            /** @example true */
-            isActive: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreateTableDto: {
-            /** @example T1 */
-            name: string;
-            /**
-             * Format: int32
-             * @default 0
-             */
-            sortOrder: number;
-            /** @default true */
-            isActive: boolean;
-        };
-        UpdateTableDto: {
-            /** @example T1 */
-            name?: string;
-            /** Format: int32 */
-            sortOrder?: number;
-            isActive?: boolean;
-        };
-        PrinterResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example Kitchen */
-            name: string;
-            /** @example 192.168.1.100 */
-            ip: string;
-            /**
-             * Format: int32
-             * @example 9100
-             */
-            port: number;
-            /** @example kitchen */
-            role: string;
-            /** @example true */
-            isActive: boolean;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreatePrinterDto: {
-            /** @example Kitchen */
-            name: string;
-            /** @example 192.168.1.100 */
-            ip: string;
-            /**
-             * Format: int32
-             * @default 9100
-             */
-            port: number;
-            /**
-             * @example kitchen
-             * @enum {string}
-             */
-            role: "receipt" | "kitchen";
-            /** @default true */
-            isActive: boolean;
-        };
-        UpdatePrinterDto: {
-            name?: string;
-            ip?: string;
-            /** Format: int32 */
-            port?: number;
-            /** @enum {string} */
-            role?: "receipt" | "kitchen";
-            isActive?: boolean;
-        };
-        PrinterStatusResponse: {
-            /** @example true */
-            reachable: boolean;
-        };
-        SuccessResponse: {
-            /** @example true */
-            success: boolean;
-        };
-        OrderSummaryResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderNo: number;
-            /** @example 550e8400-e29b-41d4-a716-446655440000 */
-            uuid: string;
-            /** @example dine_in */
-            type: string;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            tableId: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            dayOpeningId: number;
-            /** @example open */
-            status: string;
-            /**
-             * Format: int64
-             * @example 4000
-             */
-            subtotalHalalas: number;
-            /**
-             * Format: int64
-             * @example 600
-             */
-            vatHalalas: number;
-            /**
-             * Format: int64
-             * @example 4600
-             */
-            totalHalalas: number;
-            /**
-             * Format: int64
-             * @example 0
-             */
-            discountHalalas: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        OrderItemResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderId: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            itemId: number | null;
-            /** @example Zinger Burger */
-            itemName: string;
-            /**
-             * Format: int64
-             * @example 2300
-             */
-            unitPriceHalalas: number;
-            /**
-             * Format: int32
-             * @example 1500
-             */
-            vatRateBp: number;
-            /**
-             * Format: int32
-             * @example 2
-             */
-            qty: number;
-            /**
-             * Format: int64
-             * @example 4600
-             */
-            totalHalalas: number;
-            /** @example no onion */
-            notes: string | null;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        OrderEventResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderId: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            eventIdx: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            userId: number;
-            /** @example item_added */
-            type: string;
-            /** @example {"orderItemId":1,"itemName":"Burger","qty":1} */
-            payload: string;
-            /** @example  */
-            prevHash: string;
-            /** @example abc123... */
-            hash: string;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-        };
-        OrderResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderNo: number;
-            /** @example 550e8400-e29b-41d4-a716-446655440000 */
-            uuid: string;
-            /** @example dine_in */
-            type: string;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            tableId: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            dayOpeningId: number;
-            /** @example open */
-            status: string;
-            /**
-             * Format: int64
-             * @example 4000
-             */
-            subtotalHalalas: number;
-            /**
-             * Format: int64
-             * @example 600
-             */
-            vatHalalas: number;
-            /**
-             * Format: int64
-             * @example 4600
-             */
-            totalHalalas: number;
-            /**
-             * Format: int64
-             * @example 0
-             */
-            discountHalalas: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-            items: components["schemas"]["OrderItemResponse"][];
-            events: components["schemas"]["OrderEventResponse"][];
-        };
-        CreateOrderDto: {
-            /**
-             * @example dine_in
-             * @enum {string}
-             */
-            type: "dine_in" | "takeaway";
-            /**
-             * Format: int64
-             * @description Required for dine_in
-             * @example 1
-             */
-            tableId?: number;
-        };
-        CreateOrderResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example 550e8400-e29b-41d4-a716-446655440000 */
-            uuid: string;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderNo: number;
-        };
-        AddOrderItemDto: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            itemId: number;
-            /**
-             * Format: int32
-             * @example 2
-             */
-            qty: number;
-            /** @example no onion */
-            notes?: string;
-        };
-        AddOrderItemResponse: {
-            /** @example true */
-            success: boolean;
-            /**
-             * Format: int64
-             * @description order_items.id of the newly created line
-             * @example 1
-             */
-            orderItemId: number;
-        };
-        UpdateOrderItemDto: {
-            /**
-             * Format: int32
-             * @example 3
-             */
-            qty?: number;
-            /** @example extra cheese */
-            notes?: string;
-        };
-        PaymentLineDto: {
-            /**
-             * @description Payment method slug
-             * @example card
-             */
-            methodId: string;
-            /**
-             * Format: int64
-             * @description Amount in halalas
-             * @example 5000
-             */
-            amountHalalas: number;
-            /**
-             * Format: int64
-             * @description Cash tendered amount in halalas (cash only)
-             * @example 10000
-             */
-            tenderedHalalas?: number | null;
-        };
-        PayOrderDto: {
-            /** @description Payment lines (at least one required) */
-            payments: components["schemas"]["PaymentLineDto"][];
-        };
-        StatusResponse: {
-            /** @example true */
-            success: boolean;
-            /** @example paid */
-            status: string;
-        };
-        ReprintOrderDto: {
-            /**
-             * @description Reprint target (receipt only; kitchen reprints are not supported)
-             * @example receipt
-             * @enum {string}
-             */
-            target: "receipt";
-        };
-        PrintResponse: {
-            /** @example true */
-            success: boolean;
-            /** @example [] */
-            errors: string[];
-        };
-        RefundItemDto: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            orderItemId: number;
-            /**
-             * Format: int32
-             * @example 1
-             */
-            qty: number;
-        };
-        CreateRefundDto: {
-            /** @description Items and quantities to refund */
-            items: components["schemas"]["RefundItemDto"][];
-            /** @example Customer changed mind */
-            reason?: string;
-        };
-        RefundResponse: {
-            /** @example true */
-            success: boolean;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            refundId: number;
-            /** @example paid */
-            status: string;
-        };
-        RefundItemResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 5
-             */
-            orderItemId: number;
-            /** @example Burger */
-            itemName: string;
-            /**
-             * Format: int64
-             * @example 2500
-             */
-            unitPriceHalalas: number;
-            /**
-             * Format: int32
-             * @example 1500
-             */
-            vatRateBp: number;
-            /**
-             * Format: int32
-             * @example 2
-             */
-            qty: number;
-            /**
-             * Format: int64
-             * @example 5000
-             */
-            totalHalalas: number;
-        };
-        OrderRefundResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /**
-             * Format: int64
-             * @example 10
-             */
-            orderId: number;
-            /**
-             * Format: int64
-             * @example 3
-             */
-            userId: number;
-            /**
-             * Format: int64
-             * @example 4348
-             */
-            subtotalHalalas: number;
-            /**
-             * Format: int64
-             * @example 652
-             */
-            vatHalalas: number;
-            /**
-             * Format: int64
-             * @example 5000
-             */
-            totalHalalas: number;
-            /** @example Customer changed mind */
-            reason: string | null;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            items: components["schemas"]["RefundItemResponse"][];
-        };
-        AuditVerifyResponse: {
-            /** @example true */
-            valid: boolean;
-        };
-        SettingResponse: {
-            /** @example restaurant_name */
-            key: string;
-            /** @example SpicyHome */
-            value: string;
-        };
-        SetSettingDto: {
-            /** @example restaurant_name */
-            key: string;
-            /** @example SpicyHome */
-            value: string;
-        };
-        ZatcaConfigDto: {
-            /**
-             * @description Legal seller name for CSR and invoice XML
-             * @example SpicyHome Restaurant
-             */
-            sellerName: string;
-            /**
-             * @description 15-digit KSA VAT number (starts and ends with 3)
-             * @example 300123456789003
-             */
-            vatNumber: string;
-            /**
-             * @description 10-digit Commercial Registration number
-             * @example 1234567890
-             */
-            crNumber: string;
-            /**
-             * @description Street name
-             * @example King Fahd Road
-             */
-            street: string;
-            /**
-             * @description Building number
-             * @example 1234
-             */
-            building: string;
-            /**
-             * @description City name
-             * @example Riyadh
-             */
-            city: string;
-            /**
-             * @description 5-digit postal code
-             * @example 12345
-             */
-            postalCode: string;
-            /**
-             * @description 2-letter ISO country code
-             * @example SA
-             */
-            country: string;
-            /**
-             * @description Organizational unit for CSR
-             * @example SpicyHome POS
-             */
-            orgUnit: string;
-            /**
-             * @description ZATCA API base URL (defaults to developer portal)
-             * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation
-             */
-            apiBaseUrl?: string;
-            /**
-             * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)
-             * @example production
-             * @enum {string}
-             */
-            environment?: "sandbox" | "simulation" | "production";
-        };
-        OpenDayDto: {
-            /**
-             * Format: int64
-             * @description Opening cash counted in halalas
-             * @example 50000
-             */
-            openingCashHalalas: number;
-        };
-        DayOpeningResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example 2026-07-22 */
-            businessDate: string;
-            /** @example open */
-            status: string;
-            /**
-             * Format: int64
-             * @example 50000
-             */
-            openingCashHalalas: number;
-            /** Format: int64 */
-            openedAt: number;
-            /** Format: int64 */
-            openedBy: number;
-            /** Format: int64 */
-            closedAt?: number | null;
-            /** Format: int64 */
-            closedBy?: number | null;
-            /** Format: int64 */
-            closingCashHalalas?: number | null;
-            /** Format: int64 */
-            totalSalesHalalas?: number | null;
-            /** Format: int64 */
-            totalVatHalalas?: number | null;
-            /** Format: int64 */
-            orderCount?: number | null;
-            /** Format: int64 */
-            createdAt: number;
-            /** Format: int64 */
-            updatedAt: number;
-            /** Format: int64 */
-            createdBy?: number | null;
-            /** Format: int64 */
-            updatedBy?: number | null;
-        };
-        CloseDayDto: {
-            /**
-             * Format: int64
-             * @description Closing cash counted in halalas
-             * @example 125000
-             */
-            closingCashHalalas: number;
-        };
-        CloseDayResponse: {
-            /**
-             * Format: int64
-             * @example 1
-             */
-            id: number;
-            /** @example 2026-07-22 */
-            businessDate: string;
-            /** @example closed */
-            status: string;
-            /**
-             * Format: int64
-             * @example 50000
-             */
-            openingCashHalalas: number;
-            /** Format: int64 */
-            openedAt: number;
-            /** Format: int64 */
-            openedBy: number;
-            /** Format: int64 */
-            closedAt: number;
-            /** Format: int64 */
-            closedBy: number;
-            /**
-             * Format: int64
-             * @example 125000
-             */
-            closingCashHalalas: number;
-            /**
-             * Format: int64
-             * @example 46000
-             */
-            totalSalesHalalas: number;
-            /**
-             * Format: int64
-             * @example 6000
-             */
-            totalVatHalalas: number;
-            /**
-             * Format: int64
-             * @example 5
-             */
-            orderCount: number;
-        };
-        PaymentMethodResponse: {
-            /** @example cash */
-            id: string;
-            /** @example Cash */
-            title: string;
-            /** @example true */
-            enabled: boolean;
-            /**
-             * Format: int32
-             * @example 0
-             */
-            sortOrder: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            createdAt: number;
-            /**
-             * Format: int64
-             * @example 1700000000
-             */
-            updatedAt: number;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            createdBy: number | null;
-            /**
-             * Format: int64
-             * @example 1
-             */
-            updatedBy: number | null;
-        };
-        CreatePaymentMethodDto: {
-            /** @example SADAD */
-            title: string;
-        };
-        UpdatePaymentMethodDto: {
-            /** @example SADAD */
-            title?: string;
-            /** @default true */
-            enabled: boolean;
-            /**
-             * Format: int32
-             * @default 0
-             */
-            sortOrder: number;
-        };
+  schemas: {
+    LoginDto: {
+      /** @example admin */
+      username: string;
+      /** @example 1234 */
+      pin: string;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    LoginResponse: {
+      /** @example eyJhbGciOiJIUzI1NiIs... */
+      accessToken: string;
+    };
+    UsernamesResponse: {
+      /**
+       * @example [
+       *       "admin",
+       *       "cashier1"
+       *     ]
+       */
+      usernames: string[];
+    };
+    MeResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example cashier1 */
+      username: string;
+      /** @example Ahmed */
+      name: string;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      roleId: number;
+      /** @example true */
+      isActive: boolean;
+      /** @example staff */
+      roleName: string;
+      /** @example true */
+      createOrder: boolean;
+      /** @example true */
+      updateOrder: boolean;
+      /** @example false */
+      deleteOrderItem: boolean;
+      /** @example false */
+      voidOrder: boolean;
+      /** @example false */
+      refundOrder: boolean;
+      /** @example false */
+      payOrder: boolean;
+      /** @example false */
+      manageMenu: boolean;
+      /** @example false */
+      manageTables: boolean;
+      /** @example false */
+      managePrinters: boolean;
+      /** @example false */
+      manageUsers: boolean;
+      /** @example false */
+      manageSettings: boolean;
+    };
+    UserResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example cashier1 */
+      username: string;
+      /** @example Ahmed */
+      name: string;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      roleId: number;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateUserDto: {
+      /** @example cashier1 */
+      username: string;
+      /** @example 1234 */
+      pin: string;
+      /** @example Ahmed */
+      name: string;
+      /**
+       * Format: int64
+       * @description role_id — 1 for admin, 2 for staff
+       * @example 2
+       */
+      roleId: number;
+    };
+    UpdateUserDto: {
+      /** @example Ahmed Ali */
+      name?: string;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      roleId?: number;
+      /** @example false */
+      isActive?: boolean;
+      /**
+       * @description New PIN (4-6 digits)
+       * @example 5678
+       */
+      pin?: string;
+    };
+    RoleResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example staff */
+      name: string;
+      /** @example true */
+      createOrder: boolean;
+      /** @example true */
+      updateOrder: boolean;
+      /** @example false */
+      deleteOrderItem: boolean;
+      /** @example false */
+      voidOrder: boolean;
+      /** @example false */
+      refundOrder: boolean;
+      /** @example false */
+      manageMenu: boolean;
+      /** @example false */
+      manageTables: boolean;
+      /** @example false */
+      managePrinters: boolean;
+      /** @example false */
+      manageUsers: boolean;
+      /** @example false */
+      manageSettings: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateRoleDto: {
+      /** @example manager */
+      name: string;
+      /** @default false */
+      createOrder: boolean;
+      /** @default false */
+      updateOrder: boolean;
+      /** @default false */
+      deleteOrderItem: boolean;
+      /** @default false */
+      voidOrder: boolean;
+      /** @default false */
+      refundOrder: boolean;
+      /** @default false */
+      manageMenu: boolean;
+      /** @default false */
+      manageTables: boolean;
+      /** @default false */
+      managePrinters: boolean;
+      /** @default false */
+      manageUsers: boolean;
+      /** @default false */
+      manageSettings: boolean;
+    };
+    UpdateRoleDto: {
+      /** @example manager */
+      name?: string;
+      createOrder?: boolean;
+      updateOrder?: boolean;
+      deleteOrderItem?: boolean;
+      voidOrder?: boolean;
+      refundOrder?: boolean;
+      manageMenu?: boolean;
+      manageTables?: boolean;
+      managePrinters?: boolean;
+      manageUsers?: boolean;
+      manageSettings?: boolean;
+    };
+    CategoryResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example Burgers */
+      name: string;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      printerId: number | null;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateCategoryDto: {
+      /** @example Burgers */
+      name: string;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @description Printer ID for kitchen routing
+       */
+      printerId?: number;
+      /** @default true */
+      isActive: boolean;
+    };
+    UpdateCategoryDto: {
+      /** @example Burgers */
+      name?: string;
+      /** Format: int32 */
+      sortOrder?: number;
+      /** Format: int64 */
+      printerId?: number;
+      isActive?: boolean;
+    };
+    ItemResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      categoryId: number;
+      /** @example Zinger Burger */
+      name: string;
+      /** @example زنجر برجر */
+      nameAr: string | null;
+      /**
+       * Format: int64
+       * @description VAT-inclusive price in halalas
+       * @example 2300
+       */
+      priceHalalas: number;
+      /**
+       * Format: int32
+       * @description VAT rate in basis points
+       * @example 1500
+       */
+      vatRateBp: number;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateItemDto: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      categoryId: number;
+      /** @example Zinger Burger */
+      name: string;
+      /** @example زنجر برجر */
+      nameAr?: string;
+      /**
+       * Format: int64
+       * @description VAT-inclusive price in halalas (23.00 SAR)
+       * @example 2300
+       */
+      priceHalalas: number;
+      /**
+       * Format: int32
+       * @description VAT rate in basis points (1500 = 15%)
+       * @default 1500
+       */
+      vatRateBp: number;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+      /** @default true */
+      isActive: boolean;
+    };
+    UpdateItemDto: {
+      /** Format: int64 */
+      categoryId?: number;
+      name?: string;
+      nameAr?: string;
+      /** Format: int64 */
+      priceHalalas?: number;
+      /** Format: int32 */
+      vatRateBp?: number;
+      /** Format: int32 */
+      sortOrder?: number;
+      isActive?: boolean;
+    };
+    TableResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example T1 */
+      name: string;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateTableDto: {
+      /** @example T1 */
+      name: string;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+      /** @default true */
+      isActive: boolean;
+    };
+    UpdateTableDto: {
+      /** @example T1 */
+      name?: string;
+      /** Format: int32 */
+      sortOrder?: number;
+      isActive?: boolean;
+    };
+    PrinterResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example Kitchen */
+      name: string;
+      /** @example 192.168.1.100 */
+      ip: string;
+      /**
+       * Format: int32
+       * @example 9100
+       */
+      port: number;
+      /** @example kitchen */
+      role: string;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreatePrinterDto: {
+      /** @example Kitchen */
+      name: string;
+      /** @example 192.168.1.100 */
+      ip: string;
+      /**
+       * Format: int32
+       * @default 9100
+       */
+      port: number;
+      /**
+       * @example kitchen
+       * @enum {string}
+       */
+      role: 'receipt' | 'kitchen';
+      /** @default true */
+      isActive: boolean;
+    };
+    UpdatePrinterDto: {
+      name?: string;
+      ip?: string;
+      /** Format: int32 */
+      port?: number;
+      /** @enum {string} */
+      role?: 'receipt' | 'kitchen';
+      isActive?: boolean;
+    };
+    PrinterStatusResponse: {
+      /** @example true */
+      reachable: boolean;
+    };
+    SuccessResponse: {
+      /** @example true */
+      success: boolean;
+    };
+    OrderSummaryResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderNo: number;
+      /** @example 550e8400-e29b-41d4-a716-446655440000 */
+      uuid: string;
+      /** @example dine_in */
+      type: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      tableId: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      dayOpeningId: number;
+      /** @example open */
+      status: string;
+      /**
+       * Format: int64
+       * @example 4000
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @example 600
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @example 4600
+       */
+      totalHalalas: number;
+      /**
+       * Format: int64
+       * @example 0
+       */
+      discountHalalas: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    OrderItemResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderId: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      itemId: number | null;
+      /** @example Zinger Burger */
+      itemName: string;
+      /**
+       * Format: int64
+       * @example 2300
+       */
+      unitPriceHalalas: number;
+      /**
+       * Format: int32
+       * @example 1500
+       */
+      vatRateBp: number;
+      /**
+       * Format: int32
+       * @example 2
+       */
+      qty: number;
+      /**
+       * Format: int64
+       * @example 4600
+       */
+      totalHalalas: number;
+      /** @example no onion */
+      notes: string | null;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    OrderEventResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderId: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      eventIdx: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      userId: number;
+      /** @example item_added */
+      type: string;
+      /** @example {"orderItemId":1,"itemName":"Burger","qty":1} */
+      payload: string;
+      /** @example  */
+      prevHash: string;
+      /** @example abc123... */
+      hash: string;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+    };
+    OrderResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderNo: number;
+      /** @example 550e8400-e29b-41d4-a716-446655440000 */
+      uuid: string;
+      /** @example dine_in */
+      type: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      tableId: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      dayOpeningId: number;
+      /** @example open */
+      status: string;
+      /**
+       * Format: int64
+       * @example 4000
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @example 600
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @example 4600
+       */
+      totalHalalas: number;
+      /**
+       * Format: int64
+       * @example 0
+       */
+      discountHalalas: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+      items: components['schemas']['OrderItemResponse'][];
+      events: components['schemas']['OrderEventResponse'][];
+    };
+    CreateOrderDto: {
+      /**
+       * @example dine_in
+       * @enum {string}
+       */
+      type: 'dine_in' | 'takeaway';
+      /**
+       * Format: int64
+       * @description Required for dine_in
+       * @example 1
+       */
+      tableId?: number;
+    };
+    CreateOrderResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example 550e8400-e29b-41d4-a716-446655440000 */
+      uuid: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderNo: number;
+    };
+    AddOrderItemDto: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      itemId: number;
+      /**
+       * Format: int32
+       * @example 2
+       */
+      qty: number;
+      /** @example no onion */
+      notes?: string;
+    };
+    AddOrderItemResponse: {
+      /** @example true */
+      success: boolean;
+      /**
+       * Format: int64
+       * @description order_items.id of the newly created line
+       * @example 1
+       */
+      orderItemId: number;
+    };
+    UpdateOrderItemDto: {
+      /**
+       * Format: int32
+       * @example 3
+       */
+      qty?: number;
+      /** @example extra cheese */
+      notes?: string;
+    };
+    PaymentLineDto: {
+      /**
+       * @description Payment method slug
+       * @example card
+       */
+      methodId: string;
+      /**
+       * Format: int64
+       * @description Amount in halalas
+       * @example 5000
+       */
+      amountHalalas: number;
+      /**
+       * Format: int64
+       * @description Cash tendered amount in halalas (cash only)
+       * @example 10000
+       */
+      tenderedHalalas?: number | null;
+    };
+    PayOrderDto: {
+      /** @description Payment lines (at least one required) */
+      payments: components['schemas']['PaymentLineDto'][];
+    };
+    StatusResponse: {
+      /** @example true */
+      success: boolean;
+      /** @example paid */
+      status: string;
+    };
+    ReprintOrderDto: {
+      /**
+       * @description Reprint target (receipt only; kitchen reprints are not supported)
+       * @example receipt
+       * @enum {string}
+       */
+      target: 'receipt';
+    };
+    PrintResponse: {
+      /** @example true */
+      success: boolean;
+      /** @example [] */
+      errors: string[];
+    };
+    RefundItemDto: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderItemId: number;
+      /**
+       * Format: int32
+       * @example 1
+       */
+      qty: number;
+    };
+    CreateRefundDto: {
+      /** @description Items and quantities to refund */
+      items: components['schemas']['RefundItemDto'][];
+      /** @example Customer changed mind */
+      reason?: string;
+    };
+    RefundResponse: {
+      /** @example true */
+      success: boolean;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      refundId: number;
+      /** @example paid */
+      status: string;
+    };
+    RefundItemResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 5
+       */
+      orderItemId: number;
+      /** @example Burger */
+      itemName: string;
+      /**
+       * Format: int64
+       * @example 2500
+       */
+      unitPriceHalalas: number;
+      /**
+       * Format: int32
+       * @example 1500
+       */
+      vatRateBp: number;
+      /**
+       * Format: int32
+       * @example 2
+       */
+      qty: number;
+      /**
+       * Format: int64
+       * @example 5000
+       */
+      totalHalalas: number;
+    };
+    OrderRefundResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @example 10
+       */
+      orderId: number;
+      /**
+       * Format: int64
+       * @example 3
+       */
+      userId: number;
+      /**
+       * Format: int64
+       * @example 4348
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @example 652
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @example 5000
+       */
+      totalHalalas: number;
+      /** @example Customer changed mind */
+      reason: string | null;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      items: components['schemas']['RefundItemResponse'][];
+    };
+    AuditVerifyResponse: {
+      /** @example true */
+      valid: boolean;
+    };
+    SettingResponse: {
+      /** @example restaurant_name */
+      key: string;
+      /** @example SpicyHome */
+      value: string;
+    };
+    SetSettingDto: {
+      /** @example restaurant_name */
+      key: string;
+      /** @example SpicyHome */
+      value: string;
+    };
+    ZatcaConfigDto: {
+      /**
+       * @description Legal seller name for CSR and invoice XML
+       * @example SpicyHome Restaurant
+       */
+      sellerName: string;
+      /**
+       * @description 15-digit KSA VAT number (starts and ends with 3)
+       * @example 300123456789003
+       */
+      vatNumber: string;
+      /**
+       * @description 10-digit Commercial Registration number
+       * @example 1234567890
+       */
+      crNumber: string;
+      /**
+       * @description Street name
+       * @example King Fahd Road
+       */
+      street: string;
+      /**
+       * @description Building number
+       * @example 1234
+       */
+      building: string;
+      /**
+       * @description City name
+       * @example Riyadh
+       */
+      city: string;
+      /**
+       * @description 5-digit postal code
+       * @example 12345
+       */
+      postalCode: string;
+      /**
+       * @description 2-letter ISO country code
+       * @example SA
+       */
+      country: string;
+      /**
+       * @description Organizational unit for CSR
+       * @example SpicyHome POS
+       */
+      orgUnit: string;
+      /**
+       * @description ZATCA API base URL (defaults to developer portal)
+       * @example https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation
+       */
+      apiBaseUrl?: string;
+      /**
+       * @description ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)
+       * @example production
+       * @enum {string}
+       */
+      environment?: 'sandbox' | 'simulation' | 'production';
+    };
+    OpenDayDto: {
+      /**
+       * Format: int64
+       * @description Opening cash counted in halalas
+       * @example 50000
+       */
+      openingCashHalalas: number;
+    };
+    DayOpeningResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example 2026-07-22 */
+      businessDate: string;
+      /** @example open */
+      status: string;
+      /**
+       * Format: int64
+       * @example 50000
+       */
+      openingCashHalalas: number;
+      /** Format: int64 */
+      openedAt: number;
+      /** Format: int64 */
+      openedBy: number;
+      /** Format: int64 */
+      closedAt?: number | null;
+      /** Format: int64 */
+      closedBy?: number | null;
+      /** Format: int64 */
+      closingCashHalalas?: number | null;
+      /** Format: int64 */
+      totalSalesHalalas?: number | null;
+      /** Format: int64 */
+      totalVatHalalas?: number | null;
+      /** Format: int64 */
+      orderCount?: number | null;
+      /** Format: int64 */
+      createdAt: number;
+      /** Format: int64 */
+      updatedAt: number;
+      /** Format: int64 */
+      createdBy?: number | null;
+      /** Format: int64 */
+      updatedBy?: number | null;
+    };
+    CloseDayDto: {
+      /**
+       * Format: int64
+       * @description Closing cash counted in halalas
+       * @example 125000
+       */
+      closingCashHalalas: number;
+    };
+    CloseDayResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example 2026-07-22 */
+      businessDate: string;
+      /** @example closed */
+      status: string;
+      /**
+       * Format: int64
+       * @example 50000
+       */
+      openingCashHalalas: number;
+      /** Format: int64 */
+      openedAt: number;
+      /** Format: int64 */
+      openedBy: number;
+      /** Format: int64 */
+      closedAt: number;
+      /** Format: int64 */
+      closedBy: number;
+      /**
+       * Format: int64
+       * @example 125000
+       */
+      closingCashHalalas: number;
+      /**
+       * Format: int64
+       * @example 46000
+       */
+      totalSalesHalalas: number;
+      /**
+       * Format: int64
+       * @example 6000
+       */
+      totalVatHalalas: number;
+      /**
+       * Format: int64
+       * @example 5
+       */
+      orderCount: number;
+    };
+    PaymentMethodResponse: {
+      /** @example cash */
+      id: string;
+      /** @example Cash */
+      title: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreatePaymentMethodDto: {
+      /** @example SADAD */
+      title: string;
+    };
+    UpdatePaymentMethodDto: {
+      /** @example SADAD */
+      title?: string;
+      /** @default true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    AuthController_login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginDto"];
-            };
-        };
-        responses: {
-            /** @description JWT access token */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponse"];
-                };
-            };
-        };
-    };
-    AuthController_listUsernames: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Active usernames */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UsernamesResponse"];
-                };
-            };
-        };
-    };
-    AuthController_getMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current user details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeResponse"];
-                };
-            };
-        };
-    };
-    AuthController_listUsers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of users */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"][];
-                };
-            };
-        };
-    };
-    AuthController_createUser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateUserDto"];
-            };
-        };
-        responses: {
-            /** @description Created user */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-        };
-    };
-    AuthController_getUser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description User details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-        };
-    };
-    AuthController_updateUser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateUserDto"];
-            };
-        };
-        responses: {
-            /** @description Updated user */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-        };
-    };
-    AuthController_listRoles: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of roles */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleResponse"][];
-                };
-            };
-        };
-    };
-    AuthController_createRole: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRoleDto"];
-            };
-        };
-        responses: {
-            /** @description Created role */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleResponse"];
-                };
-            };
-        };
-    };
-    AuthController_updateRole: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRoleDto"];
-            };
-        };
-        responses: {
-            /** @description Updated role */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleResponse"];
-                };
-            };
-        };
-    };
-    MenuController_listCategories: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of categories */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CategoryResponse"][];
-                };
-            };
-        };
-    };
-    MenuController_createCategory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCategoryDto"];
-            };
-        };
-        responses: {
-            /** @description Created category */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CategoryResponse"];
-                };
-            };
-        };
-    };
-    MenuController_getCategory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Category details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CategoryResponse"];
-                };
-            };
-        };
-    };
-    MenuController_updateCategory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCategoryDto"];
-            };
-        };
-        responses: {
-            /** @description Updated category */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CategoryResponse"];
-                };
-            };
-        };
-    };
-    MenuController_listItems: {
-        parameters: {
-            query: {
-                categoryId: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of items */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ItemResponse"][];
-                };
-            };
-        };
-    };
-    MenuController_createItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateItemDto"];
-            };
-        };
-        responses: {
-            /** @description Created item */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ItemResponse"];
-                };
-            };
-        };
-    };
-    MenuController_getItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Item details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ItemResponse"];
-                };
-            };
-        };
-    };
-    MenuController_updateItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateItemDto"];
-            };
-        };
-        responses: {
-            /** @description Updated item */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ItemResponse"];
-                };
-            };
-        };
-    };
-    TablesController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of tables */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableResponse"][];
-                };
-            };
-        };
-    };
-    TablesController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateTableDto"];
-            };
-        };
-        responses: {
-            /** @description Created table */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableResponse"];
-                };
-            };
-        };
-    };
-    TablesController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Table details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableResponse"];
-                };
-            };
-        };
-    };
-    TablesController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateTableDto"];
-            };
-        };
-        responses: {
-            /** @description Updated table */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TableResponse"];
-                };
-            };
-        };
-    };
-    PrintersController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of printers */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrinterResponse"][];
-                };
-            };
-        };
-    };
-    PrintersController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreatePrinterDto"];
-            };
-        };
-        responses: {
-            /** @description Created printer */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrinterResponse"];
-                };
-            };
-        };
-    };
-    PrintersController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Printer details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrinterResponse"];
-                };
-            };
-        };
-    };
-    PrintersController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePrinterDto"];
-            };
-        };
-        responses: {
-            /** @description Updated printer */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrinterResponse"];
-                };
-            };
-        };
-    };
-    PrintersController_checkStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Printer reachability status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrinterStatusResponse"];
-                };
-            };
-        };
-    };
-    PrintersController_testPrint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Test ticket sent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_listOrders: {
-        parameters: {
-            query: {
-                status: string;
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of orders */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderSummaryResponse"][];
-                };
-            };
-        };
-    };
-    OrdersController_createOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateOrderDto"];
-            };
-        };
-        responses: {
-            /** @description Created order summary */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateOrderResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_getOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Order with items and events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_addItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddOrderItemDto"];
-            };
-        };
-        responses: {
-            /** @description Item added */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddOrderItemResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_removeItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                orderId: number;
-                itemId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Item removed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_updateItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                orderId: number;
-                itemId: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateOrderItemDto"];
-            };
-        };
-        responses: {
-            /** @description Item updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_payOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PayOrderDto"];
-            };
-        };
-        responses: {
-            /** @description Order paid */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_voidOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Order voided */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_reprintOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReprintOrderDto"];
-            };
-        };
-        responses: {
-            /** @description Print result */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrintResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_refundOrder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRefundDto"];
-            };
-        };
-        responses: {
-            /** @description Refund processed */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RefundResponse"];
-                };
-            };
-        };
-    };
-    OrdersController_getOrderRefunds: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of refunds with their items */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderRefundResponse"][];
-                };
-            };
-        };
-    };
-    OrdersController_getOrderEvents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of order events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderEventResponse"][];
-                };
-            };
-        };
-    };
-    OrdersController_verifyOrderChain: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Chain verification result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditVerifyResponse"];
-                };
-            };
-        };
-    };
-    SettingsController_getAll: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Key-value settings */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingResponse"][];
-                };
-            };
-        };
-    };
-    SettingsController_set: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetSettingDto"];
-            };
-        };
-        responses: {
-            /** @description Setting updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingResponse"];
-                };
-            };
-        };
-    };
-    ZatcaController_generateCSR: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_onboardCompliance: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_runComplianceCheck: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_onboardProduction: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_getStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_listInvoices: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_getInvoice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ZatcaController_getConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ZATCA seller configuration */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZatcaConfigDto"];
-                };
-            };
-        };
-    };
-    ZatcaController_updateConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ZatcaConfigDto"];
-            };
-        };
-        responses: {
-            /** @description Updated configuration */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZatcaConfigDto"];
-                };
-            };
-        };
-    };
-    ZatcaController_retryReporting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BusinessDayController_openDay: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OpenDayDto"];
-            };
-        };
-        responses: {
-            /** @description Business day opened */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DayOpeningResponse"];
-                };
-            };
-            /** @description A business day is already open */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BusinessDayController_closeDay: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloseDayDto"];
-            };
-        };
-        responses: {
-            /** @description Business day closed with frozen totals */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloseDayResponse"];
-                };
-            };
-            /** @description No open business day to close */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Open/sent orders exist — cannot close */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BusinessDayController_getCurrent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current open day or null */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BusinessDayController_list: {
-        parameters: {
-            query?: {
-                page?: number;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paged list of business days */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    BusinessDayController_getDay: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Business day */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DayOpeningResponse"];
-                };
-            };
-            /** @description Business day not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_getXReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description X-report snapshot */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_getZReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                dayId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Z-report detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_getSales: {
-        parameters: {
-            query: {
-                from: string;
-                to: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Daily sales totals */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_getVat: {
-        parameters: {
-            query: {
-                from: string;
-                to: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description VAT summary with grand total */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_printZReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                dayId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Print result */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReportsController_printXReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Print result */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PaymentMethodsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of payment methods */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodResponse"][];
-                };
-            };
-        };
-    };
-    PaymentMethodsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreatePaymentMethodDto"];
-            };
-        };
-        responses: {
-            /** @description Created payment method */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodResponse"];
-                };
-            };
-        };
-    };
-    PaymentMethodsController_listEnabled: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of enabled payment methods */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodResponse"][];
-                };
-            };
-        };
-    };
-    PaymentMethodsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Payment method slug */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePaymentMethodDto"];
-            };
-        };
-        responses: {
-            /** @description Updated payment method */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodResponse"];
-                };
-            };
-        };
-    };
+  AuthController_login: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginDto'];
+      };
+    };
+    responses: {
+      /** @description JWT access token */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoginResponse'];
+        };
+      };
+    };
+  };
+  AuthController_listUsernames: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Active usernames */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UsernamesResponse'];
+        };
+      };
+    };
+  };
+  AuthController_getMe: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current user details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MeResponse'];
+        };
+      };
+    };
+  };
+  AuthController_listUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserResponse'][];
+        };
+      };
+    };
+  };
+  AuthController_createUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateUserDto'];
+      };
+    };
+    responses: {
+      /** @description Created user */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserResponse'];
+        };
+      };
+    };
+  };
+  AuthController_getUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description User details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserResponse'];
+        };
+      };
+    };
+  };
+  AuthController_updateUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateUserDto'];
+      };
+    };
+    responses: {
+      /** @description Updated user */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserResponse'];
+        };
+      };
+    };
+  };
+  AuthController_listRoles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of roles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoleResponse'][];
+        };
+      };
+    };
+  };
+  AuthController_createRole: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateRoleDto'];
+      };
+    };
+    responses: {
+      /** @description Created role */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoleResponse'];
+        };
+      };
+    };
+  };
+  AuthController_updateRole: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateRoleDto'];
+      };
+    };
+    responses: {
+      /** @description Updated role */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoleResponse'];
+        };
+      };
+    };
+  };
+  MenuController_listCategories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of categories */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'][];
+        };
+      };
+    };
+  };
+  MenuController_createCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCategoryDto'];
+      };
+    };
+    responses: {
+      /** @description Created category */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+    };
+  };
+  MenuController_getCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Category details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+    };
+  };
+  MenuController_updateCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateCategoryDto'];
+      };
+    };
+    responses: {
+      /** @description Updated category */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+    };
+  };
+  MenuController_listItems: {
+    parameters: {
+      query: {
+        categoryId: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of items */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ItemResponse'][];
+        };
+      };
+    };
+  };
+  MenuController_createItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateItemDto'];
+      };
+    };
+    responses: {
+      /** @description Created item */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ItemResponse'];
+        };
+      };
+    };
+  };
+  MenuController_getItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Item details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ItemResponse'];
+        };
+      };
+    };
+  };
+  MenuController_updateItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateItemDto'];
+      };
+    };
+    responses: {
+      /** @description Updated item */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ItemResponse'];
+        };
+      };
+    };
+  };
+  TablesController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of tables */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TableResponse'][];
+        };
+      };
+    };
+  };
+  TablesController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateTableDto'];
+      };
+    };
+    responses: {
+      /** @description Created table */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TableResponse'];
+        };
+      };
+    };
+  };
+  TablesController_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Table details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TableResponse'];
+        };
+      };
+    };
+  };
+  TablesController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateTableDto'];
+      };
+    };
+    responses: {
+      /** @description Updated table */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TableResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of printers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrinterResponse'][];
+        };
+      };
+    };
+  };
+  PrintersController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePrinterDto'];
+      };
+    };
+    responses: {
+      /** @description Created printer */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrinterResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Printer details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrinterResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePrinterDto'];
+      };
+    };
+    responses: {
+      /** @description Updated printer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrinterResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_checkStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Printer reachability status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrinterStatusResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_testPrint: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Test ticket sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SuccessResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_listOrders: {
+    parameters: {
+      query: {
+        status: string;
+        date: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of orders */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderSummaryResponse'][];
+        };
+      };
+    };
+  };
+  OrdersController_createOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateOrderDto'];
+      };
+    };
+    responses: {
+      /** @description Created order summary */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CreateOrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_getOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_addItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddOrderItemDto'];
+      };
+    };
+    responses: {
+      /** @description Item added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AddOrderItemResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_removeItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orderId: number;
+        itemId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Item removed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SuccessResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orderId: number;
+        itemId: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderItemDto'];
+      };
+    };
+    responses: {
+      /** @description Item updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SuccessResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_payOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PayOrderDto'];
+      };
+    };
+    responses: {
+      /** @description Order paid */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StatusResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_voidOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Order voided */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StatusResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_reprintOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReprintOrderDto'];
+      };
+    };
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrintResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_refundOrder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateRefundDto'];
+      };
+    };
+    responses: {
+      /** @description Refund processed */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RefundResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_getOrderRefunds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of refunds with their items */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderRefundResponse'][];
+        };
+      };
+    };
+  };
+  OrdersController_getOrderEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of order events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderEventResponse'][];
+        };
+      };
+    };
+  };
+  OrdersController_verifyOrderChain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Chain verification result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuditVerifyResponse'];
+        };
+      };
+    };
+  };
+  SettingsController_getAll: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Key-value settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SettingResponse'][];
+        };
+      };
+    };
+  };
+  SettingsController_set: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetSettingDto'];
+      };
+    };
+    responses: {
+      /** @description Setting updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SettingResponse'];
+        };
+      };
+    };
+  };
+  ZatcaController_generateCSR: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_onboardCompliance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_runComplianceCheck: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_onboardProduction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_listInvoices: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description ZATCA seller configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaConfigDto'];
+        };
+      };
+    };
+  };
+  ZatcaController_updateConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ZatcaConfigDto'];
+      };
+    };
+    responses: {
+      /** @description Updated configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaConfigDto'];
+        };
+      };
+    };
+  };
+  ZatcaController_retryReporting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_openDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenDayDto'];
+      };
+    };
+    responses: {
+      /** @description Business day opened */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DayOpeningResponse'];
+        };
+      };
+      /** @description A business day is already open */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_closeDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CloseDayDto'];
+      };
+    };
+    responses: {
+      /** @description Business day closed with frozen totals */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CloseDayResponse'];
+        };
+      };
+      /** @description No open business day to close */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Open/sent orders exist — cannot close */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_getCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current open day or null */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_list: {
+    parameters: {
+      query?: {
+        page?: number;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Paged list of business days */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  BusinessDayController_getDay: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Business day */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DayOpeningResponse'];
+        };
+      };
+      /** @description Business day not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getXReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description X-report snapshot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getZReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        dayId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Z-report detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getSales: {
+    parameters: {
+      query: {
+        from: string;
+        to: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Daily sales totals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_getVat: {
+    parameters: {
+      query: {
+        from: string;
+        to: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description VAT summary with grand total */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_printZReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        dayId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ReportsController_printXReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  PaymentMethodsController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of payment methods */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'][];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePaymentMethodDto'];
+      };
+    };
+    responses: {
+      /** @description Created payment method */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_listEnabled: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of enabled payment methods */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'][];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Payment method slug */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePaymentMethodDto'];
+      };
+    };
+    responses: {
+      /** @description Updated payment method */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'];
+        };
+      };
+    };
+  };
 }

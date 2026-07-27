@@ -1,6 +1,15 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, inArray, and } from 'drizzle-orm';
-import { orders, orderItems, orderPayments, paymentMethods, dayOpenings, itemCategories, items, users } from '@spicyhome/db';
+import {
+  orders,
+  orderItems,
+  orderPayments,
+  paymentMethods,
+  dayOpenings,
+  itemCategories,
+  items,
+  users,
+} from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
@@ -140,7 +149,8 @@ export class ReportsService {
     }));
 
     // Per-method payment totals
-    const paymentTotals: Array<{ methodId: string; methodTitle: string; totalHalalas: number }> = [];
+    const paymentTotals: Array<{ methodId: string; methodTitle: string; totalHalalas: number }> =
+      [];
     if (paidOrderIds.length > 0) {
       const paymentRows = this.db
         .select({
@@ -149,12 +159,7 @@ export class ReportsService {
         })
         .from(orderPayments)
         .innerJoin(orders, eq(orderPayments.orderId, orders.id))
-        .where(
-          and(
-            eq(orders.dayOpeningId, dayId),
-            eq(orders.status, 'paid'),
-          ),
-        )
+        .where(and(eq(orders.dayOpeningId, dayId), eq(orders.status, 'paid')))
         .all();
 
       // Aggregate by method_id

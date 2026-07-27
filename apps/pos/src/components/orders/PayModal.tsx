@@ -67,7 +67,14 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   function handleMethodTap(methodId: string) {
     setSelectedMethodId(methodId);
     const newAmounts = tapToFill(
-      { orderTotalHalalas, methods, selectedMethodIndex: 0, amounts, tenderedHalalas, numpadActive: false },
+      {
+        orderTotalHalalas,
+        methods,
+        selectedMethodIndex: 0,
+        amounts,
+        tenderedHalalas,
+        numpadActive: false,
+      },
       methodId,
     );
     setAmounts(newAmounts);
@@ -120,7 +127,16 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const isCashSelected = selectedMethodId === 'cash';
   const selectedAmount = selectedMethodId ? amounts[selectedMethodId] || 0 : 0;
   const changeDue = isCashSelected ? calcCashChange(selectedAmount, tenderedHalalas) : 0;
-  const canSubmit = !submitting && canPay({ orderTotalHalalas, methods, selectedMethodIndex: 0, amounts, tenderedHalalas, numpadActive: false });
+  const canSubmit =
+    !submitting &&
+    canPay({
+      orderTotalHalalas,
+      methods,
+      selectedMethodIndex: 0,
+      amounts,
+      tenderedHalalas,
+      numpadActive: false,
+    });
 
   async function handlePay() {
     setSubmitting(true);
@@ -144,16 +160,13 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     );
   }
 
-  const numpadKeys = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-    ['C', '0', '.'],
-    ['⌫'],
-  ];
+  const numpadKeys = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['C', '0', '.'], ['⌫']];
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
       <div
         className="bg-gray-850 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -163,7 +176,9 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
         {/* Order total */}
         <div className="flex justify-between items-center bg-gray-800 rounded-lg p-3 mb-3">
           <span className="text-sm text-gray-400">Total</span>
-          <span className="text-xl font-bold text-white">{halalasToSar(orderTotalHalalas)} SAR</span>
+          <span className="text-xl font-bold text-white">
+            {halalasToSar(orderTotalHalalas)} SAR
+          </span>
         </div>
 
         {/* Outstanding */}
@@ -235,7 +250,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
                 step="0.01"
                 min="0"
                 value={tenderedHalalas !== undefined ? (tenderedHalalas / 100).toFixed(2) : ''}
-                 onChange={(e) => handleTenderedChange(sarDisplayToHalalas(e.target.value))}
+                onChange={(e) => handleTenderedChange(sarDisplayToHalalas(e.target.value))}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                 placeholder="0.00"
               />
@@ -245,11 +260,11 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
                 Change due: {halalasToSar(changeDue)} SAR
               </div>
             )}
-            {tenderedHalalas !== undefined && tenderedHalalas > 0 && tenderedHalalas < selectedAmount && (
-              <div className="text-sm text-red-400">
-                Insufficient tendered amount
-              </div>
-            )}
+            {tenderedHalalas !== undefined &&
+              tenderedHalalas > 0 &&
+              tenderedHalalas < selectedAmount && (
+                <div className="text-sm text-red-400">Insufficient tendered amount</div>
+              )}
           </div>
         )}
 

@@ -28,12 +28,12 @@ VALID_TRANSITIONS:
 
 ### Transition Details
 
-| Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                       |
-| ------------------- | ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                              |
+| Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                                            |
+| ------------------- | ------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                                                   |
 | `open` → `paid`     | `POST /orders/:id/pay`    | **POS SPA only**        | Requires payment lines array. Writes `order_payments` rows. Receipt printed (cash drawer kick only if cash payment > 0). ZATCA invoice created. `order_events` entries for `paid` (with payments breakdown) + `receipt_print_enqueued` + `receipt_print_succeeded`. `order.paid` event. |
-| `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                         |
-| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded) |
+| `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                                              |
+| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded)                      |
 
 ## Device Responsibilities
 
@@ -138,13 +138,13 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 
 #### Status Transition Events
 
-| Type            | Trigger                   | Payload                                                                                      |
-| --------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid }`                                                           |
+| Type            | Trigger                   | Payload                                                                                                                            |
+| --------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid }`                                                                                                 |
 | `paid`          | `POST /orders/:id/pay`    | `{ fromStatus: "open", toStatus: "paid", payments: [{ methodId, methodTitle, amountHalalas, tenderedHalalas?, changeHalalas? }] }` |
-| `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                 |
-| `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
-| `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                               |
+| `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                                                       |
+| `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }`                                       |
+| `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                     |
 
 ### Payload Fields for Item Mutations
 
@@ -352,6 +352,7 @@ Admin-configurable catalog of payment methods (`payment_methods` table). Each me
 ```
 
 Validation (single transaction):
+
 1. Order must be `open`.
 2. Each `methodId` must exist and be enabled.
 3. Each `amountHalalas` must be positive (> 0).
@@ -361,6 +362,7 @@ Validation (single transaction):
 7. Cash: `tenderedHalalas` (if present) ≥ `amountHalalas`. Change auto-computed.
 
 Transaction writes:
+
 1. `order_payments` rows (snapshot `method_title`)
 2. Updates order to `paid`
 3. `order_events` `paid` with payments breakdown
@@ -427,16 +429,16 @@ Transaction writes:
 
 ### New
 
-| Item                                   | Purpose                                                                                       |
-| -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `order_events` table                   | Unified immutable ledger: item mutations, kitchen prints, receipt prints, status transitions. |
-| `OrderEventsService`                   | Hash-chain management, event creation, chain verification, `kitchen_printed_qty` derivation.  |
-| `order_refunds` table                  | Refund transaction headers.                                                                   |
-| `order_refund_items` table             | Individual items refunded per transaction.                                                    |
+| Item                                   | Purpose                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `order_events` table                   | Unified immutable ledger: item mutations, kitchen prints, receipt prints, status transitions.           |
+| `OrderEventsService`                   | Hash-chain management, event creation, chain verification, `kitchen_printed_qty` derivation.            |
+| `order_refunds` table                  | Refund transaction headers.                                                                             |
+| `order_refund_items` table             | Individual items refunded per transaction.                                                              |
 | `payment_methods` table                | Catalog of payment methods (cash, card, mada, etc.). Soft-delete via `enabled` flag. Slugs as TEXT PKs. |
-| `order_payments` table                 | Immutable append-only payment ledger. One row per (order_id, method_id). Snapshots method_title. |
-| `pay_order` permission on `user_roles` | New permission for payment operations (was guarded by `create_order`).                        |
-| `PaymentMethodsModule`                 | CRUD for payment method catalog (admin only). Slugs generated from title, cash method locked.  |
+| `order_payments` table                 | Immutable append-only payment ledger. One row per (order_id, method_id). Snapshots method_title.        |
+| `pay_order` permission on `user_roles` | New permission for payment operations (was guarded by `create_order`).                                  |
+| `PaymentMethodsModule`                 | CRUD for payment method catalog (admin only). Slugs generated from title, cash method locked.           |
 
 ### Modified
 

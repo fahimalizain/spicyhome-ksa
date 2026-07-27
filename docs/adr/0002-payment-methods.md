@@ -30,13 +30,13 @@ acceptable.
 
 ### Domain naming
 
-| Layer      | Name                           |
-| ---------- | ------------------------------ |
-| Domain     | Payment Method                 |
-| Table      | `payment_methods`              |
-| Table      | `order_payments`               |
-| API path   | `/payment-methods`             |
-| UI label   | Payment Methods                |
+| Layer    | Name               |
+| -------- | ------------------ |
+| Domain   | Payment Method     |
+| Table    | `payment_methods`  |
+| Table    | `order_payments`   |
+| API path | `/payment-methods` |
+| UI label | Payment Methods    |
 
 ### Schema: `payment_methods` (catalog)
 
@@ -194,8 +194,13 @@ The following operations happen in **one SQLite transaction**:
   "toStatus": "paid",
   "payments": [
     { "methodId": "card", "methodTitle": "Card", "amountHalalas": 5000 },
-    { "methodId": "cash", "methodTitle": "Cash", "amountHalalas": 3250,
-      "tenderedHalalas": 10000, "changeHalalas": 6750 }
+    {
+      "methodId": "cash",
+      "methodTitle": "Cash",
+      "amountHalalas": 3250,
+      "tenderedHalalas": 10000,
+      "changeHalalas": 6750
+    }
   ]
 }
 ```
@@ -221,13 +226,13 @@ After the transaction commits: print receipt asynchronously (existing
 
 Base path: `/payment-methods`
 
-| Method   | Path                     | Auth                | Description                      |
-| -------- | ------------------------ | ------------------- | -------------------------------- |
-| `GET`    | `/payment-methods`       | `manage_settings`   | List all (inc. disabled)         |
-| `GET`    | `/payment-methods/enabled` | authenticated     | List enabled only (for pay modal)|
-| `POST`   | `/payment-methods`       | `manage_settings`   | Create (title → slug)            |
-| `PATCH`  | `/payment-methods/:id`   | `manage_settings`   | Update title, enabled, sort_order|
-| `DELETE` | —                        | —                   | Not offered (soft-disable only)  |
+| Method   | Path                       | Auth              | Description                       |
+| -------- | -------------------------- | ----------------- | --------------------------------- |
+| `GET`    | `/payment-methods`         | `manage_settings` | List all (inc. disabled)          |
+| `GET`    | `/payment-methods/enabled` | authenticated     | List enabled only (for pay modal) |
+| `POST`   | `/payment-methods`         | `manage_settings` | Create (title → slug)             |
+| `PATCH`  | `/payment-methods/:id`     | `manage_settings` | Update title, enabled, sort_order |
+| `DELETE` | —                          | —                 | Not offered (soft-disable only)   |
 
 > **Auth note for `/payment-methods/enabled`**: This endpoint requires a valid
 > JWT (global auth guard) but has no `@RequiresPermission` decorator — the same
@@ -290,7 +295,7 @@ New flow: Pay button opens a **modal** (not immediate pay). Within the modal:
 1. **Order summary**: total halalas displayed prominently.
 
 2. **Outstanding indicator**: `outstanding = order.totalHalalas - sum of
-   entered payment amounts`. Pay button is disabled while outstanding > 0.
+entered payment amounts`. Pay button is disabled while outstanding > 0.
 
 3. **Payment method list**: rendered from `GET /payment-methods/enabled`.
    Large touch-friendly buttons (Chrome 109 safe, dark theme), one per
@@ -310,7 +315,7 @@ New flow: Pay button opens a **modal** (not immediate pay). Within the modal:
    is capped at outstanding.
 
 7. **Pay button**: enabled only when outstanding === 0. Submits `POST
-   /orders/:id/pay` with non-zero payment lines only (zero-amount methods
+/orders/:id/pay` with non-zero payment lines only (zero-amount methods
    are stripped before sending).
 
 ### Reports & day close
@@ -480,26 +485,26 @@ management or tender screens.
 
 ### File touch points (from Issue #34)
 
-| File / path                                                 | Change                                                              |
-| ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/db/src/schema.ts`                                 | Add `payment_methods`, `order_payments`                             |
-| `packages/db/src/schema.test.ts`                            | Tests for new tables, FK constraints, seed data                     |
-| `packages/db/src/seed.ts`                                   | Idempotent seed of cash/card/mada                                    |
-| `packages/db/drizzle/*.sql`                                 | New migration                                                       |
-| `apps/server/src/modules/payment-methods/`                  | New module: service, controller, DTOs, tests                        |
-| `apps/server/src/modules/orders/orders.service.ts`          | Extend `payOrder()`                                                 |
-| `apps/server/src/modules/orders/dto/`                       | New pay DTO with required `payments[]`                              |
-| `apps/server/src/modules/reports/reports.service.ts`        | Primary: `paymentTotals` per-method aggregation (was hardcoded cash)|
-| `apps/server/src/modules/reports/z-report-builder.ts`       | Expected cash from cash payments, not total sales                   |
-| `apps/server/src/modules/business-day/business-day.service.ts` | Surface `paymentTotals` on day open/close responses             |
-| `packages/api-spec/`                                        | Regenerated OpenAPI spec                                            |
-| `packages/shared/src/`                                      | New DTOs / types for payment methods                                |
-| `packages/client-ts/`                                       | Regenerated                                                         |
-| `packages/client-kt/`                                       | Regenerated (types only)                                            |
-| `apps/pos/src/pages/admin/`                                 | New Payment Methods admin page                                      |
-| `apps/pos/src/components/orders/`                           | Pay modal, numpad, payment method list                              |
-| `apps/pos/src/__tests__/`                                   | Pay modal unit tests (outstanding, tap-to-fill, Pay disabled)       |
-| `docs/order-lifecycle.md`                                   | Update pay flow, payment tables, event payload                      |
+| File / path                                                    | Change                                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `packages/db/src/schema.ts`                                    | Add `payment_methods`, `order_payments`                              |
+| `packages/db/src/schema.test.ts`                               | Tests for new tables, FK constraints, seed data                      |
+| `packages/db/src/seed.ts`                                      | Idempotent seed of cash/card/mada                                    |
+| `packages/db/drizzle/*.sql`                                    | New migration                                                        |
+| `apps/server/src/modules/payment-methods/`                     | New module: service, controller, DTOs, tests                         |
+| `apps/server/src/modules/orders/orders.service.ts`             | Extend `payOrder()`                                                  |
+| `apps/server/src/modules/orders/dto/`                          | New pay DTO with required `payments[]`                               |
+| `apps/server/src/modules/reports/reports.service.ts`           | Primary: `paymentTotals` per-method aggregation (was hardcoded cash) |
+| `apps/server/src/modules/reports/z-report-builder.ts`          | Expected cash from cash payments, not total sales                    |
+| `apps/server/src/modules/business-day/business-day.service.ts` | Surface `paymentTotals` on day open/close responses                  |
+| `packages/api-spec/`                                           | Regenerated OpenAPI spec                                             |
+| `packages/shared/src/`                                         | New DTOs / types for payment methods                                 |
+| `packages/client-ts/`                                          | Regenerated                                                          |
+| `packages/client-kt/`                                          | Regenerated (types only)                                             |
+| `apps/pos/src/pages/admin/`                                    | New Payment Methods admin page                                       |
+| `apps/pos/src/components/orders/`                              | Pay modal, numpad, payment method list                               |
+| `apps/pos/src/__tests__/`                                      | Pay modal unit tests (outstanding, tap-to-fill, Pay disabled)        |
+| `docs/order-lifecycle.md`                                      | Update pay flow, payment tables, event payload                       |
 
 ## Consequences
 
@@ -620,15 +625,15 @@ operations happen on the POS SPA. This ADR does not change that rule.
 
 ### Explicitly deferred (v2+)
 
-| Item                        | Rationale                                                                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Refund tender/method        | Refunds currently have no payment method linkage. Selecting "refund to card" vs. "refund to cash" is future work.|
-| Reference / RRN column      | Card terminal reference numbers (RRN, approval code) are not captured in v1.                                     |
-| Partial pay leaving open    | The v1 pay endpoint transitions to `paid` immediately. Partial payment (e.g. deposit) while order stays `open` is not supported. |
-| Tips / gratuity             | Tip line in payment modal and tip settlement in reports is deferred.                                             |
-| Terminal integration        | Direct integration with bank card terminals (e.g. Lane/3000, POS terminals) is future work.                      |
-| Payment method icons        | Icons for payment methods in the pay modal are deferred (v1 uses text-only buttons).                             |
-| Expected cash with refunds  | Subtracting cash refunds from expected cash. v1 has a known bias (overstated expected cash).                     |
+| Item                       | Rationale                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Refund tender/method       | Refunds currently have no payment method linkage. Selecting "refund to card" vs. "refund to cash" is future work.                |
+| Reference / RRN column     | Card terminal reference numbers (RRN, approval code) are not captured in v1.                                                     |
+| Partial pay leaving open   | The v1 pay endpoint transitions to `paid` immediately. Partial payment (e.g. deposit) while order stays `open` is not supported. |
+| Tips / gratuity            | Tip line in payment modal and tip settlement in reports is deferred.                                                             |
+| Terminal integration       | Direct integration with bank card terminals (e.g. Lane/3000, POS terminals) is future work.                                      |
+| Payment method icons       | Icons for payment methods in the pay modal are deferred (v1 uses text-only buttons).                                             |
+| Expected cash with refunds | Subtracting cash refunds from expected cash. v1 has a known bias (overstated expected cash).                                     |
 
 ## Open follow-ups
 
