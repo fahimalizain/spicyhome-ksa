@@ -16,7 +16,7 @@ sandbox:
 
 | Field                                | Value             |
 | ------------------------------------ | ----------------- |
-| VAT (TIN)                            | `300000000000003` |
+| VAT (TIN)                            | `399999999900003` |
 | Onboarding OTP                       | `123456`          |
 | Commercial Registration Number (CRN) | `1234567890`      |
 
