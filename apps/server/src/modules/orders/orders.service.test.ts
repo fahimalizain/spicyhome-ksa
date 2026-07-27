@@ -457,3 +457,128 @@ describe('Order Refunds', () => {
     });
   });
 });
+
+describe('One open order per table', () => {
+  let openOrderIds: number[];
+
+  beforeAll(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (2, 'T2', 1, 1, ${now}, ${now});
+      INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (3, 'T3', 2, 1, ${now}, ${now});
+    `);
+  });
+
+  beforeEach(() => {
+    openOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of openOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOpenDineIn(tableId: number): Promise<{ id: number; orderNo: number }> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId })
+      .expect(201);
+    openOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function createOpenTakeaway(): Promise<{ id: number; orderNo: number }> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    return res.body;
+  }
+
+  it('second open dine-in on same table → 409 Conflict', async () => {
+    const first = await createOpenDineIn(2);
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId: 2 })
+      .expect(409);
+
+    expect(res.body.message).toBe(
+      `Table already has an open order #${first.orderNo} (id ${first.id}).`,
+    );
+  });
+
+  it('after pay of first order, new dine-in on same table → 201', async () => {
+    const first = await createOpenDineIn(2);
+
+    // Pay the first order
+    await request(app.getHttpServer())
+      .post(`/orders/${first.id}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+
+    // Now creating a new dine-in on same table should succeed
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId: 2 })
+      .expect(201);
+    openOrderIds.push(second.body.id);
+  });
+
+  it('after void of first order, new dine-in on same table → 201', async () => {
+    const first = await createOpenDineIn(2);
+
+    // Void the first order
+    await request(app.getHttpServer())
+      .post(`/orders/${first.id}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+
+    // Now creating a new dine-in on same table should succeed
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId: 2 })
+      .expect(201);
+    openOrderIds.push(second.body.id);
+  });
+
+  it('two takeaway open orders → both 201', async () => {
+    await createOpenTakeaway();
+    await createOpenTakeaway();
+    // No conflict expected — takeaway orders have no table
+  });
+
+  it('open dine-in on table A and table B → both 201', async () => {
+    await createOpenDineIn(2);
+    await createOpenDineIn(3);
+    // Both should succeed — different tables
+  });
+
+  it('conflict message includes order number', async () => {
+    const first = await createOpenDineIn(2);
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId: 2 })
+      .expect(409);
+
+    expect(res.body.message).toContain(`#${first.orderNo}`);
+    expect(res.body.message).toContain(`id ${first.id}`);
+  });
+});

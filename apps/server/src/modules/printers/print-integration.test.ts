@@ -132,6 +132,25 @@ afterAll(async () => {
 });
 
 describe('Print Integration', () => {
+  // Clean up open dine-in orders between tests to avoid the
+  // "one open order per table" guard from blocking subsequent tests.
+  afterEach(async () => {
+    const listRes = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`);
+    const openOrders = listRes.body || [];
+    for (const order of openOrders) {
+      if (order.tableId != null) {
+        try {
+          await request(app.getHttpServer())
+            .post(`/orders/${order.id}/void`)
+            .set('Authorization', `Bearer ${jwtToken}`);
+        } catch {
+          // ignore — order may already be closed
+        }
+      }
+    }
+  });
   describe('automatic kitchen printing on item add', () => {
     it('routes items to the correct kitchen printers by category on add', async () => {
       // Create order
