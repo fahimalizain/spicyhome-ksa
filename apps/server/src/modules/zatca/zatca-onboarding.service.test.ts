@@ -64,6 +64,7 @@ function parseComplianceResults(store: Map<string, string>): ComplianceResultEnt
 
 function setupCsrSettings(store: Map<string, string>) {
   store.set('vat_number', '300123456789003');
+  store.set('zatca_org_unit', 'SpicyHome POS');
   store.set('seller_name', 'SpicyHome Restaurant');
   store.set('seller_city', 'Riyadh');
   store.set('zatca_invoice_type', '1100');
@@ -816,5 +817,63 @@ describe('generateCSR OID label', () => {
 
     expect(payload.indexOf('PREZATCA-Code-Signing')).toBeGreaterThan(-1);
     expect(payload.indexOf('TESTZATCA-Code-Signing')).toBe(-1);
+  });
+});
+
+// ── generateCSR: subject OU ─────────────────────────────────────────────
+
+describe('generateCSR subject OU', () => {
+  let store: Map<string, string>;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    const printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+  });
+
+  function extractCsrPayload(csrPem: string): Buffer {
+    const lines = csrPem
+      .split('\n')
+      .filter((l) => !l.startsWith('-----'))
+      .join('');
+    return Buffer.from(lines, 'base64');
+  }
+
+  it('populates CSR subject OU from zatca_org_unit setting', async () => {
+    setupCsrSettings(store);
+    store.set('zatca_org_unit', 'Riyadh Branch');
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    // OU value should be present in the CSR DER payload
+    expect(payload.indexOf('Riyadh Branch')).toBeGreaterThan(-1);
+  });
+
+  it('throws BadRequestException when zatca_org_unit is missing', async () => {
+    setupCsrSettings(store);
+    store.delete('zatca_org_unit');
+
+    await expect(service.generateCSR()).rejects.toThrow(
+      'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+    );
+  });
+
+  it('throws BadRequestException when zatca_org_unit is empty string', async () => {
+    setupCsrSettings(store);
+    store.set('zatca_org_unit', '');
+
+    await expect(service.generateCSR()).rejects.toThrow(
+      'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+    );
   });
 });
