@@ -64,6 +64,7 @@ const mockOrder: OrderResponse = {
     },
   ],
   events: [],
+  payments: [],
 };
 
 const emptyRefunds: OrderRefundResponse[] = [];

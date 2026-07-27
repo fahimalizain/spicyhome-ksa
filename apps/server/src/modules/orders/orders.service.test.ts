@@ -785,6 +785,114 @@ describe('Pay with payment methods', () => {
     expect(payments[0].tenderedHalalas).toBe(totalHalalas);
     expect(payments[0].changeHalalas).toBe(0);
   });
+
+  describe('GET /orders/:id payments field', () => {
+    it('paid order returns payments with method title and amount', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/pay`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          payments: [{ methodId: 'card', amountHalalas: totalHalalas }],
+        })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(res.body.payments).toBeDefined();
+      expect(res.body.payments).toHaveLength(1);
+      expect(res.body.payments[0].methodId).toBe('card');
+      expect(res.body.payments[0].methodTitle).toBe('Card');
+      expect(res.body.payments[0].amountHalalas).toBe(totalHalalas);
+      expect(res.body.payments[0].tenderedHalalas).toBeNull();
+      expect(res.body.payments[0].changeHalalas).toBeNull();
+    });
+
+    it('split tender returns both payment lines in insertion order', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      const cardAmount = 2300;
+      const cashAmount = totalHalalas - cardAmount;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/pay`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          payments: [
+            { methodId: 'card', amountHalalas: cardAmount },
+            { methodId: 'cash', amountHalalas: cashAmount },
+          ],
+        })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(res.body.payments).toHaveLength(2);
+      expect(res.body.payments[0].methodId).toBe('card');
+      expect(res.body.payments[0].methodTitle).toBe('Card');
+      expect(res.body.payments[0].amountHalalas).toBe(cardAmount);
+      expect(res.body.payments[1].methodId).toBe('cash');
+      expect(res.body.payments[1].methodTitle).toBe('Cash');
+      expect(res.body.payments[1].amountHalalas).toBe(cashAmount);
+    });
+
+    it('open (unpaid) order returns empty payments array', async () => {
+      const { orderId } = await createOpenOrderWithItems();
+
+      const res = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(res.body.payments).toBeDefined();
+      expect(res.body.payments).toHaveLength(0);
+      expect(res.body.status).toBe('open');
+
+      await voidOrder(orderId);
+    });
+
+    it('refunded order still shows original payments', async () => {
+      const { orderId, totalHalalas, items } = await createOpenOrderWithItems();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/pay`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        })
+        .expect(201);
+
+      // Fully refund all items
+      const refundItems = items.map((i: any) => ({
+        orderItemId: i.id,
+        qty: i.itemName === 'Zinger Burger' ? 2 : 1,
+      }));
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: refundItems })
+        .expect(201);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const res = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(res.body.status).toBe('refunded');
+      expect(res.body.payments).toHaveLength(1);
+      expect(res.body.payments[0].methodId).toBe('cash');
+      expect(res.body.payments[0].amountHalalas).toBe(totalHalalas);
+    });
+  });
 });
 
 describe('One open order per table', () => {

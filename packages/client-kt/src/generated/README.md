@@ -142,6 +142,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.OpenDayDto](docs/OpenDayDto.md)
  - [com.spicyhome.client.models.OrderEventResponse](docs/OrderEventResponse.md)
  - [com.spicyhome.client.models.OrderItemResponse](docs/OrderItemResponse.md)
+ - [com.spicyhome.client.models.OrderPaymentResponse](docs/OrderPaymentResponse.md)
  - [com.spicyhome.client.models.OrderRefundResponse](docs/OrderRefundResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
  - [com.spicyhome.client.models.OrderSummaryResponse](docs/OrderSummaryResponse.md)

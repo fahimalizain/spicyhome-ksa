@@ -1,0 +1,29 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
+
+export class OrderPaymentResponse {
+  @ApiProperty({ example: 'card', description: 'Payment method slug' })
+  methodId!: string;
+
+  @ApiProperty({ example: 'Card', description: 'Payment method display title' })
+  methodTitle!: string;
+
+  @ApiProperty({ ...ApiInt64, example: 5000, description: 'Amount paid in halalas' })
+  amountHalalas!: number;
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 5000,
+    description: 'Cash tendered in halalas (null for non-cash)',
+    nullable: true,
+  })
+  tenderedHalalas!: number | null;
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 0,
+    description: 'Change given in halalas (null for non-cash)',
+    nullable: true,
+  })
+  changeHalalas!: number | null;
+}

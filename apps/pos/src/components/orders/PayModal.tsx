@@ -244,19 +244,29 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
         {/* Method amount block */}
         {selectedMethodId && (
           <div className="bg-gray-800 rounded-lg p-3 mb-3">
-            <div className="text-xs text-gray-500 mb-2">
-              Editing:{' '}
-              <span className="text-white font-medium">
-                {methods.find((m) => m.id === selectedMethodId)?.title}
+            <button
+              type="button"
+              onClick={() => setNumpadTarget('method')}
+              className={`w-full touch-target bg-gray-700 border rounded px-3 py-3 text-left transition-colors ${
+                numpadTarget === 'method'
+                  ? 'border-brand-500'
+                  : 'border-gray-700 hover:border-gray-600'
+              }`}
+            >
+              <span className="block text-xs text-gray-500 mb-1">
+                Editing:{' '}
+                <span className="text-white font-medium">
+                  {methods.find((m) => m.id === selectedMethodId)?.title}
+                </span>
               </span>
-            </div>
-            <div className="text-2xl text-white text-center mb-2 font-mono">
-              {selectedAmount > 0 ? halalasToSar(selectedAmount) : '0.00'} SAR
-            </div>
+              <span className="block text-2xl text-white text-center font-mono">
+                {selectedAmount > 0 ? halalasToSar(selectedAmount) : '0.00'} SAR
+              </span>
+            </button>
 
             {/* Collapsible method numpad */}
             <div
-              className={`overflow-hidden transition-all duration-200 ease-in-out ${
+              className={`overflow-hidden transition-all duration-200 ease-in-out mt-3 ${
                 numpadTarget === 'method'
                   ? 'max-h-64 opacity-100'
                   : 'max-h-0 opacity-0 pointer-events-none'

@@ -121,6 +121,7 @@ class OrdersViewModelTest {
             updatedBy = 1L,
             items = items,
             events = emptyList(),
+            payments = emptyList(),
         )
     }
 

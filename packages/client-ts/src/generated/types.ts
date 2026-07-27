@@ -1581,6 +1581,36 @@ export interface components {
        */
       createdAt: number;
     };
+    OrderPaymentResponse: {
+      /**
+       * @description Payment method slug
+       * @example card
+       */
+      methodId: string;
+      /**
+       * @description Payment method display title
+       * @example Card
+       */
+      methodTitle: string;
+      /**
+       * Format: int64
+       * @description Amount paid in halalas
+       * @example 5000
+       */
+      amountHalalas: number;
+      /**
+       * Format: int64
+       * @description Cash tendered in halalas (null for non-cash)
+       * @example 5000
+       */
+      tenderedHalalas: number | null;
+      /**
+       * Format: int64
+       * @description Change given in halalas (null for non-cash)
+       * @example 0
+       */
+      changeHalalas: number | null;
+    };
     OrderResponse: {
       /**
        * Format: int64
@@ -1650,6 +1680,7 @@ export interface components {
       updatedBy: number | null;
       items: components['schemas']['OrderItemResponse'][];
       events: components['schemas']['OrderEventResponse'][];
+      payments: components['schemas']['OrderPaymentResponse'][];
     };
     CreateOrderDto: {
       /**

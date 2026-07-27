@@ -1076,7 +1076,24 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Order not found');
     const itemsList = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
     const logs = this.orderEvents.getEvents(this.db, id);
-    return { ...order, items: itemsList, events: logs };
+    const payments = this.db
+      .select()
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, id))
+      .orderBy(orderPayments.id)
+      .all();
+    return {
+      ...order,
+      items: itemsList,
+      events: logs,
+      payments: payments.map((p) => ({
+        methodId: p.methodId,
+        methodTitle: p.methodTitle,
+        amountHalalas: p.amountHalalas,
+        tenderedHalalas: p.tenderedHalalas,
+        changeHalalas: p.changeHalalas,
+      })),
+    };
   }
 
   getOrderEvents(orderId: number): any[] {

@@ -7,14 +7,6 @@ import com.squareup.moshi.JsonWriter
 import com.squareup.moshi.ToJson
 import java.math.BigInteger
 
-/**
- * Moshi adapter for [BigInteger] that writes JSON numbers (not strings).
- *
- * Mirrors the [BigDecimalAdapter] fix — the openapi-generator default
- * returns `String` from [ToJson], causing Moshi to emit JSON strings.
- * This adapter writes JSON numbers via [JsonWriter.value] and accepts
- * both numbers and strings on read.
- */
 class BigIntegerAdapter {
     @ToJson
     fun toJson(writer: JsonWriter, value: BigInteger?) {

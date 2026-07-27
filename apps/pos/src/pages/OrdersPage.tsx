@@ -189,6 +189,21 @@ export function OrdersPage() {
             </div>
           </div>
 
+          {/* Payments section */}
+          {(selectedOrder.payments?.length ?? 0) > 0 && (
+            <div className="mt-3">
+              <h3 className="text-sm font-semibold text-gray-300 mb-1">Payments</h3>
+              <div className="space-y-1">
+                {selectedOrder.payments!.map((p, i) => (
+                  <div key={i} className="flex justify-between text-sm text-gray-400">
+                    <span>{p.methodTitle}</span>
+                    <span>{halalasToSar(p.amountHalalas)} SAR</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* OrderActionBar for reprints */}
           <div className="mt-3">
             <OrderActionBar orderId={selectedOrder.id} status={selectedOrder.status} />

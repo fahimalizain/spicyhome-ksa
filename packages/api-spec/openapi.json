@@ -3628,6 +3628,48 @@
           "createdAt"
         ]
       },
+      "OrderPaymentResponse": {
+        "type": "object",
+        "properties": {
+          "methodId": {
+            "type": "string",
+            "example": "card",
+            "description": "Payment method slug"
+          },
+          "methodTitle": {
+            "type": "string",
+            "example": "Card",
+            "description": "Payment method display title"
+          },
+          "amountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5000,
+            "description": "Amount paid in halalas"
+          },
+          "tenderedHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5000,
+            "description": "Cash tendered in halalas (null for non-cash)",
+            "nullable": true
+          },
+          "changeHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 0,
+            "description": "Change given in halalas (null for non-cash)",
+            "nullable": true
+          }
+        },
+        "required": [
+          "methodId",
+          "methodTitle",
+          "amountHalalas",
+          "tenderedHalalas",
+          "changeHalalas"
+        ]
+      },
       "OrderResponse": {
         "type": "object",
         "properties": {
@@ -3717,6 +3759,12 @@
             "items": {
               "$ref": "#/components/schemas/OrderEventResponse"
             }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderPaymentResponse"
+            }
           }
         },
         "required": [
@@ -3736,7 +3784,8 @@
           "createdBy",
           "updatedBy",
           "items",
-          "events"
+          "events",
+          "payments"
         ]
       },
       "CreateOrderDto": {
