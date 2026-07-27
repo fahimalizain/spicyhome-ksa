@@ -92,7 +92,7 @@ fun NavGraph(
             val args = backStackEntry.arguments
             val initialTableId: Long? = args?.getString("tableId")?.toLongOrNull()
             val initialOrderId: Long? = args?.getString("orderId")?.toLongOrNull()
-            val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider, initialTableId, initialOrderId))
+            val vm: OrderViewModel = viewModel(factory = OrderViewModel.Factory(preferencesManager, apiClientProvider, app.realtimeClient, initialTableId, initialOrderId))
             OrderScreen(
                 viewModel = vm,
                 onViewOrders = { navController.navigate(NavRoutes.ORDERS) },
@@ -109,7 +109,12 @@ fun NavGraph(
             val vm: OrdersViewModel = viewModel(factory = OrdersViewModel.Factory(preferencesManager, apiClientProvider, app.realtimeClient))
             OrdersScreen(
                 viewModel = vm,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onContinue = { orderId ->
+                    navController.navigate("order?orderId=$orderId") {
+                        popUpTo("order?tableId={tableId}&orderId={orderId}") { inclusive = true }
+                    }
+                }
             )
         }
 

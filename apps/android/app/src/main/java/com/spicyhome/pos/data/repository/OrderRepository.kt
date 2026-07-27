@@ -7,7 +7,6 @@ import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdateOrderItemDto
 import retrofit2.Call
@@ -58,13 +57,5 @@ class OrderRepository(private val ordersApi: OrdersApi) {
             orderId,
             itemId
         )
-    }
-
-    fun payOrder(orderId: Long): Call<StatusResponse> {
-        return ordersApi.ordersControllerPayOrder(orderId)
-    }
-
-    fun voidOrder(orderId: Long): Call<StatusResponse> {
-        return ordersApi.ordersControllerVoidOrder(orderId)
     }
 }

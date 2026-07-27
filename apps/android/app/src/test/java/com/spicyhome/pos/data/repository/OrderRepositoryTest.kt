@@ -6,10 +6,10 @@ import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.SuccessResponse
+import com.spicyhome.client.models.UpdateOrderItemDto
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -37,10 +37,10 @@ class OrderRepositoryTest {
     private lateinit var addItemCall: Call<AddOrderItemResponse>
 
     @MockK
-    private lateinit var payCall: Call<StatusResponse>
+    private lateinit var updateItemCall: Call<SuccessResponse>
 
     @MockK
-    private lateinit var voidCall: Call<StatusResponse>
+    private lateinit var removeItemCall: Call<SuccessResponse>
 
     private lateinit var repository: OrderRepository
 
@@ -153,46 +153,45 @@ class OrderRepositoryTest {
     }
 
     @Test
-    fun `payOrder delegates correctly`() {
-        every { ordersApi.ordersControllerPayOrder(any()) } returns payCall
+    fun `updateItem delegates correctly`() {
+        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } returns updateItemCall
 
-        repository.payOrder(42)
+        repository.updateItem(orderId = 1, itemId = 42, qty = 2, notes = "extra spicy")
 
-        verify { ordersApi.ordersControllerPayOrder(42L) }
+        verify {
+            ordersApi.ordersControllerUpdateItem(
+                1L,
+                42L,
+                match { dto ->
+                    dto.qty == 2 && dto.notes == "extra spicy"
+                }
+            )
+        }
     }
 
     @Test
-    fun `voidOrder delegates correctly`() {
-        every { ordersApi.ordersControllerVoidOrder(any()) } returns voidCall
+    fun `updateItem delegates qty only`() {
+        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } returns updateItemCall
 
-        repository.voidOrder(42)
+        repository.updateItem(orderId = 1, itemId = 42, qty = 3, notes = null)
 
-        verify { ordersApi.ordersControllerVoidOrder(42L) }
+        verify {
+            ordersApi.ordersControllerUpdateItem(
+                1L,
+                42L,
+                match { dto ->
+                    dto.qty == 3 && dto.notes == null
+                }
+            )
+        }
     }
 
     @Test
-    fun `order lifecycle create pay`() {
-        // Create
-        val created = CreateOrderResponse(
-            id = 1L,
-            uuid = "uuid",
-            orderNo = 100L,
-        )
-        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
-        every { createCall.execute() } returns Response.success(created)
+    fun `removeItem delegates correctly`() {
+        every { ordersApi.ordersControllerRemoveItem(any(), any()) } returns removeItemCall
 
-        val createResult = repository.createOrder("dine_in", 1).execute()
-        assertThat(createResult.isSuccessful).isTrue()
-        assertThat(createResult.body()?.orderNo?.toLong()).isEqualTo(100)
+        repository.removeItem(orderId = 1, itemId = 42)
 
-        // Pay
-        every { ordersApi.ordersControllerPayOrder(any()) } returns payCall
-        every { payCall.execute() } returns Response.success(
-            StatusResponse(status = "paid", success = true)
-        )
-
-        val payResult = repository.payOrder(1).execute()
-        assertThat(payResult.isSuccessful).isTrue()
-        assertThat(payResult.body()?.status).isEqualTo("paid")
+        verify { ordersApi.ordersControllerRemoveItem(1L, 42L) }
     }
 }

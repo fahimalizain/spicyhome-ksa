@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -20,15 +19,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.client.models.ItemResponse
-import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
+
 @Composable
 fun OrderScreen(
     viewModel: OrderViewModel,
@@ -40,9 +38,8 @@ fun OrderScreen(
 
     when (state.screenState) {
         OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onLogout)
-        OrderScreenState.BUILDING_ORDER -> OrderBuildingPanel(viewModel, state, onViewOrders, onViewTables)
-        OrderScreenState.ORDER_CREATED -> OrderCreatedPanel(viewModel, state)
-        OrderScreenState.ORDER_PAID -> OrderPaidPanel(viewModel, state)
+        OrderScreenState.EDITING_ORDER -> OrderEditingPanel(viewModel, state, onViewOrders, onViewTables)
+        OrderScreenState.ORDER_TERMINAL -> OrderTerminalPanel(viewModel, state)
         OrderScreenState.DAY_NOT_OPEN -> DayNotOpenPanel(viewModel, state)
     }
 }
@@ -184,12 +181,26 @@ private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState, o
     }
 }
 
+// ── Unified Editing Panel (covers both pre-create local cart and post-create server-synced cart) ──
+
 @Composable
-private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, onViewOrders: () -> Unit, onViewTables: () -> Unit) {
+private fun OrderEditingPanel(
+    viewModel: OrderViewModel,
+    state: OrderUiState,
+    onViewOrders: () -> Unit,
+    onViewTables: () -> Unit,
+) {
+    val isServerSynced = state.currentOrderId != null
+    val isOpenOrder = isServerSynced && state.currentOrder?.status == "open"
+
     Row(modifier = Modifier.fillMaxSize()) {
         // Left: categories + items
         Column(modifier = Modifier.weight(0.65f)) {
-            TopBar(title = "New Order", onViewOrders = onViewOrders, onViewTables = onViewTables)
+            TopBar(
+                title = if (isOpenOrder) "Order #${state.currentOrder?.orderNo ?: state.currentOrderId}" else "New Order",
+                onViewOrders = onViewOrders,
+                onViewTables = onViewTables,
+            )
 
             // Category tabs
             if (state.categories.isNotEmpty()) {
@@ -245,19 +256,68 @@ private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, o
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(state.filteredItems, key = { it.id }) { item ->
-                        ItemCard(item = item, onClick = { viewModel.addToCart(item) })
+                        ItemCard(
+                            item = item,
+                            onClick = {
+                                if (isServerSynced) {
+                                    // D16 branching: merge qty if existing server-synced line
+                                    val existing = state.cart.find {
+                                        it.item.id == item.id && it.orderItemId != null
+                                    }
+                                    if (existing != null) {
+                                        viewModel.updateQtyServer(existing.orderItemId!!, existing.qty + 1)
+                                    } else {
+                                        viewModel.addItemServer(item)
+                                    }
+                                } else {
+                                    viewModel.addToCart(item)
+                                }
+                            },
+                            enabled = !isServerSynced || state.permissions.updateOrder,
+                        )
                     }
                 }
             }
         }
 
         // Right: cart panel
-        CartPanel(
+        UnifiedCartPanel(
             state = state,
+            isOpenOrder = isServerSynced,
             onCreateOrder = { viewModel.createOrder() },
-            onDecreaseQty = { viewModel.decreaseQty(it) },
-            onIncreaseQty = { viewModel.increaseQty(it) },
-            onRemove = { viewModel.removeFromCart(it) },
+            onDecrease = { index, cartItem ->
+                if (cartItem.orderItemId != null) {
+                    if (cartItem.qty <= 1) {
+                        viewModel.removeItemServer(cartItem.orderItemId!!)
+                    } else {
+                        viewModel.updateQtyServer(cartItem.orderItemId!!, cartItem.qty - 1)
+                    }
+                } else {
+                    viewModel.decreaseQty(index)
+                }
+            },
+            onIncrease = { index, cartItem ->
+                if (cartItem.orderItemId != null) {
+                    viewModel.updateQtyServer(cartItem.orderItemId!!, cartItem.qty + 1)
+                } else {
+                    viewModel.increaseQty(index)
+                }
+            },
+            onRemove = { index, cartItem ->
+                if (cartItem.orderItemId != null) {
+                    viewModel.removeItemServer(cartItem.orderItemId!!)
+                } else {
+                    viewModel.removeFromCart(index)
+                }
+            },
+            onUpdateNotes = { index, cartItem, notes ->
+                if (cartItem.orderItemId != null) {
+                    viewModel.updateNotesServer(cartItem.orderItemId!!, notes)
+                } else {
+                    viewModel.updateItemNotes(index, notes)
+                }
+            },
+            onNewOrder = { viewModel.newOrder() },
             modifier = Modifier
                 .weight(0.35f)
                 .fillMaxHeight(),
@@ -266,12 +326,16 @@ private fun OrderBuildingPanel(viewModel: OrderViewModel, state: OrderUiState, o
 }
 
 @Composable
-private fun ItemCard(item: ItemResponse, onClick: () -> Unit) {
+private fun ItemCard(item: ItemResponse, onClick: () -> Unit, enabled: Boolean = true) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
+            .then(
+                if (enabled) Modifier.clickable(onClick = onClick) else Modifier
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) DarkSurfaceVariant else DarkSurfaceVariant.copy(alpha = 0.4f),
+        ),
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(
@@ -286,7 +350,7 @@ private fun ItemCard(item: ItemResponse, onClick: () -> Unit) {
                     text = item.name,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = OnDark,
+                    color = if (enabled) OnDark else OnDarkSecondary,
                 )
                 if (item.nameAr != null && item.nameAr.toString() != "null") {
                     Text(
@@ -300,20 +364,25 @@ private fun ItemCard(item: ItemResponse, onClick: () -> Unit) {
                 text = MoneyFormatter.halalasToSar(item.priceHalalas),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Accent,
+                color = if (enabled) Accent else OnDarkSecondary,
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
     }
 }
 
+// ── Unified Cart Panel ──
+
 @Composable
-private fun CartPanel(
+private fun UnifiedCartPanel(
     state: OrderUiState,
+    isOpenOrder: Boolean,
     onCreateOrder: () -> Unit,
-    onDecreaseQty: (Int) -> Unit,
-    onIncreaseQty: (Int) -> Unit,
-    onRemove: (Int) -> Unit,
+    onDecrease: (Int, CartItem) -> Unit,
+    onIncrease: (Int, CartItem) -> Unit,
+    onRemove: (Int, CartItem) -> Unit,
+    onUpdateNotes: (Int, CartItem, String) -> Unit,
+    onNewOrder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -347,9 +416,12 @@ private fun CartPanel(
                 itemsIndexed(state.cart.toList()) { index, cartItem ->
                     CartItemRow(
                         cartItem = cartItem,
-                        onDecrease = { onDecreaseQty(index) },
-                        onIncrease = { onIncreaseQty(index) },
-                        onRemove = { onRemove(index) },
+                        onDecrease = { onDecrease(index, cartItem) },
+                        onIncrease = { onIncrease(index, cartItem) },
+                        onRemove = { onRemove(index, cartItem) },
+                        onUpdateNotes = { notes -> onUpdateNotes(index, cartItem, notes) },
+                        canMutate = !isOpenOrder || (cartItem.orderItemId != null && state.permissions.updateOrder),
+                        canDelete = !isOpenOrder || (cartItem.orderItemId != null && state.permissions.deleteOrderItem),
                     )
                 }
             }
@@ -377,7 +449,7 @@ private fun CartPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("VAT (15%)", color = OnDarkSecondary, fontSize = 14.sp)
+                    Text("VAT", color = OnDarkSecondary, fontSize = 14.sp)
                     Text(
                         MoneyFormatter.halalasToSar(state.cartVatHalalas),
                         color = OnDark,
@@ -407,18 +479,34 @@ private fun CartPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = onCreateOrder,
-                enabled = !state.isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                Text(
-                    text = if (state.isLoading) "Creating..." else "Create Order",
-                    fontSize = 18.sp,
-                )
+            // Create Order button (pre-create only)
+            if (!isOpenOrder) {
+                if (state.permissions.createOrder) {
+                    Button(
+                        onClick = onCreateOrder,
+                        enabled = !state.isLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    ) {
+                        Text(
+                            text = if (state.isLoading) "Creating..." else "Create Order",
+                            fontSize = 18.sp,
+                        )
+                    }
+                }
+            } else {
+                // New Order button for open orders
+                OutlinedButton(
+                    onClick = onNewOrder,
+                    enabled = !state.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                ) {
+                    Text("New Order", fontSize = 16.sp)
+                }
             }
         }
 
@@ -435,7 +523,12 @@ private fun CartItemRow(
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
     onRemove: () -> Unit,
+    onUpdateNotes: (String) -> Unit,
+    canMutate: Boolean,
+    canDelete: Boolean,
 ) {
+    var showNotesDialog by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -444,45 +537,145 @@ private fun CartItemRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = cartItem.item.name,
-                fontSize = 13.sp,
-                color = OnDark,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = cartItem.item.name,
+                    fontSize = 13.sp,
+                    color = OnDark,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (cartItem.notes.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "\uD83D\uDCDD",
+                        fontSize = 11.sp,
+                    )
+                }
+                if (canMutate) {
+                    TextButton(
+                        onClick = { showNotesDialog = true },
+                        modifier = Modifier.width(24.dp).height(24.dp),
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        Text("\u270E", fontSize = 13.sp, color = OnDarkSecondary)
+                    }
+                }
+            }
+            if (cartItem.notes.isNotBlank()) {
+                Text(
+                    text = cartItem.notes,
+                    fontSize = 10.sp,
+                    color = OnDarkSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = "${cartItem.qty} × ${MoneyFormatter.halalasToSar(cartItem.item.priceHalalas)}",
                 fontSize = 11.sp,
                 color = OnDarkSecondary,
             )
         }
-        TextButton(onClick = onDecrease, modifier = Modifier.width(36.dp)) {
-            Text("-", color = Accent, fontSize = 18.sp)
+        if (canMutate) {
+            TextButton(onClick = onDecrease, modifier = Modifier.width(36.dp)) {
+                Text("-", color = Accent, fontSize = 18.sp)
+            }
+            Text(
+                text = "${cartItem.qty}",
+                color = OnDark,
+                fontSize = 15.sp,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            TextButton(onClick = onIncrease, modifier = Modifier.width(36.dp)) {
+                Text("+", color = Accent, fontSize = 18.sp)
+            }
+        } else {
+            Text(
+                text = "×${cartItem.qty}",
+                color = OnDarkSecondary,
+                fontSize = 15.sp,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
         }
-        Text(
-            text = "${cartItem.qty}",
-            color = OnDark,
-            fontSize = 15.sp,
-            modifier = Modifier.padding(horizontal = 4.dp),
+        if (canDelete) {
+            TextButton(onClick = onRemove) {
+                Text("×", color = OnDarkSecondary, fontSize = 18.sp)
+            }
+        }
+    }
+
+    if (showNotesDialog) {
+        var notesText by remember(cartItem.notes) { mutableStateOf(cartItem.notes) }
+        AlertDialog(
+            onDismissRequest = { showNotesDialog = false },
+            title = { Text("Item Notes", color = OnDark) },
+            text = {
+                OutlinedTextField(
+                    value = notesText,
+                    onValueChange = { notesText = it },
+                    label = { Text("Notes") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        focusedLabelColor = Accent,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUpdateNotes(notesText)
+                    showNotesDialog = false
+                }) {
+                    Text("Save", color = Accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotesDialog = false }) {
+                    Text("Cancel", color = OnDarkSecondary)
+                }
+            },
+            containerColor = DarkSurface,
         )
-        TextButton(onClick = onIncrease, modifier = Modifier.width(36.dp)) {
-            Text("+", color = Accent, fontSize = 18.sp)
-        }
-        TextButton(onClick = onRemove) {
-            Text("×", color = OnDarkSecondary, fontSize = 18.sp)
-        }
     }
 }
 
+// ── Read-only Terminal Panel for paid/voided/refunded orders ──
+
 @Composable
-private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
-    val items = state.currentOrder?.items ?: emptyList()
+private fun OrderTerminalPanel(viewModel: OrderViewModel, state: OrderUiState) {
+    val order = state.currentOrder
+    val statusColor = when (order?.status) {
+        "paid" -> Success
+        "voided" -> StatusVoided
+        "refunded" -> StatusRefunded
+        else -> StatusOpen
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "Order #${state.currentOrder?.orderNo ?: state.currentOrderId ?: "?"}")
+        TopBar(title = "Order #${order?.orderNo ?: ""}")
 
-        if (items.isNotEmpty()) {
+        // Status badge
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(statusColor.copy(alpha = 0.15f))
+                .padding(12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = (order?.status ?: "").uppercase(),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = statusColor,
+            )
+        }
+
+        // Items (prefer currentOrder.items over cart for terminal)
+        val displayItems = order?.items ?: emptyList()
+
+        if (displayItems.isNotEmpty()) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -490,7 +683,7 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(items, key = { it.id }) { item ->
+                items(displayItems, key = { it.id }) { item ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
                     ) {
@@ -525,6 +718,7 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
             }
         }
 
+        // Totals + New Order
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -533,9 +727,7 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
         ) {
             Divider(color = DarkSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Order Created", fontSize = 20.sp, color = OnDark)
-            Spacer(modifier = Modifier.height(4.dp))
-            state.currentOrder?.let {
+            order?.let {
                 Text(
                     "Total: ${MoneyFormatter.halalasToSar(it.totalHalalas)}",
                     fontSize = 22.sp,
@@ -545,9 +737,10 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedButton(
+            Button(
                 onClick = { viewModel.newOrder() },
                 enabled = !state.isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = Accent),
                 modifier = Modifier
                     .width(200.dp)
                     .height(64.dp),
@@ -563,38 +756,7 @@ private fun OrderCreatedPanel(viewModel: OrderViewModel, state: OrderUiState) {
     }
 }
 
-@Composable
-private fun OrderPaidPanel(viewModel: OrderViewModel, state: OrderUiState) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "Order #${state.currentOrder?.orderNo ?: ""}")
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("Paid", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Success)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Total: ${MoneyFormatter.halalasToSar(state.currentOrder?.totalHalalas ?: 0L)}",
-                fontSize = 22.sp,
-                color = OnDark,
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = { viewModel.newOrder() },
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier
-                    .width(300.dp)
-                    .height(64.dp),
-            ) {
-                Text("New Order", fontSize = 20.sp)
-            }
-        }
-    }
-}
+// ── Day Not Open Panel (message + Back only, no admin controls) ──
 
 @Composable
 private fun DayNotOpenPanel(viewModel: OrderViewModel, state: OrderUiState) {
@@ -607,62 +769,23 @@ private fun DayNotOpenPanel(viewModel: OrderViewModel, state: OrderUiState) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                "⚠",
-                fontSize = 48.sp,
-                color = Warning,
-            )
+            Text("⚠", fontSize = 48.sp, color = Warning)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "No Open Business Day",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = OnDark,
-            )
+            Text("No Open Business Day", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = OnDark)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "A business day must be opened before taking orders.",
+                "A business day must be opened from the POS terminal before taking orders.",
                 fontSize = 16.sp,
                 color = OnDarkSecondary,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Opening cash input
-            OutlinedTextField(
-                value = state.openingCash,
-                onValueChange = {},
-                label = { Text("Opening Cash (SAR)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.width(250.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Accent,
-                    focusedLabelColor = Accent,
-                ),
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = { viewModel.newOrder() },
-                    modifier = Modifier.height(48.dp),
-                ) {
-                    Text("Back")
-                }
-                Button(
-                    onClick = { }, // Open day would be called here
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                    modifier = Modifier.height(48.dp),
-                ) {
-                    Text("Open Day")
-                }
-            }
-
-            if (state.dayOpeningError != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(state.dayOpeningError, color = Error, fontSize = 14.sp)
+            Button(
+                onClick = { viewModel.newOrder() },
+                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                modifier = Modifier.height(48.dp),
+            ) {
+                Text("Back")
             }
         }
     }
