@@ -365,7 +365,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Mark order as paid (open → paid) */
+    /** Mark order as paid with payment methods (open → paid) */
     post: operations['OrdersController_payOrder'];
     delete?: never;
     options?: never;
@@ -832,6 +832,58 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/payment-methods': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all payment methods (including disabled) */
+    get: operations['PaymentMethodsController_list'];
+    put?: never;
+    /** Create a payment method */
+    post: operations['PaymentMethodsController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/payment-methods/enabled': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List enabled payment methods (no special permission required) */
+    get: operations['PaymentMethodsController_listEnabled'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/payment-methods/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a payment method */
+    patch: operations['PaymentMethodsController_update'];
     trace?: never;
   };
 }
@@ -1511,6 +1563,36 @@ export interface components {
        */
       createdAt: number;
     };
+    OrderPaymentResponse: {
+      /**
+       * @description Payment method slug
+       * @example card
+       */
+      methodId: string;
+      /**
+       * @description Payment method display title
+       * @example Card
+       */
+      methodTitle: string;
+      /**
+       * Format: int64
+       * @description Amount paid in halalas
+       * @example 5000
+       */
+      amountHalalas: number;
+      /**
+       * Format: int64
+       * @description Cash tendered in halalas (null for non-cash)
+       * @example 5000
+       */
+      tenderedHalalas: number | null;
+      /**
+       * Format: int64
+       * @description Change given in halalas (null for non-cash)
+       * @example 0
+       */
+      changeHalalas: number | null;
+    };
     OrderResponse: {
       /**
        * Format: int64
@@ -1580,6 +1662,7 @@ export interface components {
       updatedBy: number | null;
       items: components['schemas']['OrderItemResponse'][];
       events: components['schemas']['OrderEventResponse'][];
+      payments: components['schemas']['OrderPaymentResponse'][];
     };
     CreateOrderDto: {
       /**
@@ -1639,6 +1722,29 @@ export interface components {
       baseUpdatedAt: number;
       /** @description Full desired cart — missing existing lines are removed */
       items: components['schemas']['SyncOrderItemDto'][];
+    };
+    PaymentLineDto: {
+      /**
+       * @description Payment method slug
+       * @example card
+       */
+      methodId: string;
+      /**
+       * Format: int64
+       * @description Amount in halalas
+       * @example 5000
+       */
+      amountHalalas: number;
+      /**
+       * Format: int64
+       * @description Cash tendered amount in halalas (cash only)
+       * @example 10000
+       */
+      tenderedHalalas?: number | null;
+    };
+    PayOrderDto: {
+      /** @description Payment lines (at least one required) */
+      payments: components['schemas']['PaymentLineDto'][];
     };
     StatusResponse: {
       /** @example true */
@@ -1936,6 +2042,54 @@ export interface components {
        * @example 5
        */
       orderCount: number;
+    };
+    PaymentMethodResponse: {
+      /** @example cash */
+      id: string;
+      /** @example Cash */
+      title: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreatePaymentMethodDto: {
+      /** @example SADAD */
+      title: string;
+    };
+    UpdatePaymentMethodDto: {
+      /** @example SADAD */
+      title?: string;
+      /** @default true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
     };
   };
   responses: never;
@@ -2690,7 +2844,11 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PayOrderDto'];
+      };
+    };
     responses: {
       /** @description Order paid */
       201: {
@@ -3324,6 +3482,97 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  PaymentMethodsController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of payment methods */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'][];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePaymentMethodDto'];
+      };
+    };
+    responses: {
+      /** @description Created payment method */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_listEnabled: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of enabled payment methods */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'][];
+        };
+      };
+    };
+  };
+  PaymentMethodsController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Payment method slug */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePaymentMethodDto'];
+      };
+    };
+    responses: {
+      /** @description Updated payment method */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethodResponse'];
+        };
       };
     };
   };

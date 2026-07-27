@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderItemResponse } from './order-item-response.dto';
 import { OrderEventResponse } from './order-event-response.dto';
+import { OrderPaymentResponse } from './order-payment-response.dto';
 import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class OrderResponse {
@@ -54,4 +55,7 @@ export class OrderResponse {
 
   @ApiProperty({ type: [OrderEventResponse] })
   events!: OrderEventResponse[];
+
+  @ApiProperty({ type: [OrderPaymentResponse] })
+  payments!: OrderPaymentResponse[];
 }

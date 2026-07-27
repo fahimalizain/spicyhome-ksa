@@ -1181,7 +1181,7 @@
     "/orders/{id}/pay": {
       "post": {
         "operationId": "OrdersController_payOrder",
-        "summary": "Mark order as paid (open → paid)",
+        "summary": "Mark order as paid with payment methods (open → paid)",
         "parameters": [
           {
             "name": "id",
@@ -1193,6 +1193,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayOrderDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Order paid",
@@ -2133,6 +2143,148 @@
           }
         ]
       }
+    },
+    "/payment-methods": {
+      "get": {
+        "operationId": "PaymentMethodsController_list",
+        "summary": "List all payment methods (including disabled)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of payment methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentMethodResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "payment-methods"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "PaymentMethodsController_create",
+        "summary": "Create a payment method",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentMethodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created payment method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "payment-methods"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/payment-methods/enabled": {
+      "get": {
+        "operationId": "PaymentMethodsController_listEnabled",
+        "summary": "List enabled payment methods (no special permission required)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of enabled payment methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentMethodResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "payment-methods"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/payment-methods/{id}": {
+      "patch": {
+        "operationId": "PaymentMethodsController_update",
+        "summary": "Update a payment method",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Payment method slug",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePaymentMethodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated payment method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "payment-methods"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -2177,6 +2329,10 @@
     {
       "name": "zatca",
       "description": "ZATCA e-invoicing"
+    },
+    {
+      "name": "payment-methods",
+      "description": "Payment method configuration"
     }
   ],
   "servers": [],
@@ -3372,6 +3528,48 @@
           "createdAt"
         ]
       },
+      "OrderPaymentResponse": {
+        "type": "object",
+        "properties": {
+          "methodId": {
+            "type": "string",
+            "example": "card",
+            "description": "Payment method slug"
+          },
+          "methodTitle": {
+            "type": "string",
+            "example": "Card",
+            "description": "Payment method display title"
+          },
+          "amountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5000,
+            "description": "Amount paid in halalas"
+          },
+          "tenderedHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5000,
+            "description": "Cash tendered in halalas (null for non-cash)",
+            "nullable": true
+          },
+          "changeHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 0,
+            "description": "Change given in halalas (null for non-cash)",
+            "nullable": true
+          }
+        },
+        "required": [
+          "methodId",
+          "methodTitle",
+          "amountHalalas",
+          "tenderedHalalas",
+          "changeHalalas"
+        ]
+      },
       "OrderResponse": {
         "type": "object",
         "properties": {
@@ -3461,6 +3659,12 @@
             "items": {
               "$ref": "#/components/schemas/OrderEventResponse"
             }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderPaymentResponse"
+            }
           }
         },
         "required": [
@@ -3480,7 +3684,8 @@
           "createdBy",
           "updatedBy",
           "items",
-          "events"
+          "events",
+          "payments"
         ]
       },
       "CreateOrderDto": {
@@ -3580,6 +3785,48 @@
         "required": [
           "baseUpdatedAt",
           "items"
+        ]
+      },
+      "PaymentLineDto": {
+        "type": "object",
+        "properties": {
+          "methodId": {
+            "type": "string",
+            "example": "card",
+            "description": "Payment method slug"
+          },
+          "amountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5000,
+            "description": "Amount in halalas"
+          },
+          "tenderedHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 10000,
+            "description": "Cash tendered amount in halalas (cash only)",
+            "nullable": true
+          }
+        },
+        "required": [
+          "methodId",
+          "amountHalalas"
+        ]
+      },
+      "PayOrderDto": {
+        "type": "object",
+        "properties": {
+          "payments": {
+            "description": "Payment lines (at least one required)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentLineDto"
+            }
+          }
+        },
+        "required": [
+          "payments"
         ]
       },
       "StatusResponse": {
@@ -4117,6 +4364,90 @@
           "totalVatHalalas",
           "orderCount"
         ]
+      },
+      "PaymentMethodResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cash"
+          },
+          "title": {
+            "type": "string",
+            "example": "Cash"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "enabled",
+          "sortOrder",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreatePaymentMethodDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "SADAD"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdatePaymentMethodDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "SADAD"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-import { SpicyHomeClient } from './client';
+import { SpicyHomeClient, type PayOrderDto } from './client';
 
 describe('SpicyHomeClient', () => {
   it('can be instantiated', () => {
@@ -99,6 +99,18 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.printers.update).toBe('function');
   });
 
+  it('exposes payment methods methods', () => {
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => null,
+    });
+
+    expect(typeof client.paymentMethods.list).toBe('function');
+    expect(typeof client.paymentMethods.listEnabled).toBe('function');
+    expect(typeof client.paymentMethods.create).toBe('function');
+    expect(typeof client.paymentMethods.update).toBe('function');
+  });
+
   it('includes auth token in headers when token is set', async () => {
     const client = new SpicyHomeClient({
       baseUrl: 'http://localhost:3000',
@@ -107,5 +119,12 @@ describe('SpicyHomeClient', () => {
 
     // Verify the client exists with token
     expect(client).toBeDefined();
+  });
+
+  it('PayOrderDto type is constructable', () => {
+    const dto: PayOrderDto = {
+      payments: [{ methodId: 'cash', amountHalalas: 4600 }],
+    };
+    expect(dto.payments).toHaveLength(1);
   });
 });

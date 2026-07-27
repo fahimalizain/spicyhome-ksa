@@ -12,6 +12,7 @@ import { PrintersPage } from './pages/admin/PrintersPage';
 import { TablesPage } from './pages/admin/TablesPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { ZatcaPage } from './pages/admin/ZatcaPage';
+import { PaymentMethodsPage } from './pages/admin/PaymentMethodsPage';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { SentryErrorFallback } from './components/SentryErrorFallback';
@@ -38,6 +39,7 @@ export function App() {
               <Route path="/admin/tables" element={<TablesPage />} />
               <Route path="/admin/users" element={<UsersPage />} />
               <Route path="/admin/zatca" element={<ZatcaPage />} />
+              <Route path="/admin/payment-methods" element={<PaymentMethodsPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -73,12 +73,16 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerGetOrderEvents**](docs/OrdersApi.md#orderscontrollergetorderevents) | **GET** orders/{id}/events | Get the complete event chain for an order |
 | *OrdersApi* | [**ordersControllerGetOrderRefunds**](docs/OrdersApi.md#orderscontrollergetorderrefunds) | **GET** orders/{id}/refunds | Get all refunds for an order |
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
-| *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid (open → paid) |
+| *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid with payment methods (open → paid) |
 | *OrdersApi* | [**ordersControllerRefundOrder**](docs/OrdersApi.md#orderscontrollerrefundorder) | **POST** orders/{id}/refund | Refund items on a paid order |
 | *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
 | *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
+| *PaymentMethodsApi* | [**paymentMethodsControllerCreate**](docs/PaymentMethodsApi.md#paymentmethodscontrollercreate) | **POST** payment-methods | Create a payment method |
+| *PaymentMethodsApi* | [**paymentMethodsControllerList**](docs/PaymentMethodsApi.md#paymentmethodscontrollerlist) | **GET** payment-methods | List all payment methods (including disabled) |
+| *PaymentMethodsApi* | [**paymentMethodsControllerListEnabled**](docs/PaymentMethodsApi.md#paymentmethodscontrollerlistenabled) | **GET** payment-methods/enabled | List enabled payment methods (no special permission required) |
+| *PaymentMethodsApi* | [**paymentMethodsControllerUpdate**](docs/PaymentMethodsApi.md#paymentmethodscontrollerupdate) | **PATCH** payment-methods/{id} | Update a payment method |
 | *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer TCP reachability |
 | *PrintersApi* | [**printersControllerCreate**](docs/PrintersApi.md#printerscontrollercreate) | **POST** printers | Create a printer |
 | *PrintersApi* | [**printersControllerGet**](docs/PrintersApi.md#printerscontrollerget) | **GET** printers/{id} | Get printer by ID |
@@ -120,6 +124,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateItemDto](docs/CreateItemDto.md)
  - [com.spicyhome.client.models.CreateOrderDto](docs/CreateOrderDto.md)
  - [com.spicyhome.client.models.CreateOrderResponse](docs/CreateOrderResponse.md)
+ - [com.spicyhome.client.models.CreatePaymentMethodDto](docs/CreatePaymentMethodDto.md)
  - [com.spicyhome.client.models.CreatePrinterDto](docs/CreatePrinterDto.md)
  - [com.spicyhome.client.models.CreateRefundDto](docs/CreateRefundDto.md)
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
@@ -133,9 +138,13 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.OpenDayDto](docs/OpenDayDto.md)
  - [com.spicyhome.client.models.OrderEventResponse](docs/OrderEventResponse.md)
  - [com.spicyhome.client.models.OrderItemResponse](docs/OrderItemResponse.md)
+ - [com.spicyhome.client.models.OrderPaymentResponse](docs/OrderPaymentResponse.md)
  - [com.spicyhome.client.models.OrderRefundResponse](docs/OrderRefundResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
  - [com.spicyhome.client.models.OrderSummaryResponse](docs/OrderSummaryResponse.md)
+ - [com.spicyhome.client.models.PayOrderDto](docs/PayOrderDto.md)
+ - [com.spicyhome.client.models.PaymentLineDto](docs/PaymentLineDto.md)
+ - [com.spicyhome.client.models.PaymentMethodResponse](docs/PaymentMethodResponse.md)
  - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
  - [com.spicyhome.client.models.PrinterResponse](docs/PrinterResponse.md)
  - [com.spicyhome.client.models.PrinterStatusResponse](docs/PrinterStatusResponse.md)
@@ -153,6 +162,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.TableResponse](docs/TableResponse.md)
  - [com.spicyhome.client.models.UpdateCategoryDto](docs/UpdateCategoryDto.md)
  - [com.spicyhome.client.models.UpdateItemDto](docs/UpdateItemDto.md)
+ - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)

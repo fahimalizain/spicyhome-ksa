@@ -463,9 +463,13 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       // Pay order (open → paid)
+      const fetchedOrder = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`);
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ payments: [{ methodId: 'cash', amountHalalas: fetchedOrder.body.totalHalalas }] })
         .expect(201);
 
       await new Promise((r) => setTimeout(r, 200));
@@ -515,10 +519,12 @@ describe('Print Integration', () => {
         })
         .expect(200);
 
-      // Pay the order (open → paid)
+      // Pay the order (open → paid) — 1 Zinger = 2300 halalas
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
-        .set('Authorization', `Bearer ${jwtToken}`);
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ payments: [{ methodId: 'cash', amountHalalas: 2300 }] })
+        .expect(201);
 
       await new Promise((r) => setTimeout(r, 200));
       transport.sent = [];
@@ -606,10 +612,12 @@ describe('Print Integration', () => {
       // Wait for async kitchen print
       await new Promise((r) => setTimeout(r, 300));
 
-      // Pay → receipt print
+      // Pay → receipt print (1 Zinger = 2300 halalas)
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
-        .set('Authorization', `Bearer ${jwtToken}`);
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ payments: [{ methodId: 'cash', amountHalalas: 2300 }] })
+        .expect(201);
 
       // Wait for async receipt print
       await new Promise((r) => setTimeout(r, 300));

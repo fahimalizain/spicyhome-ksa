@@ -13,6 +13,7 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 1,
       voidedOrderCount: 0,
       restaurantName: 'SpicyHome',
+      expectedCashHalalas: 52300,
     });
 
     const text = buffer.toString('ascii');
@@ -42,13 +43,14 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 0,
       voidedOrderCount: 0,
       restaurantName: 'Test',
+      expectedCashHalalas: 50000,
     });
 
     const text = buffer.toString('ascii');
     expect(text).toContain('X-REPORT');
   });
 
-  it('includes expected cash calculation', () => {
+  it('includes expected cash calculation using explicit expectedCashHalalas', () => {
     const builder = new ZReportBuilder();
     const buffer = builder.build({
       businessDate: '2026-07-22',
@@ -60,11 +62,12 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 1,
       voidedOrderCount: 0,
       restaurantName: 'Test',
+      expectedCashHalalas: 50000 + 500, // opening + cash payments (not total sales)
     });
 
     const text = buffer.toString('ascii');
     expect(text).toContain('Expected');
-    expect(text).toContain('523.00');
+    expect(text).toContain('505.00'); // 500.00 + 5.00 = 505.00 SAR
     expect(text).toContain('Difference');
   });
 
@@ -80,6 +83,7 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 1,
       voidedOrderCount: 3,
       restaurantName: 'Test',
+      expectedCashHalalas: 0,
     });
 
     const text = buffer.toString('ascii');

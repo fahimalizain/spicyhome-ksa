@@ -31,6 +31,8 @@ export type {
   SuccessResponse,
   StatusResponse,
   AuditVerifyResponse,
+  PayOrderDto,
+  PaymentLineDto,
   SyncOrderItemsDto,
   SyncOrderItemDto,
   CreateRefundDto,

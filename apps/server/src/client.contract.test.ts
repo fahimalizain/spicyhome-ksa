@@ -237,7 +237,11 @@ describe('Client contract test', () => {
   });
 
   it('pays order (from open)', async () => {
-    const res: any = await client.orders.pay(orderId);
+    // Get the order to know its total
+    const order: any = await client.orders.get(orderId);
+    const res: any = await client.orders.pay(orderId, {
+      payments: [{ methodId: 'cash', amountHalalas: order.totalHalalas }],
+    });
     expect(res.status).toBe('paid');
   });
 
