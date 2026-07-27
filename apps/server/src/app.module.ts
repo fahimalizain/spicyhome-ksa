@@ -13,6 +13,7 @@ import { ZatcaModule } from './modules/zatca/zatca.module';
 import { BusinessDayModule } from './modules/business-day/business-day.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 import { HealthModule } from './health/health.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -33,6 +34,7 @@ const imports: any[] = [
   BusinessDayModule,
   ReportsModule,
   RealtimeModule,
+  PaymentMethodsModule,
   HealthModule,
 ];
 
@@ -52,6 +54,7 @@ if (spaDist) {
         '/day/(.*)',
         '/reports/(.*)',
         '/health',
+        '/payment-methods/(.*)',
       ],
     }),
   );
