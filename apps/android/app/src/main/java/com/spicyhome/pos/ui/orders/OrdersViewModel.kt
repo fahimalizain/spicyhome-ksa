@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.data.repository.OrderRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,17 +18,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class OrdersUiState(
-    val orders: List<OrderResponse> = emptyList(),
+    val orders: List<OrderSummaryResponse> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val selectedOrder: OrderResponse? = null,
     val showDetail: Boolean = false,
+    val detailLoading: Boolean = false,
 )
 
 class OrdersViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
     private val realtimeClient: RealtimeClient,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrdersUiState())
@@ -59,7 +63,7 @@ class OrdersViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
+                val response = withContext(ioDispatcher) {
                     orderRepo!!.listOrders().execute()
                 }
                 if (response.isSuccessful) {
@@ -82,17 +86,46 @@ class OrdersViewModel(
         }
     }
 
-    fun selectOrder(order: OrderResponse) {
+    fun selectOrder(order: OrderSummaryResponse) {
         _uiState.value = _uiState.value.copy(
-            selectedOrder = order,
             showDetail = true,
+            detailLoading = true,
+            error = null,
         )
+        viewModelScope.launch {
+            try {
+                val response = withContext(ioDispatcher) {
+                    orderRepo!!.getOrder(order.id).execute()
+                }
+                if (response.isSuccessful) {
+                    _uiState.value = _uiState.value.copy(
+                        selectedOrder = response.body(),
+                        detailLoading = false,
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        detailLoading = false,
+                        showDetail = true,
+                        selectedOrder = null,
+                        error = "Failed to load order details (${response.code()})",
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    detailLoading = false,
+                    showDetail = true,
+                    selectedOrder = null,
+                    error = e.message,
+                )
+            }
+        }
     }
 
     fun closeDetail() {
         _uiState.value = _uiState.value.copy(
             selectedOrder = null,
             showDetail = false,
+            detailLoading = false,
         )
     }
 
@@ -100,10 +133,11 @@ class OrdersViewModel(
         private val preferencesManager: PreferencesManager,
         private val apiClientProvider: ApiClientProvider,
         private val realtimeClient: RealtimeClient,
+        private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return OrdersViewModel(preferencesManager, apiClientProvider, realtimeClient) as T
+            return OrdersViewModel(preferencesManager, apiClientProvider, realtimeClient, ioDispatcher) as T
         }
     }
 }

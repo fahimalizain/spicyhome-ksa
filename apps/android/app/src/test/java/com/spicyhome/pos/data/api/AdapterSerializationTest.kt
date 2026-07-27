@@ -1,10 +1,15 @@
 package com.spicyhome.pos.data.api
 
 import com.google.common.truth.Truth.assertThat
+import com.squareup.moshi.JsonDataException
+import com.squareup.moshi.Types
 import com.spicyhome.client.infrastructure.Serializer
 import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
+import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -244,5 +249,115 @@ class AdapterSerializationTest {
         assertThat(roundTripped!!.itemId).isEqualTo(original.itemId)
         assertThat(roundTripped.qty).isEqualTo(original.qty)
         assertThat(roundTripped.notes).isEqualTo(original.notes)
+    }
+
+    // -- OrderSummaryResponse deserialization (no items/auditLog fields) --
+
+    @Test
+    fun `OrderSummaryResponse deserializes from list JSON without items or auditLog`() {
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "dine_in",
+                "tableId": 5,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 4000,
+                "vatHalalas": 600,
+                "totalHalalas": 4600,
+                "discountHalalas": 0,
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1
+            }
+        """.trimIndent()
+        val response = moshi.adapter(OrderSummaryResponse::class.java).fromJson(json)
+        assertThat(response).isNotNull()
+        assertThat(response!!.id).isEqualTo(1L)
+        assertThat(response.orderNo).isEqualTo(100L)
+        assertThat(response.type).isEqualTo("dine_in")
+        assertThat(response.status).isEqualTo("open")
+        assertThat(response.totalHalalas).isEqualTo(4600L)
+    }
+
+    @Test
+    fun `OrderSummaryResponse list deserializes from array JSON`() {
+        val json = """
+            [
+                {
+                    "id": 1,
+                    "orderNo": 100,
+                    "uuid": "abc-123",
+                    "type": "dine_in",
+                    "tableId": 5,
+                    "dayOpeningId": 1,
+                    "status": "open",
+                    "subtotalHalalas": 4000,
+                    "vatHalalas": 600,
+                    "totalHalalas": 4600,
+                    "discountHalalas": 0,
+                    "createdAt": 1700000000,
+                    "updatedAt": 1700000000,
+                    "createdBy": 1,
+                    "updatedBy": 1
+                },
+                {
+                    "id": 2,
+                    "orderNo": 101,
+                    "uuid": "def-456",
+                    "type": "takeaway",
+                    "tableId": null,
+                    "dayOpeningId": 1,
+                    "status": "open",
+                    "subtotalHalalas": 2000,
+                    "vatHalalas": 300,
+                    "totalHalalas": 2300,
+                    "discountHalalas": 0,
+                    "createdAt": 1700000000,
+                    "updatedAt": 1700000000,
+                    "createdBy": 2,
+                    "updatedBy": 2
+                }
+            ]
+        """.trimIndent()
+        val listType = Types.newParameterizedType(List::class.java, OrderSummaryResponse::class.java)
+        val adapter = moshi.adapter<List<OrderSummaryResponse>>(listType)
+        val response = adapter.fromJson(json)
+        assertThat(response).isNotNull()
+        assertThat(response!!).hasSize(2)
+        assertThat(response[0].id).isEqualTo(1L)
+        assertThat(response[1].id).isEqualTo(2L)
+    }
+
+    @Test
+    fun `OrderResponse requires items field and fails without it`() {
+        // Full OrderResponse must have items; summary JSON (without items) should fail
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "dine_in",
+                "tableId": 5,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 4000,
+                "vatHalalas": 600,
+                "totalHalalas": 4600,
+                "discountHalalas": 0,
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1,
+                "auditLog": []
+            }
+        """.trimIndent()
+        // OrderResponse requires both items and auditLog — missing items => should throw
+        assertThrows(JsonDataException::class.java) {
+            moshi.adapter(OrderResponse::class.java).fromJson(json)
+        }
     }
 }

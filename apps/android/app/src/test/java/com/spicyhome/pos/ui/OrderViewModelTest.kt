@@ -8,6 +8,7 @@ import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
@@ -36,6 +37,7 @@ class OrderViewModelTest {
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var apiClientProvider: ApiClientProvider
     private lateinit var menuApi: MenuApi
+    private lateinit var ordersApi: OrdersApi
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
@@ -52,7 +54,7 @@ class OrderViewModelTest {
 
         // Stable stubs for API factories — no NPEs, no swallowed exceptions
         menuApi = mockk(relaxed = true)
-        val ordersApi = mockk<OrdersApi>(relaxed = true)
+        ordersApi = mockk(relaxed = true)
         val tablesApi = mockk<TablesApi>(relaxed = true)
 
         every { apiClientProvider.createMenuApi(any(), any()) } returns menuApi
@@ -318,6 +320,74 @@ class OrderViewModelTest {
         // Category 1: only active items in that category
         vm.selectCategory(1)
         assertThat(vm.uiState.value.filteredItems).containsExactly(active1)
+    }
+
+    // --- initialOrderId tests ---
+
+    @Test
+    fun `initialOrderId loads order into ORDER_CREATED with currentOrder set`() = runTest(testDispatcher) {
+        val order = OrderResponse(
+            id = 42L,
+            orderNo = 1001L,
+            uuid = "abc-123",
+            type = "dine_in",
+            tableId = 5L,
+            dayOpeningId = 1L,
+            status = "open",
+            subtotalHalalas = 4000L,
+            vatHalalas = 600L,
+            totalHalalas = 4600L,
+            discountHalalas = 0L,
+            createdAt = 1700000000L,
+            updatedAt = 1700000000L,
+            createdBy = 1L,
+            updatedBy = 1L,
+            items = emptyList(),
+            auditLog = emptyList(),
+        )
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(order)
+
+        val store = ViewModelStore()
+        viewModelStores.add(store)
+        val factory = OrderViewModel.Factory(
+            preferencesManager = preferencesManager,
+            apiClientProvider = apiClientProvider,
+            initialOrderId = 42L,
+            ioDispatcher = testDispatcher,
+        )
+        val vm = ViewModelProvider(store, factory)[OrderViewModel::class.java]
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.ORDER_CREATED)
+        assertThat(state.currentOrderId).isEqualTo(42L)
+        assertThat(state.currentOrder).isNotNull()
+        assertThat(state.currentOrder!!.id).isEqualTo(42L)
+        assertThat(state.orderType).isEqualTo(OrderType.DINE_IN)
+        assertThat(state.selectedTableId).isEqualTo(5L)
+    }
+
+    @Test
+    fun `initialOrderId failure surfaces error and stays on SELECTING_TYPE`() = runTest(testDispatcher) {
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(99L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.error(404, okhttp3.ResponseBody.create(null, ""))
+
+        val store = ViewModelStore()
+        viewModelStores.add(store)
+        val factory = OrderViewModel.Factory(
+            preferencesManager = preferencesManager,
+            apiClientProvider = apiClientProvider,
+            initialOrderId = 99L,
+            ioDispatcher = testDispatcher,
+        )
+        val vm = ViewModelProvider(store, factory)[OrderViewModel::class.java]
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+        assertThat(state.error).isNotNull()
+        assertThat(state.error).contains("404")
     }
 
     private fun stubMenuItems(items: List<ItemResponse>) {

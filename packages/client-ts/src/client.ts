@@ -37,6 +37,7 @@ export type RoleResponse = Schemas['RoleResponse'];
 export type CategoryResponse = Schemas['CategoryResponse'];
 export type ItemResponse = Schemas['ItemResponse'];
 export type OrderResponse = Schemas['OrderResponse'];
+export type OrderSummaryResponse = Schemas['OrderSummaryResponse'];
 export type CreateOrderResponse = Schemas['CreateOrderResponse'];
 export type SuccessResponse = Schemas['SuccessResponse'];
 export type StatusResponse = Schemas['StatusResponse'];
@@ -249,7 +250,7 @@ export class SpicyHomeClient {
 
   orders = {
     list: (status?: string, date?: string) =>
-      request<OrderResponse[]>(this.config, 'GET', '/orders', undefined, { status, date }),
+      request<OrderSummaryResponse[]>(this.config, 'GET', '/orders', undefined, { status, date }),
 
     get: (id: number) => request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
 

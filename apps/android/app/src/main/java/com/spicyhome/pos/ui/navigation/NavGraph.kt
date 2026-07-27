@@ -121,7 +121,7 @@ fun NavGraph(
                 onOpenTable = { tableId, orderId ->
                     val route = if (orderId != null) "order?tableId=$tableId&orderId=$orderId" else "order?tableId=$tableId"
                     navController.navigate(route) {
-                        popUpTo("order") { inclusive = true }
+                        popUpTo("order?tableId={tableId}&orderId={orderId}") { inclusive = true }
                     }
                 },
             )

@@ -147,8 +147,17 @@ class OrderViewModel(
                             selectedTableId = order.tableId,
                             screenState = OrderScreenState.ORDER_CREATED,
                         )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            error = "Failed to load order (${response.code()})",
+                            screenState = OrderScreenState.SELECTING_TYPE,
+                        )
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        error = e.message ?: "Failed to load order",
+                        screenState = OrderScreenState.SELECTING_TYPE,
+                    )
                 }
             }
         } else if (initialTableId != null) {
