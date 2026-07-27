@@ -575,9 +575,9 @@ describe('ZATCA Integration', () => {
     it('GET /zatca/config never exposes secret keys', async () => {
       // Set secret keys
       const ps = app.get(PrintersService);
-      ps.setSetting('zatca_simulation_private_key_encrypted', 'secret_data');
-      ps.setSetting('zatca_simulation_compliance_cert', 'cert_data');
-      ps.setSetting('zatca_simulation_production_secret', 'prod_secret');
+      ps.setSetting('zatca_simulation_spicyhome-pos_private_key_encrypted', 'secret_data');
+      ps.setSetting('zatca_simulation_spicyhome-pos_compliance_cert', 'cert_data');
+      ps.setSetting('zatca_simulation_spicyhome-pos_production_secret', 'prod_secret');
 
       const res = await request(app.getHttpServer())
         .get('/zatca/config')

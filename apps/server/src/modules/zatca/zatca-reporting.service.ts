@@ -87,6 +87,10 @@ export class ZatcaReportingService implements OnModuleInit {
     return this.printersService.getSetting('zatca_environment', 'simulation') as ZATCAEnvironment;
   }
 
+  private getOrgUnit(): string {
+    return this.printersService.getSetting('zatca_org_unit', '');
+  }
+
   private async processQueue(): Promise<{
     processed: number;
     succeeded: number;
@@ -94,7 +98,11 @@ export class ZatcaReportingService implements OnModuleInit {
   }> {
     // Only run if onboarding is at compliance or production stage
     const env = this.getEnv();
-    const state = this.printersService.getSetting(zatcaKey(env, 'onboarding_state'), 'not_started');
+    const orgUnit = this.getOrgUnit();
+    const state = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'onboarding_state'),
+      'not_started',
+    );
     if (state !== 'compliance' && state !== 'production') {
       this.logger.debug('Reporting skipped: onboarding not complete');
       return { processed: 0, succeeded: 0, failed: 0 };
@@ -161,16 +169,23 @@ export class ZatcaReportingService implements OnModuleInit {
 
     // Get credentials
     const env = this.getEnv();
+    const orgUnit = this.getOrgUnit();
     const productionSecret = this.printersService.getSetting(
-      zatcaKey(env, 'production_secret'),
+      zatcaKey(env, orgUnit, 'production_secret'),
       '',
     );
-    const productionCert = this.printersService.getSetting(zatcaKey(env, 'production_cert'), '');
+    const productionCert = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'production_cert'),
+      '',
+    );
     const complianceSecret = this.printersService.getSetting(
-      zatcaKey(env, 'compliance_secret'),
+      zatcaKey(env, orgUnit, 'compliance_secret'),
       '',
     );
-    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
+    const complianceCert = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'compliance_cert'),
+      '',
+    );
 
     // Use production credentials if available, otherwise compliance
     const cert = productionCert || complianceCert;

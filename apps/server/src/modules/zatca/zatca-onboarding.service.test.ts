@@ -39,8 +39,9 @@ function createMockHttpClient() {
 
 function setupComplianceState(invoiceService: MockInvoiceService, store: Map<string, string>) {
   invoiceService.getOnboardingState.mockReturnValue('compliance');
-  store.set('zatca_simulation_compliance_cert', 'fake-compliance-cert');
-  store.set('zatca_simulation_compliance_secret', 'fake-compliance-secret');
+  store.set('zatca_org_unit', 'SpicyHome POS');
+  store.set('zatca_simulation_spicyhome-pos_compliance_cert', 'fake-compliance-cert');
+  store.set('zatca_simulation_spicyhome-pos_compliance_secret', 'fake-compliance-secret');
   invoiceService.buildComplianceInvoice.mockResolvedValue({
     signedXml:
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>',
@@ -58,7 +59,7 @@ function mockComplianceHttpSuccess(httpClient: MockHttpClient) {
 }
 
 function parseComplianceResults(store: Map<string, string>): ComplianceResultEntry[] {
-  const json = store.get('zatca_simulation_compliance_results') ?? '[]';
+  const json = store.get('zatca_simulation_spicyhome-pos_compliance_results') ?? '[]';
   return JSON.parse(json);
 }
 
@@ -79,6 +80,7 @@ describe('getState', () => {
 
   beforeEach(() => {
     store = createSettingsStore();
+    store.set('zatca_org_unit', 'SpicyHome POS');
     const printersService = createMockPrintersService(store);
     const invoiceService = createMockInvoiceService();
     const httpClient = createMockHttpClient();
@@ -98,7 +100,7 @@ describe('getState', () => {
 
     it('returns stored compliance results', () => {
       store.set(
-        'zatca_simulation_compliance_results',
+        'zatca_simulation_spicyhome-pos_compliance_results',
         JSON.stringify([
           {
             key: 'invoice',
@@ -136,7 +138,7 @@ describe('getState', () => {
     });
 
     it('returns empty array for corrupted JSON', () => {
-      store.set('zatca_simulation_compliance_results', '{corrupted-json!!!');
+      store.set('zatca_simulation_spicyhome-pos_compliance_results', '{corrupted-json!!!');
 
       const state = service.getState();
 
@@ -145,7 +147,7 @@ describe('getState', () => {
 
     it('preserves full OnboardingState shape alongside complianceResults', () => {
       store.set(
-        'zatca_simulation_compliance_results',
+        'zatca_simulation_spicyhome-pos_compliance_results',
         JSON.stringify([
           {
             key: 'debit_note',
@@ -169,6 +171,41 @@ describe('getState', () => {
       expect(state.publicKeyPem).toBeNull();
       expect(state.complianceResults).toHaveLength(1);
       expect(state.complianceResults[0].key).toBe('debit_note');
+    });
+  });
+
+  describe('empty org unit', () => {
+    it('returns not_started with empty complianceResults when zatca_org_unit is absent', () => {
+      store.delete('zatca_org_unit');
+
+      const state = service.getState();
+
+      expect(state.state).toBe('not_started');
+      expect(state.keyGenerated).toBe(false);
+      expect(state.complianceDone).toBe(false);
+      expect(state.productionDone).toBe(false);
+      expect(state.complianceCertExpiry).toBeNull();
+      expect(state.productionCertExpiry).toBeNull();
+      expect(state.publicKeyPem).toBeNull();
+      expect(state.complianceResults).toEqual([]);
+    });
+
+    it('returns not_started with empty complianceResults when zatca_org_unit is empty string', () => {
+      store.set('zatca_org_unit', '');
+
+      const state = service.getState();
+
+      expect(state.state).toBe('not_started');
+      expect(state.complianceResults).toEqual([]);
+    });
+
+    it('returns not_started with empty complianceResults when zatca_org_unit is whitespace-only', () => {
+      store.set('zatca_org_unit', '   ');
+
+      const state = service.getState();
+
+      expect(state.state).toBe('not_started');
+      expect(state.complianceResults).toEqual([]);
     });
   });
 });
@@ -217,7 +254,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_simulation_compliance_results',
+      'zatca_simulation_spicyhome-pos_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -249,7 +286,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_simulation_compliance_results',
+      'zatca_simulation_spicyhome-pos_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -288,7 +325,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     mockComplianceHttpSuccess(httpClient);
 
     store.set(
-      'zatca_simulation_compliance_results',
+      'zatca_simulation_spicyhome-pos_compliance_results',
       JSON.stringify([
         {
           key: 'invoice',
@@ -314,7 +351,7 @@ describe('runComplianceCheck → persistComplianceResult', () => {
     setupComplianceState(invoiceService, store);
     mockComplianceHttpSuccess(httpClient);
 
-    store.set('zatca_simulation_compliance_results', '{corrupted-json');
+    store.set('zatca_simulation_spicyhome-pos_compliance_results', '{corrupted-json');
 
     await service.runComplianceCheck(null, 'invoice');
 
@@ -338,6 +375,7 @@ describe('runComplianceCheck response and persistence', () => {
 
   beforeEach(() => {
     store = createSettingsStore();
+    store.set('zatca_org_unit', 'SpicyHome POS');
     const printersService = createMockPrintersService(store);
     invoiceService = createMockInvoiceService();
     httpClient = createMockHttpClient();
