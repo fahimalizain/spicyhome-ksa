@@ -11,6 +11,7 @@ docs/CreateCategoryDto.md
 docs/CreateItemDto.md
 docs/CreateOrderDto.md
 docs/CreateOrderResponse.md
+docs/CreatePaymentMethodDto.md
 docs/CreatePrinterDto.md
 docs/CreateRefundDto.md
 docs/CreateRoleDto.md
@@ -30,6 +31,10 @@ docs/OrderRefundResponse.md
 docs/OrderResponse.md
 docs/OrderSummaryResponse.md
 docs/OrdersApi.md
+docs/PayOrderDto.md
+docs/PaymentLineDto.md
+docs/PaymentMethodResponse.md
+docs/PaymentMethodsApi.md
 docs/PrintResponse.md
 docs/PrinterResponse.md
 docs/PrinterStatusResponse.md
@@ -50,6 +55,7 @@ docs/TablesApi.md
 docs/UpdateCategoryDto.md
 docs/UpdateItemDto.md
 docs/UpdateOrderItemDto.md
+docs/UpdatePaymentMethodDto.md
 docs/UpdatePrinterDto.md
 docs/UpdateRoleDto.md
 docs/UpdateTableDto.md
@@ -67,6 +73,7 @@ src/main/kotlin/com/spicyhome/client/apis/AuthApi.kt
 src/main/kotlin/com/spicyhome/client/apis/DayApi.kt
 src/main/kotlin/com/spicyhome/client/apis/MenuApi.kt
 src/main/kotlin/com/spicyhome/client/apis/OrdersApi.kt
+src/main/kotlin/com/spicyhome/client/apis/PaymentMethodsApi.kt
 src/main/kotlin/com/spicyhome/client/apis/PrintersApi.kt
 src/main/kotlin/com/spicyhome/client/apis/ReportsApi.kt
 src/main/kotlin/com/spicyhome/client/apis/SettingsApi.kt
@@ -95,6 +102,7 @@ src/main/kotlin/com/spicyhome/client/models/CreateCategoryDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateItemDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateOrderDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateOrderResponse.kt
+src/main/kotlin/com/spicyhome/client/models/CreatePaymentMethodDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateRefundDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateRoleDto.kt
@@ -111,6 +119,9 @@ src/main/kotlin/com/spicyhome/client/models/OrderItemResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OrderRefundResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OrderResponse.kt
 src/main/kotlin/com/spicyhome/client/models/OrderSummaryResponse.kt
+src/main/kotlin/com/spicyhome/client/models/PayOrderDto.kt
+src/main/kotlin/com/spicyhome/client/models/PaymentLineDto.kt
+src/main/kotlin/com/spicyhome/client/models/PaymentMethodResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrintResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterStatusResponse.kt
@@ -127,6 +138,7 @@ src/main/kotlin/com/spicyhome/client/models/TableResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateCategoryDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateItemDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateOrderItemDto.kt
+src/main/kotlin/com/spicyhome/client/models/UpdatePaymentMethodDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateRoleDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateTableDto.kt
@@ -134,3 +146,9 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
+src/test/kotlin/com/spicyhome/client/apis/PaymentMethodsApiTest.kt
+src/test/kotlin/com/spicyhome/client/models/CreatePaymentMethodDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/PayOrderDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/PaymentLineDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/PaymentMethodResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/UpdatePaymentMethodDtoTest.kt
