@@ -1042,7 +1042,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/OrderResponse"
+                    "$ref": "#/components/schemas/OrderSummaryResponse"
                   }
                 }
               }
@@ -3266,6 +3266,103 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "OrderSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "orderNo": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "uuid": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "type": {
+            "type": "string",
+            "example": "dine_in"
+          },
+          "tableId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "dayOpeningId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "status": {
+            "type": "string",
+            "example": "open"
+          },
+          "subtotalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 4000
+          },
+          "vatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 600
+          },
+          "totalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 4600
+          },
+          "discountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "uuid",
+          "type",
+          "tableId",
+          "dayOpeningId",
+          "status",
+          "subtotalHalalas",
+          "vatHalalas",
+          "totalHalalas",
+          "discountHalalas",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
         ]
       },
       "OrderItemResponse": {

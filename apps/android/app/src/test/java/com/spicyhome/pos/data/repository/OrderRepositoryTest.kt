@@ -5,6 +5,7 @@ import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.AddOrderItemDto
@@ -29,7 +30,7 @@ class OrderRepositoryTest {
     private lateinit var getOrderCall: Call<OrderResponse>
 
     @MockK
-    private lateinit var listOrdersCall: Call<List<OrderResponse>>
+    private lateinit var listOrdersCall: Call<List<OrderSummaryResponse>>
 
     @MockK
     private lateinit var addItemCall: Call<SuccessResponse>

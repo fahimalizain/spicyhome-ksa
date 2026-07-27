@@ -5,6 +5,7 @@ import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdateOrderItemDto
@@ -28,7 +29,7 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         return ordersApi.ordersControllerGetOrder(id)
     }
 
-    fun listOrders(status: String? = null, date: String? = null): Call<List<OrderResponse>> {
+    fun listOrders(status: String? = null, date: String? = null): Call<List<OrderSummaryResponse>> {
         return ordersApi.ordersControllerListOrders(status ?: "", date ?: "")
     }
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api';
 import { realtime } from '../realtime';
-import type { TableResponse, OrderResponse } from '@spicyhome/client-ts';
+import type { TableResponse, OrderSummaryResponse } from '@spicyhome/client-ts';
 
 function formatElapsed(seconds: number): string {
   if (seconds < 60) {
@@ -22,7 +22,7 @@ function formatElapsed(seconds: number): string {
 
 export function TablesViewPage() {
   const [tables, setTables] = useState<TableResponse[]>([]);
-  const [openOrders, setOpenOrders] = useState<OrderResponse[]>([]);
+  const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
@@ -74,7 +74,7 @@ export function TablesViewPage() {
     }
   }
 
-  function getOpenOrder(tableId: number): OrderResponse | undefined {
+  function getOpenOrder(tableId: number): OrderSummaryResponse | undefined {
     return openOrders.find(
       (o) => o.tableId != null && (o.tableId as unknown as number) === tableId,
     );

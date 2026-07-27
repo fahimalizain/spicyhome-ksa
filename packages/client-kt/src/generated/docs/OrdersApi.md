@@ -228,7 +228,7 @@ val webService = apiClient.createWebservice(OrdersApi::class.java)
 val status : kotlin.String = status_example // kotlin.String | 
 val date : kotlin.String = date_example // kotlin.String | 
 
-val result : kotlin.collections.List<OrderResponse> = webService.ordersControllerListOrders(status, date)
+val result : kotlin.collections.List<OrderSummaryResponse> = webService.ordersControllerListOrders(status, date)
 ```
 
 ### Parameters
@@ -239,7 +239,7 @@ val result : kotlin.collections.List<OrderResponse> = webService.ordersControlle
 
 ### Return type
 
-[**kotlin.collections.List&lt;OrderResponse&gt;**](OrderResponse.md)
+[**kotlin.collections.List&lt;OrderSummaryResponse&gt;**](OrderSummaryResponse.md)
 
 ### Authorization
 

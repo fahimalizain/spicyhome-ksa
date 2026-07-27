@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
-import type { OrderResponse } from '@spicyhome/client-ts';
+import type { OrderResponse, OrderSummaryResponse } from '@spicyhome/client-ts';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
@@ -14,7 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [orders, setOrders] = useState<OrderSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
