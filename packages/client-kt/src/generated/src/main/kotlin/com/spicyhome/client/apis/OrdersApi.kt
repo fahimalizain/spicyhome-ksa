@@ -7,6 +7,7 @@ import okhttp3.RequestBody
 import com.squareup.moshi.Json
 
 import com.spicyhome.client.models.AddOrderItemDto
+import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
@@ -31,10 +32,10 @@ interface OrdersApi {
      *
      * @param id 
      * @param addOrderItemDto 
-     * @return [Call]<[SuccessResponse]>
+     * @return [Call]<[AddOrderItemResponse]>
      */
     @POST("orders/{id}/items")
-    fun ordersControllerAddItem(@Path("id") id: kotlin.Long, @Body addOrderItemDto: AddOrderItemDto): Call<SuccessResponse>
+    fun ordersControllerAddItem(@Path("id") id: kotlin.Long, @Body addOrderItemDto: AddOrderItemDto): Call<AddOrderItemResponse>
 
     /**
      * POST orders

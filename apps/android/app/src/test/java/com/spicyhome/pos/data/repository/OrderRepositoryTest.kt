@@ -6,8 +6,9 @@ import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.StatusResponse
-import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.AddOrderItemDto
+import com.spicyhome.client.models.AddOrderItemResponse
+import com.spicyhome.client.models.SuccessResponse
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -32,7 +33,7 @@ class OrderRepositoryTest {
     private lateinit var listOrdersCall: Call<List<OrderResponse>>
 
     @MockK
-    private lateinit var addItemCall: Call<SuccessResponse>
+    private lateinit var addItemCall: Call<AddOrderItemResponse>
 
     @MockK
     private lateinit var payCall: Call<StatusResponse>

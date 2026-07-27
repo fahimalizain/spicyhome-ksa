@@ -785,8 +785,10 @@ export class OrdersService {
   }
 
   async reprintOrder(orderId: number, target: string, userId: number) {
-    if (target === 'kitchen') {
-      return this.reprintKitchen(orderId, userId);
+    if (target !== 'receipt') {
+      throw new BadRequestException(
+        `Unsupported reprint target: ${target}. Only 'receipt' is supported.`,
+      );
     }
     return this.reprintReceipt(orderId, userId);
   }
@@ -864,79 +866,6 @@ export class OrdersService {
   }
 
   // ── Reprint helpers ──────────────────────────────────────────────────────────
-
-  private async reprintKitchen(
-    orderId: number,
-    userId: number,
-  ): Promise<{ success: boolean; errors: string[] }> {
-    const now = Math.floor(Date.now() / 1000);
-
-    // Group order items by kitchen printer and write enqueued events
-    const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-
-    const printerGroups = new Map<
-      number,
-      {
-        printer: PrinterRecord;
-        items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
-      }
-    >();
-
-    for (const oi of oiRows) {
-      if (!oi.itemId) continue;
-      const printer = this.printJobService.getKitchenPrinterForItem(oi.itemId);
-      if (!printer) continue;
-
-      let group = printerGroups.get(printer.id);
-      if (!group) {
-        group = { printer, items: [] };
-        printerGroups.set(printer.id, group);
-      }
-      group.items.push({
-        orderItemId: oi.id,
-        itemName: oi.itemName,
-        printedQty: oi.qty,
-      });
-    }
-
-    // Write kitchen_print_enqueued events
-    for (const [, group] of printerGroups) {
-      this.orderEvents.createEvent(
-        this.db,
-        orderId,
-        userId,
-        'kitchen_print_enqueued',
-        {
-          printer: group.printer.name,
-          printerId: group.printer.id,
-          items: group.items,
-        },
-        now,
-      );
-    }
-
-    // Print full kitchen tickets (one call handles routing/fallback internally)
-    const result = await this.printJobService.printKitchenTickets(orderId);
-
-    // Write succeeded events for each printer that actually printed
-    for (const p of result.printed) {
-      this.orderEvents.createEvent(
-        this.db,
-        orderId,
-        userId,
-        'kitchen_print_succeeded',
-        { printer: p.name, printerId: p.id },
-        now,
-      );
-    }
-
-    // Log any errors (do not throw up)
-    for (const err of result.errors) {
-      this.logger.error(`Kitchen reprint error for order ${orderId}: ${err}`);
-    }
-
-    return { success: result.errors.length === 0, errors: result.errors };
-  }
 
   private async reprintReceipt(
     orderId: number,

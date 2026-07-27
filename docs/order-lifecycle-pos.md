@@ -78,7 +78,7 @@ Key observations:
 
 - List unchanged in structure. WS: drop `order.sent`, add `order.refund.issued`, `order.refunded`, `order.updated`.
 - Detail pane gains:
-  - **OrderActionBar** — Reprint Receipt, Reprint Kitchen (visibility gated by status + permission).
+  - **OrderActionBar** — Reprint Receipt (visibility gated by status + permission).
   - **RefundPanel** — accessible from `paid` status, inline within detail pane.
   - **OrderEventTimeline** — replaces raw audit trail with typed, labeled, formatted event list (types from `order_events`).
 - All action buttons hidden (not disabled) when user lacks permission.
@@ -150,7 +150,7 @@ These are settled. Do not re-litigate.
 | **D5**  | `client-ts` must land before POS UI                       | Remove `orders.send`. Add `refund`, `getRefunds`, `getEvents`, `verifyEvents`, `reprint`. Deprecate `verifyAuditChain` (legacy `/audit/verify` still on server). Export new types.                                                     |
 | **D6**  | Events timeline uses `GET /orders/:id/events`             | Do not rely on `OrderResponse.auditLog` for new UI. Server still returns it for backward compat; POS uses the dedicated events endpoint.                                                                                               |
 | **D7**  | Refund primary surface                                    | Reusable `RefundPanel` + `useRefund` hook. Primary entry: OrdersPage detail. Also on OrderPage when `status === 'paid'` (inline modal). Permission: `refundOrder`.                                                                     |
-| **D8**  | Reprint via `OrderActionBar`                              | Reprint Receipt (`paid`\|`refunded`), Reprint Kitchen (`open`\|`paid`\|`refunded`). Permission: `updateOrder`. API: `POST /orders/:id/print { target }`.                                                                               |
+| **D8**  | Reprint via `OrderActionBar`                              | Reprint Receipt (`paid`\|`refunded`). Permission: `updateOrder`. API: `POST /orders/:id/print { target: 'receipt' }`. Kitchen reprints are not supported; kitchen prints happen automatically on item add / qty increase only.         |
 | **D9**  | Permissions: hide (not disable)                           | New `usePermissions()` from `getMe()`. Buttons without permission are not rendered. Safe default when `me` is null: hide privileged actions.                                                                                           |
 | **D10** | WS events                                                 | Drop `order.sent`. Add `order.refund.issued`, `order.refunded`, and (on OrdersPage) `order.updated`.                                                                                                                                   |
 | **D11** | DayPage: remove Sent row only                             | Server `sentOrderCount` cleanup is a follow-up. POS stops displaying it.                                                                                                                                                               |
@@ -339,10 +339,9 @@ interface OrderActionBarProps {
 
 Renders action buttons conditionally:
 
-| Action          | Visible When                  | API Call                               | Permission    |
-| --------------- | ----------------------------- | -------------------------------------- | ------------- |
-| Reprint Receipt | `paid` or `refunded`          | `client.orders.reprint(id, 'receipt')` | `updateOrder` |
-| Reprint Kitchen | `open`, `paid`, or `refunded` | `client.orders.reprint(id, 'kitchen')` | `updateOrder` |
+| Action          | Visible When         | API Call                               | Permission    |
+| --------------- | -------------------- | -------------------------------------- | ------------- |
+| Reprint Receipt | `paid` or `refunded` | `client.orders.reprint(id, 'receipt')` | `updateOrder` |
 
 Internal: calls `usePermissions()` and hides buttons without `updateOrder`.
 
@@ -417,20 +416,19 @@ The OrderPage must detect whether it's in pre-order mode (`currentOrder === null
 | Void            | `open`                           | `voidOrder`                               |
 | Refund          | `paid`                           | `refundOrder` (→ opens RefundPanel modal) |
 | Reprint Receipt | `paid` or `refunded`             | `updateOrder`                             |
-| Reprint Kitchen | `open`, `paid`, or `refunded`    | `updateOrder`                             |
 | New Order       | `paid` or `voided` or `refunded` | none                                      |
 
 > **Permission note:** Add item and update qty/notes use `updateOrder`. The remove (✕) button on a cart item maps to `deleteOrderItem` (server uses DELETE `/orders/:orderId/items/:itemId` which checks `delete_order_item`). Wire each cart action wrapper to the correct permission flag.
 
 ### Status → Available Actions Matrix
 
-| Status      | Pay | Void | Refund | Reprint Receipt | Reprint Kitchen | Add/Edit Items |
-| ----------- | :-: | :--: | :----: | :-------------: | :-------------: | :------------: |
-| (pre-order) |  —  |  —   |   —    |        —        |        —        |  Yes (local)   |
-| `open`      | Yes | Yes  |   —    |        —        |       Yes       |  Yes (server)  |
-| `paid`      |  —  |  —   |  Yes   |       Yes       |       Yes       |       —        |
-| `voided`    |  —  |  —   |   —    |        —        |        —        |       —        |
-| `refunded`  |  —  |  —   |   —    |       Yes       |       Yes       |       —        |
+| Status      | Pay | Void | Refund | Reprint Receipt | Add/Edit Items |
+| ----------- | :-: | :--: | :----: | :-------------: | :------------: |
+| (pre-order) |  —  |  —   |   —    |        —        |  Yes (local)   |
+| `open`      | Yes | Yes  |   —    |        —        |  Yes (server)  |
+| `paid`      |  —  |  —   |  Yes   |       Yes       |       —        |
+| `voided`    |  —  |  —   |   —    |        —        |       —        |
+| `refunded`  |  —  |  —   |   —    |       Yes       |       —        |
 
 > **Action surface split:**
 >
@@ -525,7 +523,7 @@ orders = {
       `/orders/${orderId}/events/verify`,
     ),
 
-  reprint: (orderId: number, target: 'receipt' | 'kitchen') =>
+  reprint: (orderId: number, target: 'receipt') =>
     request<{ success: boolean; errors: string[] }>(
       this.config,
       'POST',
@@ -891,10 +889,10 @@ All new methods compile; `send` is gone from the `SpicyHomeClient` interface.
 
 **Acceptance:**
 
-- Open a paid order: "Reprint Receipt" and "Reprint Kitchen" visible.
-- Open an open order: only "Reprint Kitchen" visible.
+- Open a paid order: "Reprint Receipt" visible (no Reprint Kitchen).
+- Open an open order: nothing rendered (no reprint buttons).
 - Voided/refunded orders: reprint buttons per matrix above.
-- Reprint triggers server API, receipt/kitchen ticket prints, events written to ledger.
+- Reprint triggers server API, receipt prints, events written to ledger.
 - `bazel test //apps/pos:test` passes.
 
 ### Phase 8 — WS + DayPage Cleanup + CSS
@@ -1050,7 +1048,7 @@ All must pass before merge.
 - [ ] `OrderEventTimeline` renders typed events in place of raw audit log.
 - [ ] `RefundPanel` works: select items, set qtys, process refund, close on success.
 - [ ] Refund button hidden when user lacks `refundOrder` permission.
-- [ ] `OrderActionBar` renders Reprint Receipt + Reprint Kitchen per status matrix.
+- [ ] `OrderActionBar` renders Reprint Receipt per status matrix.
 - [ ] Reprint buttons hidden when user lacks `updateOrder` permission.
 - [ ] X-report no longer shows Sent row.
 - [ ] WS subscriptions updated: `order.sent` removed; `order.refund.issued`, `order.refunded`, `order.updated` added (OrdersPage).

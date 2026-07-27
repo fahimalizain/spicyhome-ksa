@@ -22,26 +22,26 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param target 
+ * @param target Reprint target (receipt only; kitchen reprints are not supported)
  */
 
 
 data class ReprintOrderDto (
 
+    /* Reprint target (receipt only; kitchen reprints are not supported) */
     @Json(name = "target")
     val target: ReprintOrderDto.Target
 
 ) {
 
     /**
-     * 
+     * Reprint target (receipt only; kitchen reprints are not supported)
      *
-     * Values: receipt,kitchen
+     * Values: receipt
      */
     @JsonClass(generateAdapter = false)
     enum class Target(val value: kotlin.String) {
-        @Json(name = "receipt") receipt("receipt"),
-        @Json(name = "kitchen") kitchen("kitchen");
+        @Json(name = "receipt") receipt("receipt");
     }
 
 }

@@ -116,7 +116,7 @@ describe('Order Refunds', () => {
     const orderRes = await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ type: 'dine_in', tableId: 1 })
+      .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 

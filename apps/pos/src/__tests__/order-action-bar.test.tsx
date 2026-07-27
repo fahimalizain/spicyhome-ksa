@@ -65,28 +65,26 @@ describe('OrderActionBar', () => {
   });
 
   describe('button visibility by status', () => {
-    it('shows both reprint buttons for paid status', () => {
+    it('shows Reprint Receipt for paid status', () => {
       mockGetMe.mockReturnValue(makeMe());
       render(<OrderActionBar orderId={1} status="paid" />);
 
       expect(screen.getByText('Reprint Receipt')).toBeInTheDocument();
-      expect(screen.getByText('Reprint Kitchen')).toBeInTheDocument();
+      expect(screen.queryByText('Reprint Kitchen')).not.toBeInTheDocument();
     });
 
-    it('shows both reprint buttons for refunded status', () => {
+    it('shows Reprint Receipt for refunded status', () => {
       mockGetMe.mockReturnValue(makeMe());
       render(<OrderActionBar orderId={1} status="refunded" />);
 
       expect(screen.getByText('Reprint Receipt')).toBeInTheDocument();
-      expect(screen.getByText('Reprint Kitchen')).toBeInTheDocument();
+      expect(screen.queryByText('Reprint Kitchen')).not.toBeInTheDocument();
     });
 
-    it('shows only Reprint Kitchen for open status', () => {
+    it('renders nothing for open status', () => {
       mockGetMe.mockReturnValue(makeMe());
-      render(<OrderActionBar orderId={1} status="open" />);
-
-      expect(screen.queryByText('Reprint Receipt')).not.toBeInTheDocument();
-      expect(screen.getByText('Reprint Kitchen')).toBeInTheDocument();
+      const { container } = render(<OrderActionBar orderId={1} status="open" />);
+      expect(container.firstChild).toBeNull();
     });
 
     it('renders nothing for voided status', () => {
@@ -110,19 +108,6 @@ describe('OrderActionBar', () => {
       });
     });
 
-    it('calls reprint with kitchen target', async () => {
-      mockGetMe.mockReturnValue(makeMe());
-      mockReprint.mockResolvedValue({ success: true, errors: [] });
-
-      render(<OrderActionBar orderId={99} status="open" />);
-
-      fireEvent.click(screen.getByText('Reprint Kitchen'));
-
-      await waitFor(() => {
-        expect(mockReprint).toHaveBeenCalledWith(99, { target: 'kitchen' });
-      });
-    });
-
     it('shows success message after reprint', async () => {
       mockGetMe.mockReturnValue(makeMe());
       mockReprint.mockResolvedValue({ success: true, errors: [] });
@@ -142,14 +127,14 @@ describe('OrderActionBar', () => {
 
       render(<OrderActionBar orderId={1} status="paid" />);
 
-      fireEvent.click(screen.getByText('Reprint Kitchen'));
+      fireEvent.click(screen.getByText('Reprint Receipt'));
 
       await waitFor(() => {
         expect(screen.getByText('Printer offline')).toBeInTheDocument();
       });
     });
 
-    it('disables buttons during reprint', async () => {
+    it('disables button during reprint', async () => {
       mockGetMe.mockReturnValue(makeMe());
       // Never resolves
       mockReprint.mockReturnValue(new Promise(() => {}));
@@ -161,19 +146,6 @@ describe('OrderActionBar', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Reprinting...')).toBeDisabled();
-      });
-    });
-
-    it('shows kitchen success message', async () => {
-      mockGetMe.mockReturnValue(makeMe());
-      mockReprint.mockResolvedValue({ success: true, errors: [] });
-
-      render(<OrderActionBar orderId={1} status="open" />);
-
-      fireEvent.click(screen.getByText('Reprint Kitchen'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Kitchen ticket reprinted')).toBeInTheDocument();
       });
     });
   });

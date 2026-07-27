@@ -1318,7 +1318,7 @@
     "/orders/{id}/pay": {
       "post": {
         "operationId": "OrdersController_payOrder",
-        "summary": "Mark order as paid (open \u2192 paid)",
+        "summary": "Mark order as paid (open → paid)",
         "parameters": [
           {
             "name": "id",
@@ -1355,7 +1355,7 @@
     "/orders/{id}/void": {
       "post": {
         "operationId": "OrdersController_voidOrder",
-        "summary": "Void an order (open \u2192 voided)",
+        "summary": "Void an order (open → voided)",
         "parameters": [
           {
             "name": "id",
@@ -1985,7 +1985,7 @@
             "description": "No open business day to close"
           },
           "409": {
-            "description": "Open/sent orders exist \u2014 cannot close"
+            "description": "Open/sent orders exist — cannot close"
           }
         },
         "tags": [
@@ -2546,7 +2546,7 @@
             "type": "integer",
             "format": "int64",
             "example": 2,
-            "description": "role_id \u2014 1 for admin, 2 for staff"
+            "description": "role_id — 1 for admin, 2 for staff"
           }
         },
         "required": [
@@ -2891,7 +2891,7 @@
           },
           "nameAr": {
             "type": "string",
-            "example": "\u0632\u0646\u062c\u0631 \u0628\u0631\u062c\u0631",
+            "example": "زنجر برجر",
             "nullable": true
           },
           "priceHalalas": {
@@ -2967,7 +2967,7 @@
           },
           "nameAr": {
             "type": "string",
-            "example": "\u0632\u0646\u062c\u0631 \u0628\u0631\u062c\u0631"
+            "example": "زنجر برجر"
           },
           "priceHalalas": {
             "type": "integer",
@@ -3254,25 +3254,6 @@
         },
         "required": [
           "reachable"
-        ]
-      },
-      "AddOrderItemResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
-          "orderItemId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "order_items.id of the newly created line",
-            "example": 1
-          }
-        },
-        "required": [
-          "success",
-          "orderItemId"
         ]
       },
       "SuccessResponse": {
@@ -3617,6 +3598,25 @@
           "qty"
         ]
       },
+      "AddOrderItemResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "orderItemId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "order_items.id of the newly created line"
+          }
+        },
+        "required": [
+          "success",
+          "orderItemId"
+        ]
+      },
       "UpdateOrderItemDto": {
         "type": "object",
         "properties": {
@@ -3654,10 +3654,10 @@
           "target": {
             "type": "string",
             "enum": [
-              "receipt",
-              "kitchen"
+              "receipt"
             ],
-            "example": "receipt"
+            "example": "receipt",
+            "description": "Reprint target (receipt only; kitchen reprints are not supported)"
           }
         },
         "required": [
@@ -4002,7 +4002,7 @@
           "environment": {
             "type": "string",
             "example": "production",
-            "description": "ZATCA environment \u2014 controls CSR OID label (sandbox\u2192TESTZATCA-Code-Signing, simulation\u2192PREZATCA-Code-Signing, production\u2192ZATCA-Code-Signing)",
+            "description": "ZATCA environment — controls CSR OID label (sandbox→TESTZATCA-Code-Signing, simulation→PREZATCA-Code-Signing, production→ZATCA-Code-Signing)",
             "enum": [
               "sandbox",
               "simulation",

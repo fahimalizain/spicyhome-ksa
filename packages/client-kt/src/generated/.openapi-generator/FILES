@@ -2,6 +2,7 @@
 README.md
 build.gradle
 docs/AddOrderItemDto.md
+docs/AddOrderItemResponse.md
 docs/AuditLogEntry.md
 docs/AuditVerifyResponse.md
 docs/AuthApi.md
@@ -86,6 +87,7 @@ src/main/kotlin/com/spicyhome/client/infrastructure/Serializer.kt
 src/main/kotlin/com/spicyhome/client/infrastructure/URIAdapter.kt
 src/main/kotlin/com/spicyhome/client/infrastructure/UUIDAdapter.kt
 src/main/kotlin/com/spicyhome/client/models/AddOrderItemDto.kt
+src/main/kotlin/com/spicyhome/client/models/AddOrderItemResponse.kt
 src/main/kotlin/com/spicyhome/client/models/AuditLogEntry.kt
 src/main/kotlin/com/spicyhome/client/models/AuditVerifyResponse.kt
 src/main/kotlin/com/spicyhome/client/models/CategoryResponse.kt
@@ -143,6 +145,7 @@ src/test/kotlin/com/spicyhome/client/apis/SettingsApiTest.kt
 src/test/kotlin/com/spicyhome/client/apis/TablesApiTest.kt
 src/test/kotlin/com/spicyhome/client/apis/ZatcaApiTest.kt
 src/test/kotlin/com/spicyhome/client/models/AddOrderItemDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/AddOrderItemResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/AuditLogEntryTest.kt
 src/test/kotlin/com/spicyhome/client/models/AuditVerifyResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/CategoryResponseTest.kt

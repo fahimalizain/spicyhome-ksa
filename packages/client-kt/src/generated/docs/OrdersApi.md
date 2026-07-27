@@ -36,7 +36,7 @@ val webService = apiClient.createWebservice(OrdersApi::class.java)
 val id : kotlin.Long = 789 // kotlin.Long | 
 val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
 
-val result : SuccessResponse = webService.ordersControllerAddItem(id, addOrderItemDto)
+val result : AddOrderItemResponse = webService.ordersControllerAddItem(id, addOrderItemDto)
 ```
 
 ### Parameters
@@ -47,7 +47,7 @@ val result : SuccessResponse = webService.ordersControllerAddItem(id, addOrderIt
 
 ### Return type
 
-[**SuccessResponse**](SuccessResponse.md)
+[**AddOrderItemResponse**](AddOrderItemResponse.md)
 
 ### Authorization
 

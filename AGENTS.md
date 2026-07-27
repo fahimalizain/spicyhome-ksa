@@ -52,7 +52,7 @@ Codebase conventions and constraints for all contributors and AI agents.
 ## Device Responsibilities
 
 - **POS SPA (Windows 7)**: Full control — create orders, manage items, make
-  payments, issue refunds, void orders, reprint receipts/tickets, open/close
+  payments, issue refunds, void orders, reprint receipts, open/close
   business days, manage menu/tables/printers/users/settings. Kitchen prints
   happen automatically as items are added or quantities increased.
 - **Android Tablet**: Order item management only — create orders, add/update/remove

@@ -46,9 +46,13 @@ export class UpdateOrderItemDto {
 }
 
 export class ReprintOrderDto {
-  @ApiProperty({ enum: ['receipt', 'kitchen'], example: 'receipt' })
+  @ApiProperty({
+    enum: ['receipt'],
+    example: 'receipt',
+    description: 'Reprint target (receipt only; kitchen reprints are not supported)',
+  })
   @IsString()
-  @IsIn(['receipt', 'kitchen'])
+  @IsIn(['receipt'])
   target!: string;
 }
 
