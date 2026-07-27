@@ -13,6 +13,7 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 1,
       voidedOrderCount: 0,
       restaurantName: 'SpicyHome',
+      expectedCashHalalas: 52300,
     });
 
     const text = buffer.toString('ascii');
@@ -42,6 +43,7 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 0,
       voidedOrderCount: 0,
       restaurantName: 'Test',
+      expectedCashHalalas: 50000,
     });
 
     const text = buffer.toString('ascii');
@@ -69,25 +71,6 @@ describe('ZReportBuilder', () => {
     expect(text).toContain('Difference');
   });
 
-  it('falls back to total sales when expectedCashHalalas not provided', () => {
-    const builder = new ZReportBuilder();
-    const buffer = builder.build({
-      businessDate: '2026-07-22',
-      status: 'closed',
-      openingCashHalalas: 50000,
-      closingCashHalalas: 60000,
-      totalSalesHalalas: 2300,
-      totalVatHalalas: 300,
-      paidOrderCount: 1,
-      voidedOrderCount: 0,
-      restaurantName: 'Test',
-    });
-
-    const text = buffer.toString('ascii');
-    expect(text).toContain('Expected');
-    expect(text).toContain('523.00');
-  });
-
   it('includes voided count when present', () => {
     const builder = new ZReportBuilder();
     const buffer = builder.build({
@@ -100,6 +83,7 @@ describe('ZReportBuilder', () => {
       paidOrderCount: 1,
       voidedOrderCount: 3,
       restaurantName: 'Test',
+      expectedCashHalalas: 0,
     });
 
     const text = buffer.toString('ascii');

@@ -276,11 +276,13 @@ export class ReportsService {
     }
 
     const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+    const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
     const builder = new ZReportBuilder();
     const buffer = builder.build({
       ...report,
       closingCashHalalas: 0,
       restaurantName,
+      expectedCashHalalas: report.openingCashHalalas + cashTotal,
     });
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'X-report printed' };
