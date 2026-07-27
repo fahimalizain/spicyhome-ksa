@@ -962,4 +962,215 @@ describe('syncItems (bulk cart sync)', () => {
     // At least one kitchen_print_enqueued event
     expect(enqEvents.length).toBeGreaterThanOrEqual(1);
   });
+
+  // --- Test 12: Unchanged lines do not emit item_updated ---
+  it('unchanged lines do not emit item_updated, only truly changed lines do', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync: add item A (Zinger qty 2) and item B (Pepsi qty 1)
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [
+          { itemId: zingerItemId, qty: 2 },
+          { itemId: pepsiItemId, qty: 1 },
+        ],
+      })
+      .expect(200);
+
+    const zingerOiId = res1.body.items.find((i: any) => i.itemId === zingerItemId).id;
+    const pepsiOiId = res1.body.items.find((i: any) => i.itemId === pepsiItemId).id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Second sync: Zinger unchanged (qty 2, no notes), Pepsi qty increased (1→2)
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [
+          { orderItemId: zingerOiId, qty: 2 }, // unchanged
+          { orderItemId: pepsiOiId, qty: 2 }, // changed: 1→2
+        ],
+      })
+      .expect(200);
+
+    const events = res2.body.events;
+    const updateEvents = events.filter((e: any) => e.type === 'item_updated');
+
+    // Exactly 1 item_updated event (Pepsi only; Zinger was no-op)
+    expect(updateEvents.length).toBe(1);
+
+    // The single item_updated must be for Pepsi with oldQty !== newQty
+    const pepsiUpdatePayload =
+      typeof updateEvents[0].payload === 'string'
+        ? JSON.parse(updateEvents[0].payload)
+        : updateEvents[0].payload;
+    expect(pepsiUpdatePayload.oldQty).toBe(1);
+    expect(pepsiUpdatePayload.newQty).toBe(2);
+
+    // Ensure no item_updated has oldQty === newQty (would indicate no-op line leaked)
+    for (const evt of updateEvents) {
+      const p = typeof evt.payload === 'string' ? JSON.parse(evt.payload) : evt.payload;
+      expect(p.oldQty).not.toBe(p.newQty);
+    }
+  });
+
+  // --- Test 13: Identical cart snapshot is a no-op ---
+  it('identical cart snapshot does not bump updatedAt or create new events', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync: add Zinger qty 2
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Second sync: exact same snapshot
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 2 }],
+      })
+      .expect(200);
+
+    // updatedAt must NOT have changed (no pointless order row update)
+    expect(res2.body.updatedAt).toBe(updatedAt2);
+
+    // No new item_updated events for unchanged lines
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(0);
+  });
+
+  // --- Test 14: notes-only change still emits item_updated but no kitchen delta ---
+  it('notes-only change emits item_updated but no kitchen print', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2, notes: 'spicy' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Same qty, different notes
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 2, notes: 'extra spicy' }],
+      })
+      .expect(200);
+
+    // item_updated event must exist for notes change
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(1);
+
+    // The payload should include notes
+    const payload =
+      typeof updateEvents[0].payload === 'string'
+        ? JSON.parse(updateEvents[0].payload)
+        : updateEvents[0].payload;
+    expect(payload.notes).toBe('extra spicy');
+    // oldQty === newQty (only notes changed)
+    expect(payload.oldQty).toBe(2);
+    expect(payload.newQty).toBe(2);
+    // No kitchen delta for notes-only
+    expect(payload.kitchenPrintedQty).toBe(0);
+
+    // No kitchen print happened
+    await new Promise((r) => setTimeout(r, 100));
+    const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
+    expect(kitchenPrints.length).toBe(0);
+  });
+
+  // --- Test 15: notes cleared to blank normalizes to null ---
+  it('clearing notes via null or empty string normalizes to null', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync with notes
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    expect(res1.body.items[0].notes).toBe('no onions');
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Clear notes to empty string
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1, notes: '' }],
+      })
+      .expect(200);
+
+    // Empty string → normalized to null in DB
+    expect(res2.body.items[0].notes).toBeNull();
+
+    // item_updated event emitted with notes: null
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(1);
+  });
+
+  // --- Test 16: setting notes to same value is a no-op ---
+  it('setting notes to the same value is a no-op', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Same notes, same qty — should be fully no-op
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    // updatedAt unchanged
+    expect(res2.body.updatedAt).toBe(updatedAt2);
+
+    // No item_updated events
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(0);
+  });
 });

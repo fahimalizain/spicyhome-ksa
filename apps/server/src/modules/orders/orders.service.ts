@@ -57,6 +57,11 @@ function todayInRiyadh(): string {
   return fmt.format(new Date());
 }
 
+function normalizeNotes(n: string | null | undefined): string | null {
+  if (n == null || n === '') return null;
+  return n;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -231,6 +236,9 @@ export class OrdersService {
       }
     >();
 
+    // Track whether any mutation (remove/update/insert) occurred
+    let anyMutation = false;
+
     const updatedOrder = this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
@@ -270,6 +278,8 @@ export class OrdersService {
       // 1. Remove lines not in desired set
       for (const existing of existingItems) {
         if (!desiredIds.has(existing.id)) {
+          anyMutation = true;
+
           tx.delete(orderItems).where(eq(orderItems.id, existing.id)).run();
 
           this.orderEvents.createEvent(
@@ -302,6 +312,18 @@ export class OrdersService {
           const oldQty = oi.qty;
           const oldTotal = oi.totalHalalas;
 
+          // Compute desired notes
+          const desiredNotes = line.notes !== undefined ? normalizeNotes(line.notes) : oi.notes;
+          const qtyChanged = line.qty !== oi.qty;
+          const notesChanged = normalizeNotes(desiredNotes) !== normalizeNotes(oi.notes);
+
+          // Skip no-op lines — nothing changed
+          if (!qtyChanged && !notesChanged) {
+            continue;
+          }
+
+          anyMutation = true;
+
           const updates: Record<string, any> = { ...updateAuditFields(userId, now) };
           const newQty = line.qty;
           const newTotal = oi.unitPriceHalalas * line.qty;
@@ -309,14 +331,14 @@ export class OrdersService {
           updates.totalHalalas = newTotal;
 
           if (line.notes !== undefined) {
-            updates.notes = line.notes;
+            updates.notes = desiredNotes;
           }
 
           tx.update(orderItems).set(updates).where(eq(orderItems.id, line.orderItemId)).run();
 
           // Kitchen delta: only if qty increased
           let kitchenPrintedQty = 0;
-          if (newQty > oldQty && oi.itemId) {
+          if (qtyChanged && newQty > oldQty && oi.itemId) {
             const previousPrinted = this.orderEvents.getPrintedQty(tx, line.orderItemId);
             kitchenPrintedQty = newQty > previousPrinted ? newQty - previousPrinted : 0;
           }
@@ -334,7 +356,7 @@ export class OrdersService {
               oldTotal,
               newTotal,
               kitchenPrintedQty,
-              ...(line.notes !== undefined ? { notes: line.notes } : {}),
+              ...(notesChanged ? { notes: desiredNotes } : {}),
             },
             now,
           );
@@ -362,6 +384,8 @@ export class OrdersService {
             throw new BadRequestException('New item lines must include an itemId');
           }
 
+          anyMutation = true;
+
           const item = tx.select().from(items).where(eq(items.id, line.itemId)).get();
           if (!item) throw new NotFoundException(`Menu item ${line.itemId} not found`);
           if (!item.isActive) {
@@ -369,6 +393,7 @@ export class OrdersService {
           }
 
           const totalHalalas = item.priceHalalas * line.qty;
+          const normalizedNotes = normalizeNotes(line.notes ?? null);
 
           const insertResult = tx
             .insert(orderItems)
@@ -380,7 +405,7 @@ export class OrdersService {
               vatRateBp: item.vatRateBp,
               qty: line.qty,
               totalHalalas,
-              notes: line.notes ?? null,
+              notes: normalizedNotes,
               ...createAuditFields(userId, now),
             })
             .run();
@@ -401,7 +426,7 @@ export class OrdersService {
               unitPriceHalalas: item.priceHalalas,
               totalHalalas,
               kitchenPrintedQty: line.qty,
-              ...(line.notes ? { notes: line.notes } : {}),
+              ...(normalizedNotes ? { notes: normalizedNotes } : {}),
             },
             now,
           );
@@ -424,19 +449,21 @@ export class OrdersService {
         }
       }
 
-      // Recompute totals
-      const allItems = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-      const totals = recomputeOrderTotals(allItems);
+      // Recompute totals and bump order audit fields — only if something changed
+      if (anyMutation) {
+        const allItems = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+        const totals = recomputeOrderTotals(allItems);
 
-      tx.update(orders)
-        .set({
-          subtotalHalalas: totals.subtotalHalalas,
-          vatHalalas: totals.vatHalalas,
-          totalHalalas: totals.totalHalalas,
-          ...updateAuditFields(userId, now),
-        })
-        .where(eq(orders.id, orderId))
-        .run();
+        tx.update(orders)
+          .set({
+            subtotalHalalas: totals.subtotalHalalas,
+            vatHalalas: totals.vatHalalas,
+            totalHalalas: totals.totalHalalas,
+            ...updateAuditFields(userId, now),
+          })
+          .where(eq(orders.id, orderId))
+          .run();
+      }
 
       // Write kitchen_print_enqueued events grouped by printer
       for (const [, entry] of kitchenDeltasByPrinter) {
@@ -472,7 +499,9 @@ export class OrdersService {
       }
     }
 
-    this.emitDomainEvent('order.updated', orderId, userId);
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
     return updatedOrder;
   }
 
