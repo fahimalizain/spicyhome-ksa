@@ -4,15 +4,15 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
 | **name** | **kotlin.String** |  |  |
-| **sortOrder** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **printerId** | [**kotlin.Any**](.md) |  |  |
+| **sortOrder** | **kotlin.Int** |  |  |
+| **printerId** | **kotlin.Long** |  |  |
 | **isActive** | **kotlin.Boolean** |  |  |
-| **createdAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **updatedAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **createdBy** | [**kotlin.Any**](.md) |  |  |
-| **updatedBy** | [**kotlin.Any**](.md) |  |  |
+| **createdAt** | **kotlin.Long** |  |  |
+| **updatedAt** | **kotlin.Long** |  |  |
+| **createdBy** | **kotlin.Long** |  |  |
+| **updatedBy** | **kotlin.Long** |  |  |
 
 
 

@@ -28,6 +28,7 @@ import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
 import com.spicyhome.client.models.UserResponse
+import com.spicyhome.client.models.UsernamesResponse
 
 class AuthApiTest : ShouldSpec() {
     init {
@@ -60,7 +61,7 @@ class AuthApiTest : ShouldSpec() {
         // to test authControllerGetUser
         should("test authControllerGetUser") {
             // uncomment below to test authControllerGetUser
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : UserResponse = apiInstance.authControllerGetUser(id)
             //result shouldBe ("TODO")
         }
@@ -69,6 +70,13 @@ class AuthApiTest : ShouldSpec() {
         should("test authControllerListRoles") {
             // uncomment below to test authControllerListRoles
             //val result : kotlin.collections.List<RoleResponse> = apiInstance.authControllerListRoles()
+            //result shouldBe ("TODO")
+        }
+
+        // to test authControllerListUsernames
+        should("test authControllerListUsernames") {
+            // uncomment below to test authControllerListUsernames
+            //val result : UsernamesResponse = apiInstance.authControllerListUsernames()
             //result shouldBe ("TODO")
         }
 
@@ -90,7 +98,7 @@ class AuthApiTest : ShouldSpec() {
         // to test authControllerUpdateRole
         should("test authControllerUpdateRole") {
             // uncomment below to test authControllerUpdateRole
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateRoleDto : UpdateRoleDto =  // UpdateRoleDto | 
             //val result : RoleResponse = apiInstance.authControllerUpdateRole(id, updateRoleDto)
             //result shouldBe ("TODO")
@@ -99,7 +107,7 @@ class AuthApiTest : ShouldSpec() {
         // to test authControllerUpdateUser
         should("test authControllerUpdateUser") {
             // uncomment below to test authControllerUpdateUser
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateUserDto : UpdateUserDto =  // UpdateUserDto | 
             //val result : UserResponse = apiInstance.authControllerUpdateUser(id, updateUserDto)
             //result shouldBe ("TODO")

@@ -44,7 +44,7 @@ import com.squareup.moshi.JsonClass
 data class DayOpeningResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "businessDate")
     val businessDate: kotlin.String,
@@ -53,43 +53,43 @@ data class DayOpeningResponse (
     val status: kotlin.String,
 
     @Json(name = "openingCashHalalas")
-    val openingCashHalalas: java.math.BigDecimal,
+    val openingCashHalalas: kotlin.Long,
 
     @Json(name = "openedAt")
-    val openedAt: java.math.BigDecimal,
+    val openedAt: kotlin.Long,
 
     @Json(name = "openedBy")
-    val openedBy: java.math.BigDecimal,
+    val openedBy: kotlin.Long,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "updatedAt")
-    val updatedAt: java.math.BigDecimal,
+    val updatedAt: kotlin.Long,
 
     @Json(name = "closedAt")
-    val closedAt: kotlin.Any? = null,
+    val closedAt: kotlin.Long? = null,
 
     @Json(name = "closedBy")
-    val closedBy: kotlin.Any? = null,
+    val closedBy: kotlin.Long? = null,
 
     @Json(name = "closingCashHalalas")
-    val closingCashHalalas: kotlin.Any? = null,
+    val closingCashHalalas: kotlin.Long? = null,
 
     @Json(name = "totalSalesHalalas")
-    val totalSalesHalalas: kotlin.Any? = null,
+    val totalSalesHalalas: kotlin.Long? = null,
 
     @Json(name = "totalVatHalalas")
-    val totalVatHalalas: kotlin.Any? = null,
+    val totalVatHalalas: kotlin.Long? = null,
 
     @Json(name = "orderCount")
-    val orderCount: kotlin.Any? = null,
+    val orderCount: kotlin.Long? = null,
 
     @Json(name = "createdBy")
-    val createdBy: kotlin.Any? = null,
+    val createdBy: kotlin.Long? = null,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Any? = null
+    val updatedBy: kotlin.Long? = null
 
 ) {
 

@@ -42,7 +42,7 @@ data class CreateUserDto (
 
     /* role_id — 1 for admin, 2 for staff */
     @Json(name = "roleId")
-    val roleId: java.math.BigDecimal
+    val roleId: kotlin.Long
 
 ) {
 

@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { TablesService } from './tables.service';
 import { CreateTableDto, UpdateTableDto } from './dto/create-table.dto';
@@ -27,6 +28,7 @@ export class TablesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get table by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Table details', type: TableResponse })
   get(@Param('id', ParseIntPipe) id: number) {
     return this.tablesService.get(id);
@@ -43,6 +45,7 @@ export class TablesController {
   @Put(':id')
   @RequiresPermission('manage_tables')
   @ApiOperation({ summary: 'Update a table' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated table', type: TableResponse })
   update(
     @Param('id', ParseIntPipe) id: number,

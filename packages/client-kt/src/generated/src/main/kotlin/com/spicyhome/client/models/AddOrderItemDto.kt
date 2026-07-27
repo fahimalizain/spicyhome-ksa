@@ -31,10 +31,10 @@ import com.squareup.moshi.JsonClass
 data class AddOrderItemDto (
 
     @Json(name = "itemId")
-    val itemId: java.math.BigDecimal,
+    val itemId: kotlin.Long,
 
     @Json(name = "qty")
-    val qty: java.math.BigDecimal,
+    val qty: kotlin.Int,
 
     @Json(name = "notes")
     val notes: kotlin.String? = null

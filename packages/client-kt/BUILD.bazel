@@ -6,8 +6,8 @@ load("@aspect_rules_jest//jest:defs.bzl", "jest_test")
 npm_link_all_packages(name = "node_modules")
 
 ts_project(
-    name = "generate_lib",
-    srcs = ["src/generate.ts"],
+    name = "patch_adapters_lib",
+    srcs = ["src/patch-adapters.ts"],
     tsconfig = "tsconfig.json",
     transpiler = "tsc",
     declaration = True,
@@ -18,10 +18,25 @@ ts_project(
     visibility = ["//visibility:public"],
 )
 
+ts_project(
+    name = "generate_lib",
+    srcs = ["src/generate.ts"],
+    tsconfig = "tsconfig.json",
+    transpiler = "tsc",
+    declaration = True,
+    resolve_json_module = True,
+    deps = [
+        "//:node_modules/@types/node",
+        ":patch_adapters_lib",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 js_binary(
     name = "generate",
     data = [
         ":generate_lib",
+        ":patch_adapters_lib",
         ":node_modules/@openapitools/openapi-generator-cli",
         "//packages/api-spec:openapi_json",
     ],
@@ -39,6 +54,7 @@ ts_project(
         "//:node_modules/@types/node",
         ":node_modules/@types/jest",
         ":node_modules/jest",
+        ":patch_adapters_lib",
     ],
 )
 
@@ -47,6 +63,7 @@ jest_test(
     config = "jest.config.cjs",
     data = [
         ":test_lib",
+        ":patch_adapters_lib",
         ":sources",
         ":node_modules/@openapitools/openapi-generator-cli",
         "//packages/api-spec:openapi_json",

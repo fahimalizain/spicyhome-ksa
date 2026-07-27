@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class MeResponse {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
   @ApiProperty({ example: 'cashier1' })
@@ -10,7 +11,7 @@ export class MeResponse {
   @ApiProperty({ example: 'Ahmed' })
   name!: string;
 
-  @ApiProperty({ example: 2 })
+  @ApiProperty({ ...ApiInt64, example: 2 })
   roleId!: number;
 
   @ApiProperty({ example: true })

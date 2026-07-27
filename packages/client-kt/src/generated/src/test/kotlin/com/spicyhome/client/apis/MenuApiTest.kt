@@ -50,7 +50,7 @@ class MenuApiTest : ShouldSpec() {
         // to test menuControllerGetCategory
         should("test menuControllerGetCategory") {
             // uncomment below to test menuControllerGetCategory
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : CategoryResponse = apiInstance.menuControllerGetCategory(id)
             //result shouldBe ("TODO")
         }
@@ -58,7 +58,7 @@ class MenuApiTest : ShouldSpec() {
         // to test menuControllerGetItem
         should("test menuControllerGetItem") {
             // uncomment below to test menuControllerGetItem
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : ItemResponse = apiInstance.menuControllerGetItem(id)
             //result shouldBe ("TODO")
         }
@@ -81,7 +81,7 @@ class MenuApiTest : ShouldSpec() {
         // to test menuControllerUpdateCategory
         should("test menuControllerUpdateCategory") {
             // uncomment below to test menuControllerUpdateCategory
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateCategoryDto : UpdateCategoryDto =  // UpdateCategoryDto | 
             //val result : CategoryResponse = apiInstance.menuControllerUpdateCategory(id, updateCategoryDto)
             //result shouldBe ("TODO")
@@ -90,7 +90,7 @@ class MenuApiTest : ShouldSpec() {
         // to test menuControllerUpdateItem
         should("test menuControllerUpdateItem") {
             // uncomment below to test menuControllerUpdateItem
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateItemDto : UpdateItemDto =  // UpdateItemDto | 
             //val result : ItemResponse = apiInstance.menuControllerUpdateItem(id, updateItemDto)
             //result shouldBe ("TODO")

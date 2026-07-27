@@ -29,8 +29,6 @@ import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
-import java.math.BigDecimal
-
 @Composable
 fun OrderScreen(
     viewModel: OrderViewModel,
@@ -370,7 +368,7 @@ private fun CartPanel(
                 ) {
                     Text("Subtotal", color = OnDarkSecondary, fontSize = 14.sp)
                     Text(
-                        MoneyFormatter.halalasToSar(BigDecimal.valueOf(state.cartSubtotalHalalas)),
+                        MoneyFormatter.halalasToSar(state.cartSubtotalHalalas),
                         color = OnDark,
                         fontSize = 14.sp,
                     )
@@ -381,7 +379,7 @@ private fun CartPanel(
                 ) {
                     Text("VAT (15%)", color = OnDarkSecondary, fontSize = 14.sp)
                     Text(
-                        MoneyFormatter.halalasToSar(BigDecimal.valueOf(state.cartVatHalalas)),
+                        MoneyFormatter.halalasToSar(state.cartVatHalalas),
                         color = OnDark,
                         fontSize = 14.sp,
                     )
@@ -399,7 +397,7 @@ private fun CartPanel(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        MoneyFormatter.halalasToSar(BigDecimal.valueOf(state.cartTotalHalalas)),
+                        MoneyFormatter.halalasToSar(state.cartTotalHalalas),
                         color = Accent,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -579,7 +577,7 @@ private fun OrderPaidPanel(viewModel: OrderViewModel, state: OrderUiState) {
             Text("Paid", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Success)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Total: ${MoneyFormatter.halalasToSar(state.currentOrder?.totalHalalas ?: BigDecimal.ZERO)}",
+                "Total: ${MoneyFormatter.halalasToSar(state.currentOrder?.totalHalalas ?: 0L)}",
                 fontSize = 22.sp,
                 color = OnDark,
             )

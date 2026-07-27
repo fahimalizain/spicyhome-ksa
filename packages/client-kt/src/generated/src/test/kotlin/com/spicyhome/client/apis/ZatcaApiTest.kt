@@ -55,8 +55,8 @@ class ZatcaApiTest : ShouldSpec() {
         // to test zatcaControllerListInvoices
         should("test zatcaControllerListInvoices") {
             // uncomment below to test zatcaControllerListInvoices
-            //val limit : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-            //val offset : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val limit : kotlin.Int = 56 // kotlin.Int | 
+            //val offset : kotlin.Int = 56 // kotlin.Int | 
             //apiInstance.zatcaControllerListInvoices(limit, offset)
         }
 

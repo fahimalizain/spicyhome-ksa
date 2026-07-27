@@ -16,7 +16,6 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Call
 import retrofit2.Response
-import java.math.BigDecimal
 
 class OrderRepositoryTest {
 
@@ -59,7 +58,7 @@ class OrderRepositoryTest {
         verify {
             ordersApi.ordersControllerCreateOrder(match { dto ->
                 dto.type == CreateOrderDto.Type.dine_in &&
-                    dto.tableId == BigDecimal.valueOf(5)
+                    dto.tableId == 5L
             })
         }
     }
@@ -81,9 +80,9 @@ class OrderRepositoryTest {
     @Test
     fun `createOrder returns response`() {
         val created = CreateOrderResponse(
-            id = BigDecimal.valueOf(42),
+            id = 42L,
             uuid = "uuid-123",
-            orderNo = BigDecimal.valueOf(1001),
+            orderNo = 1001L,
         )
         every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
         every { createCall.execute() } returns Response.success(created)
@@ -112,7 +111,7 @@ class OrderRepositoryTest {
 
         repository.getOrder(42)
 
-        verify { ordersApi.ordersControllerGetOrder(BigDecimal.valueOf(42)) }
+        verify { ordersApi.ordersControllerGetOrder(42L) }
     }
 
     @Test
@@ -141,10 +140,10 @@ class OrderRepositoryTest {
 
         verify {
             ordersApi.ordersControllerAddItem(
-                BigDecimal.valueOf(1),
+                1L,
                 match { dto ->
-                    dto.itemId == BigDecimal.valueOf(10) &&
-                        dto.qty == BigDecimal.valueOf(3) &&
+                    dto.itemId == 10L &&
+                        dto.qty == 3 &&
                         dto.notes == "no onions"
                 }
             )
@@ -157,7 +156,7 @@ class OrderRepositoryTest {
 
         repository.payOrder(42)
 
-        verify { ordersApi.ordersControllerPayOrder(BigDecimal.valueOf(42)) }
+        verify { ordersApi.ordersControllerPayOrder(42L) }
     }
 
     @Test
@@ -166,16 +165,16 @@ class OrderRepositoryTest {
 
         repository.voidOrder(42)
 
-        verify { ordersApi.ordersControllerVoidOrder(BigDecimal.valueOf(42)) }
+        verify { ordersApi.ordersControllerVoidOrder(42L) }
     }
 
     @Test
     fun `order lifecycle create pay`() {
         // Create
         val created = CreateOrderResponse(
-            id = BigDecimal.ONE,
+            id = 1L,
             uuid = "uuid",
-            orderNo = BigDecimal.valueOf(100),
+            orderNo = 100L,
         )
         every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
         every { createCall.execute() } returns Response.success(created)

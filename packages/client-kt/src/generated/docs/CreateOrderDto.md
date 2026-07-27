@@ -5,7 +5,7 @@
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
 | **type** | [**inline**](#Type) |  |  |
-| **tableId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) | Required for dine_in |  [optional] |
+| **tableId** | **kotlin.Long** | Required for dine_in |  [optional] |
 
 
 <a id="Type"></a>

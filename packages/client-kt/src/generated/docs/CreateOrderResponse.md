@@ -4,9 +4,9 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
 | **uuid** | **kotlin.String** |  |  |
-| **orderNo** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **orderNo** | **kotlin.Long** |  |  |
 
 
 

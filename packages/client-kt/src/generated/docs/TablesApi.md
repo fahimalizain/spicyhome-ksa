@@ -61,7 +61,7 @@ Get table by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(TablesApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : TableResponse = webService.tablesControllerGet(id)
 ```
@@ -69,7 +69,7 @@ val result : TableResponse = webService.tablesControllerGet(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -134,14 +134,14 @@ Update a table
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(TablesApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updateTableDto : UpdateTableDto =  // UpdateTableDto | 
 
 val result : TableResponse = webService.tablesControllerUpdate(id, updateTableDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateTableDto** | [**UpdateTableDto**](UpdateTableDto.md)|  | |

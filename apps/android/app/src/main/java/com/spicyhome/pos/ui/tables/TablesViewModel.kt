@@ -80,8 +80,7 @@ class TablesViewModel(
                         .map { table ->
                             val matchedOrder = openOrders.find { order ->
                                 order.tableId != null &&
-                                    order.tableId is java.math.BigDecimal &&
-                                    (order.tableId as java.math.BigDecimal).toLong() == table.id.toLong()
+                                    order.tableId == table.id.toLong()
                             }
                             TableCard(table = table, openOrder = matchedOrder)
                         }

@@ -4,14 +4,14 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **orderId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **userId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **subtotalHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **vatHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **totalHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **reason** | [**kotlin.Any**](.md) |  |  |
-| **createdAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
+| **orderId** | **kotlin.Long** |  |  |
+| **userId** | **kotlin.Long** |  |  |
+| **subtotalHalalas** | **kotlin.Long** |  |  |
+| **vatHalalas** | **kotlin.Long** |  |  |
+| **totalHalalas** | **kotlin.Long** |  |  |
+| **reason** | **kotlin.String** |  |  |
+| **createdAt** | **kotlin.Long** |  |  |
 | **items** | [**kotlin.collections.List&lt;RefundItemResponse&gt;**](RefundItemResponse.md) |  |  |
 
 

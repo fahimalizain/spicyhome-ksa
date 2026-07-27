@@ -10,7 +10,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaOnboardingService } from './zatca-onboarding.service';
 import { ZatcaReportingService } from './zatca-reporting.service';
@@ -88,6 +88,8 @@ export class ZatcaController {
 
   @Get('invoices')
   @ApiOperation({ summary: 'List ZATCA invoices' })
+  @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', format: 'int32' } })
+  @ApiQuery({ name: 'offset', required: false, schema: { type: 'integer', format: 'int32' } })
   async listInvoices(
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,

@@ -1,15 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, Min } from 'class-validator';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class OpenDayDto {
-  @ApiProperty({ description: 'Opening cash counted in halalas', example: 50000 })
+  @ApiProperty({ ...ApiInt64, description: 'Opening cash counted in halalas', example: 50000 })
   @IsInt()
   @Min(0)
   openingCashHalalas!: number;
 }
 
 export class DayOpeningResponse {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
   @ApiProperty({ example: '2026-07-22' })
@@ -18,42 +19,42 @@ export class DayOpeningResponse {
   @ApiProperty({ example: 'open' })
   status!: string;
 
-  @ApiProperty({ example: 50000 })
+  @ApiProperty({ ...ApiInt64, example: 50000 })
   openingCashHalalas!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   openedAt!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   openedBy!: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   closedAt?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   closedBy?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   closingCashHalalas?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   totalSalesHalalas?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   totalVatHalalas?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   orderCount?: number | null;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   createdAt!: number;
 
-  @ApiProperty()
+  @ApiProperty({ ...ApiInt64 })
   updatedAt!: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   createdBy?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ ...ApiInt64, nullable: true })
   updatedBy?: number | null;
 }

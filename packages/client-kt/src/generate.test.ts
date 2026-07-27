@@ -10,6 +10,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { patchAdapters } from './patch-adapters';
 
 function findSpec(): string {
   const candidates = [
@@ -102,6 +103,9 @@ describe('Kotlin client drift check', () => {
       ].join(' ');
 
       execSync(cmd, { stdio: 'pipe', cwd: path.join(__dirname, '..'), timeout: 120000 });
+
+      // Apply the same post-generate patch as generate.ts
+      patchAdapters(outDir);
 
       const generatedRoot = path.join(
         outDir,

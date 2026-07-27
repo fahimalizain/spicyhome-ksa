@@ -39,7 +39,7 @@ class TablesApiTest : ShouldSpec() {
         // to test tablesControllerGet
         should("test tablesControllerGet") {
             // uncomment below to test tablesControllerGet
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : TableResponse = apiInstance.tablesControllerGet(id)
             //result shouldBe ("TODO")
         }
@@ -54,7 +54,7 @@ class TablesApiTest : ShouldSpec() {
         // to test tablesControllerUpdate
         should("test tablesControllerUpdate") {
             // uncomment below to test tablesControllerUpdate
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateTableDto : UpdateTableDto =  // UpdateTableDto | 
             //val result : TableResponse = apiInstance.tablesControllerUpdate(id, updateTableDto)
             //result shouldBe ("TODO")

@@ -11,6 +11,7 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { patchAdapters } from './patch-adapters';
 
 const PACKAGE_NAME = 'com.spicyhome.client';
 const ADDITIONAL_PROPS = [
@@ -100,6 +101,7 @@ function main(): void {
 
   try {
     execSync(cmd, { stdio: 'inherit' });
+    patchAdapters(outDir);
     console.log('Done.');
   } catch (err: any) {
     console.error('Generation failed:', err.message);

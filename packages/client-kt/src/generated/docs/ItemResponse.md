@@ -4,18 +4,18 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **categoryId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
+| **categoryId** | **kotlin.Long** |  |  |
 | **name** | **kotlin.String** |  |  |
-| **nameAr** | [**kotlin.Any**](.md) |  |  |
-| **priceHalalas** | [**java.math.BigDecimal**](java.math.BigDecimal.md) | VAT-inclusive price in halalas |  |
-| **vatRateBp** | [**java.math.BigDecimal**](java.math.BigDecimal.md) | VAT rate in basis points |  |
-| **sortOrder** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **nameAr** | **kotlin.String** |  |  |
+| **priceHalalas** | **kotlin.Long** | VAT-inclusive price in halalas |  |
+| **vatRateBp** | **kotlin.Int** | VAT rate in basis points |  |
+| **sortOrder** | **kotlin.Int** |  |  |
 | **isActive** | **kotlin.Boolean** |  |  |
-| **createdAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **updatedAt** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
-| **createdBy** | [**kotlin.Any**](.md) |  |  |
-| **updatedBy** | [**kotlin.Any**](.md) |  |  |
+| **createdAt** | **kotlin.Long** |  |  |
+| **updatedAt** | **kotlin.Long** |  |  |
+| **createdBy** | **kotlin.Long** |  |  |
+| **updatedBy** | **kotlin.Long** |  |  |
 
 
 

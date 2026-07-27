@@ -24,7 +24,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import java.math.BigDecimal
 
 data class CartItem(
     val item: ItemResponse,
@@ -145,7 +144,7 @@ class OrderViewModel(
                             currentOrderId = order.id.toLong(),
                             currentOrder = order,
                             orderType = if (order.type == "dine_in") OrderType.DINE_IN else OrderType.TAKEAWAY,
-                            selectedTableId = (order.tableId as? BigDecimal)?.toLong(),
+                            selectedTableId = order.tableId,
                             screenState = OrderScreenState.ORDER_CREATED,
                         )
                     }

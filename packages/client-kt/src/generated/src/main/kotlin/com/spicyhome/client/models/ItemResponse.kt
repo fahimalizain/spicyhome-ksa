@@ -40,42 +40,42 @@ import com.squareup.moshi.JsonClass
 data class ItemResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "categoryId")
-    val categoryId: java.math.BigDecimal,
+    val categoryId: kotlin.Long,
 
     @Json(name = "name")
     val name: kotlin.String,
 
     @Json(name = "nameAr")
-    val nameAr: kotlin.Any?,
+    val nameAr: kotlin.String?,
 
     /* VAT-inclusive price in halalas */
     @Json(name = "priceHalalas")
-    val priceHalalas: java.math.BigDecimal,
+    val priceHalalas: kotlin.Long,
 
     /* VAT rate in basis points */
     @Json(name = "vatRateBp")
-    val vatRateBp: java.math.BigDecimal,
+    val vatRateBp: kotlin.Int,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal,
+    val sortOrder: kotlin.Int,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "updatedAt")
-    val updatedAt: java.math.BigDecimal,
+    val updatedAt: kotlin.Long,
 
     @Json(name = "createdBy")
-    val createdBy: kotlin.Any?,
+    val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Any?
+    val updatedBy: kotlin.Long?
 
 ) {
 

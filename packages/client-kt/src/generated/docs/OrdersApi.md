@@ -33,14 +33,14 @@ Add an item to an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
 
 val result : SuccessResponse = webService.ordersControllerAddItem(id, addOrderItemDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **addOrderItemDto** | [**AddOrderItemDto**](AddOrderItemDto.md)|  | |
@@ -111,7 +111,7 @@ Get order by ID with items and audit log
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : OrderResponse = webService.ordersControllerGetOrder(id)
 ```
@@ -119,7 +119,7 @@ val result : OrderResponse = webService.ordersControllerGetOrder(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -149,7 +149,7 @@ Get the complete event chain for an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : kotlin.collections.List<OrderEventResponse> = webService.ordersControllerGetOrderEvents(id)
 ```
@@ -157,7 +157,7 @@ val result : kotlin.collections.List<OrderEventResponse> = webService.ordersCont
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -187,7 +187,7 @@ Get all refunds for an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : kotlin.collections.List<OrderRefundResponse> = webService.ordersControllerGetOrderRefunds(id)
 ```
@@ -195,7 +195,7 @@ val result : kotlin.collections.List<OrderRefundResponse> = webService.ordersCon
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -265,7 +265,7 @@ Mark order as paid (open → paid)
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : StatusResponse = webService.ordersControllerPayOrder(id)
 ```
@@ -273,7 +273,7 @@ val result : StatusResponse = webService.ordersControllerPayOrder(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -303,14 +303,14 @@ Refund items on a paid order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val createRefundDto : CreateRefundDto =  // CreateRefundDto | 
 
 val result : RefundResponse = webService.ordersControllerRefundOrder(id, createRefundDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **createRefundDto** | [**CreateRefundDto**](CreateRefundDto.md)|  | |
@@ -343,17 +343,17 @@ Remove an item from an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val orderId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-val itemId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val orderId : kotlin.Long = 789 // kotlin.Long | 
+val itemId : kotlin.Long = 789 // kotlin.Long | 
 
 val result : SuccessResponse = webService.ordersControllerRemoveItem(orderId, itemId)
 ```
 
 ### Parameters
-| **orderId** | **java.math.BigDecimal**|  | |
+| **orderId** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **itemId** | **java.math.BigDecimal**|  | |
+| **itemId** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -383,14 +383,14 @@ Reprint receipt or kitchen ticket for an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val reprintOrderDto : ReprintOrderDto =  // ReprintOrderDto | 
 
 val result : PrintResponse = webService.ordersControllerReprintOrder(id, reprintOrderDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **reprintOrderDto** | [**ReprintOrderDto**](ReprintOrderDto.md)|  | |
@@ -423,16 +423,16 @@ Update an order item (qty or notes)
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val orderId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-val itemId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val orderId : kotlin.Long = 789 // kotlin.Long | 
+val itemId : kotlin.Long = 789 // kotlin.Long | 
 val updateOrderItemDto : UpdateOrderItemDto =  // UpdateOrderItemDto | 
 
 val result : SuccessResponse = webService.ordersControllerUpdateItem(orderId, itemId, updateOrderItemDto)
 ```
 
 ### Parameters
-| **orderId** | **java.math.BigDecimal**|  | |
-| **itemId** | **java.math.BigDecimal**|  | |
+| **orderId** | **kotlin.Long**|  | |
+| **itemId** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateOrderItemDto** | [**UpdateOrderItemDto**](UpdateOrderItemDto.md)|  | |
@@ -465,7 +465,7 @@ Verify audit log hash chain for an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : AuditVerifyResponse = webService.ordersControllerVerifyAuditChain(id)
 ```
@@ -473,7 +473,7 @@ val result : AuditVerifyResponse = webService.ordersControllerVerifyAuditChain(i
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -503,7 +503,7 @@ Verify the hash chain integrity for an order
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : AuditVerifyResponse = webService.ordersControllerVerifyOrderChain(id)
 ```
@@ -511,7 +511,7 @@ val result : AuditVerifyResponse = webService.ordersControllerVerifyOrderChain(i
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -541,7 +541,7 @@ Void an order (open → voided)
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : StatusResponse = webService.ordersControllerVoidOrder(id)
 ```
@@ -549,7 +549,7 @@ val result : StatusResponse = webService.ordersControllerVoidOrder(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 

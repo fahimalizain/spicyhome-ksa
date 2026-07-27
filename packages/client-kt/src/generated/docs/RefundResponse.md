@@ -5,7 +5,7 @@
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
 | **success** | **kotlin.Boolean** |  |  |
-| **refundId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **refundId** | **kotlin.Long** |  |  |
 | **status** | **kotlin.String** |  |  |
 
 

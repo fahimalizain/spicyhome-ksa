@@ -35,7 +35,7 @@ data class UpdateUserDto (
     val name: kotlin.String? = null,
 
     @Json(name = "roleId")
-    val roleId: java.math.BigDecimal? = null,
+    val roleId: kotlin.Long? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = null,

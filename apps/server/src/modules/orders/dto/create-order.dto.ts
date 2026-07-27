@@ -2,6 +2,7 @@ import { IsString, IsIn, IsInt, IsOptional, Min, ValidateNested } from 'class-va
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderType } from '@spicyhome/shared';
+import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 
 export class CreateOrderDto {
   @ApiProperty({ enum: ['dine_in', 'takeaway'], example: 'dine_in' })
@@ -9,36 +10,36 @@ export class CreateOrderDto {
   @IsIn([OrderType.DINE_IN, OrderType.TAKEAWAY])
   type!: typeof OrderType.DINE_IN | typeof OrderType.TAKEAWAY;
 
-  @ApiPropertyOptional({ example: 1, description: 'Required for dine_in' })
+  @ApiPropertyOptional({ ...ApiInt64, example: 1, description: 'Required for dine_in' })
   @IsOptional()
   @IsInt()
   tableId?: number;
 }
 
 export class AddOrderItemDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   @IsInt()
   itemId!: number;
 
-  @ApiProperty({ example: 2 })
+  @ApiProperty({ ...ApiInt32, example: 2 })
   @IsInt()
   @Min(1)
   qty!: number;
 
-  @ApiPropertyOptional({ example: 'no onion' })
+  @ApiPropertyOptional({ type: String, example: 'no onion' })
   @IsOptional()
   @IsString()
   notes?: string;
 }
 
 export class UpdateOrderItemDto {
-  @ApiPropertyOptional({ example: 3 })
+  @ApiPropertyOptional({ ...ApiInt32, example: 3 })
   @IsOptional()
   @IsInt()
   @Min(1)
   qty?: number;
 
-  @ApiPropertyOptional({ example: 'extra cheese' })
+  @ApiPropertyOptional({ type: String, example: 'extra cheese' })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -52,11 +53,11 @@ export class ReprintOrderDto {
 }
 
 export class RefundItemDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   @IsInt()
   orderItemId!: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt32, example: 1 })
   @IsInt()
   @Min(1)
   qty!: number;
@@ -68,7 +69,7 @@ export class CreateRefundDto {
   @Type(() => RefundItemDto)
   items!: RefundItemDto[];
 
-  @ApiPropertyOptional({ example: 'Customer changed mind' })
+  @ApiPropertyOptional({ type: String, example: 'Customer changed mind' })
   @IsOptional()
   @IsString()
   reason?: string;

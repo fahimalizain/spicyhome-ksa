@@ -35,11 +35,11 @@ data class CreateCategoryDto (
     val name: kotlin.String,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = java.math.BigDecimal("0"),
+    val sortOrder: kotlin.Int? = 0,
 
     /* Printer ID for kitchen routing */
     @Json(name = "printerId")
-    val printerId: java.math.BigDecimal? = null,
+    val printerId: kotlin.Long? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = true

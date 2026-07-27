@@ -40,7 +40,7 @@ import com.squareup.moshi.JsonClass
 data class CloseDayResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "businessDate")
     val businessDate: kotlin.String,
@@ -49,31 +49,31 @@ data class CloseDayResponse (
     val status: kotlin.String,
 
     @Json(name = "openingCashHalalas")
-    val openingCashHalalas: java.math.BigDecimal,
+    val openingCashHalalas: kotlin.Long,
 
     @Json(name = "openedAt")
-    val openedAt: java.math.BigDecimal,
+    val openedAt: kotlin.Long,
 
     @Json(name = "openedBy")
-    val openedBy: java.math.BigDecimal,
+    val openedBy: kotlin.Long,
 
     @Json(name = "closedAt")
-    val closedAt: java.math.BigDecimal,
+    val closedAt: kotlin.Long,
 
     @Json(name = "closedBy")
-    val closedBy: java.math.BigDecimal,
+    val closedBy: kotlin.Long,
 
     @Json(name = "closingCashHalalas")
-    val closingCashHalalas: java.math.BigDecimal,
+    val closingCashHalalas: kotlin.Long,
 
     @Json(name = "totalSalesHalalas")
-    val totalSalesHalalas: java.math.BigDecimal,
+    val totalSalesHalalas: kotlin.Long,
 
     @Json(name = "totalVatHalalas")
-    val totalVatHalalas: java.math.BigDecimal,
+    val totalVatHalalas: kotlin.Long,
 
     @Json(name = "orderCount")
-    val orderCount: java.math.BigDecimal
+    val orderCount: kotlin.Long
 
 ) {
 

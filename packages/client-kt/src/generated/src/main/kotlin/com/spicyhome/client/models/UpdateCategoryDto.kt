@@ -35,10 +35,10 @@ data class UpdateCategoryDto (
     val name: kotlin.String? = null,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = null,
+    val sortOrder: kotlin.Int? = null,
 
     @Json(name = "printerId")
-    val printerId: java.math.BigDecimal? = null,
+    val printerId: kotlin.Long? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = null

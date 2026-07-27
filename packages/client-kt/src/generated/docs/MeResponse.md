@@ -4,10 +4,10 @@
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
-| **id** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **id** | **kotlin.Long** |  |  |
 | **username** | **kotlin.String** |  |  |
 | **name** | **kotlin.String** |  |  |
-| **roleId** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  |
+| **roleId** | **kotlin.Long** |  |  |
 | **isActive** | **kotlin.Boolean** |  |  |
 | **roleName** | **kotlin.String** |  |  |
 | **createOrder** | **kotlin.Boolean** |  |  |

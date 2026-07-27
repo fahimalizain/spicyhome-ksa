@@ -35,7 +35,7 @@ interface TablesApi {
      * @return [Call]<[TableResponse]>
      */
     @GET("tables/{id}")
-    fun tablesControllerGet(@Path("id") id: java.math.BigDecimal): Call<TableResponse>
+    fun tablesControllerGet(@Path("id") id: kotlin.Long): Call<TableResponse>
 
     /**
      * GET tables
@@ -61,6 +61,6 @@ interface TablesApi {
      * @return [Call]<[TableResponse]>
      */
     @PUT("tables/{id}")
-    fun tablesControllerUpdate(@Path("id") id: java.math.BigDecimal, @Body updateTableDto: UpdateTableDto): Call<TableResponse>
+    fun tablesControllerUpdate(@Path("id") id: kotlin.Long, @Body updateTableDto: UpdateTableDto): Call<TableResponse>
 
 }
