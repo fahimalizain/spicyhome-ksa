@@ -118,6 +118,13 @@ export function OrderPage() {
 
   async function handleCreateOrder() {
     if (cart.items.length === 0) return;
+
+    if (cart.orderType === 'dine_in' && !cart.tableId) {
+      setError('Please select a table');
+      setShowTablePicker(true);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -239,7 +246,9 @@ export function OrderPage() {
         <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 border-b border-gray-700 shrink-0">
           <button
             onClick={() => {
-              cart.setOrderType('dine_in', null);
+              if (cart.orderType !== 'dine_in') {
+                cart.setOrderType('dine_in', null);
+              }
               setShowTablePicker(true);
             }}
             className={`touch-target px-4 rounded-lg text-sm font-medium ${
@@ -260,10 +269,20 @@ export function OrderPage() {
           >
             Takeaway
           </button>
-          {cart.tableId && (
-            <span className="text-sm text-gray-400">
-              Table: {tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}
-            </span>
+          {cart.orderType === 'dine_in' && (
+            <button
+              onClick={() => setShowTablePicker(true)}
+              disabled={!!currentOrder}
+              className={`touch-target px-3 py-1.5 rounded-lg text-sm ${
+                cart.tableId
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-brand-700/50 text-brand-300 border border-brand-600/50 hover:bg-brand-700'
+              }`}
+            >
+              {cart.tableId
+                ? `Table: ${tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}`
+                : 'Select table\u2026'}
+            </button>
           )}
         </div>
 
