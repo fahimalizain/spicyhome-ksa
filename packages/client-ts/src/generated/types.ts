@@ -2043,6 +2043,66 @@ export interface components {
        */
       orderCount: number;
     };
+    CurrentDayResponse: {
+      /**
+       * @description Whether a business day is open
+       * @example true
+       */
+      open: boolean;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id?: number;
+      /** @example 2026-07-22 */
+      businessDate?: string;
+      /** @example open */
+      status?: string;
+      /**
+       * Format: int64
+       * @example 50000
+       */
+      openingCashHalalas?: number;
+      /** Format: int64 */
+      openedAt?: number;
+      /** Format: int64 */
+      openedBy?: number;
+      /** Format: int64 */
+      closedAt?: number | null;
+      /** Format: int64 */
+      closedBy?: number | null;
+      /** Format: int64 */
+      closingCashHalalas?: number | null;
+      /** Format: int64 */
+      totalSalesHalalas?: number | null;
+      /** Format: int64 */
+      totalVatHalalas?: number | null;
+      /** Format: int64 */
+      orderCount?: number | null;
+      /** Format: int64 */
+      createdAt?: number;
+      /** Format: int64 */
+      updatedAt?: number;
+      /** Format: int64 */
+      createdBy?: number | null;
+      /** Format: int64 */
+      updatedBy?: number | null;
+      /**
+       * Format: int64
+       * @description Live sales total (halalas) for open day
+       */
+      liveSalesHalalas?: number;
+      /**
+       * Format: int64
+       * @description Live VAT total (halalas) for open day
+       */
+      liveVatHalalas?: number;
+      /**
+       * Format: int64
+       * @description Live paid order count for open day
+       */
+      liveOrderCount?: number;
+    };
     PaymentMethodResponse: {
       /** @example cash */
       id: string;
@@ -3313,7 +3373,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CurrentDayResponse'];
+        };
       };
     };
   };

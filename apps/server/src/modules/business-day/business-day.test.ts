@@ -243,6 +243,8 @@ describe('BusinessDayService', () => {
 
       const current = service.getCurrentDay()!;
       expect(current).not.toBeNull();
+      expect(current.open).toBe(true);
+      expect(current.status).toBe('open');
       expect(current.liveSalesHalalas).toBe(2300);
       expect(current.liveVatHalalas).toBe(300);
       expect(current.liveOrderCount).toBe(1);

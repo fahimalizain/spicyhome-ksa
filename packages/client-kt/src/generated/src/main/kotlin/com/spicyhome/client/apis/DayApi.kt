@@ -8,6 +8,7 @@ import com.squareup.moshi.Json
 
 import com.spicyhome.client.models.CloseDayDto
 import com.spicyhome.client.models.CloseDayResponse
+import com.spicyhome.client.models.CurrentDayResponse
 import com.spicyhome.client.models.DayOpeningResponse
 import com.spicyhome.client.models.OpenDayDto
 
@@ -34,10 +35,10 @@ interface DayApi {
      * Responses:
      *  - 200: Current open day or null
      *
-     * @return [Call]<[Unit]>
+     * @return [Call]<[CurrentDayResponse]>
      */
     @GET("day/current")
-    fun businessDayControllerGetCurrent(): Call<Unit>
+    fun businessDayControllerGetCurrent(): Call<CurrentDayResponse>
 
     /**
      * GET day/{id}

@@ -131,6 +131,7 @@ export class BusinessDayService {
 
     return {
       ...openDay,
+      open: true,
       liveSalesHalalas: liveSales,
       liveVatHalalas: liveVat,
       liveOrderCount: liveCount,

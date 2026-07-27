@@ -1878,7 +1878,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Current open day or null"
+            "description": "Current open day or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentDayResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4363,6 +4370,108 @@
           "totalSalesHalalas",
           "totalVatHalalas",
           "orderCount"
+        ]
+      },
+      "CurrentDayResponse": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "description": "Whether a business day is open",
+            "example": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "businessDate": {
+            "type": "string",
+            "example": "2026-07-22"
+          },
+          "status": {
+            "type": "string",
+            "example": "open"
+          },
+          "openingCashHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 50000
+          },
+          "openedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "openedBy": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "closedAt": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "closedBy": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "closingCashHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "totalSalesHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "totalVatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "orderCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "liveSalesHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Live sales total (halalas) for open day"
+          },
+          "liveVatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Live VAT total (halalas) for open day"
+          },
+          "liveOrderCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Live paid order count for open day"
+          }
+        },
+        "required": [
+          "open"
         ]
       },
       "PaymentMethodResponse": {

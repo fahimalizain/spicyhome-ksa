@@ -1,6 +1,7 @@
 package com.spicyhome.pos.data.api
 
 import com.spicyhome.client.apis.AuthApi
+import com.spicyhome.client.apis.DayApi
 import com.spicyhome.client.apis.MenuApi
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
@@ -14,11 +15,13 @@ class FakeApiClientProvider(
     var menuApi: MenuApi,
     var ordersApi: OrdersApi,
     var tablesApi: TablesApi,
+    var dayApi: DayApi,
 ) {
     fun createAuthApi(baseUrl: String): AuthApi = authApi
     fun createAuthApi(baseUrl: String, bearerToken: String): AuthApi = authApi
     fun createMenuApi(baseUrl: String, bearerToken: String): MenuApi = menuApi
     fun createOrdersApi(baseUrl: String, bearerToken: String): OrdersApi = ordersApi
     fun createTablesApi(baseUrl: String, bearerToken: String): TablesApi = tablesApi
+    fun createDayApi(baseUrl: String, bearerToken: String): DayApi = dayApi
     fun testConnectivity(baseUrl: String): Boolean = true
 }

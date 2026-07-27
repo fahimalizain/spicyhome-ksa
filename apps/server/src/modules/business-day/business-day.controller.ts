@@ -13,6 +13,7 @@ import {
 import { BusinessDayService } from './business-day.service';
 import { OpenDayDto, DayOpeningResponse } from './dto/open-day.dto';
 import { CloseDayDto, CloseDayResponse } from './dto/close-day.dto';
+import { CurrentDayResponse } from './dto/current-day.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -46,7 +47,7 @@ export class BusinessDayController {
 
   @Get('current')
   @ApiOperation({ summary: 'Get current open day with live X-report totals' })
-  @ApiOkResponse({ description: 'Current open day or null' })
+  @ApiOkResponse({ description: 'Current open day or null', type: CurrentDayResponse })
   getCurrent() {
     return this.businessDayService.getCurrentDay() ?? { open: false };
   }

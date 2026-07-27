@@ -13,6 +13,8 @@ import com.spicyhome.pos.SpicyHomeApp
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.SessionManager
 import com.spicyhome.pos.data.api.ApiClientProvider
+import com.spicyhome.pos.ui.day.DayNotOpenScreen
+import com.spicyhome.pos.ui.day.DayNotOpenViewModel
 import com.spicyhome.pos.ui.login.LoginScreen
 import com.spicyhome.pos.ui.login.LoginViewModel
 import com.spicyhome.pos.ui.order.OrderScreen
@@ -27,6 +29,7 @@ import com.spicyhome.pos.ui.setup.SetupViewModel
 object NavRoutes {
     const val SETUP = "setup"
     const val LOGIN = "login"
+    const val DAY_NOT_OPEN = "day_not_open"
     const val ORDER = "order"
     const val ORDERS = "orders"
     const val TABLES = "tables"
@@ -70,7 +73,7 @@ fun NavGraph(
             LoginScreen(
                 viewModel = vm,
                 onLoginSuccess = {
-                    navController.navigate(NavRoutes.ORDER) {
+                    navController.navigate(NavRoutes.DAY_NOT_OPEN) {
                         popUpTo(NavRoutes.LOGIN) { inclusive = true }
                     }
                 },
@@ -79,6 +82,23 @@ fun NavGraph(
                         popUpTo(0) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(NavRoutes.DAY_NOT_OPEN) {
+            val vm: DayNotOpenViewModel = viewModel(factory = DayNotOpenViewModel.Factory(preferencesManager, apiClientProvider))
+            DayNotOpenScreen(
+                viewModel = vm,
+                onDayOpen = {
+                    navController.navigate(NavRoutes.ORDER) {
+                        popUpTo(NavRoutes.DAY_NOT_OPEN) { inclusive = true }
+                    }
+                },
+                onLogout = {
+                    navController.navigate(NavRoutes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
 

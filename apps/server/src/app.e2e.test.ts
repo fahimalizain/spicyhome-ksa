@@ -150,6 +150,7 @@ describe('Business Day (e2e)', () => {
       .get('/day/current')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
+    expect(res.body.open).toBe(true);
     expect(res.body.status).toBe('open');
     expect(res.body.liveSalesHalalas).toBe(0);
   });
@@ -282,6 +283,15 @@ describe('Orders (e2e)', () => {
       .expect(201);
     expect(res.body.status).toBe('closed');
     expect(res.body.totalSalesHalalas).toBeGreaterThan(0);
+  });
+
+  it('GET /day/current returns { open: false } after day close', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/day/current')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(res.body.open).toBe(false);
+    expect(res.body.id).toBeUndefined();
   });
 
   it('GET /reports/z/:dayId returns Z-report', async () => {

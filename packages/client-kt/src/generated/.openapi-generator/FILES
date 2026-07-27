@@ -15,6 +15,7 @@ docs/CreateRefundDto.md
 docs/CreateRoleDto.md
 docs/CreateTableDto.md
 docs/CreateUserDto.md
+docs/CurrentDayResponse.md
 docs/DayApi.md
 docs/DayOpeningResponse.md
 docs/ItemResponse.md
@@ -106,6 +107,7 @@ src/main/kotlin/com/spicyhome/client/models/CreateRefundDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateRoleDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateTableDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateUserDto.kt
+src/main/kotlin/com/spicyhome/client/models/CurrentDayResponse.kt
 src/main/kotlin/com/spicyhome/client/models/DayOpeningResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ItemResponse.kt
 src/main/kotlin/com/spicyhome/client/models/LoginDto.kt
@@ -146,3 +148,4 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
+src/test/kotlin/com/spicyhome/client/models/CurrentDayResponseTest.kt

@@ -813,7 +813,7 @@ private fun OrderTerminalPanel(viewModel: OrderViewModel, state: OrderUiState) {
     }
 }
 
-// ── Day Not Open Panel (message + Back only, no admin controls) ──
+// ── Day Not Open Panel (message + Refresh, no admin controls) ──
 
 @Composable
 private fun DayNotOpenPanel(viewModel: OrderViewModel, state: OrderUiState) {
@@ -828,7 +828,12 @@ private fun DayNotOpenPanel(viewModel: OrderViewModel, state: OrderUiState) {
         ) {
             Text("⚠", fontSize = 48.sp, color = Warning)
             Spacer(modifier = Modifier.height(16.dp))
-            Text("No Open Business Day", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = OnDark)
+            Text(
+                "No Open Business Day",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = OnDark,
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 "A business day must be opened from the POS terminal before taking orders.",
@@ -836,13 +841,37 @@ private fun DayNotOpenPanel(viewModel: OrderViewModel, state: OrderUiState) {
                 color = OnDarkSecondary,
                 textAlign = TextAlign.Center,
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "The tablet cannot open or close business days.",
+                fontSize = 14.sp,
+                color = OnDarkSecondary,
+                textAlign = TextAlign.Center,
+            )
             Spacer(modifier = Modifier.height(24.dp))
+
+            if (state.error != null) {
+                Text(state.error, color = Error, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             Button(
-                onClick = { viewModel.newOrder() },
+                onClick = { viewModel.checkDayOpen() },
+                enabled = !state.isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(48.dp),
             ) {
-                Text("Back")
+                if (state.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = OnDark,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text("Refresh")
+                }
             }
         }
     }
