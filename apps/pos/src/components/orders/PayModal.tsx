@@ -168,7 +168,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       onClick={onClose}
     >
       <div
-        className="bg-gray-850 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto"
+        className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-white mb-3">Payment</h2>

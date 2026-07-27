@@ -641,7 +641,7 @@ export function OrderPage() {
           onClick={handleCloseRefund}
         >
           <div
-            className="bg-gray-850 rounded-xl p-4 w-96 max-h-[80vh] overflow-y-auto"
+            className="bg-gray-900 rounded-xl p-4 w-96 max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {refundLoading || !refundOrder ? (
