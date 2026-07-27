@@ -434,7 +434,7 @@ export class OrdersService {
   async payOrder(
     orderId: number,
     userId: number,
-    dto?: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> },
+    dto: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> },
   ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
@@ -452,18 +452,12 @@ export class OrdersService {
         );
       }
 
-      // If no payments body provided, use implicit full cash payment (backward compat for migration)
-      const paymentLines: Array<{
-        methodId: string;
-        amountHalalas: number;
-        tenderedHalalas?: number;
-      }> = dto?.payments ?? [
-        { methodId: 'cash', amountHalalas: order.totalHalalas as number },
-      ];
-
-      if (paymentLines.length === 0) {
-        throw new BadRequestException('Payment lines array must not be empty');
+      // ADR 0002: payments key is required — no implicit cash fallback
+      if (!dto.payments || dto.payments.length === 0) {
+        throw new BadRequestException('Payment lines array is required and must not be empty');
       }
+
+      const paymentLines = dto.payments;
 
       // Validate and process each payment line
       const paymentRecords: Array<{

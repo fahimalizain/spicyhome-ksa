@@ -1,4 +1,12 @@
-import { IsString, IsInt, IsOptional, Min, ValidateNested, ArrayNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsArray,
+  IsOptional,
+  Min,
+  ValidateNested,
+  ArrayNotEmpty,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiInt64 } from '../../../common/api-property-helpers';
@@ -30,6 +38,7 @@ export class PayOrderDto {
     type: [PaymentLineDto],
     description: 'Payment lines (at least one required)',
   })
+  @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PaymentLineDto)
   @ArrayNotEmpty()
