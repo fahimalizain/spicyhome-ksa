@@ -363,7 +363,7 @@ class OrderViewModelTest {
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
             items = listOf(oi),
-            auditLog = emptyList(),
+            events = emptyList(),
         )
         val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
         every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall
@@ -1041,7 +1041,7 @@ class OrderViewModelTest {
         createdBy = 1L,
         updatedBy = 1L,
         items = items,
-        auditLog = emptyList(),
+        events = emptyList(),
     )
 
     private fun setOpenOrderState(vm: OrderViewModel, orderId: Long, status: String) {
