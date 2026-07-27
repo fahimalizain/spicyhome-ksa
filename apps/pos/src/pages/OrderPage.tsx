@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { PayModal } from '../components/orders/PayModal';
+import { filterMenuItems } from '../lib/filterMenuItems';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
@@ -96,6 +97,7 @@ export function OrderPage() {
   const [openingCash, setOpeningCash] = useState('');
   const [dayLoading, setDayLoading] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
+  const [itemSearch, setItemSearch] = useState('');
 
   // Navigation / realtime guards
   const [showLeaveGuard, setShowLeaveGuard] = useState(false);
@@ -214,9 +216,10 @@ export function OrderPage() {
     }
   }
 
-  const filteredItems = selectedCategory
-    ? items.filter((i) => i.categoryId === selectedCategory)
-    : items;
+  const filteredItems = filterMenuItems(items, {
+    categoryId: selectedCategory,
+    query: itemSearch,
+  });
 
   async function handleOpenRefund() {
     if (!currentOrder) return;
@@ -244,6 +247,7 @@ export function OrderPage() {
     setShowTablePicker(false);
     setShowRefundModal(false);
     setRefundOrder(null);
+    setItemSearch('');
     setSearchParams({}, { replace: true });
   }
 
@@ -532,6 +536,31 @@ export function OrderPage() {
           )}
         </div>
 
+        {/* Search input */}
+        <div className="px-3 pt-2 pb-1 bg-gray-800 shrink-0">
+          <div className="relative">
+            <input
+              type="text"
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setItemSearch('');
+              }}
+              placeholder="Search items…"
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+            />
+            {itemSearch && (
+              <button
+                onClick={() => setItemSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-lg leading-none px-1"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Category tabs */}
         <div className="flex overflow-x-auto bg-gray-850 border-b border-gray-700 shrink-0">
           <button
@@ -561,21 +590,27 @@ export function OrderPage() {
 
         {/* Item grid */}
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {filteredItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleAddItem(item)}
-                disabled={cartDisabled}
-                className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
-              >
-                <span className="text-sm font-medium text-white">{item.name}</span>
-                <span className="text-xs text-brand-400 mt-1">
-                  {halalasToSar(item.priceHalalas)} SAR
-                </span>
-              </button>
-            ))}
-          </div>
+          {filteredItems.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-sm text-gray-500">No items match</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {filteredItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleAddItem(item)}
+                  disabled={cartDisabled}
+                  className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
+                >
+                  <span className="text-sm font-medium text-white">{item.name}</span>
+                  <span className="text-xs text-brand-400 mt-1">
+                    {halalasToSar(item.priceHalalas)} SAR
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

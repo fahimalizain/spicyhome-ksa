@@ -216,6 +216,37 @@ private fun OrderEditingPanel(
                 onViewTables = { guardedNavigate(onViewTables) },
             )
 
+            // Search field
+            OutlinedTextField(
+                value = state.itemSearchQuery,
+                onValueChange = { viewModel.setItemSearch(it) },
+                singleLine = true,
+                placeholder = { Text("Search items\u2026", color = OnDarkSecondary) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Accent,
+                    unfocusedBorderColor = DarkSurfaceVariant,
+                    focusedTextColor = OnDark,
+                    unfocusedTextColor = OnDark,
+                    cursorColor = Accent,
+                    focusedContainerColor = DarkSurface,
+                    unfocusedContainerColor = DarkSurface,
+                ),
+                trailingIcon = {
+                    if (state.itemSearchQuery.isNotEmpty()) {
+                        TextButton(
+                            onClick = { viewModel.setItemSearch("") },
+                            modifier = Modifier.width(32.dp).height(32.dp),
+                            contentPadding = PaddingValues(0.dp),
+                        ) {
+                            Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
+                        }
+                    }
+                },
+            )
+
             // Category tabs
             if (state.categories.isNotEmpty()) {
                 LazyRow(
@@ -262,6 +293,13 @@ private fun OrderEditingPanel(
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = Accent)
+                }
+            } else if (state.filteredItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No items match", color = OnDarkSecondary, fontSize = 16.sp)
                 }
             } else {
                 LazyColumn(
