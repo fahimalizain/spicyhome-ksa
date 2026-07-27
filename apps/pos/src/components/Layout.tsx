@@ -39,8 +39,12 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
   return (
     <nav className="flex items-center justify-between bg-gray-800 px-4 py-2 border-b border-gray-700 shrink-0">
       <div className="flex items-center gap-4">
-        <Link to="/" className="text-lg font-bold text-brand-500 touch-target">
-          SpicyHome
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-lg font-bold text-brand-500 touch-target"
+        >
+          <img src="/logo.svg" alt="SpicyHome" className="h-8 w-8 object-contain" />
+          <span>POS</span>
         </Link>
         <Link to="/" className="text-sm text-gray-300 hover:text-white touch-target">
           Order
