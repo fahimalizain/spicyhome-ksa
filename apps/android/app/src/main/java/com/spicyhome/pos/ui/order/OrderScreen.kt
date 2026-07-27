@@ -8,16 +8,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -224,36 +228,67 @@ private fun OrderEditingPanel(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Left: horizontally scrollable category chips
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        FilterChip(
-                            selected = state.selectedCategoryId == null,
-                            onClick = { viewModel.selectCategory(null) },
-                            label = { Text("All", fontSize = 15.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                            ),
-                        )
+                // Left: horizontally scrollable category chips with right-edge fade
+                val listState = rememberLazyListState()
+
+                val showRightFade by remember {
+                    derivedStateOf {
+                        val info = listState.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
+                        last.index < info.totalItemsCount - 1 ||
+                            last.offset + last.size > info.viewportEndOffset
                     }
-                    items(state.categories) { cat ->
-                        FilterChip(
-                            selected = state.selectedCategoryId == cat.id.toLong(),
-                            onClick = { viewModel.selectCategory(cat.id.toLong()) },
-                            label = {
-                                Text(
-                                    text = cat.name,
-                                    fontSize = 15.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                            ),
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    LazyRow(
+                        state = listState,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = state.selectedCategoryId == null,
+                                onClick = { viewModel.selectCategory(null) },
+                                label = { Text("All", fontSize = 15.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Accent,
+                                ),
+                            )
+                        }
+                        items(state.categories) { cat ->
+                            FilterChip(
+                                selected = state.selectedCategoryId == cat.id.toLong(),
+                                onClick = { viewModel.selectCategory(cat.id.toLong()) },
+                                label = {
+                                    Text(
+                                        text = cat.name,
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Accent,
+                                ),
+                            )
+                        }
+                    }
+
+                    // Right-edge fade toward search field
+                    if (showRightFade) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(32.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color.Transparent,
+                                            DarkSurfaceVariant,
+                                        ),
+                                    ),
+                                ),
                         )
                     }
                 }

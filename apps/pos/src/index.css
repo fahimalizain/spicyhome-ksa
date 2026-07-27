@@ -18,6 +18,15 @@ body,
   @apply min-h-touch min-w-touch flex items-center justify-center select-none;
 }
 
+.scrollbar-none {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
 .status-open {
   @apply bg-yellow-700 text-yellow-100;
 }

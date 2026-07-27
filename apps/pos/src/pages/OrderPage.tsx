@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
@@ -98,6 +98,30 @@ export function OrderPage() {
   const [dayLoading, setDayLoading] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
+
+  // Category scroll fades
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateCategoryScrollFades = useCallback(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 1);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
+  }, []);
+
+  // Recompute fades when categories change (affects scrollWidth)
+  useEffect(() => {
+    updateCategoryScrollFades();
+  }, [categories, updateCategoryScrollFades]);
+
+  // Recompute fades on window resize
+  useEffect(() => {
+    window.addEventListener('resize', updateCategoryScrollFades);
+    return () => window.removeEventListener('resize', updateCategoryScrollFades);
+  }, [updateCategoryScrollFades]);
 
   // Navigation / realtime guards
   const [showLeaveGuard, setShowLeaveGuard] = useState(false);
@@ -538,31 +562,56 @@ export function OrderPage() {
 
         {/* Category tabs + inline search */}
         <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2">
-          {/* Left: horizontally scrollable category tabs */}
-          <div className="flex min-w-0 flex-1 overflow-x-auto">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
-                selectedCategory === null
-                  ? 'text-brand-500 border-b-2 border-brand-500'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+          {/* Scroll region wrapper for category tabs */}
+          <div className="relative min-w-0 flex-1">
+            <div
+              ref={categoryScrollRef}
+              onScroll={updateCategoryScrollFades}
+              className="flex overflow-x-auto overflow-y-hidden scrollbar-none"
             >
-              All
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
-                  selectedCategory === cat.id
-                    ? 'text-brand-500 border-b-2 border-brand-500'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+              {/* Inner track — prevents children from being squeezed to container width */}
+              <div className="inline-flex flex-nowrap items-center">
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
+                    selectedCategory === null
+                      ? 'text-brand-500 border-b-2 border-brand-500'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
+                      selectedCategory === cat.id
+                        ? 'text-brand-500 border-b-2 border-brand-500'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Left fade — only when scrolled past start */}
+            {canScrollLeft && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-gray-850 to-transparent"
+              />
+            )}
+
+            {/* Right fade — toward search; only when more content to the right */}
+            {canScrollRight && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-gray-850 to-transparent"
+              />
+            )}
           </div>
 
           {/* Right: compact search, fixed width */}
