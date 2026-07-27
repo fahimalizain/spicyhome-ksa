@@ -76,6 +76,13 @@ export class ZatcaOnboardingService {
       throw new BadRequestException('VAT number not configured. Set vat_number in settings first.');
     }
 
+    const orgUnit = this.printersService.getSetting('zatca_org_unit', '');
+    if (!orgUnit) {
+      throw new BadRequestException(
+        'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+      );
+    }
+
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
     const city = this.printersService.getSetting('seller_city', 'Riyadh').toUpperCase();
 
@@ -111,7 +118,7 @@ export class ZatcaOnboardingService {
       {
         commonName,
         organizationName: sellerName,
-        organizationalUnit: vatNumber,
+        organizationalUnit: orgUnit,
         country: 'SA',
       },
       keyPair.publicKeyHex,
