@@ -4,6 +4,7 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import request from 'supertest';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
@@ -451,6 +452,335 @@ describe('Order Refunds', () => {
 
       expect(res.body.valid).toBe(true);
     });
+  });
+});
+
+describe('Pay with payment methods', () => {
+  async function createOpenOrderWithItems(): Promise<{
+    orderId: number;
+    totalHalalas: number;
+    items: Array<{ id: number; itemName: string }>;
+  }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    // Add Zinger Burger (2300 halalas)
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/items`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ itemId: 1, qty: 2 })
+      .expect(201);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const fetched = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return {
+      orderId,
+      totalHalalas: fetched.body.totalHalalas,
+      items: fetched.body.items,
+    };
+  }
+
+  async function voidOrder(orderId: number) {
+    try {
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${jwtToken}`);
+    } catch {
+      // Ignore
+    }
+  }
+
+  it('rejects missing body (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+    await voidOrder(orderId);
+  });
+
+  it('rejects empty payments array (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [] })
+      .expect(400);
+    await voidOrder(orderId);
+  });
+
+  it('pays cash-only exact and creates order_payments row', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    transport.sent = [];
+    const payRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
+      })
+      .expect(201);
+
+    expect(payRes.body.status).toBe('paid');
+
+    // Verify order_payments row exists
+    const payments = db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.orderId, orderId))
+      .all();
+    expect(payments).toHaveLength(1);
+    expect(payments[0].methodId).toBe('cash');
+    expect(payments[0].amountHalalas).toBe(totalHalalas);
+    expect(payments[0].tenderedHalalas).toBe(totalHalalas);
+    expect(payments[0].changeHalalas).toBe(0);
+
+    // Verify kickDrawer is true (receipt_print_enqueued event)
+    await new Promise((r) => setTimeout(r, 200));
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+    expect(paidEvent).toBeDefined();
+    const paidPayload = typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+    expect(paidPayload.payments).toBeDefined();
+    expect(paidPayload.payments[0].methodId).toBe('cash');
+
+    const enqueuedEvent = eventsRes.body.find(
+      (e: any) => e.type === 'receipt_print_enqueued',
+    );
+    expect(enqueuedEvent).toBeDefined();
+    const enqueuedPayload = typeof enqueuedEvent.payload === 'string' ? JSON.parse(enqueuedEvent.payload) : enqueuedEvent.payload;
+    expect(enqueuedPayload.kickDrawer).toBe(true);
+  });
+
+  it('pays card-only and kickDrawer is false', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    transport.sent = [];
+    const payRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'card', amountHalalas: totalHalalas }],
+      })
+      .expect(201);
+
+    expect(payRes.body.status).toBe('paid');
+
+    // Verify order_payments row
+    const payments = db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.orderId, orderId))
+      .all();
+    expect(payments).toHaveLength(1);
+    expect(payments[0].methodId).toBe('card');
+    expect(payments[0].tenderedHalalas).toBeNull();
+    expect(payments[0].changeHalalas).toBeNull();
+
+    // kickDrawer must be false
+    await new Promise((r) => setTimeout(r, 200));
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const enqueuedEvent = eventsRes.body.find(
+      (e: any) => e.type === 'receipt_print_enqueued',
+    );
+    expect(enqueuedEvent).toBeDefined();
+    const enqueuedPayload = typeof enqueuedEvent.payload === 'string' ? JSON.parse(enqueuedEvent.payload) : enqueuedEvent.payload;
+    expect(enqueuedPayload.kickDrawer).toBe(false);
+  });
+
+  it('pays split card+cash with correct sum and two order_payments rows', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    const cardAmount = 2300;
+    const cashAmount = totalHalalas - cardAmount;
+
+    const payRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [
+          { methodId: 'card', amountHalalas: cardAmount },
+          { methodId: 'cash', amountHalalas: cashAmount, tenderedHalalas: cashAmount + 500 },
+        ],
+      })
+      .expect(201);
+
+    expect(payRes.body.status).toBe('paid');
+
+    const payments = db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.orderId, orderId))
+      .all();
+    expect(payments).toHaveLength(2);
+
+    const cardPayment = payments.find((p: any) => p.methodId === 'card')!;
+    expect(cardPayment.amountHalalas).toBe(cardAmount);
+
+    const cashPayment = payments.find((p: any) => p.methodId === 'cash')!;
+    expect(cashPayment.amountHalalas).toBe(cashAmount);
+    expect(cashPayment.tenderedHalalas).toBe(cashAmount + 500);
+    expect(cashPayment.changeHalalas).toBe(500);
+  });
+
+  it('rejects sum not equal to order total', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'cash', amountHalalas: totalHalalas + 100 }],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects unknown methodId', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'bitcoin', amountHalalas: totalHalalas }],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects disabled method at pay time', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    // Disable mada
+    db.update(schema.paymentMethods)
+      .set({ enabled: 0 })
+      .where(eq(schema.paymentMethods.id, 'mada'))
+      .run();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'mada', amountHalalas: totalHalalas }],
+      })
+      .expect(400);
+
+    // Re-enable for other tests
+    db.update(schema.paymentMethods)
+      .set({ enabled: 1 })
+      .where(eq(schema.paymentMethods.id, 'mada'))
+      .run();
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects duplicate methodId', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [
+          { methodId: 'cash', amountHalalas: Math.floor(totalHalalas / 2) },
+          { methodId: 'cash', amountHalalas: Math.ceil(totalHalalas / 2) },
+        ],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects amountHalalas <= 0', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [
+          { methodId: 'cash', amountHalalas: 0 },
+          { methodId: 'card', amountHalalas: totalHalalas },
+        ],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects non-cash with tenderedHalalas', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [
+          { methodId: 'card', amountHalalas: totalHalalas, tenderedHalalas: totalHalalas },
+        ],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('rejects cash tendered < amount', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [
+          { methodId: 'cash', amountHalalas: totalHalalas, tenderedHalalas: totalHalalas - 1 },
+        ],
+      })
+      .expect(400);
+
+    await voidOrder(orderId);
+  });
+
+  it('cash tendered omitted defaults tendered = amount, change = 0', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    const payRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
+      })
+      .expect(201);
+
+    expect(payRes.body.status).toBe('paid');
+
+    const payments = db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.orderId, orderId))
+      .all();
+    expect(payments).toHaveLength(1);
+    expect(payments[0].methodId).toBe('cash');
+    expect(payments[0].tenderedHalalas).toBe(totalHalalas);
+    expect(payments[0].changeHalalas).toBe(0);
   });
 });
 
