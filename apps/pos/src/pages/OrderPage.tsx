@@ -6,6 +6,7 @@ import { useCart } from '../hooks/useCart';
 import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
+import { PayModal } from '../components/orders/PayModal';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
@@ -36,6 +37,7 @@ export function OrderPage() {
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
   const [dayLoading, setDayLoading] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tableParamApplied = useRef(false);
@@ -187,18 +189,14 @@ export function OrderPage() {
     }
   }
 
-  async function handlePay() {
+  function handleOpenPayModal() {
     if (!currentOrder) return;
-    setLoading(true);
-    setError('');
-    try {
-      await client.orders.pay(currentOrder.id);
-      setCurrentOrder((prev) => (prev ? { ...prev, status: 'paid' } : null));
-    } catch (e: any) {
-      setError(e.message || 'Failed to pay order');
-    } finally {
-      setLoading(false);
-    }
+    setShowPayModal(true);
+  }
+
+  function handlePaid() {
+    setShowPayModal(false);
+    setCurrentOrder((prev) => (prev ? { ...prev, status: 'paid' } : null));
   }
 
   async function handleVoid() {
@@ -553,11 +551,11 @@ export function OrderPage() {
               <>
                 {permissions.payOrder && (
                   <button
-                    onClick={handlePay}
+                    onClick={handleOpenPayModal}
                     disabled={loading || cart.items.length === 0 || mutating}
                     className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
                   >
-                    {loading ? 'Paying...' : 'Pay'}
+                    Pay
                   </button>
                 )}
                 {permissions.voidOrder && (
@@ -671,6 +669,16 @@ export function OrderPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Pay modal */}
+      {showPayModal && currentOrder && (
+        <PayModal
+          orderId={currentOrder.id}
+          orderTotalHalalas={cart.totals.totalHalalas}
+          onPaid={handlePaid}
+          onClose={() => setShowPayModal(false)}
+        />
       )}
     </div>
   );
