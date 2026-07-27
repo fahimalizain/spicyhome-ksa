@@ -45,7 +45,7 @@ describe('LoginPage', () => {
 
   it('renders login form with heading', () => {
     renderLogin();
-    expect(screen.getByText('SpicyHome POS')).toBeInTheDocument();
+    expect(screen.getByAltText('SpicyHome')).toBeInTheDocument();
   });
 
   it('shows loading state while fetching usernames', () => {

@@ -98,7 +98,9 @@ export function LoginPage() {
   return (
     <div className="h-full flex flex-col items-center justify-center bg-gray-900 px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center text-brand-500 mb-8">SpicyHome POS</h1>
+        <div className="flex flex-col items-center mb-8">
+          <img src="/logo.svg" alt="SpicyHome" className="h-32 w-32 object-contain mb-3" />
+        </div>
 
         <div className="mb-6">
           <label className="block text-sm text-gray-400 mb-1">Username</label>

@@ -1,5 +1,6 @@
 package com.spicyhome.pos.ui.setup
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -9,9 +10,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.spicyhome.pos.R
 import com.spicyhome.pos.ui.theme.Accent
 
 @Composable
@@ -34,8 +37,16 @@ fun SetupScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Image(
+            painter = painterResource(R.drawable.logo),
+            contentDescription = "SpicyHome",
+            modifier = Modifier.size(96.dp),
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            text = "SpicyHome POS",
+            text = "POS",
             fontSize = 32.sp,
             color = MaterialTheme.colorScheme.onBackground,
         )
