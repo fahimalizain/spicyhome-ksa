@@ -28,8 +28,8 @@ SpicyHome manages ICV via `last_icv` settings and `allocateICV()` in
 - The first allocation (`last_icv` not yet set) assigns `icv = 1`.
 - Both invoices and credit notes call the same `allocateICV()` method, sharing
   a single per-EGS counter.
-- The previous-invoice-hash chain lookup spans both `invoices` and
-  `credit_notes` tables to maintain hash continuity across document types.
+- The previous-invoice-hash chain lookup spans both `zatca_invoices` and
+  `zatca_credit_notes` tables to maintain hash continuity across document types.
 
 ## EGS Registration
 

@@ -229,9 +229,9 @@ export const orderRefundItems = sqliteTable('order_refund_items', {
   createdAt: integer('created_at').notNull(),
 });
 
-// ── invoices ───────────────────────────────────────────────────────────────────
+// ── zatca_invoices ─────────────────────────────────────────────────────────────
 
-export const invoices = sqliteTable('invoices', {
+export const zatcaInvoices = sqliteTable('zatca_invoices', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   orderId: integer('order_id')
     .references(() => orders.id)
@@ -251,9 +251,9 @@ export const invoices = sqliteTable('invoices', {
   updatedBy: integer('updated_by').references(() => users.id),
 });
 
-// ── credit_notes ─────────────────────────────────────────────────────────────
+// ── zatca_credit_notes ────────────────────────────────────────────────────────
 
-export const creditNotes = sqliteTable('credit_notes', {
+export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   orderId: integer('order_id')
     .references(() => orders.id)

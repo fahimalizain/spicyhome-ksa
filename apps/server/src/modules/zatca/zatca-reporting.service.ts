@@ -2,7 +2,7 @@
  * ZATCA Reporting Service — background worker that reports signed invoices
  * to the ZATCA reporting API.
  *
- * The worker polls the invoices table every N minutes (default 5) and
+ * The worker polls the zatca_invoices table every N minutes (default 5) and
  * POSTs invoices with status 'signed' or 'failed' (retry) to the
  * ZATCA reporting API.
  *
@@ -15,7 +15,7 @@
 
 import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { eq, or } from 'drizzle-orm';
-import { invoices } from '@spicyhome/db';
+import { zatcaInvoices } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { ZatcaHttpService } from './zatca-http.service';
@@ -110,8 +110,8 @@ export class ZatcaReportingService implements OnModuleInit {
 
     const pendingInvoices = this.db
       .select()
-      .from(invoices)
-      .where(or(eq(invoices.status, 'signed'), eq(invoices.status, 'failed')))
+      .from(zatcaInvoices)
+      .where(or(eq(zatcaInvoices.status, 'signed'), eq(zatcaInvoices.status, 'failed')))
       .limit(10)
       .all();
 
@@ -140,7 +140,7 @@ export class ZatcaReportingService implements OnModuleInit {
     succeeded: number;
     failed: number;
   }> {
-    const inv = this.db.select().from(invoices).where(eq(invoices.id, invoiceId)).get();
+    const inv = this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, invoiceId)).get();
 
     if (!inv) {
       return { processed: 0, succeeded: 0, failed: 0 };
@@ -220,13 +220,13 @@ export class ZatcaReportingService implements OnModuleInit {
     if (response.status === 200 || response.status === 202) {
       // Success — mark as reported
       this.db
-        .update(invoices)
+        .update(zatcaInvoices)
         .set({
           status: 'reported',
           reportedAt: now,
           updatedAt: now,
         })
-        .where(eq(invoices.id, inv.id))
+        .where(eq(zatcaInvoices.id, inv.id))
         .run();
 
       this.logger.log(`Invoice ICV=${inv.icv} reported successfully`);
@@ -234,12 +234,12 @@ export class ZatcaReportingService implements OnModuleInit {
     } else {
       // Mark as failed with the error
       this.db
-        .update(invoices)
+        .update(zatcaInvoices)
         .set({
           status: 'failed',
           updatedAt: now,
         })
-        .where(eq(invoices.id, inv.id))
+        .where(eq(zatcaInvoices.id, inv.id))
         .run();
 
       this.logger.warn(
