@@ -111,6 +111,14 @@ describe('Kotlin client verification', () => {
     expect(content).not.toContain('auditLog');
   });
 
+  it('OrderResponse uses events not auditLog', () => {
+    const filePath = path.join(GENERATED_ROOT, 'models', 'OrderResponse.kt');
+    expect(fs.existsSync(filePath)).toBe(true);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    expect(content).toContain('val events');
+    expect(content).not.toContain('auditLog');
+  });
+
   it('no API method returns Call<Unit>', () => {
     const apiFiles = [
       path.join(GENERATED_ROOT, 'apis', 'AuthApi.kt'),

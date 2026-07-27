@@ -254,10 +254,6 @@ export class SpicyHomeClient {
 
     get: (id: number) => request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
 
-    /** @deprecated Use verifyEvents instead — maps to legacy /audit/verify endpoint. */
-    verifyAuditChain: (id: number) =>
-      request<AuditVerifyResponse>(this.config, 'GET', `/orders/${id}/audit/verify`),
-
     create: (dto: CreateOrderDto) =>
       request<CreateOrderResponse>(this.config, 'POST', '/orders', dto),
 

@@ -43,7 +43,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     createdBy: null,
     updatedBy: null,
     items: [],
-    auditLog: [],
+    events: [],
     ...overrides,
   };
 }

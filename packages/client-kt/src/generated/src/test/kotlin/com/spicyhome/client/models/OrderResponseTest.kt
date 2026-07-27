@@ -19,7 +19,6 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.models.OrderResponse
-import com.spicyhome.client.models.AuditLogEntry
 import com.spicyhome.client.models.OrderItemResponse
 
 class OrderResponseTest : ShouldSpec() {
@@ -123,10 +122,10 @@ class OrderResponseTest : ShouldSpec() {
             //modelInstance.items shouldBe ("TODO")
         }
 
-        // to test the property `auditLog`
-        should("test auditLog") {
+        // to test the property `events`
+        should("test events") {
             // uncomment below to test the property
-            //modelInstance.auditLog shouldBe ("TODO")
+            //modelInstance.events shouldBe ("TODO")
         }
 
     }

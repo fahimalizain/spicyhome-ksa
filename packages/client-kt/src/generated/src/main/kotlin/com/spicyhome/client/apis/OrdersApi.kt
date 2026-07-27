@@ -53,10 +53,10 @@ interface OrdersApi {
 
     /**
      * GET orders/{id}
-     * Get order by ID with items and audit log
+     * Get order by ID with items and events
      * 
      * Responses:
-     *  - 200: Order with items and audit log
+     *  - 200: Order with items and events
      *
      * @param id 
      * @return [Call]<[OrderResponse]>
@@ -173,19 +173,6 @@ interface OrdersApi {
      */
     @PATCH("orders/{orderId}/items/{itemId}")
     fun ordersControllerUpdateItem(@Path("orderId") orderId: kotlin.Long, @Path("itemId") itemId: kotlin.Long, @Body updateOrderItemDto: UpdateOrderItemDto): Call<SuccessResponse>
-
-    /**
-     * GET orders/{id}/audit/verify
-     * Verify audit log hash chain for an order
-     * 
-     * Responses:
-     *  - 200: Audit chain verification result
-     *
-     * @param id 
-     * @return [Call]<[AuditVerifyResponse]>
-     */
-    @GET("orders/{id}/audit/verify")
-    fun ordersControllerVerifyAuditChain(@Path("id") id: kotlin.Long): Call<AuditVerifyResponse>
 
     /**
      * GET orders/{id}/events/verify

@@ -251,10 +251,10 @@ class AdapterSerializationTest {
         assertThat(roundTripped.notes).isEqualTo(original.notes)
     }
 
-    // -- OrderSummaryResponse deserialization (no items/auditLog fields) --
+    // -- OrderSummaryResponse deserialization (no items/events fields) --
 
     @Test
-    fun `OrderSummaryResponse deserializes from list JSON without items or auditLog`() {
+    fun `OrderSummaryResponse deserializes from list JSON without items or events`() {
         val json = """
             {
                 "id": 1,
@@ -352,10 +352,10 @@ class AdapterSerializationTest {
                 "updatedAt": 1700000000,
                 "createdBy": 1,
                 "updatedBy": 1,
-                "auditLog": []
+                "events": []
             }
         """.trimIndent()
-        // OrderResponse requires both items and auditLog — missing items => should throw
+        // OrderResponse requires both items and events — missing items => should throw
         assertThrows(JsonDataException::class.java) {
             moshi.adapter(OrderResponse::class.java).fromJson(json)
         }

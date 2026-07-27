@@ -120,7 +120,7 @@ class OrdersViewModelTest {
             createdBy = 1L,
             updatedBy = 1L,
             items = items,
-            auditLog = emptyList(),
+            events = emptyList(),
         )
     }
 
