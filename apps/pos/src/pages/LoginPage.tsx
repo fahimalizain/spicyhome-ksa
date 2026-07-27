@@ -194,6 +194,12 @@ export function LoginPage() {
         </div>
 
         {loading && <div className="text-center text-gray-400 text-sm mt-4">Logging in...</div>}
+
+        {import.meta.env.VITE_APP_VERSION ? (
+          <p className="text-xs text-gray-600 text-center mt-8">
+            v{import.meta.env.VITE_APP_VERSION}
+          </p>
+        ) : null}
       </div>
     </div>
   );

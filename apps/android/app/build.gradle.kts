@@ -30,6 +30,18 @@ fun getLocalProperty(key: String, default: String = ""): String {
 val sentryDsn = getLocalProperty("SENTRY_DSN")
 val sentryEnvironment = getLocalProperty("SENTRY_ENVIRONMENT", "development")
 
+/** Derive a monotonic integer versionCode from a date-based version string.
+ *  Format: YYYYMM.DD.N → YYYYMM * 10000 + DD * 100 + min(N, 99).
+ *  Returns 1 if parsing fails. */
+fun computeVersionCode(version: String): Int {
+    val regex = Regex("""^(\d{6})\.(\d{2})\.(\d+)$""")
+    val match = regex.matchEntire(version) ?: return 1
+    val yyyymm = match.groupValues[1].toIntOrNull() ?: return 1
+    val dd = match.groupValues[2].toIntOrNull() ?: return 1
+    val n = match.groupValues[3].toIntOrNull()?.coerceAtMost(99) ?: return 1
+    return yyyymm * 10000 + dd * 100 + n
+}
+
 android {
     namespace = "com.spicyhome.pos"
     compileSdk = 36
@@ -38,7 +50,7 @@ android {
         applicationId = "com.spicyhome.pos"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = computeVersionCode(appVersion)
         versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
