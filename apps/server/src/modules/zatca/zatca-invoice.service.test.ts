@@ -166,7 +166,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
     // create invoice and set last_icv so allocateICV continues from here
     sqlite.exec(`
-      INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+      INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
       VALUES (${orderId}, 1, 'invoice-uuid-001', 'test-hash-001', '', '<Invoice/>', 'tlv-data', 'signed', ${now}, ${now})
     `);
     const invoiceId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
@@ -235,7 +235,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       // No credit_note row should exist in the DB
       const creditNoteCount = (
         sqlite
-          .prepare('SELECT COUNT(*) as cnt FROM credit_notes WHERE order_id = ?')
+          .prepare('SELECT COUNT(*) as cnt FROM zatca_credit_notes WHERE order_id = ?')
           .get(orderId) as any
       ).cnt;
       expect(creditNoteCount).toBe(0);
@@ -277,7 +277,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Verify the credit_notes row in DB
       const row = sqlite
-        .prepare('SELECT * FROM credit_notes WHERE refund_id = ?')
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
 
       expect(row).not.toBeUndefined();
@@ -330,7 +330,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const invoiceIcvReason = currentLastIcvReason + 1;
 
       sqlite.exec(`
-        INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
         VALUES (${orderId}, ${invoiceIcvReason}, 'invoice-uuid-003', 'hash-003', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
       sqlite.exec(
@@ -353,7 +353,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(result.id).toBeGreaterThan(0);
 
       const row = sqlite
-        .prepare('SELECT * FROM credit_notes WHERE refund_id = ?')
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
 
       expect(row.reason).toBe('Refund');
@@ -383,7 +383,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create an invoice for this order with the next ICV
       sqlite.exec(`
-        INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
         VALUES (${orderId}, ${nextIcv}, 'invoice-uuid-seq', 'hash-seq', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
       // Update last_icv to reflect this invoice's ICV
@@ -408,7 +408,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(result.icv).toBeGreaterThan(nextIcv);
 
       const row = sqlite
-        .prepare('SELECT * FROM credit_notes WHERE refund_id = ?')
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
 
       // prev_invoice_hash should match the invoice we created

@@ -21,7 +21,7 @@ CREATE TABLE `day_openings` (
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE TABLE `invoices` (
+CREATE TABLE `zatca_invoices` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`order_id` integer NOT NULL,
 	`icv` integer NOT NULL,
@@ -233,7 +233,7 @@ CREATE TABLE `users` (
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE TABLE `credit_notes` (
+CREATE TABLE `zatca_credit_notes` (
   `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   `order_id` integer NOT NULL,
   `refund_id` integer NOT NULL,
@@ -258,17 +258,17 @@ CREATE TABLE `credit_notes` (
   FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `credit_notes_refund_id_unique` ON `credit_notes` (`refund_id`);
+CREATE UNIQUE INDEX `zatca_credit_notes_refund_id_unique` ON `zatca_credit_notes` (`refund_id`);
 --> statement-breakpoint
-CREATE UNIQUE INDEX `credit_notes_icv_unique` ON `credit_notes` (`icv`);
+CREATE UNIQUE INDEX `zatca_credit_notes_icv_unique` ON `zatca_credit_notes` (`icv`);
 --> statement-breakpoint
-CREATE UNIQUE INDEX `credit_notes_uuid_unique` ON `credit_notes` (`uuid`);
+CREATE UNIQUE INDEX `zatca_credit_notes_uuid_unique` ON `zatca_credit_notes` (`uuid`);
 --> statement-breakpoint
-CREATE INDEX `credit_notes_order_id_idx` ON `credit_notes` (`order_id`);
+CREATE INDEX `zatca_credit_notes_order_id_idx` ON `zatca_credit_notes` (`order_id`);
 --> statement-breakpoint
-CREATE UNIQUE INDEX `invoices_order_id_unique` ON `invoices` (`order_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `invoices_icv_unique` ON `invoices` (`icv`);--> statement-breakpoint
-CREATE UNIQUE INDEX `invoices_uuid_unique` ON `invoices` (`uuid`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_order_id_unique` ON `zatca_invoices` (`order_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_icv_unique` ON `zatca_invoices` (`icv`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_uuid_unique` ON `zatca_invoices` (`uuid`);--> statement-breakpoint
 CREATE UNIQUE INDEX `orders_uuid_unique` ON `orders` (`uuid`);--> statement-breakpoint
 CREATE INDEX `idx_orders_day_opening` ON `orders` (`day_opening_id`);--> statement-breakpoint
 CREATE INDEX `idx_orders_status` ON `orders` (`status`);--> statement-breakpoint

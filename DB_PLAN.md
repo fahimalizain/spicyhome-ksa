@@ -157,7 +157,7 @@ paths); a SQLite trigger additionally blocks mutations.
 | hash       | text not null            | sha256(order_id, user_id, action, payload, prev_hash, created_at)                                   |
 | created_at | int not null             |                                                                                                     |
 
-## invoices (ZATCA Phase 2)
+## zatca_invoices (ZATCA Phase 2)
 
 | col                     | type                            | notes                                                       |
 | ----------------------- | ------------------------------- | ----------------------------------------------------------- |
@@ -212,7 +212,7 @@ One row per business day. Orders belong to the `day_openings` row that was
 
 ## Reports (derived, no extra tables)
 
-All reports are queries over `orders`, `order_items`, `invoices` and
+All reports are queries over `orders`, `order_items`, `zatca_invoices` and
 `day_openings`, scoped by `day_opening_id` / business date:
 
 - **X-report** — mid-day snapshot of the currently open day: sales, VAT,
@@ -235,7 +235,7 @@ day_openings 1──* orders
 tables 1──* orders
 orders 1──* order_items ──* items (loose, snapshots keep history)
 orders 1──* order_audit_log
-orders 1──1 invoices
+orders 1──1 zatca_invoices
 item_categories 1──* items
 printers 1──* item_categories (kitchen routing)
 ```
