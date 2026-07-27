@@ -44,7 +44,7 @@ import {
   extractCertSignature,
   encryptAtRest,
   decryptAtRest,
-  exportPublicKeyDer,
+  extractPublicKeySpkiFromCert,
 } from './zatca-crypto.service';
 
 import {
@@ -169,7 +169,6 @@ export class ZatcaInvoiceService {
       throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
-    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, orgUnit, 'public_key'), '');
     const certBase64 = this.getCertificate(env, orgUnit);
 
     // Build invoice items from order items
@@ -260,8 +259,10 @@ export class ZatcaInvoiceService {
       invoiceHashBase64: invoiceHashB64,
       signatureBase64: signatureB64,
       // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
-      // (NOT the raw 65-byte EC point — ZATCA SDK uses SPKI DER, ~88 bytes)
-      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      // extracted directly from the X.509 certificate (NOT the reconstructed
+      // SPKI from the stored public_key hex — ZATCA validates byte-for-byte
+      // against certPublicKey.getEncoded()).
+      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
@@ -380,7 +381,6 @@ export class ZatcaInvoiceService {
       throw new Error('ZATCA private key not configured. Run onboarding first.');
     }
 
-    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, orgUnit, 'public_key'), '');
     const certBase64 = this.getCertificate(env, orgUnit);
 
     // 7. Build invoice items from refund items
@@ -442,7 +442,7 @@ export class ZatcaInvoiceService {
       vatHalalas,
       invoiceHashBase64: invoiceHashB64,
       signatureBase64: signatureB64,
-      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
@@ -618,7 +618,6 @@ export class ZatcaInvoiceService {
     const vatHalalas = 1500;
     // Tag 3: timestamp must match IssueDate/IssueTime from the XML exactly
     const timestampIso = `${issueDate}T${issueTime}`;
-    const publicKeyHex = this.printersService.getSetting(zatcaKey(env, orgUnit, 'public_key'), '');
     const certSigB64 = extractCertSignature(certForXml);
 
     const tlvInput: TLVInput = {
@@ -630,8 +629,10 @@ export class ZatcaInvoiceService {
       invoiceHashBase64: digestHashB64,
       signatureBase64: signatureB64,
       // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
-      // (NOT the raw 65-byte EC point — ZATCA SDK uses SPKI DER, ~88 bytes)
-      publicKeyBase64: Buffer.from(exportPublicKeyDer(publicKeyHex)).toString('base64'),
+      // extracted directly from the X.509 certificate (NOT the reconstructed
+      // SPKI from the stored public_key hex — ZATCA validates byte-for-byte
+      // against certPublicKey.getEncoded()).
+      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
