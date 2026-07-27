@@ -102,6 +102,8 @@ data class OrderUiState(
     val serverUpdatedAt: Long? = null,
     /** Server snapshot cart items (for discard). */
     val snapshotCart: List<CartItem>? = null,
+    /** Whether a WS realtime conflict is pending (another terminal changed this order while we had local edits). */
+    val showRemoteConflict: Boolean = false,
 ) {
     val filteredItems: List<ItemResponse>
         get() = if (selectedCategoryId == null) {
@@ -133,6 +135,23 @@ data class OrderUiState(
 
     val isCartEmpty: Boolean
         get() = cart.isEmpty()
+}
+
+/**
+ * Compare two cart item lists for equality based on identity fields
+ * (item.id for new lines, orderItemId for existing, plus qty and notes).
+ */
+private fun cartEquals(a: List<CartItem>, b: List<CartItem>): Boolean {
+    if (a.size != b.size) return false
+    for (i in a.indices) {
+        val ai = a[i]
+        val bi = b[i]
+        if (ai.orderItemId != bi.orderItemId) return false
+        if (ai.orderItemId == null && ai.item.id != bi.item.id) return false
+        if (ai.qty != bi.qty) return false
+        if (ai.notes != bi.notes) return false
+    }
+    return true
 }
 
 class OrderViewModel(
@@ -172,10 +191,20 @@ class OrderViewModel(
                 if (event.type.startsWith("order.")) {
                     val order = refetchOrder() ?: return@collect
                     if (order.status != "open") {
+                        // Terminal state (paid/voided/refunded) always applies
                         _uiState.value = _uiState.value.copy(
                             currentOrder = order,
                             screenState = OrderScreenState.ORDER_TERMINAL,
+                            showRemoteConflict = false,
                         )
+                    } else if (_uiState.value.isDirty == true) {
+                        // D8: If dirty and remote order changed, show conflict dialog
+                        val serverUpdatedAt = _uiState.value.serverUpdatedAt
+                        if (serverUpdatedAt != null && order.updatedAt != serverUpdatedAt) {
+                            _uiState.value = _uiState.value.copy(
+                                showRemoteConflict = true,
+                            )
+                        }
                     } else {
                         hydrateFromOrder(order)
                     }
@@ -317,6 +346,13 @@ class OrderViewModel(
 
     // ── Local cart mutations (pre-order and post-order — all local staging) ──
 
+    /** Recompute isDirty after a local cart mutation when an order is loaded. */
+    private fun recomputeDirty(newCart: List<CartItem>) {
+        val snapshot = _uiState.value.snapshotCart
+        val isDirty = if (snapshot != null) !cartEquals(newCart, snapshot) else null
+        _uiState.value = _uiState.value.copy(cart = newCart, isDirty = isDirty)
+    }
+
     fun addToCart(item: ItemResponse) {
         val cart = _uiState.value.cart.toMutableList()
         // Merge by itemId (D11)
@@ -326,7 +362,7 @@ class OrderViewModel(
         } else {
             cart.add(CartItem(item = item))
         }
-        _uiState.value = _uiState.value.copy(cart = cart)
+        recomputeDirty(cart)
     }
 
     fun removeFromCart(index: Int) {
@@ -334,7 +370,7 @@ class OrderViewModel(
         if (index in cart.indices) {
             cart.removeAt(index)
         }
-        _uiState.value = _uiState.value.copy(cart = cart)
+        recomputeDirty(cart)
     }
 
     fun increaseQty(index: Int) {
@@ -342,7 +378,7 @@ class OrderViewModel(
         if (index in cart.indices) {
             cart[index] = cart[index].copy(qty = cart[index].qty + 1)
         }
-        _uiState.value = _uiState.value.copy(cart = cart)
+        recomputeDirty(cart)
     }
 
     fun decreaseQty(index: Int) {
@@ -355,14 +391,14 @@ class OrderViewModel(
                 cart.removeAt(index)
             }
         }
-        _uiState.value = _uiState.value.copy(cart = cart)
+        recomputeDirty(cart)
     }
 
     fun updateItemNotes(index: Int, notes: String) {
         val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
             cart[index] = cart[index].copy(notes = notes)
-            _uiState.value = _uiState.value.copy(cart = cart)
+            recomputeDirty(cart)
         }
     }
 
@@ -411,13 +447,22 @@ class OrderViewModel(
                     val created = response.body()!!
                     val orderId = created.id.toLong()
 
+                    // B6: Refetch to get real updatedAt before syncing items
+                    val fetchedOrder = withContext(ioDispatcher) {
+                        orderRepo!!.getOrder(orderId).execute()
+                    }
+                    val baseUpdatedAt = if (fetchedOrder.isSuccessful) {
+                        fetchedOrder.body()?.updatedAt?.toLong() ?: 0L
+                    } else {
+                        0L
+                    }
+
                     // Sync all cart items in one bulk call
                     if (state.cart.isNotEmpty()) {
-                        syncCartItemsToOrder(orderId)
+                        syncCartItemsToOrder(orderId, baseUpdatedAt)
                     } else {
-                        val order = refetchOrder()
-                        if (order != null) {
-                            hydrateFromOrder(order)
+                        if (fetchedOrder.isSuccessful && fetchedOrder.body() != null) {
+                            hydrateFromOrder(fetchedOrder.body()!!)
                         }
                         _uiState.value = _uiState.value.copy(isLoading = false)
                     }
@@ -443,7 +488,7 @@ class OrderViewModel(
         }
     }
 
-    private suspend fun syncCartItemsToOrder(orderId: Long) {
+    private suspend fun syncCartItemsToOrder(orderId: Long, baseUpdatedAt: Long) {
         val cart = _uiState.value.cart.toList()
         try {
             val syncItems = cart.map { ci ->
@@ -454,23 +499,31 @@ class OrderViewModel(
                 )
             }
             val response = withContext(ioDispatcher) {
-                orderRepo!!.syncItems(orderId, baseUpdatedAt = 0, items = syncItems).execute()
+                orderRepo!!.syncItems(orderId, baseUpdatedAt, items = syncItems).execute()
             }
             if (response.isSuccessful) {
                 hydrateFromOrder(response.body()!!)
+                _uiState.value = _uiState.value.copy(isLoading = false)
             } else {
-                // Order created but sync failed; set up for retry
+                // B8: Order created but sync failed; set up for retry via sendToKitchen
                 _uiState.value = _uiState.value.copy(
                     currentOrderId = orderId,
+                    serverUpdatedAt = baseUpdatedAt,
+                    snapshotCart = cart,
+                    isDirty = true,
                     isLoading = false,
-                    error = "Order created but item sync failed (${response.code()})",
+                    error = "Order created but item sync failed (${response.code()}). Tap Send to retry.",
                 )
             }
         } catch (e: Exception) {
+            // B8: Sync failed; keep orderId + dirty cart for retry
             _uiState.value = _uiState.value.copy(
                 currentOrderId = orderId,
+                serverUpdatedAt = baseUpdatedAt,
+                snapshotCart = cart,
+                isDirty = true,
                 isLoading = false,
-                error = e.message ?: "Order created but item sync failed",
+                error = e.message ?: "Order created but item sync failed. Tap Send to retry.",
             )
         }
     }
@@ -549,8 +602,22 @@ class OrderViewModel(
         val snapshot = _uiState.value.snapshotCart ?: return
         _uiState.value = _uiState.value.copy(
             cart = snapshot,
+            isDirty = false,
             error = null,
         )
+    }
+
+    // ── Realtime conflict dismiss (D8) ──
+
+    fun dismissRemoteConflict() {
+        _uiState.value = _uiState.value.copy(showRemoteConflict = false)
+        viewModelScope.launch {
+            val order = refetchOrder()
+            if (order != null) {
+                hydrateFromOrder(order)
+            }
+            _uiState.value = _uiState.value.copy(showRemoteConflict = false)
+        }
     }
 
     // ── Order hydrate / refetch ──

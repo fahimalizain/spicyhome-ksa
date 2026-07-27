@@ -190,6 +190,18 @@ describe('OrderPage — create order with sync', () => {
 
   it('select table then Create calls orders.create with dine_in + tableId + syncItems', async () => {
     mockOrdersCreate.mockResolvedValue({ id: 10, orderNo: 42, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
+    mockOrdersGet.mockResolvedValue({
+      id: 10,
+      orderNo: 42,
+      uuid: 'test',
+      type: 'dine_in',
+      tableId: 1,
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
     mockOrdersSyncItems.mockResolvedValue({
       id: 10,
       orderNo: 42,
@@ -249,10 +261,14 @@ describe('OrderPage — create order with sync', () => {
       });
     });
 
+    // B6: After creation, the code fetches the order first to get updatedAt
+    // mockOrdersGet was already set up in beforeEach
+
     await waitFor(() => {
       expect(mockOrdersSyncItems).toHaveBeenCalledWith(
         10,
         expect.objectContaining({
+          baseUpdatedAt: 5000,
           items: [{ itemId: 1, qty: 1 }],
         }),
       );
@@ -261,6 +277,17 @@ describe('OrderPage — create order with sync', () => {
 
   it('takeaway + items, no table: Create calls create+sync', async () => {
     mockOrdersCreate.mockResolvedValue({ id: 20, orderNo: 5, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
+    mockOrdersGet.mockResolvedValue({
+      id: 20,
+      orderNo: 5,
+      uuid: 'test',
+      type: 'takeaway',
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
     mockOrdersSyncItems.mockResolvedValue({
       id: 20,
       orderNo: 5,
@@ -305,6 +332,18 @@ describe('OrderPage — create order with sync', () => {
 
   it('deep-link /?tableId=5 pre-selects table, Create works with sync', async () => {
     mockOrdersCreate.mockResolvedValue({ id: 30, orderNo: 7, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
+    mockOrdersGet.mockResolvedValue({
+      id: 30,
+      orderNo: 7,
+      uuid: 'test',
+      type: 'dine_in',
+      tableId: 5,
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
     mockOrdersSyncItems.mockResolvedValue({
       id: 30,
       orderNo: 7,

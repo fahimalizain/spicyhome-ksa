@@ -523,11 +523,50 @@ class OrderViewModelTest {
 
         // Add a new item locally — this should mark dirty
         vm.addToCart(menuItem)
-        // Note: isDirty isn't auto-computed from cart changes in current model,
-        // but local mutations (addToCart) are all local now — no server calls.
-        // The isDirty field is set by sendToKitchen/createOrder flows.
-        // For local cart display, the UI shows Send to Kitchen when there's an order.
         assertThat(vm.uiState.value.cart).hasSize(1)
+        assertThat(vm.uiState.value.isDirty).isTrue()
+    }
+
+    @Test
+    fun `isDirty becomes true after local qty increase`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val vm = createViewModel()
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi))
+        vm.hydrateFromOrder(order)
+
+        vm.increaseQty(0)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
+        assertThat(vm.uiState.value.isDirty).isTrue()
+    }
+
+    @Test
+    fun `isDirty becomes true after notes change`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val vm = createViewModel()
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi))
+        vm.hydrateFromOrder(order)
+
+        vm.updateItemNotes(0, "extra cheese")
+        assertThat(vm.uiState.value.cart[0].notes).isEqualTo("extra cheese")
+        assertThat(vm.uiState.value.isDirty).isTrue()
     }
 
     // --- Send to Kitchen (D3) ---
@@ -614,7 +653,7 @@ class OrderViewModelTest {
     // --- Discard (D14) ---
 
     @Test
-    fun `discardChanges restores snapshot cart`() = runTest(testDispatcher) {
+    fun `discardChanges restores snapshot cart and clears isDirty`() = runTest(testDispatcher) {
         val menuItem = createItem(10, "Burger", 1500, 1500)
         stubMenuItems(listOf(menuItem))
 
@@ -631,18 +670,20 @@ class OrderViewModelTest {
         // Make local changes
         vm.addToCart(createItem(20, "Fries", 500, 1500))
         assertThat(vm.uiState.value.cart).hasSize(2)
+        assertThat(vm.uiState.value.isDirty).isTrue()
 
         // Discard
         vm.discardChanges()
 
         assertThat(vm.uiState.value.cart).hasSize(1) // Back to snapshot
         assertThat(vm.uiState.value.cart[0].notes).isEqualTo("original")
+        assertThat(vm.uiState.value.isDirty).isFalse()
     }
 
     // --- createOrder tests (D10: create + sync) ---
 
     @Test
-    fun `createOrder calls create then syncItems`() = runTest(testDispatcher) {
+    fun `createOrder calls create then getOrder then syncItems`() = runTest(testDispatcher) {
         val item = createItem(1, "Burger", 1500, 1500)
         stubMenuItems(listOf(item))
 
@@ -658,9 +699,7 @@ class OrderViewModelTest {
             com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L)
         )
 
-        // Stub syncItems
-        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        // B6: After creation, the VM refetches to get real updatedAt
         val oi = OrderItemResponse(
             id = 500L, orderId = 10L, itemId = 1L,
             itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
@@ -668,6 +707,15 @@ class OrderViewModelTest {
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
         )
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(10L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(
+            createOrderResponse(10L, 200L, "open", listOf(oi), updatedAt = 5000L)
+        )
+
+        // Stub syncItems — VM uses refetched updatedAt (5000) as baseUpdatedAt
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
         every { syncCall.execute() } returns Response.success(
             createOrderResponse(10L, 200L, "open", listOf(oi), updatedAt = 6000L)
         )
@@ -679,6 +727,7 @@ class OrderViewModelTest {
         assertThat(state.currentOrderId).isEqualTo(10L)
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].orderItemId).isEqualTo(500L)
+        assertThat(state.isDirty).isFalse()
     }
 
     @Test

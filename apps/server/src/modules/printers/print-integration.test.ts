@@ -293,6 +293,145 @@ describe('Print Integration', () => {
     });
   });
 
+  describe('syncItems kitchen print deltas (edge cases)', () => {
+    it('notes-only sync → 0 kitchen print jobs', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Sync item
+      const sync1 = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+
+      const itemId = sync1.body.items[0].id;
+      const updatedAt2 = sync1.body.updatedAt;
+
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Notes-only update
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: updatedAt2,
+          items: [{ orderItemId: itemId, qty: 1, notes: 'extra spicy' }],
+        })
+        .expect(200);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // No kitchen prints for notes-only change
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBe(0);
+    });
+
+    it('qty decrease sync → 0 kitchen print jobs', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Sync with qty 5
+      const sync1 = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 5 }],
+        })
+        .expect(200);
+
+      const itemId = sync1.body.items[0].id;
+      const updatedAt2 = sync1.body.updatedAt;
+
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Decrease qty to 2
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: updatedAt2,
+          items: [{ orderItemId: itemId, qty: 2 }],
+        })
+        .expect(200);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // No kitchen prints for qty decrease
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBe(0);
+    });
+
+    it('empty cart sync → 0 kitchen print jobs', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Add items first
+      const sync1 = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 3 }],
+        })
+        .expect(200);
+
+      const updatedAt2 = sync1.body.updatedAt;
+
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Empty cart sync
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: updatedAt2,
+          items: [],
+        })
+        .expect(200);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // No kitchen prints for empty cart
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBe(0);
+    });
+  });
+
   describe('order pay → receipt printing', () => {
     it('prints receipt with drawer kick on pay (from open)', async () => {
       // Create order

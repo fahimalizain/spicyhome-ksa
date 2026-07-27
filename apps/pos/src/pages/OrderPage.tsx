@@ -266,10 +266,14 @@ export function OrderPage() {
       });
       setCurrentOrder({ id: res.id, status: 'open', orderNo: res.orderNo });
 
+      // B6: Refetch to get real updatedAt before syncing (create response lacks updatedAt)
+      const fetchedOrder = await client.orders.get(res.id);
+      const baseUpdatedAt = fetchedOrder.updatedAt;
+
       // Sync all cart items in one bulk call
       if (cart.items.length > 0) {
         const syncRes = await client.orders.syncItems(res.id, {
-          baseUpdatedAt: 0, // fresh order — no prior state
+          baseUpdatedAt,
           items: cart.items.map((item) => ({
             itemId: item.itemId,
             qty: item.qty,
@@ -278,8 +282,7 @@ export function OrderPage() {
         });
         cart.loadOrder(syncRes);
       } else {
-        const order = await client.orders.get(res.id);
-        cart.loadOrder(order);
+        cart.loadOrder(fetchedOrder);
       }
     } catch (e: any) {
       // If create succeeded but sync failed, keep orderId for retry
