@@ -41,6 +41,7 @@ export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): voi
   seedTables(effectiveSqlite);
   seedCategories(effectiveSqlite);
   seedItems(effectiveSqlite);
+  seedPaymentMethods(effectiveSqlite);
 }
 
 function seedRoles(sqlite: Database.Database): void {
@@ -262,6 +263,23 @@ function findSqlite(
   }
 
   return undefined;
+}
+
+function seedPaymentMethods(sqlite: Database.Database): void {
+  const existing = sqlite.prepare('SELECT COUNT(*) as cnt FROM payment_methods').get() as {
+    cnt: number;
+  };
+
+  if (existing.cnt > 0) return;
+
+  sqlite.exec(`
+    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+    VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
+    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+    VALUES ('card', 'Card', 1, 1, ${now}, ${now});
+    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+    VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+  `);
 }
 
 /**

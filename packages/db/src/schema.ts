@@ -279,6 +279,37 @@ export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
   updatedBy: integer('updated_by').references(() => users.id),
 });
 
+// ── payment_methods ────────────────────────────────────────────────────────────
+
+export const paymentMethods = sqliteTable('payment_methods', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  enabled: integer('enabled').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  createdBy: integer('created_by').references((): any => users.id),
+  updatedBy: integer('updated_by').references((): any => users.id),
+});
+
+// ── order_payments ─────────────────────────────────────────────────────────────
+
+export const orderPayments = sqliteTable('order_payments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  methodId: text('method_id')
+    .references(() => paymentMethods.id)
+    .notNull(),
+  methodTitle: text('method_title').notNull(),
+  amountHalalas: integer('amount_halalas').notNull(),
+  tenderedHalalas: integer('tendered_halalas'),
+  changeHalalas: integer('change_halalas'),
+  createdAt: integer('created_at').notNull(),
+  createdBy: integer('created_by').references((): any => users.id),
+});
+
 // ── settings ───────────────────────────────────────────────────────────────────
 
 export const settings = sqliteTable('settings', {
