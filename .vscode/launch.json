@@ -32,7 +32,7 @@
       "serverReadyAction": {
         "pattern": "Local:\\s+https?://\\S+:([0-9]+)/?",
         "uriFormat": "http://localhost:%s",
-        "action": "openExternally"
+        "action": "openIntegratedBrowser"
       }
     },
     {
