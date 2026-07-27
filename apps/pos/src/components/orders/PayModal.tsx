@@ -253,12 +253,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
                   : 'border-gray-700 hover:border-gray-600'
               }`}
             >
-              <span className="block text-xs text-gray-500 mb-1">
-                Editing:{' '}
-                <span className="text-white font-medium">
-                  {methods.find((m) => m.id === selectedMethodId)?.title}
-                </span>
-              </span>
               <span className="block text-2xl text-white text-center font-mono">
                 {selectedAmount > 0 ? halalasToSar(selectedAmount) : '0.00'} SAR
               </span>
