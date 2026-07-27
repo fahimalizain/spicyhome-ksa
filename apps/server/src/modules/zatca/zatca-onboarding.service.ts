@@ -19,7 +19,7 @@ import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaHttpService } from './zatca-http.service';
 import { generateKeyPair, buildCSR, toPem, getPublicKeyPem } from './zatca-crypto.service';
 import type { CsrExtensionParams } from './zatca-crypto.service';
-import { zatcaKey } from '@spicyhome/shared';
+import { zatcaKey, slugifyOrgUnit } from '@spicyhome/shared';
 import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
 
@@ -101,9 +101,9 @@ export class ZatcaOnboardingService {
     ) as ZATCAEnvironment;
 
     const secret = process.env.ZATCA_SECRET || 'spicyhome-zatca-secret-change-me';
-    this.invoiceService.storePrivateKey(keyPair.privateKeyHex, secret, env);
+    this.invoiceService.storePrivateKey(keyPair.privateKeyHex, secret, env, orgUnit);
 
-    this.printersService.setSetting(zatcaKey(env, 'public_key'), keyPair.publicKeyHex);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'public_key'), keyPair.publicKeyHex);
 
     const extensions: CsrExtensionParams = {
       zatcaEnv: env,
@@ -130,10 +130,10 @@ export class ZatcaOnboardingService {
 
     // Store base64 of PEM bytes (matching ERPGulf's format for compliance API)
     const csrBase64 = Buffer.from(csrPem).toString('base64');
-    this.printersService.setSetting(zatcaKey(env, 'csr_base64'), csrBase64);
-    this.printersService.setSetting(zatcaKey(env, 'csr_pem'), csrPem);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'csr_base64'), csrBase64);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'csr_pem'), csrPem);
 
-    this.invoiceService.setOnboardingState('csr_generated', env);
+    this.invoiceService.setOnboardingState('csr_generated', env, orgUnit);
 
     return { csr: csrPem, publicKeyPem };
   }
@@ -153,8 +153,15 @@ export class ZatcaOnboardingService {
       'zatca_environment',
       'simulation',
     ) as ZATCAEnvironment;
+    const orgUnit = this.printersService.getSetting('zatca_org_unit', '');
 
-    const csrBase64 = this.printersService.getSetting(zatcaKey(env, 'csr_base64'), '');
+    if (!slugifyOrgUnit(orgUnit)) {
+      throw new BadRequestException(
+        'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+      );
+    }
+
+    const csrBase64 = this.printersService.getSetting(zatcaKey(env, orgUnit, 'csr_base64'), '');
     if (!csrBase64) {
       throw new BadRequestException('CSR not generated. Run CSR generation first.');
     }
@@ -194,10 +201,13 @@ export class ZatcaOnboardingService {
       throw new Error(`ZATCA compliance response missing certificate or secret: ${response.body}`);
     }
 
-    this.printersService.setSetting(zatcaKey(env, 'compliance_cert'), certBase64);
-    this.printersService.setSetting(zatcaKey(env, 'compliance_secret'), secret);
-    this.printersService.setSetting(zatcaKey(env, 'compliance_request_id'), result.requestID || '');
-    this.invoiceService.setOnboardingState('compliance', env);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'compliance_cert'), certBase64);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'compliance_secret'), secret);
+    this.printersService.setSetting(
+      zatcaKey(env, orgUnit, 'compliance_request_id'),
+      result.requestID || '',
+    );
+    this.invoiceService.setOnboardingState('compliance', env, orgUnit);
 
     this.logger.log(`Compliance CSID obtained: requestID=${result.requestID || 'unknown'}`);
 
@@ -214,12 +224,22 @@ export class ZatcaOnboardingService {
       'zatca_environment',
       'simulation',
     ) as ZATCAEnvironment;
+    const orgUnit = this.printersService.getSetting('zatca_org_unit', '');
+
+    if (!slugifyOrgUnit(orgUnit)) {
+      throw new BadRequestException(
+        'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+      );
+    }
 
     const complianceSecret = this.printersService.getSetting(
-      zatcaKey(env, 'compliance_secret'),
+      zatcaKey(env, orgUnit, 'compliance_secret'),
       '',
     );
-    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
+    const complianceCert = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'compliance_cert'),
+      '',
+    );
 
     if (!complianceSecret) {
       throw new BadRequestException(
@@ -228,7 +248,7 @@ export class ZatcaOnboardingService {
     }
 
     const complianceRequestId = this.printersService.getSetting(
-      zatcaKey(env, 'compliance_request_id'),
+      zatcaKey(env, orgUnit, 'compliance_request_id'),
       '',
     );
     if (!complianceRequestId) {
@@ -276,9 +296,9 @@ export class ZatcaOnboardingService {
       throw new Error(`ZATCA production response missing certificate or secret: ${response.body}`);
     }
 
-    this.printersService.setSetting(zatcaKey(env, 'production_cert'), certBase64);
-    this.printersService.setSetting(zatcaKey(env, 'production_secret'), secret);
-    this.invoiceService.setOnboardingState('production', env);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'production_cert'), certBase64);
+    this.printersService.setSetting(zatcaKey(env, orgUnit, 'production_secret'), secret);
+    this.invoiceService.setOnboardingState('production', env, orgUnit);
 
     this.logger.log(`Production CSID obtained: requestID=${result.requestID || 'unknown'}`);
 
@@ -289,16 +309,34 @@ export class ZatcaOnboardingService {
    * Get current onboarding state.
    */
   getState(): OnboardingState {
+    const orgUnit = this.printersService.getSetting('zatca_org_unit', '');
+
+    // Return safe default if org unit is missing or would slugify to empty
+    // (e.g. whitespace-only or Arabic-only). This prevents zatcaKey from
+    // throwing on GET /zatca/status before the admin has configured an OU.
+    if (!slugifyOrgUnit(orgUnit)) {
+      return {
+        state: 'not_started',
+        keyGenerated: false,
+        complianceDone: false,
+        productionDone: false,
+        complianceCertExpiry: null,
+        productionCertExpiry: null,
+        publicKeyPem: null,
+        complianceResults: [],
+      };
+    }
+
     const env = this.printersService.getSetting(
       'zatca_environment',
       'simulation',
     ) as ZATCAEnvironment;
-    const state = this.invoiceService.getOnboardingState(env) as OnboardingState['state'];
-    const publicKey = this.printersService.getSetting(zatcaKey(env, 'public_key'), '');
+    const state = this.invoiceService.getOnboardingState(env, orgUnit) as OnboardingState['state'];
+    const publicKey = this.printersService.getSetting(zatcaKey(env, orgUnit, 'public_key'), '');
     const publicKeyPem = publicKey ? getPublicKeyPem(publicKey) : null;
 
     const complianceResultsJson = this.printersService.getSetting(
-      zatcaKey(env, 'compliance_results'),
+      zatcaKey(env, orgUnit, 'compliance_results'),
       '[]',
     );
     let complianceResults: ComplianceResultEntry[];
@@ -345,16 +383,27 @@ export class ZatcaOnboardingService {
       'zatca_environment',
       'simulation',
     ) as ZATCAEnvironment;
-    const state = this.invoiceService.getOnboardingState(env);
+    const orgUnit = this.printersService.getSetting('zatca_org_unit', '');
+
+    if (!slugifyOrgUnit(orgUnit)) {
+      throw new BadRequestException(
+        'Org Unit not configured. Set Org Unit in ZATCA settings first.',
+      );
+    }
+
+    const state = this.invoiceService.getOnboardingState(env, orgUnit);
     if (state !== 'compliance' && state !== 'production') {
       throw new BadRequestException(
         `Compliance checks require compliance onboarding to be completed. Current state: ${state}.`,
       );
     }
 
-    const complianceCert = this.printersService.getSetting(zatcaKey(env, 'compliance_cert'), '');
+    const complianceCert = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'compliance_cert'),
+      '',
+    );
     const complianceSecret = this.printersService.getSetting(
-      zatcaKey(env, 'compliance_secret'),
+      zatcaKey(env, orgUnit, 'compliance_secret'),
       '',
     );
 
@@ -441,7 +490,7 @@ export class ZatcaOnboardingService {
         errors: [] as string[],
         ...(debug ? { debug: debugData } : {}),
       };
-      this.persistComplianceResult(env, resultKey, result);
+      this.persistComplianceResult(env, orgUnit, resultKey, result);
       return result;
     }
 
@@ -464,7 +513,7 @@ export class ZatcaOnboardingService {
         errors: [] as string[],
         ...(debug ? { debug: debugData } : {}),
       };
-      this.persistComplianceResult(env, resultKey, result);
+      this.persistComplianceResult(env, orgUnit, resultKey, result);
       return result;
     }
 
@@ -477,7 +526,7 @@ export class ZatcaOnboardingService {
         errors: [] as string[],
         ...(debug ? { debug: debugData } : {}),
       };
-      this.persistComplianceResult(env, resultKey, result);
+      this.persistComplianceResult(env, orgUnit, resultKey, result);
       return result;
     }
 
@@ -506,7 +555,7 @@ export class ZatcaOnboardingService {
       errors,
       ...(debug ? { debug: debugData } : {}),
     };
-    this.persistComplianceResult(env, resultKey, result);
+    this.persistComplianceResult(env, orgUnit, resultKey, result);
     return result;
   }
 
@@ -520,10 +569,14 @@ export class ZatcaOnboardingService {
    */
   private persistComplianceResult(
     env: ZATCAEnvironment,
+    orgUnit: string,
     key: string,
     result: { success: boolean; status: number; warnings: string[]; errors: string[] },
   ): void {
-    const json = this.printersService.getSetting(zatcaKey(env, 'compliance_results'), '[]');
+    const json = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'compliance_results'),
+      '[]',
+    );
     let entries: ComplianceResultEntry[];
     try {
       entries = JSON.parse(json);
@@ -547,7 +600,10 @@ export class ZatcaOnboardingService {
       entries.push(entry);
     }
 
-    this.printersService.setSetting(zatcaKey(env, 'compliance_results'), JSON.stringify(entries));
+    this.printersService.setSetting(
+      zatcaKey(env, orgUnit, 'compliance_results'),
+      JSON.stringify(entries),
+    );
   }
 
   /**

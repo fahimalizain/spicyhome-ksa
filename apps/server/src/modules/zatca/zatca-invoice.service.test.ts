@@ -59,7 +59,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
   let service: ZatcaInvoiceService;
   let printersService: PrintersService;
   let now: number;
-  const LAST_ICV_KEY = zatcaKey('simulation', 'last_icv');
+  const TEST_ORG_UNIT = 'SpicyHome POS';
+  const LAST_ICV_KEY = zatcaKey('simulation', TEST_ORG_UNIT, 'last_icv');
 
   beforeAll(async () => {
     sqlite = new Database(':memory:');
@@ -94,6 +95,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
+      INSERT INTO settings (key, value) VALUES ('zatca_org_unit', '${TEST_ORG_UNIT}');
     `);
 
     // ── Now create the drizzle instance and the NestJS module ──────────────
@@ -120,12 +122,15 @@ describe('ZatcaInvoiceService — credit notes', () => {
     const testSecret = 'spicyhome-zatca-secret-change-me';
 
     // Store encrypted private key parts using the simulation-scoped keys
-    service.storePrivateKey(keyPair.privateKeyHex, testSecret, 'simulation');
-    printersService.setSetting(zatcaKey('simulation', 'public_key'), keyPair.publicKeyHex);
+    service.storePrivateKey(keyPair.privateKeyHex, testSecret, 'simulation', TEST_ORG_UNIT);
+    printersService.setSetting(
+      zatcaKey('simulation', TEST_ORG_UNIT, 'public_key'),
+      keyPair.publicKeyHex,
+    );
 
     // Generate and store a test X.509 certificate
     const zatcaCert = createTestZatcaCert();
-    printersService.setSetting(zatcaKey('simulation', 'compliance_cert'), zatcaCert);
+    printersService.setSetting(zatcaKey('simulation', TEST_ORG_UNIT, 'compliance_cert'), zatcaCert);
   });
 
   afterAll(async () => {
