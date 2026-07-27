@@ -220,6 +220,18 @@ describe('LoginPage', () => {
     });
   });
 
+  it('renders app version from VITE_APP_VERSION', async () => {
+    renderLogin();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Select user')).toBeInTheDocument();
+    });
+    // Version is defined via vite.config.ts define. In Bazel test sandbox the
+    // VERSION file may not be found, so the fallback is "0.0.0". Accept any
+    // version-like string after the "v" prefix.
+    const versionEl = screen.getByText(/^v(\d{6}\.\d{2}\.\d+|0\.0\.0)$/);
+    expect(versionEl).toBeInTheDocument();
+  });
+
   it('disables digits during loading', async () => {
     mockLogin.mockImplementation(() => new Promise(() => {}));
 
