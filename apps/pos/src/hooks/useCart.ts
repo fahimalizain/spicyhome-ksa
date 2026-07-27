@@ -16,6 +16,10 @@ export interface CartState {
   items: CartItem[];
   orderType: 'dine_in' | 'takeaway';
   tableId: number | null;
+  /** Server snapshot items (null = no order loaded yet). */
+  snapshotItems: CartItem[] | null;
+  /** Server updatedAt when last hydrated. */
+  snapshotUpdatedAt: number | null;
 }
 
 type CartAction =
@@ -30,12 +34,9 @@ type CartAction =
       items: CartItem[];
       orderType: 'dine_in' | 'takeaway';
       tableId: number | null;
+      snapshotUpdatedAt: number;
     }
-  // Post-order (server-synced) actions
-  | { type: 'APPEND_ITEM'; item: CartItem }
-  | { type: 'UPDATE_QTY_BY_ORDER_ITEM'; orderItemId: number; qty: number }
-  | { type: 'REMOVE_BY_ORDER_ITEM'; orderItemId: number }
-  | { type: 'UPDATE_NOTES_BY_ORDER_ITEM'; orderItemId: number; notes: string };
+  | { type: 'MARK_CLEAN' };
 
 export interface CartTotals {
   subtotalHalalas: number;
@@ -85,7 +86,6 @@ function decomposeTotalVat(items: CartItem[]): { vatHalalas: number; priceExclHa
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD_ITEM': {
-      // Pre-order merge behavior: same menu itemId → increase qty
       const existing = state.items.find((i) => i.itemId === action.item.itemId);
       if (existing) {
         return {
@@ -124,50 +124,61 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case 'SET_ORDER_TYPE':
       return { ...state, orderType: action.orderType, tableId: action.tableId };
     case 'CLEAR':
-      return { items: [], orderType: 'dine_in', tableId: null };
+      return {
+        ...state,
+        items: [],
+        snapshotItems: null,
+        snapshotUpdatedAt: null,
+      };
     case 'LOAD_ORDER':
-      return { items: action.items, orderType: action.orderType, tableId: action.tableId };
-
-    // Post-order (server-synced) actions — operate by orderItemId
-    case 'APPEND_ITEM':
-      // Always append as a new line, never merge (server addItem always inserts a new row)
-      return { ...state, items: [...state.items, action.item] };
-
-    case 'UPDATE_QTY_BY_ORDER_ITEM': {
-      if (action.qty <= 0) {
-        return {
-          ...state,
-          items: state.items.filter((i) => i.orderItemId !== action.orderItemId),
-        };
-      }
       return {
         ...state,
-        items: state.items.map((i) =>
-          i.orderItemId === action.orderItemId ? { ...i, qty: action.qty } : i,
-        ),
+        items: action.items,
+        orderType: action.orderType,
+        tableId: action.tableId,
+        snapshotItems: action.items,
+        snapshotUpdatedAt: action.snapshotUpdatedAt,
       };
-    }
-
-    case 'REMOVE_BY_ORDER_ITEM':
+    case 'MARK_CLEAN':
       return {
         ...state,
-        items: state.items.filter((i) => i.orderItemId !== action.orderItemId),
+        snapshotItems: state.items,
       };
-
-    case 'UPDATE_NOTES_BY_ORDER_ITEM':
-      return {
-        ...state,
-        items: state.items.map((i) =>
-          i.orderItemId === action.orderItemId ? { ...i, notes: action.notes } : i,
-        ),
-      };
-
     default:
       return state;
   }
 }
 
-const initialCart: CartState = { items: [], orderType: 'dine_in', tableId: null };
+/**
+ * Compare two cart item arrays for equality based on identity fields
+ * (itemId/qty/notes — ignores orderItemId for line comparison).
+ */
+function cartItemsEqual(a: CartItem[], b: CartItem[]): boolean {
+  if (a.length !== b.length) return false;
+
+  const sortKey = (item: CartItem) => item.itemId;
+  const sortedA = [...a].sort((x, y) => sortKey(x) - sortKey(y));
+  const sortedB = [...b].sort((x, y) => sortKey(x) - sortKey(y));
+
+  for (let i = 0; i < sortedA.length; i++) {
+    if (
+      sortedA[i].itemId !== sortedB[i].itemId ||
+      sortedA[i].qty !== sortedB[i].qty ||
+      sortedA[i].notes !== sortedB[i].notes
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const initialCart: CartState = {
+  items: [],
+  orderType: 'dine_in',
+  tableId: null,
+  snapshotItems: null,
+  snapshotUpdatedAt: null,
+};
 
 export function useCart() {
   const [state, dispatch] = useReducer(cartReducer, initialCart);
@@ -221,35 +232,12 @@ export function useCart() {
       items,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableId: order.tableId,
+      snapshotUpdatedAt: order.updatedAt,
     });
   }, []);
 
-  // Post-order methods — operate by orderItemId, no API calls (those are in OrderPage)
-  const appendItem = useCallback((item: ItemResponse, qty = 1) => {
-    dispatch({
-      type: 'APPEND_ITEM',
-      item: {
-        itemId: item.id,
-        name: item.name,
-        unitPriceHalalas: item.priceHalalas,
-        vatRateBp: item.vatRateBp,
-        qty,
-        notes: '',
-      },
-    });
-  }, []);
-
-  const updateQtyByOrderItem = useCallback((orderItemId: number, qty: number) => {
-    dispatch({ type: 'UPDATE_QTY_BY_ORDER_ITEM', orderItemId, qty });
-  }, []);
-
-  const removeByOrderItem = useCallback((orderItemId: number) => {
-    dispatch({ type: 'REMOVE_BY_ORDER_ITEM', orderItemId });
-  }, []);
-
-  const updateNotesByOrderItem = useCallback((orderItemId: number, notes: string) => {
-    dispatch({ type: 'UPDATE_NOTES_BY_ORDER_ITEM', orderItemId, notes });
-  }, []);
+  /** Whether the local cart differs from the server snapshot. */
+  const isDirty = state.snapshotItems !== null && !cartItemsEqual(state.items, state.snapshotItems);
 
   const totals = computeTotals(state.items);
 
@@ -258,6 +246,9 @@ export function useCart() {
     orderType: state.orderType,
     tableId: state.tableId,
     totals,
+    isDirty,
+    /** Last known server updatedAt, or null if no order is loaded. */
+    serverUpdatedAt: state.snapshotUpdatedAt,
     addItem,
     removeItem,
     updateQty,
@@ -265,10 +256,21 @@ export function useCart() {
     setOrderType,
     clear,
     loadOrder,
-    // Post-order methods
-    appendItem,
-    updateQtyByOrderItem,
-    removeByOrderItem,
-    updateNotesByOrderItem,
+    /** Reset isDirty by accepting the current cart as new snapshot. */
+    markClean: () => {
+      dispatch({ type: 'MARK_CLEAN' });
+    },
+    /** Discard local changes: restore to snapshot. */
+    discard: () => {
+      if (state.snapshotItems) {
+        dispatch({
+          type: 'LOAD_ORDER',
+          items: state.snapshotItems,
+          orderType: state.orderType,
+          tableId: state.tableId,
+          snapshotUpdatedAt: state.snapshotUpdatedAt ?? 0,
+        });
+      }
+    },
   };
 }

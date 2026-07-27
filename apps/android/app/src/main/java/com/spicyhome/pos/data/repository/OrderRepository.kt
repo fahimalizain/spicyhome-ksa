@@ -1,14 +1,12 @@
 package com.spicyhome.pos.data.repository
 
 import com.spicyhome.client.apis.OrdersApi
-import com.spicyhome.client.models.AddOrderItemDto
-import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.SuccessResponse
-import com.spicyhome.client.models.UpdateOrderItemDto
+import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.SyncOrderItemDto
 import retrofit2.Call
 
 class OrderRepository(private val ordersApi: OrdersApi) {
@@ -33,29 +31,15 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         return ordersApi.ordersControllerListOrders(status ?: "", date ?: "")
     }
 
-    fun addItem(orderId: Long, itemId: Long, qty: Int, notes: String?): Call<AddOrderItemResponse> {
-        return ordersApi.ordersControllerAddItem(
-            orderId,
-            AddOrderItemDto(
-                itemId = itemId,
-                qty = qty,
-                notes = notes
-            )
+    fun syncItems(
+        orderId: Long,
+        baseUpdatedAt: Long,
+        items: List<SyncOrderItemDto>,
+    ): Call<OrderResponse> {
+        val dto = SyncOrderItemsDto(
+            baseUpdatedAt = baseUpdatedAt,
+            items = items,
         )
-    }
-
-    fun updateItem(orderId: Long, itemId: Long, qty: Int?, notes: String?): Call<SuccessResponse> {
-        return ordersApi.ordersControllerUpdateItem(
-            orderId,
-            itemId,
-            UpdateOrderItemDto(qty = qty, notes = notes)
-        )
-    }
-
-    fun removeItem(orderId: Long, itemId: Long): Call<SuccessResponse> {
-        return ordersApi.ordersControllerRemoveItem(
-            orderId,
-            itemId
-        )
+        return ordersApi.ordersControllerSyncItems(orderId, dto)
     }
 }

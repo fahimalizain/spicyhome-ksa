@@ -152,7 +152,7 @@ describe('Print Integration', () => {
     }
   });
   describe('automatic kitchen printing on item add', () => {
-    it('routes items to the correct kitchen printers by category on add', async () => {
+    it('routes items to the correct kitchen printers by category on sync', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
@@ -161,22 +161,28 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      // Clear transport log before items
+      // Get order to get updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const baseUpdatedAt = getRes.body.updatedAt;
+
+      // Clear transport log before sync
       transport.sent = [];
 
-      // Add burger item (→ kitchen printer 2) — triggers auto kitchen print
+      // Sync both items in one bulk call
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+        .put(`/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 2 })
-        .expect(201);
-
-      // Add drink item (→ cold station printer 3) — triggers auto kitchen print
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: pepsiItemId, qty: 1 })
-        .expect(201);
+        .send({
+          baseUpdatedAt,
+          items: [
+            { itemId: zingerItemId, qty: 2 },
+            { itemId: pepsiItemId, qty: 1 },
+          ],
+        })
+        .expect(200);
 
       // Non-blocking: give kitchen print a moment to process
       await new Promise((r) => setTimeout(r, 300));
@@ -198,7 +204,7 @@ describe('Print Integration', () => {
       expect(pepsiPrint).toBeDefined();
     });
 
-    it('item add succeeds even when kitchen printer is unreachable', async () => {
+    it('item sync succeeds even when kitchen printer is unreachable', async () => {
       transport.nextError = new Error('Connection refused');
 
       const orderRes = await request(app.getHttpServer())
@@ -208,21 +214,30 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
+      // Get order to get updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
       transport.sent = [];
 
-      // Add item should still succeed — kitchen print failure doesn't break order
+      // Sync item should still succeed — kitchen print failure doesn't break order
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+        .put(`/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 1 })
-        .expect(201);
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
 
       await new Promise((r) => setTimeout(r, 200));
     });
   });
 
   describe('automatic kitchen printing on item qty increase', () => {
-    it('prints delta when item qty is increased', async () => {
+    it('prints delta when item qty is increased via sync', async () => {
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
@@ -230,28 +245,41 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      // Add zinger with qty 2
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to get updatedAt
+      const getRes1 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 2 })
-        .expect(201);
+        .expect(200);
+
+      // Sync with qty 2
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes1.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
 
       await new Promise((r) => setTimeout(r, 200));
       transport.sent = [];
 
-      // Get the order item ID
-      const orderRes2 = await request(app.getHttpServer())
+      // Get updated order to know new updatedAt
+      const getRes2 = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
-      const itemId = orderRes2.body.items[0].id;
+      const itemId = getRes2.body.items[0].id;
+      const baseUpdatedAt2 = getRes2.body.updatedAt;
 
-      // Increase qty to 5 (delta = 3)
+      // Sync qty to 5 (delta = 3: 5 - 2 previously printed)
       await request(app.getHttpServer())
-        .patch(`/orders/${orderId}/items/${itemId}`)
+        .put(`/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ qty: 5 })
+        .send({
+          baseUpdatedAt: baseUpdatedAt2,
+          items: [{ orderItemId: itemId, qty: 5 }],
+        })
         .expect(200);
 
       await new Promise((r) => setTimeout(r, 300));
@@ -275,11 +303,21 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to get updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 2 })
-        .expect(201);
+        .expect(200);
+
+      // Sync items
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
 
       // Wait for kitchen prints to finish
       await new Promise((r) => setTimeout(r, 200));
@@ -322,11 +360,21 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to get updatedAt
+      const getRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 1 })
-        .expect(201);
+        .expect(200);
+
+      // Sync items
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes2.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
 
       // Pay the order (open → paid)
       await request(app.getHttpServer())
@@ -361,11 +409,21 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to get updatedAt
+      const getRes3 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 2 })
-        .expect(201);
+        .expect(200);
+
+      // Sync items
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes3.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
 
       transport.sent = [];
 
@@ -390,11 +448,21 @@ describe('Print Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to get updatedAt
+      const getRes4 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: zingerItemId, qty: 1 })
-        .expect(201);
+        .expect(200);
+
+      // Sync items via bulk sync
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes4.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
 
       // Wait for async kitchen print
       await new Promise((r) => setTimeout(r, 300));

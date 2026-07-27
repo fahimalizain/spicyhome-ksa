@@ -7,6 +7,7 @@ import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.SyncOrderItemDto
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
@@ -91,11 +92,17 @@ data class OrderUiState(
     val currentOrderId: Long? = null,
     val currentOrder: OrderResponse? = null,
     val isLoading: Boolean = false,
+    val isSyncing: Boolean = false,
     val error: String? = null,
     val categoriesLoaded: Boolean = false,
     val permissions: Permissions = Permissions(),
+    /** Whether local cart differs from last server snapshot. Null when no order loaded yet. */
+    val isDirty: Boolean? = null,
+    /** Last known server updatedAt (for concurrency check). */
+    val serverUpdatedAt: Long? = null,
+    /** Server snapshot cart items (for discard). */
+    val snapshotCart: List<CartItem>? = null,
 ) {
-    // Filtered items — client-side filtering based on selected category
     val filteredItems: List<ItemResponse>
         get() = if (selectedCategoryId == null) {
             items
@@ -103,7 +110,6 @@ data class OrderUiState(
             items.filter { it.categoryId.toLong() == selectedCategoryId }
         }
 
-    // Cart totals — computed from cart state
     val cartTotalHalalas: Long
         get() = cart.sumOf { it.item.priceHalalas.toLong() * it.qty }
 
@@ -309,10 +315,11 @@ class OrderViewModel(
         _uiState.value = _uiState.value.copy(selectedTableId = tableId)
     }
 
-    // ── Local cart mutations (pre-order only — no permission gate per D17) ──
+    // ── Local cart mutations (pre-order and post-order — all local staging) ──
 
     fun addToCart(item: ItemResponse) {
         val cart = _uiState.value.cart.toMutableList()
+        // Merge by itemId (D11)
         val idx = cart.indexOfFirst { it.item.id == item.id }
         if (idx >= 0) {
             cart[idx] = cart[idx].copy(qty = cart[idx].qty + 1)
@@ -360,179 +367,15 @@ class OrderViewModel(
     }
 
     fun clearCart() {
-        _uiState.value = _uiState.value.copy(cart = mutableListOf())
+        _uiState.value = _uiState.value.copy(
+            cart = mutableListOf(),
+            isDirty = null,
+            snapshotCart = null,
+            serverUpdatedAt = null,
+        )
     }
 
-    // ── Server-synced cart mutations (canonical pattern: optimistic → API → refetch+hdyrate) ──
-
-    fun addItemServer(item: ItemResponse) {
-        val orderId = _uiState.value.currentOrderId ?: return
-        viewModelScope.launch {
-            val snapshotCart = _uiState.value.cart.toList()
-            val snapshotState = _uiState.value.copy(cart = snapshotCart)
-
-            // Optimistic: add item locally with qty=1, orderItemId=null (placeholder)
-            val tempCartItem = CartItem(item = item, qty = 1)
-            _uiState.value = _uiState.value.copy(
-                cart = _uiState.value.cart + tempCartItem,
-                error = null,
-            )
-            try {
-                val response = withContext(ioDispatcher) {
-                    orderRepo!!.addItem(
-                        orderId = orderId,
-                        itemId = item.id.toLong(),
-                        qty = 1,
-                        notes = null,
-                    ).execute()
-                }
-                // Always refetch + hydrate
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = if (response.isSuccessful) "Sync failed — pull to refresh"
-                        else "Failed to add item (${response.code()})"
-                    )
-                }
-            } catch (e: Exception) {
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = e.message ?: "Failed to add item"
-                    )
-                }
-            }
-        }
-    }
-
-    fun updateQtyServer(orderItemId: Long, newQty: Int) {
-        // Guard: qty below 1 is a remove, not a PATCH qty=0
-        if (newQty < 1) {
-            removeItemServer(orderItemId)
-            return
-        }
-        val orderId = _uiState.value.currentOrderId ?: return
-        viewModelScope.launch {
-            val snapshotCart = _uiState.value.cart.toList()
-            val snapshotState = _uiState.value.copy(cart = snapshotCart)
-
-            // Optimistic: update qty locally
-            val cart = _uiState.value.cart.toMutableList()
-            val idx = cart.indexOfFirst { it.orderItemId == orderItemId }
-            if (idx >= 0) {
-                cart[idx] = cart[idx].copy(qty = newQty)
-                _uiState.value = _uiState.value.copy(cart = cart, error = null)
-            } else {
-                return@launch
-            }
-
-            try {
-                withContext(ioDispatcher) {
-                    orderRepo!!.updateItem(orderId, orderItemId, newQty, null).execute()
-                }
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = "Sync failed — pull to refresh"
-                    )
-                }
-            } catch (e: Exception) {
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = e.message ?: "Failed to update quantity"
-                    )
-                }
-            }
-        }
-    }
-
-    fun removeItemServer(orderItemId: Long) {
-        val orderId = _uiState.value.currentOrderId ?: return
-        viewModelScope.launch {
-            val snapshotCart = _uiState.value.cart.toList()
-            val snapshotState = _uiState.value.copy(cart = snapshotCart)
-
-            // Optimistic: remove from cart
-            val cart = _uiState.value.cart.toMutableList()
-            cart.removeAll { it.orderItemId == orderItemId }
-            _uiState.value = _uiState.value.copy(cart = cart, error = null)
-
-            try {
-                withContext(ioDispatcher) {
-                    orderRepo!!.removeItem(orderId, orderItemId).execute()
-                }
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = "Sync failed — pull to refresh"
-                    )
-                }
-            } catch (e: Exception) {
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = e.message ?: "Failed to remove item"
-                    )
-                }
-            }
-        }
-    }
-
-    fun updateNotesServer(orderItemId: Long, notes: String) {
-        val orderId = _uiState.value.currentOrderId ?: return
-        viewModelScope.launch {
-            val snapshotCart = _uiState.value.cart.toList()
-            val snapshotState = _uiState.value.copy(cart = snapshotCart)
-
-            // Optimistic: update notes locally
-            val cart = _uiState.value.cart.toMutableList()
-            val idx = cart.indexOfFirst { it.orderItemId == orderItemId }
-            if (idx >= 0) {
-                cart[idx] = cart[idx].copy(notes = notes)
-                _uiState.value = _uiState.value.copy(cart = cart, error = null)
-            } else {
-                return@launch
-            }
-
-            try {
-                withContext(ioDispatcher) {
-                    orderRepo!!.updateItem(orderId, orderItemId, null, notes.ifBlank { null }).execute()
-                }
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = "Sync failed — pull to refresh"
-                    )
-                }
-            } catch (e: Exception) {
-                val order = refetchOrder()
-                if (order != null) {
-                    hydrateFromOrder(order)
-                } else {
-                    _uiState.value = snapshotState.copy(
-                        error = e.message ?: "Failed to update notes"
-                    )
-                }
-            }
-        }
-    }
-
-    // ── Order creation ──
+    // ── Order creation (D10: create + sync) ──
 
     fun proceedToBuild() {
         val state = _uiState.value
@@ -567,20 +410,24 @@ class OrderViewModel(
                 if (response.isSuccessful) {
                     val created = response.body()!!
                     val orderId = created.id.toLong()
-                    _uiState.value = _uiState.value.copy(
-                        currentOrderId = orderId,
-                    )
-                    // Now add all cart items to the order (keeps isLoading=true until done)
-                    addCartItemsToOrder(orderId)
+
+                    // Sync all cart items in one bulk call
+                    if (state.cart.isNotEmpty()) {
+                        syncCartItemsToOrder(orderId)
+                    } else {
+                        val order = refetchOrder()
+                        if (order != null) {
+                            hydrateFromOrder(order)
+                        }
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                    }
                 } else if (response.code() == 409) {
-                    // No open business day
                     _uiState.value = _uiState.value.copy(
                         screenState = OrderScreenState.DAY_NOT_OPEN,
                         isLoading = false,
                         error = "No open business day. Please open a day first.",
                     )
                 } else {
-                    // HTTP 4xx/5xx are captured by SentryOkHttpInterceptor (with bodies).
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = "Failed to create order (${response.code()})",
@@ -596,50 +443,120 @@ class OrderViewModel(
         }
     }
 
-    private suspend fun addCartItemsToOrder(orderId: Long) {
+    private suspend fun syncCartItemsToOrder(orderId: Long) {
         val cart = _uiState.value.cart.toList()
-        var hasError = false
+        try {
+            val syncItems = cart.map { ci ->
+                SyncOrderItemDto(
+                    itemId = ci.item.id,
+                    qty = ci.qty,
+                    notes = if (ci.notes.isBlank()) null else ci.notes,
+                )
+            }
+            val response = withContext(ioDispatcher) {
+                orderRepo!!.syncItems(orderId, baseUpdatedAt = 0, items = syncItems).execute()
+            }
+            if (response.isSuccessful) {
+                hydrateFromOrder(response.body()!!)
+            } else {
+                // Order created but sync failed; set up for retry
+                _uiState.value = _uiState.value.copy(
+                    currentOrderId = orderId,
+                    isLoading = false,
+                    error = "Order created but item sync failed (${response.code()})",
+                )
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                currentOrderId = orderId,
+                isLoading = false,
+                error = e.message ?: "Order created but item sync failed",
+            )
+        }
+    }
 
-        for (ci in cart) {
+    // ── Send to Kitchen (D3: bulk sync) ──
+
+    fun sendToKitchen() {
+        val state = _uiState.value
+        val orderId = state.currentOrderId ?: return
+        val serverUpdatedAt = state.serverUpdatedAt ?: return
+
+        _uiState.value = state.copy(isSyncing = true, error = null)
+
+        viewModelScope.launch {
             try {
+                val syncItems = state.cart.map { ci ->
+                    if (ci.orderItemId != null) {
+                        SyncOrderItemDto(
+                            orderItemId = ci.orderItemId,
+                            qty = ci.qty,
+                            notes = if (ci.notes.isBlank()) null else ci.notes,
+                        )
+                    } else {
+                        SyncOrderItemDto(
+                            itemId = ci.item.id,
+                            qty = ci.qty,
+                            notes = if (ci.notes.isBlank()) null else ci.notes,
+                        )
+                    }
+                }
                 val response = withContext(ioDispatcher) {
-                    orderRepo!!.addItem(
-                        orderId = orderId,
-                        itemId = ci.item.id.toLong(),
-                        qty = ci.qty,
-                        notes = ci.notes.ifBlank { null },
-                    ).execute()
+                    orderRepo!!.syncItems(orderId, serverUpdatedAt, syncItems).execute()
                 }
-                if (!response.isSuccessful) {
-                    hasError = true
+                if (response.isSuccessful) {
+                    hydrateFromOrder(response.body()!!)
+                    _uiState.value = _uiState.value.copy(isSyncing = false)
+                } else if (response.code() == 409) {
+                    // Conflict: refetch and reset
+                    val order = refetchOrder()
+                    if (order != null) {
+                        hydrateFromOrder(order)
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Order was modified elsewhere. Your local changes have been reset.",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Failed to sync (${response.code()})",
+                    )
                 }
-            } catch (_: Exception) {
-                hasError = true
+            } catch (e: Exception) {
+                if (e.message?.contains("409") == true) {
+                    val order = refetchOrder()
+                    if (order != null) {
+                        hydrateFromOrder(order)
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Order was modified elsewhere. Your local changes have been reset.",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = e.message ?: "Failed to sync",
+                    )
+                }
             }
         }
+    }
 
-        // Always refetch + hydrate to populate orderItemId from authoritative server state
-        val order = refetchOrder()
-        if (order != null) {
-            hydrateFromOrder(order)
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                error = if (hasError) "Some items could not be added" else null,
-            )
-        } else {
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                screenState = OrderScreenState.EDITING_ORDER,
-                error = if (hasError) "Some items could not be added; sync failed" else "Sync failed — pull to refresh",
-            )
-        }
+    // ── Discard (D14) ──
+
+    fun discardChanges() {
+        val snapshot = _uiState.value.snapshotCart ?: return
+        _uiState.value = _uiState.value.copy(
+            cart = snapshot,
+            error = null,
+        )
     }
 
     // ── Order hydrate / refetch ──
 
     fun hydrateFromOrder(order: OrderResponse) {
         val cartItems = order.items.map { oi ->
-            // Match menu item by itemId; fall back to synthesized ItemResponse from snapshots
             val menuItem = _uiState.value.items.find { it.id == oi.itemId }
             val item = menuItem ?: ItemResponse(
                 id = oi.itemId ?: 0L,
@@ -664,11 +581,14 @@ class OrderViewModel(
         }
         _uiState.value = _uiState.value.copy(
             cart = cartItems,
+            snapshotCart = cartItems,
             currentOrderId = order.id.toLong(),
             currentOrder = order,
             orderType = if (order.type == "dine_in") OrderType.DINE_IN else OrderType.TAKEAWAY,
             selectedTableId = order.tableId,
             screenState = if (order.status == "open") OrderScreenState.EDITING_ORDER else OrderScreenState.ORDER_TERMINAL,
+            isDirty = false,
+            serverUpdatedAt = order.updatedAt?.toLong(),
         )
     }
 

@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  ParseIntPipe,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -18,22 +8,12 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
-import {
-  CreateOrderDto,
-  AddOrderItemDto,
-  UpdateOrderItemDto,
-  ReprintOrderDto,
-  CreateRefundDto,
-} from './dto/create-order.dto';
+import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
+import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { OrderSummaryResponse } from './dto/order-summary-response.dto';
-import {
-  SuccessResponse,
-  AddOrderItemResponse,
-  StatusResponse,
-  RefundResponse,
-} from './dto/success-response.dto';
+import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { OrderEventResponse } from './dto/order-event-response.dto';
 import { OrderRefundResponse } from './dto/refund-response.dto';
@@ -70,46 +50,17 @@ export class OrdersController {
     return this.ordersService.createOrder(dto, user.sub);
   }
 
-  @Post(':id/items')
+  @Put(':orderId/items/sync')
   @RequiresPermission('update_order')
-  @ApiOperation({ summary: 'Add an item to an order' })
-  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Item added', type: AddOrderItemResponse })
-  addItem(
-    @Param('id', ParseIntPipe) orderId: number,
-    @Body() dto: AddOrderItemDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.ordersService.addItem(orderId, dto, user.sub);
-  }
-
-  @Patch(':orderId/items/:itemId')
-  @RequiresPermission('update_order')
-  @ApiOperation({ summary: 'Update an order item (qty or notes)' })
+  @ApiOperation({ summary: 'Bulk sync cart items (add, update, remove) for an open order' })
   @ApiParam({ name: 'orderId', type: 'integer', format: 'int64' })
-  @ApiParam({ name: 'itemId', type: 'integer', format: 'int64' })
-  @ApiOkResponse({ description: 'Item updated', type: SuccessResponse })
-  updateItem(
+  @ApiOkResponse({ description: 'Order with items and events', type: OrderResponse })
+  syncItems(
     @Param('orderId', ParseIntPipe) orderId: number,
-    @Param('itemId', ParseIntPipe) itemId: number,
-    @Body() dto: UpdateOrderItemDto,
+    @Body() dto: SyncOrderItemsDto,
     @CurrentUser() user: any,
   ) {
-    return this.ordersService.updateItem(orderId, itemId, dto, user.sub);
-  }
-
-  @Delete(':orderId/items/:itemId')
-  @RequiresPermission('delete_order_item')
-  @ApiOperation({ summary: 'Remove an item from an order' })
-  @ApiParam({ name: 'orderId', type: 'integer', format: 'int64' })
-  @ApiParam({ name: 'itemId', type: 'integer', format: 'int64' })
-  @ApiOkResponse({ description: 'Item removed', type: SuccessResponse })
-  removeItem(
-    @Param('orderId', ParseIntPipe) orderId: number,
-    @Param('itemId', ParseIntPipe) itemId: number,
-    @CurrentUser() user: any,
-  ) {
-    return this.ordersService.removeItem(orderId, itemId, user.sub);
+    return this.ordersService.syncItems(orderId, dto, user.sub);
   }
 
   @Post(':id/pay')

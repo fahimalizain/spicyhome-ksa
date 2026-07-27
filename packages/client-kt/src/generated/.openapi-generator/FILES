@@ -1,7 +1,5 @@
 README.md
 build.gradle
-docs/AddOrderItemDto.md
-docs/AddOrderItemResponse.md
 docs/AuditVerifyResponse.md
 docs/AuthApi.md
 docs/CategoryResponse.md
@@ -45,11 +43,12 @@ docs/SettingResponse.md
 docs/SettingsApi.md
 docs/StatusResponse.md
 docs/SuccessResponse.md
+docs/SyncOrderItemDto.md
+docs/SyncOrderItemsDto.md
 docs/TableResponse.md
 docs/TablesApi.md
 docs/UpdateCategoryDto.md
 docs/UpdateItemDto.md
-docs/UpdateOrderItemDto.md
 docs/UpdatePrinterDto.md
 docs/UpdateRoleDto.md
 docs/UpdateTableDto.md
@@ -85,8 +84,6 @@ src/main/kotlin/com/spicyhome/client/infrastructure/ResponseExt.kt
 src/main/kotlin/com/spicyhome/client/infrastructure/Serializer.kt
 src/main/kotlin/com/spicyhome/client/infrastructure/URIAdapter.kt
 src/main/kotlin/com/spicyhome/client/infrastructure/UUIDAdapter.kt
-src/main/kotlin/com/spicyhome/client/models/AddOrderItemDto.kt
-src/main/kotlin/com/spicyhome/client/models/AddOrderItemResponse.kt
 src/main/kotlin/com/spicyhome/client/models/AuditVerifyResponse.kt
 src/main/kotlin/com/spicyhome/client/models/CategoryResponse.kt
 src/main/kotlin/com/spicyhome/client/models/CloseDayDto.kt
@@ -123,10 +120,11 @@ src/main/kotlin/com/spicyhome/client/models/SetSettingDto.kt
 src/main/kotlin/com/spicyhome/client/models/SettingResponse.kt
 src/main/kotlin/com/spicyhome/client/models/StatusResponse.kt
 src/main/kotlin/com/spicyhome/client/models/SuccessResponse.kt
+src/main/kotlin/com/spicyhome/client/models/SyncOrderItemDto.kt
+src/main/kotlin/com/spicyhome/client/models/SyncOrderItemsDto.kt
 src/main/kotlin/com/spicyhome/client/models/TableResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateCategoryDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateItemDto.kt
-src/main/kotlin/com/spicyhome/client/models/UpdateOrderItemDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateRoleDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateTableDto.kt
@@ -134,3 +132,5 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
+src/test/kotlin/com/spicyhome/client/models/SyncOrderItemDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/SyncOrderItemsDtoTest.kt

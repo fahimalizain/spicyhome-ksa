@@ -68,7 +68,6 @@ All URIs are relative to *http://localhost*
 | *MenuApi* | [**menuControllerListItems**](docs/MenuApi.md#menucontrollerlistitems) | **GET** menu/items | List all items, optionally filtered by category |
 | *MenuApi* | [**menuControllerUpdateCategory**](docs/MenuApi.md#menucontrollerupdatecategory) | **PUT** menu/categories/{id} | Update a category |
 | *MenuApi* | [**menuControllerUpdateItem**](docs/MenuApi.md#menucontrollerupdateitem) | **PUT** menu/items/{id} | Update an item |
-| *OrdersApi* | [**ordersControllerAddItem**](docs/OrdersApi.md#orderscontrolleradditem) | **POST** orders/{id}/items | Add an item to an order |
 | *OrdersApi* | [**ordersControllerCreateOrder**](docs/OrdersApi.md#orderscontrollercreateorder) | **POST** orders | Create a new order |
 | *OrdersApi* | [**ordersControllerGetOrder**](docs/OrdersApi.md#orderscontrollergetorder) | **GET** orders/{id} | Get order by ID with items and events |
 | *OrdersApi* | [**ordersControllerGetOrderEvents**](docs/OrdersApi.md#orderscontrollergetorderevents) | **GET** orders/{id}/events | Get the complete event chain for an order |
@@ -76,9 +75,8 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
 | *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid (open → paid) |
 | *OrdersApi* | [**ordersControllerRefundOrder**](docs/OrdersApi.md#orderscontrollerrefundorder) | **POST** orders/{id}/refund | Refund items on a paid order |
-| *OrdersApi* | [**ordersControllerRemoveItem**](docs/OrdersApi.md#orderscontrollerremoveitem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
 | *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
-| *OrdersApi* | [**ordersControllerUpdateItem**](docs/OrdersApi.md#orderscontrollerupdateitem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
+| *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
 | *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer TCP reachability |
@@ -114,8 +112,6 @@ All URIs are relative to *http://localhost*
 <a id="documentation-for-models"></a>
 ## Documentation for Models
 
- - [com.spicyhome.client.models.AddOrderItemDto](docs/AddOrderItemDto.md)
- - [com.spicyhome.client.models.AddOrderItemResponse](docs/AddOrderItemResponse.md)
  - [com.spicyhome.client.models.AuditVerifyResponse](docs/AuditVerifyResponse.md)
  - [com.spicyhome.client.models.CategoryResponse](docs/CategoryResponse.md)
  - [com.spicyhome.client.models.CloseDayDto](docs/CloseDayDto.md)
@@ -152,10 +148,11 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.SettingResponse](docs/SettingResponse.md)
  - [com.spicyhome.client.models.StatusResponse](docs/StatusResponse.md)
  - [com.spicyhome.client.models.SuccessResponse](docs/SuccessResponse.md)
+ - [com.spicyhome.client.models.SyncOrderItemDto](docs/SyncOrderItemDto.md)
+ - [com.spicyhome.client.models.SyncOrderItemsDto](docs/SyncOrderItemsDto.md)
  - [com.spicyhome.client.models.TableResponse](docs/TableResponse.md)
  - [com.spicyhome.client.models.UpdateCategoryDto](docs/UpdateCategoryDto.md)
  - [com.spicyhome.client.models.UpdateItemDto](docs/UpdateItemDto.md)
- - [com.spicyhome.client.models.UpdateOrderItemDto](docs/UpdateOrderItemDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)

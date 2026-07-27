@@ -193,11 +193,20 @@ describe('ZATCA Integration', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to know updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: 1, qty: 2 })
-        .expect(201);
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 2 }],
+        })
+        .expect(200);
 
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/pay`)
@@ -470,11 +479,20 @@ describe('ZATCA Integration', () => {
           .expect(201);
         const orderId = orderRes.body.id;
 
-        await request(app.getHttpServer())
-          .post(`/orders/${orderId}/items`)
+        // Get order to know updatedAt
+        const getItemRes = await request(app.getHttpServer())
+          .get(`/orders/${orderId}`)
           .set('Authorization', `Bearer ${jwtToken}`)
-          .send({ itemId: 1, qty: 1 })
-          .expect(201);
+          .expect(200);
+
+        await request(app.getHttpServer())
+          .put(`/orders/${orderId}/items/sync`)
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({
+            baseUpdatedAt: getItemRes.body.updatedAt,
+            items: [{ itemId: 1, qty: 1 }],
+          })
+          .expect(200);
 
         await request(app.getHttpServer())
           .post(`/orders/${orderId}/pay`)

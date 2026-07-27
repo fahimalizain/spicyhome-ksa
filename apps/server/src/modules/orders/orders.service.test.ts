@@ -120,20 +120,24 @@ describe('Order Refunds', () => {
       .expect(201);
     const orderId = orderRes.body.id;
 
-    // Add items
-    const addRes1 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Get order to know its updatedAt
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 2 })
-      .expect(201);
-    expect(addRes1.body.orderItemId).toBeGreaterThan(0);
+      .expect(200);
 
-    const addRes2 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Add items via bulk sync
+    const syncRes = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 2, qty: 1 })
-      .expect(201);
-    expect(addRes2.body.orderItemId).toBeGreaterThan(0);
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [
+          { itemId: 1, qty: 2 },
+          { itemId: 2, qty: 1 },
+        ],
+      })
+      .expect(200);
 
     // Wait for kitchen prints
     await new Promise((r) => setTimeout(r, 200));
@@ -286,12 +290,20 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      const addRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to know updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: 1, qty: 1 })
-        .expect(201);
-      expect(addRes.body.orderItemId).toBeGreaterThan(0);
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 1 }],
+        })
+        .expect(200);
 
       // Get the item ID
       const fetched = await request(app.getHttpServer())
@@ -316,12 +328,20 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      const addRes2 = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to know updatedAt
+      const getRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: 1, qty: 1 })
-        .expect(201);
-      expect(addRes2.body.orderItemId).toBeGreaterThan(0);
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes2.body.updatedAt,
+          items: [{ itemId: 1, qty: 1 }],
+        })
+        .expect(200);
 
       const fetched = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)

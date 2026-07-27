@@ -14,6 +14,64 @@ import type {
   OrderResponse,
 } from '@spicyhome/client-ts';
 
+/**
+ * Guard dialog shown when navigating away while dirty.
+ */
+function LeaveGuardDialog({
+  onKeepEditing,
+  onDiscard,
+}: {
+  onKeepEditing: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-xl p-6 w-80 text-center">
+        <h3 className="text-lg font-bold text-white mb-3">Unsent Changes</h3>
+        <p className="text-sm text-gray-400 mb-6">
+          You have unsent changes. What would you like to do?
+        </p>
+        <div className="space-y-2">
+          <button
+            onClick={onKeepEditing}
+            className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
+          >
+            Keep Editing
+          </button>
+          <button
+            onClick={onDiscard}
+            className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
+          >
+            Discard Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Realtime conflict dialog: shown when the order was modified elsewhere.
+ */
+function RealtimeConflictDialog({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-xl p-6 w-80 text-center">
+        <h3 className="text-lg font-bold text-white mb-3">Order Updated Elsewhere</h3>
+        <p className="text-sm text-gray-400 mb-6">
+          This order was modified by another terminal. Your local changes have been reset.
+        </p>
+        <button
+          onClick={onDismiss}
+          className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function OrderPage() {
   const cart = useCart();
   const permissions = usePermissions();
@@ -31,14 +89,20 @@ export function OrderPage() {
     orderNo: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mutating, setMutating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
   const [dayLoading, setDayLoading] = useState(false);
 
+  // Navigation / realtime guards
+  const [showLeaveGuard, setShowLeaveGuard] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const [showRealtimeConflict, setShowRealtimeConflict] = useState(false);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const tableParamApplied = useRef(false);
+  const wsEventSeenForCurrentOrder = useRef(false);
 
   useEffect(() => {
     if (tableParamApplied.current) return;
@@ -68,6 +132,36 @@ export function OrderPage() {
     loadMenu();
     loadTables();
   }, []);
+
+  // Listen for WebSocket events on the current order
+  useEffect(() => {
+    if (!currentOrder) return;
+
+    // Poll-style check for WS events on this order
+    const interval = setInterval(async () => {
+      if (!currentOrder) return;
+      try {
+        const order = await client.orders.get(currentOrder.id);
+        const currentStatus = order.status;
+
+        // If order was paid/voided elsewhere
+        if (currentStatus !== 'open') {
+          setCurrentOrder((prev) => (prev ? { ...prev, status: currentStatus } : null));
+          return;
+        }
+
+        // If items changed while we're dirty, show conflict dialog
+        if (cart.isDirty && order.updatedAt !== cart.serverUpdatedAt) {
+          setShowRealtimeConflict(true);
+          clearInterval(interval);
+        }
+      } catch {
+        // Ignore poll errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [currentOrder?.id, cart.isDirty, cart.serverUpdatedAt]);
 
   async function checkDay() {
     try {
@@ -152,6 +246,8 @@ export function OrderPage() {
     setSearchParams({}, { replace: true });
   }
 
+  // ── Create Order (D10: create + sync) ──
+
   async function handleCreateOrder() {
     if (cart.items.length === 0) return;
 
@@ -170,22 +266,74 @@ export function OrderPage() {
       });
       setCurrentOrder({ id: res.id, status: 'open', orderNo: res.orderNo });
 
-      for (const item of cart.items) {
-        await client.orders.addItem(res.id, {
-          itemId: item.itemId,
-          qty: item.qty,
-          notes: item.notes || undefined,
+      // Sync all cart items in one bulk call
+      if (cart.items.length > 0) {
+        const syncRes = await client.orders.syncItems(res.id, {
+          baseUpdatedAt: 0, // fresh order — no prior state
+          items: cart.items.map((item) => ({
+            itemId: item.itemId,
+            qty: item.qty,
+            notes: item.notes || undefined,
+          })),
         });
+        cart.loadOrder(syncRes);
+      } else {
+        const order = await client.orders.get(res.id);
+        cart.loadOrder(order);
       }
-
-      const order = await client.orders.get(res.id);
-      cart.loadOrder(order);
     } catch (e: any) {
+      // If create succeeded but sync failed, keep orderId for retry
       setError(e.message || 'Failed to create order');
     } finally {
       setLoading(false);
     }
   }
+
+  // ── Send to Kitchen (D3: bulk sync) ──
+
+  async function handleSendToKitchen() {
+    if (!currentOrder || currentOrder.status !== 'open') return;
+
+    setSyncing(true);
+    setError('');
+    try {
+      const syncRes = await client.orders.syncItems(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt!,
+        items: cart.items.map((item) => ({
+          ...(item.orderItemId != null
+            ? { orderItemId: item.orderItemId }
+            : { itemId: item.itemId }),
+          qty: item.qty,
+          notes: item.notes || undefined,
+        })),
+      });
+      cart.loadOrder(syncRes);
+    } catch (e: any) {
+      // Check for 409 conflict
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        // Refetch and hydrate
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          cart.loadOrder(order);
+          setError('Order was modified elsewhere. Your local changes have been reset.');
+        } catch {
+          setError(e.message || 'Failed to sync items');
+        }
+      } else {
+        setError(e.message || 'Failed to send to kitchen');
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // ── Discard ──
+
+  function handleDiscard() {
+    cart.discard();
+  }
+
+  // ── Pay / Void ──
 
   async function handlePay() {
     if (!currentOrder) return;
@@ -215,108 +363,83 @@ export function OrderPage() {
     }
   }
 
-  // ---- Server-synced cart mutation handlers ----
+  // ── Cart mutations (ALL local — no API calls for open orders) ──
 
-  async function handleAddItem(item: ItemResponse) {
-    if (currentOrder && currentOrder.status === 'open') {
-      // Post-order: optimistic append → server addItem → refetch
-      setMutating(true);
-      setError('');
-      cart.appendItem(item);
-      try {
-        await client.orders.addItem(currentOrder.id, {
-          itemId: item.id,
-          qty: 1,
-        });
-        const order = await client.orders.get(currentOrder.id);
-        cart.loadOrder(order);
-      } catch (e: any) {
-        // Rollback: refetch server state
-        try {
-          const order = await client.orders.get(currentOrder.id);
-          cart.loadOrder(order);
-        } catch {
-          // If refetch also fails, leave optimistic state + error
-        }
-        setError(e.message || 'Failed to add item');
-      } finally {
-        setMutating(false);
-      }
-    } else {
-      // Pre-order: local merge behavior
-      cart.addItem(item);
-    }
+  function handleAddItem(item: ItemResponse) {
+    // Always merge by itemId (D11)
+    cart.addItem(item);
   }
 
-  async function handleUpdateQty(cartItem: CartItem, newQty: number) {
-    if (currentOrder && cartItem.orderItemId != null && currentOrder.status === 'open') {
-      setMutating(true);
-      setError('');
-      if (newQty <= 0) {
-        // Remove via DELETE
-        cart.removeByOrderItem(cartItem.orderItemId);
-        try {
-          await client.orders.removeItem(currentOrder.id, cartItem.orderItemId);
-        } catch (e: any) {
-          await refetchOrderSafe();
-          setError(e.message || 'Failed to remove item');
-        } finally {
-          setMutating(false);
-        }
-      } else {
-        // Update qty via PATCH
-        cart.updateQtyByOrderItem(cartItem.orderItemId, newQty);
-        try {
-          await client.orders.updateItem(currentOrder.id, cartItem.orderItemId, { qty: newQty });
-        } catch (e: any) {
-          await refetchOrderSafe();
-          setError(e.message || 'Failed to update item');
-        } finally {
-          setMutating(false);
-        }
-      }
+  function handleUpdateQty(cartItem: CartItem, newQty: number) {
+    if (newQty <= 0) {
+      cart.removeItem(cartItem.itemId);
     } else {
-      // Pre-order: local
       cart.updateQty(cartItem.itemId, newQty);
     }
   }
 
-  async function handleRemove(cartItem: CartItem) {
-    if (currentOrder && cartItem.orderItemId != null && currentOrder.status === 'open') {
-      setMutating(true);
-      setError('');
-      cart.removeByOrderItem(cartItem.orderItemId);
-      try {
-        await client.orders.removeItem(currentOrder.id, cartItem.orderItemId);
-      } catch (e: any) {
-        await refetchOrderSafe();
-        setError(e.message || 'Failed to remove item');
-      } finally {
-        setMutating(false);
-      }
+  function handleRemove(cartItem: CartItem) {
+    cart.removeItem(cartItem.itemId);
+  }
+
+  // ── Navigation guard (D7) ──
+
+  function guardedNavigate(navigateFn: () => void) {
+    if (cart.isDirty && currentOrder) {
+      setShowLeaveGuard(true);
+      setPendingNavigation(() => navigateFn);
     } else {
-      // Pre-order: local
-      cart.removeItem(cartItem.itemId);
+      navigateFn();
     }
   }
 
-  async function refetchOrderSafe() {
-    if (!currentOrder) return;
-    try {
-      const order = await client.orders.get(currentOrder.id);
-      cart.loadOrder(order);
-    } catch {
-      // If refetch fails, leave optimistic state + error
+  function handleKeepEditing() {
+    setShowLeaveGuard(false);
+    setPendingNavigation(null);
+  }
+
+  function handleDiscardAndNavigate() {
+    cart.discard();
+    setShowLeaveGuard(false);
+    if (pendingNavigation) {
+      pendingNavigation();
+      setPendingNavigation(null);
     }
   }
 
-  // ---- End mutation handlers ----
+  // ── Realtime conflict dismiss ──
+
+  function handleRealtimeConflictDismiss() {
+    // Clear draft, refetch, hydrate
+    setShowRealtimeConflict(false);
+    if (currentOrder) {
+      client.orders
+        .get(currentOrder.id)
+        .then((order) => {
+          if (order.status !== 'open') {
+            setCurrentOrder((prev) => (prev ? { ...prev, status: order.status } : null));
+          } else {
+            cart.loadOrder(order);
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  // ── Visibility logic ──
 
   const orderReadonly = currentOrder ? currentOrder.status !== 'open' : false;
-  // If no updateOrder permission, treat as readonly for post-order mutations
   const permissionsReadonly = currentOrder ? !permissions.updateOrder : false;
-  const cartDisabled = orderReadonly || permissionsReadonly || loading || mutating;
+  const cartDisabled = orderReadonly || permissionsReadonly || loading || syncing;
   const canCreateOrder = !currentOrder && permissions.createOrder;
+
+  // Dirty state: hide Pay/Void (D15), show Send + Discard
+  const showPayVoid =
+    currentOrder &&
+    currentOrder.status === 'open' &&
+    !cart.isDirty &&
+    !orderReadonly &&
+    !permissionsReadonly;
 
   if (dayOpen === null) {
     return (
@@ -466,6 +589,7 @@ export function OrderPage() {
                 {currentOrder.status}
               </span>
             )}
+            {cart.isDirty && <span className="ml-2 text-xs text-amber-400">Unsent changes</span>}
           </h2>
 
           {cart.items.length === 0 ? (
@@ -539,6 +663,7 @@ export function OrderPage() {
           {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
 
           <div className="space-y-2">
+            {/* Pre-order: Create Order */}
             {canCreateOrder && (
               <button
                 onClick={handleCreateOrder}
@@ -549,12 +674,33 @@ export function OrderPage() {
               </button>
             )}
 
-            {currentOrder && currentOrder.status === 'open' && (
+            {/* Open + Dirty: Send to Kitchen + Discard (D12, D14) */}
+            {currentOrder && currentOrder.status === 'open' && cart.isDirty && (
+              <>
+                <button
+                  onClick={handleSendToKitchen}
+                  disabled={syncing || loading}
+                  className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                >
+                  {syncing ? 'Syncing...' : 'Send to Kitchen'}
+                </button>
+                <button
+                  onClick={handleDiscard}
+                  disabled={syncing || loading}
+                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
+                >
+                  Discard
+                </button>
+              </>
+            )}
+
+            {/* Open + Clean: Pay / Void (D15) */}
+            {showPayVoid && (
               <>
                 {permissions.payOrder && (
                   <button
                     onClick={handlePay}
-                    disabled={loading || cart.items.length === 0 || mutating}
+                    disabled={loading || cart.items.length === 0}
                     className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
                   >
                     {loading ? 'Paying...' : 'Pay'}
@@ -593,7 +739,7 @@ export function OrderPage() {
               currentOrder?.status === 'voided' ||
               currentOrder?.status === 'refunded') && (
               <button
-                onClick={handleNewOrder}
+                onClick={() => guardedNavigate(handleNewOrder)}
                 className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
               >
                 New Order
@@ -654,7 +800,6 @@ export function OrderPage() {
                 onClose={handleCloseRefund}
                 onRefunded={() => {
                   handleCloseRefund();
-                  // Reload order to get updated status
                   client.orders
                     .get(currentOrder!.id)
                     .then((order) => {
@@ -672,6 +817,14 @@ export function OrderPage() {
           </div>
         </div>
       )}
+
+      {/* Leave guard dialog (D7) */}
+      {showLeaveGuard && (
+        <LeaveGuardDialog onKeepEditing={handleKeepEditing} onDiscard={handleDiscardAndNavigate} />
+      )}
+
+      {/* Realtime conflict dialog (D8) */}
+      {showRealtimeConflict && <RealtimeConflictDialog onDismiss={handleRealtimeConflictDismiss} />}
     </div>
   );
 }

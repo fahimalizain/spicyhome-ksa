@@ -1131,13 +1131,13 @@
         ]
       }
     },
-    "/orders/{id}/items": {
-      "post": {
-        "operationId": "OrdersController_addItem",
-        "summary": "Add an item to an order",
+    "/orders/{orderId}/items/sync": {
+      "put": {
+        "operationId": "OrdersController_syncItems",
+        "summary": "Bulk sync cart items (add, update, remove) for an open order",
         "parameters": [
           {
-            "name": "id",
+            "name": "orderId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1151,118 +1151,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddOrderItemDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Item added",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AddOrderItemResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "orders"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/orders/{orderId}/items/{itemId}": {
-      "patch": {
-        "operationId": "OrdersController_updateItem",
-        "summary": "Update an order item (qty or notes)",
-        "parameters": [
-          {
-            "name": "orderId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "itemId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateOrderItemDto"
+                "$ref": "#/components/schemas/SyncOrderItemsDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Item updated",
+            "description": "Order with items and events",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "orders"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "delete": {
-        "operationId": "OrdersController_removeItem",
-        "summary": "Remove an item from an order",
-        "parameters": [
-          {
-            "name": "orderId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "itemId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Item removed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/OrderResponse"
                 }
               }
             }
@@ -3629,61 +3529,58 @@
           "orderNo"
         ]
       },
-      "AddOrderItemDto": {
+      "SyncOrderItemDto": {
         "type": "object",
         "properties": {
-          "itemId": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "qty": {
-            "type": "integer",
-            "format": "int32",
-            "example": 2
-          },
-          "notes": {
-            "type": "string",
-            "example": "no onion"
-          }
-        },
-        "required": [
-          "itemId",
-          "qty"
-        ]
-      },
-      "AddOrderItemResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
           "orderItemId": {
             "type": "integer",
             "format": "int64",
-            "example": 1,
-            "description": "order_items.id of the newly created line"
-          }
-        },
-        "required": [
-          "success",
-          "orderItemId"
-        ]
-      },
-      "UpdateOrderItemDto": {
-        "type": "object",
-        "properties": {
+            "example": 10,
+            "description": "Existing order item ID to update"
+          },
+          "itemId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5,
+            "description": "Menu item ID for new lines (required when orderItemId absent)"
+          },
           "qty": {
             "type": "integer",
             "format": "int32",
-            "example": 3
+            "example": 2,
+            "description": "Desired quantity (≥1)"
           },
           "notes": {
             "type": "string",
-            "example": "extra cheese"
+            "example": "no onion",
+            "nullable": true
           }
-        }
+        },
+        "required": [
+          "qty"
+        ]
+      },
+      "SyncOrderItemsDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "items": {
+            "description": "Full desired cart — missing existing lines are removed",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncOrderItemDto"
+            }
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "items"
+        ]
       },
       "StatusResponse": {
         "type": "object",

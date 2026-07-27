@@ -429,6 +429,287 @@ export class OrdersService {
     return { success: true };
   }
 
+  async syncItems(
+    orderId: number,
+    dto: {
+      baseUpdatedAt: number;
+      items: Array<{
+        orderItemId?: number;
+        itemId?: number;
+        qty: number;
+        notes?: string | null | undefined;
+      }>;
+    },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Resolve kitchen printers pre-transaction (read-only, stable data)
+    // We'll map itemId → printer for new lines; for existing lines, get from order_items.itemId
+    const printerCache = new Map<number, PrinterRecord | null>();
+    const getPrinter = (menuItemId: number): PrinterRecord | null => {
+      if (!printerCache.has(menuItemId)) {
+        printerCache.set(menuItemId, this.printJobService.getKitchenPrinterForItem(menuItemId));
+      }
+      return printerCache.get(menuItemId) ?? null;
+    };
+
+    // Kitchen deltas collected during transaction
+    const kitchenDeltasByPrinter = new Map<
+      string, // printer name
+      {
+        printer: PrinterRecord;
+        items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+      }
+    >();
+
+    const updatedOrder = this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.status !== 'open') throw new BadRequestException('Order is not open');
+
+      // Concurrency check
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      const existingItems: Array<any> = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+
+      const existingMap = new Map(existingItems.map((oi: any) => [oi.id, oi]));
+
+      // Desired set of orderItemIds (excluding null for new lines)
+      const desiredIds = new Set<number>();
+      const desiredLines: Array<{
+        orderItemId?: number;
+        itemId?: number;
+        qty: number;
+        notes?: string | null;
+      }> = dto.items;
+
+      for (const line of desiredLines) {
+        if (line.orderItemId != null) {
+          desiredIds.add(line.orderItemId);
+        }
+      }
+
+      // 1. Remove lines not in desired set
+      for (const existing of existingItems) {
+        if (!desiredIds.has(existing.id)) {
+          tx.delete(orderItems).where(eq(orderItems.id, existing.id)).run();
+
+          this.orderEvents.createEvent(
+            tx,
+            orderId,
+            userId,
+            'item_removed',
+            {
+              orderItemId: existing.id,
+              itemName: existing.itemName,
+              oldQty: existing.qty,
+              oldTotal: existing.totalHalalas,
+            },
+            now,
+          );
+        }
+      }
+
+      // 2. Process each desired line
+      for (const line of desiredLines) {
+        if (line.orderItemId != null) {
+          // Update existing line
+          const oi = existingMap.get(line.orderItemId);
+          if (!oi || oi.orderId !== orderId) {
+            throw new NotFoundException(
+              `Order item ${line.orderItemId} not found on order ${orderId}`,
+            );
+          }
+
+          const oldQty = oi.qty;
+          const oldTotal = oi.totalHalalas;
+
+          const updates: Record<string, any> = { ...updateAuditFields(userId, now) };
+          let newQty = oldQty;
+          let newTotal = oldTotal;
+          updates.qty = line.qty;
+          newQty = line.qty;
+          newTotal = oi.unitPriceHalalas * line.qty;
+          updates.totalHalalas = newTotal;
+
+          if (line.notes !== undefined) {
+            updates.notes = line.notes;
+          }
+
+          tx.update(orderItems).set(updates).where(eq(orderItems.id, line.orderItemId)).run();
+
+          // Kitchen delta: only if qty increased
+          let kitchenPrintedQty = 0;
+          if (newQty > oldQty && oi.itemId) {
+            const previousPrinted = this.orderEvents.getPrintedQty(tx, line.orderItemId);
+            kitchenPrintedQty = newQty > previousPrinted ? newQty - previousPrinted : 0;
+          }
+
+          this.orderEvents.createEvent(
+            tx,
+            orderId,
+            userId,
+            'item_updated',
+            {
+              orderItemId: line.orderItemId,
+              itemName: oi.itemName,
+              oldQty,
+              newQty,
+              oldTotal,
+              newTotal,
+              kitchenPrintedQty,
+              ...(line.notes !== undefined ? { notes: line.notes } : {}),
+            },
+            now,
+          );
+
+          // Accumulate kitchen delta
+          if (kitchenPrintedQty > 0 && oi.itemId) {
+            const printer = getPrinter(oi.itemId);
+            if (printer) {
+              const key = printer.name;
+              let entry = kitchenDeltasByPrinter.get(key);
+              if (!entry) {
+                entry = { printer, items: [] };
+                kitchenDeltasByPrinter.set(key, entry);
+              }
+              entry.items.push({
+                orderItemId: line.orderItemId,
+                itemName: oi.itemName,
+                printedQty: kitchenPrintedQty,
+              });
+            }
+          }
+        } else {
+          // New line — must have itemId
+          if (line.itemId == null) {
+            throw new BadRequestException('New item lines must include an itemId');
+          }
+
+          const item = tx.select().from(items).where(eq(items.id, line.itemId)).get();
+          if (!item) throw new NotFoundException(`Menu item ${line.itemId} not found`);
+          if (!item.isActive) {
+            throw new BadRequestException(`Menu item ${line.itemId} is inactive`);
+          }
+
+          const totalHalalas = item.priceHalalas * line.qty;
+
+          const insertResult = tx
+            .insert(orderItems)
+            .values({
+              orderId,
+              itemId: item.id,
+              itemName: item.name,
+              unitPriceHalalas: item.priceHalalas,
+              vatRateBp: item.vatRateBp,
+              qty: line.qty,
+              totalHalalas,
+              notes: line.notes ?? null,
+              ...createAuditFields(userId, now),
+            })
+            .run();
+
+          const orderItemId = Number(insertResult.lastInsertRowid);
+
+          // item_added event with full payload (kitchenPrintedQty = qty for new lines)
+          this.orderEvents.createEvent(
+            tx,
+            orderId,
+            userId,
+            'item_added',
+            {
+              orderItemId,
+              itemId: item.id,
+              itemName: item.name,
+              qty: line.qty,
+              unitPriceHalalas: item.priceHalalas,
+              totalHalalas,
+              kitchenPrintedQty: line.qty,
+              ...(line.notes ? { notes: line.notes } : {}),
+            },
+            now,
+          );
+
+          // Accumulate kitchen delta for new line
+          const printer = getPrinter(item.id);
+          if (printer) {
+            const key = printer.name;
+            let entry = kitchenDeltasByPrinter.get(key);
+            if (!entry) {
+              entry = { printer, items: [] };
+              kitchenDeltasByPrinter.set(key, entry);
+            }
+            entry.items.push({
+              orderItemId,
+              itemName: item.name,
+              printedQty: line.qty,
+            });
+          }
+        }
+      }
+
+      // Recompute totals
+      const allItems = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+      const totals = recomputeOrderTotals(allItems);
+
+      tx.update(orders)
+        .set({
+          subtotalHalalas: totals.subtotalHalalas,
+          vatHalalas: totals.vatHalalas,
+          totalHalalas: totals.totalHalalas,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      // Write kitchen_print_enqueued events grouped by printer
+      for (const [, entry] of kitchenDeltasByPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'kitchen_print_enqueued',
+          {
+            printer: entry.printer.name,
+            printerId: entry.printer.id,
+            items: entry.items,
+          },
+          now,
+        );
+      }
+
+      // Return the updated order
+      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      const refreshedItems = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      const logs = this.orderEvents.getEvents(tx, orderId);
+      return { ...refreshedOrder, items: refreshedItems, events: logs };
+    });
+
+    // After transaction: non-blocking kitchen prints — one ticket per printer
+    for (const [, entry] of kitchenDeltasByPrinter) {
+      if (entry.items.length > 0) {
+        this.runKitchenPrint(orderId, entry.printer, entry.items, userId);
+      }
+    }
+
+    this.emitDomainEvent('order.updated', orderId, userId);
+    return updatedOrder;
+  }
+
   async payOrder(orderId: number, userId: number) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
