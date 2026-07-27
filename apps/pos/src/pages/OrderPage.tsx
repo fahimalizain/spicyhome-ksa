@@ -536,9 +536,37 @@ export function OrderPage() {
           )}
         </div>
 
-        {/* Search input */}
-        <div className="px-3 pt-2 pb-1 bg-gray-800 shrink-0">
-          <div className="relative">
+        {/* Category tabs + inline search */}
+        <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2">
+          {/* Left: horizontally scrollable category tabs */}
+          <div className="flex min-w-0 flex-1 overflow-x-auto">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
+                selectedCategory === null
+                  ? 'text-brand-500 border-b-2 border-brand-500'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
+                  selectedCategory === cat.id
+                    ? 'text-brand-500 border-b-2 border-brand-500'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: compact search, fixed width */}
+          <div className="relative shrink-0 w-40 sm:w-48 md:w-56">
             <input
               type="text"
               value={itemSearch}
@@ -546,8 +574,8 @@ export function OrderPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') setItemSearch('');
               }}
-              placeholder="Search items…"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+              placeholder="Search…"
+              className="w-full pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
             />
             {itemSearch && (
               <button
@@ -559,33 +587,6 @@ export function OrderPage() {
               </button>
             )}
           </div>
-        </div>
-
-        {/* Category tabs */}
-        <div className="flex overflow-x-auto bg-gray-850 border-b border-gray-700 shrink-0">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
-              selectedCategory === null
-                ? 'text-brand-500 border-b-2 border-brand-500'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            All
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`touch-target px-4 py-2 text-sm whitespace-nowrap ${
-                selectedCategory === cat.id
-                  ? 'text-brand-500 border-b-2 border-brand-500'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
         </div>
 
         {/* Item grid */}

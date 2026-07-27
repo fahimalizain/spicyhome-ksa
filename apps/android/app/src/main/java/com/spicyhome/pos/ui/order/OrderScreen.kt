@@ -216,44 +216,17 @@ private fun OrderEditingPanel(
                 onViewTables = { guardedNavigate(onViewTables) },
             )
 
-            // Search field
-            OutlinedTextField(
-                value = state.itemSearchQuery,
-                onValueChange = { viewModel.setItemSearch(it) },
-                singleLine = true,
-                placeholder = { Text("Search items\u2026", color = OnDarkSecondary) },
+            // Category tabs + inline search
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Accent,
-                    unfocusedBorderColor = DarkSurfaceVariant,
-                    focusedTextColor = OnDark,
-                    unfocusedTextColor = OnDark,
-                    cursorColor = Accent,
-                    focusedContainerColor = DarkSurface,
-                    unfocusedContainerColor = DarkSurface,
-                ),
-                trailingIcon = {
-                    if (state.itemSearchQuery.isNotEmpty()) {
-                        TextButton(
-                            onClick = { viewModel.setItemSearch("") },
-                            modifier = Modifier.width(32.dp).height(32.dp),
-                            contentPadding = PaddingValues(0.dp),
-                        ) {
-                            Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
-                        }
-                    }
-                },
-            )
-
-            // Category tabs
-            if (state.categories.isNotEmpty()) {
+                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Left: horizontally scrollable category chips
                 LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                        .padding(8.dp),
+                    modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item {
@@ -284,6 +257,38 @@ private fun OrderEditingPanel(
                         )
                     }
                 }
+
+                Spacer(Modifier.width(8.dp))
+
+                // Right: compact search, fixed width
+                OutlinedTextField(
+                    value = state.itemSearchQuery,
+                    onValueChange = { viewModel.setItemSearch(it) },
+                    singleLine = true,
+                    placeholder = { Text("Search\u2026", color = OnDarkSecondary) },
+                    modifier = Modifier
+                        .widthIn(min = 140.dp, max = 200.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = DarkSurfaceVariant,
+                        focusedTextColor = OnDark,
+                        unfocusedTextColor = OnDark,
+                        cursorColor = Accent,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface,
+                    ),
+                    trailingIcon = {
+                        if (state.itemSearchQuery.isNotEmpty()) {
+                            TextButton(
+                                onClick = { viewModel.setItemSearch("") },
+                                modifier = Modifier.width(32.dp).height(32.dp),
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
+                            }
+                        }
+                    },
+                )
             }
 
             // Item grid
