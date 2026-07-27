@@ -10,6 +10,21 @@ import {
   type PaymentMethod,
 } from './pay-modal-logic';
 
+/**
+ * Convert a SAR display string (e.g. "12.50") to integer halalas,
+ * using integer-only math to avoid floating-point errors.
+ * Only accepts up to 2 decimal digits.
+ */
+function sarDisplayToHalalas(value: string): number {
+  if (!value || value === '.') return 0;
+  // Validate: at most 2 decimal digits
+  if (!/^\d+(\.\d{0,2})?$/.test(value)) return 0;
+  const parts = value.split('.');
+  const whole = parseInt(parts[0] || '0', 10);
+  const frac = parts[1] ? parseInt((parts[1] + '00').slice(0, 2), 10) : 0;
+  return whole * 100 + frac;
+}
+
 interface PayModalProps {
   orderId: number;
   orderTotalHalalas: number;
@@ -74,7 +89,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       setNumpadInput(newVal);
       setAmounts((prev) => ({
         ...prev,
-        [selectedMethodId]: Math.round((parseFloat(newVal) || 0) * 100),
+        [selectedMethodId]: sarDisplayToHalalas(newVal),
       }));
       return;
     }
@@ -85,7 +100,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     if (key === '.' && numpadInput.includes('.')) return;
 
     setNumpadInput(newInput);
-    const halalas = Math.round((parseFloat(newInput) || 0) * 100);
+    const halalas = sarDisplayToHalalas(newInput);
     // Don't allow exceeding outstanding
     const currentSum = Object.entries(amounts).reduce(
       (sum, [mid, amt]) => sum + (mid === selectedMethodId ? 0 : amt),
@@ -220,7 +235,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
                 step="0.01"
                 min="0"
                 value={tenderedHalalas !== undefined ? (tenderedHalalas / 100).toFixed(2) : ''}
-                onChange={(e) => handleTenderedChange(Math.round((parseFloat(e.target.value) || 0) * 100))}
+                 onChange={(e) => handleTenderedChange(sarDisplayToHalalas(e.target.value))}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                 placeholder="0.00"
               />
