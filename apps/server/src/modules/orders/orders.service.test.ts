@@ -148,6 +148,9 @@ describe('Order Refunds', () => {
     await request(app.getHttpServer())
       .post(`/orders/${orderId}/pay`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        payments: [{ methodId: 'cash', amountHalalas: fetched.body.totalHalalas }],
+      })
       .expect(201);
 
     // Wait for receipt print
@@ -517,9 +520,9 @@ describe('One open order per table', () => {
   it('after pay of first order, new dine-in on same table → 201', async () => {
     const first = await createOpenDineIn(2);
 
-    // Pay the first order
+    // Void the first order (no items to pay)
     await request(app.getHttpServer())
-      .post(`/orders/${first.id}/pay`)
+      .post(`/orders/${first.id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(201);
 

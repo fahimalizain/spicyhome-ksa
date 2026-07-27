@@ -203,14 +203,19 @@ describe('Orders (e2e)', () => {
   });
 
   it('POST /orders/:id/pay transitions to paid (from open)', async () => {
+    // Get the order to know its total
+    const orderRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`);
     const res = await request(app.getHttpServer())
       .post(`/orders/${orderId}/pay`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [{ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas }] })
       .expect(201);
     expect(res.body.status).toBe('paid');
   });
 
-  it('GET /reports/x returns live X-report', async () => {
+  it('GET /reports/x returns live X-report with paymentTotals', async () => {
     const res = await request(app.getHttpServer())
       .get('/reports/x')
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -218,6 +223,7 @@ describe('Orders (e2e)', () => {
     expect('error' in res.body).toBe(false);
     expect(res.body.paidOrderCount).toBeGreaterThanOrEqual(1);
     expect(res.body.totalSalesHalalas).toBeGreaterThanOrEqual(4600);
+    expect(Array.isArray(res.body.paymentTotals)).toBe(true);
   });
 
   it('POST /day/close fails when open orders exist', async () => {
@@ -229,6 +235,13 @@ describe('Orders (e2e)', () => {
       .expect(201);
     secondOrderId = createRes.body.id;
 
+    // Add an item so we can pay later
+    await request(app.getHttpServer())
+      .post(`/orders/${secondOrderId}/items`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ itemId: 1, qty: 1 })
+      .expect(201);
+
     // Leave it open — should block close
     await request(app.getHttpServer())
       .post('/day/close')
@@ -238,9 +251,14 @@ describe('Orders (e2e)', () => {
   });
 
   it('pay the blocking order then close succeeds', async () => {
+    // Get total for the second order
+    const orderRes = await request(app.getHttpServer())
+      .get(`/orders/${secondOrderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`);
     await request(app.getHttpServer())
       .post(`/orders/${secondOrderId}/pay`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [{ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas }] })
       .expect(201);
 
     const res = await request(app.getHttpServer())

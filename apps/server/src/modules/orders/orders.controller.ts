@@ -25,6 +25,7 @@ import {
   ReprintOrderDto,
   CreateRefundDto,
 } from './dto/create-order.dto';
+import { PayOrderDto } from './dto/pay-order.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { OrderSummaryResponse } from './dto/order-summary-response.dto';
@@ -114,11 +115,15 @@ export class OrdersController {
 
   @Post(':id/pay')
   @RequiresPermission('pay_order')
-  @ApiOperation({ summary: 'Mark order as paid (open → paid)' })
+  @ApiOperation({ summary: 'Mark order as paid with payment methods (open → paid)' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Order paid', type: StatusResponse })
-  payOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
-    return this.ordersService.payOrder(orderId, user.sub);
+  payOrder(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: PayOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.payOrder(orderId, user.sub, dto);
   }
 
   @Post(':id/void')

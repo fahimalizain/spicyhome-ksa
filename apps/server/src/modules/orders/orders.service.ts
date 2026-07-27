@@ -14,6 +14,8 @@ import {
   orderItems,
   orderRefunds,
   orderRefundItems,
+  orderPayments,
+  paymentMethods,
   tables,
   dayOpenings,
   settings,
@@ -429,9 +431,16 @@ export class OrdersService {
     return { success: true };
   }
 
-  async payOrder(orderId: number, userId: number) {
+  async payOrder(
+    orderId: number,
+    userId: number,
+    dto?: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> },
+  ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
+
+    // Payment validation happens inside the transaction
+    let hasCashPayment = false;
 
     this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
@@ -443,11 +452,130 @@ export class OrdersService {
         );
       }
 
+      // If no payments body provided, use implicit full cash payment (backward compat for migration)
+      const paymentLines: Array<{
+        methodId: string;
+        amountHalalas: number;
+        tenderedHalalas?: number;
+      }> = dto?.payments ?? [
+        { methodId: 'cash', amountHalalas: order.totalHalalas as number },
+      ];
+
+      if (paymentLines.length === 0) {
+        throw new BadRequestException('Payment lines array must not be empty');
+      }
+
+      // Validate and process each payment line
+      const paymentRecords: Array<{
+        methodId: string;
+        methodTitle: string;
+        amountHalalas: number;
+        tenderedHalalas?: number;
+        changeHalalas?: number;
+      }> = [];
+      const seenMethods = new Set<string>();
+
+      let sumAmounts = 0;
+
+      for (const line of paymentLines) {
+        // Amount must be positive
+        if (line.amountHalalas <= 0) {
+          throw new BadRequestException(
+            `Payment amount for method "${line.methodId}" must be positive`,
+          );
+        }
+
+        // No duplicate methods
+        if (seenMethods.has(line.methodId)) {
+          throw new BadRequestException(
+            `Duplicate payment method "${line.methodId}" — only one entry per method allowed`,
+          );
+        }
+        seenMethods.add(line.methodId);
+
+        // Validate method exists and is enabled
+        const pm = tx
+          .select()
+          .from(paymentMethods)
+          .where(eq(paymentMethods.id, line.methodId))
+          .get();
+        if (!pm) {
+          throw new BadRequestException(`Unknown payment method "${line.methodId}"`);
+        }
+        if (!pm.enabled) {
+          throw new BadRequestException(`Payment method "${line.methodId}" is disabled`);
+        }
+
+        // Non-cash: tenderedHalalas must be absent
+        if (line.methodId !== 'cash') {
+          if (line.tenderedHalalas !== undefined && line.tenderedHalalas !== null) {
+            throw new BadRequestException(
+              `Tendered amount is only valid for cash payments (method "${line.methodId}")`,
+            );
+          }
+        }
+
+        // Cash: tendered must be >= amount if present
+        let tendered: number | undefined;
+        let change: number | undefined;
+        if (line.methodId === 'cash') {
+          if (line.tenderedHalalas !== undefined && line.tenderedHalalas !== null) {
+            if (line.tenderedHalalas < line.amountHalalas) {
+              throw new BadRequestException(
+                `Cash tendered amount (${line.tenderedHalalas}) must be >= payment amount (${line.amountHalalas})`,
+              );
+            }
+            tendered = line.tenderedHalalas;
+            change = tendered! - line.amountHalalas;
+          } else {
+            tendered = line.amountHalalas;
+            change = 0;
+          }
+          if (line.amountHalalas > 0) {
+            hasCashPayment = true;
+          }
+        }
+
+        sumAmounts += line.amountHalalas;
+        paymentRecords.push({
+          methodId: line.methodId,
+          methodTitle: pm.title,
+          amountHalalas: line.amountHalalas,
+          tenderedHalalas: tendered ?? undefined,
+          changeHalalas: change ?? undefined,
+        });
+      }
+
+      // Sum must equal order total
+      if (sumAmounts !== order.totalHalalas) {
+        throw new BadRequestException(
+          `Payment sum (${sumAmounts}) does not equal order total (${order.totalHalalas})`,
+        );
+      }
+
+      // Insert order_payments rows
+      for (const pr of paymentRecords) {
+        tx.insert(orderPayments)
+          .values({
+            orderId,
+            methodId: pr.methodId,
+            methodTitle: pr.methodTitle,
+            amountHalalas: pr.amountHalalas,
+            tenderedHalalas: pr.tenderedHalalas ?? null,
+            changeHalalas: pr.changeHalalas ?? null,
+            createdAt: now,
+            createdBy: userId,
+          })
+          .run();
+      }
+
+      // Update order status
       tx.update(orders)
         .set({ status: 'paid', ...updateAuditFields(userId, now) })
         .where(eq(orders.id, orderId))
         .run();
 
+      // Write paid event with payment breakdown
       this.orderEvents.createEvent(
         tx,
         orderId,
@@ -456,10 +584,19 @@ export class OrdersService {
         {
           fromStatus: 'open',
           toStatus: 'paid',
+          payments: paymentRecords.map((pr) => ({
+            methodId: pr.methodId,
+            methodTitle: pr.methodTitle,
+            amountHalalas: pr.amountHalalas,
+            ...(pr.tenderedHalalas !== undefined
+              ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
+              : {}),
+          })),
         },
         now,
       );
 
+      // Receipt print enqueued with conditional kickDrawer
       if (receiptPrinter) {
         this.orderEvents.createEvent(
           tx,
@@ -470,7 +607,7 @@ export class OrdersService {
             printer: receiptPrinter.name,
             printerId: receiptPrinter.id,
             totalHalalas: order.totalHalalas,
-            kickDrawer: true,
+            kickDrawer: hasCashPayment,
           },
           now,
         );
@@ -479,7 +616,7 @@ export class OrdersService {
 
     // After transaction: non-blocking receipt print
     if (receiptPrinter) {
-      this.runReceiptPrint(orderId, receiptPrinter, userId);
+      this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
     }
 
     this.emitDomainEvent('order.paid', orderId, userId);
@@ -824,9 +961,10 @@ export class OrdersService {
     orderId: number,
     printer: PrinterRecord,
     userId: number,
+    kickDrawer = true,
   ): Promise<void> {
     try {
-      await this.printJobService.printReceipt(orderId, { kickDrawer: true });
+      await this.printJobService.printReceipt(orderId, { kickDrawer });
 
       const now = Math.floor(Date.now() / 1000);
       this.orderEvents.createEvent(
