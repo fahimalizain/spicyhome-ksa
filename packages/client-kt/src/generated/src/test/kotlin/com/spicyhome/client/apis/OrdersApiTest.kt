@@ -23,8 +23,12 @@ import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
+import com.spicyhome.client.models.CreateRefundDto
+import com.spicyhome.client.models.OrderEventResponse
+import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.PrintResponse
+import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
@@ -38,7 +42,7 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerAddItem
         should("test ordersControllerAddItem") {
             // uncomment below to test ordersControllerAddItem
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
             //val result : SuccessResponse = apiInstance.ordersControllerAddItem(id, addOrderItemDto)
             //result shouldBe ("TODO")
@@ -55,8 +59,24 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerGetOrder
         should("test ordersControllerGetOrder") {
             // uncomment below to test ordersControllerGetOrder
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : OrderResponse = apiInstance.ordersControllerGetOrder(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerGetOrderEvents
+        should("test ordersControllerGetOrderEvents") {
+            // uncomment below to test ordersControllerGetOrderEvents
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : kotlin.collections.List<OrderEventResponse> = apiInstance.ordersControllerGetOrderEvents(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerGetOrderRefunds
+        should("test ordersControllerGetOrderRefunds") {
+            // uncomment below to test ordersControllerGetOrderRefunds
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : kotlin.collections.List<OrderRefundResponse> = apiInstance.ordersControllerGetOrderRefunds(id)
             //result shouldBe ("TODO")
         }
 
@@ -72,16 +92,25 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerPayOrder
         should("test ordersControllerPayOrder") {
             // uncomment below to test ordersControllerPayOrder
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : StatusResponse = apiInstance.ordersControllerPayOrder(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerRefundOrder
+        should("test ordersControllerRefundOrder") {
+            // uncomment below to test ordersControllerRefundOrder
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val createRefundDto : CreateRefundDto =  // CreateRefundDto | 
+            //val result : RefundResponse = apiInstance.ordersControllerRefundOrder(id, createRefundDto)
             //result shouldBe ("TODO")
         }
 
         // to test ordersControllerRemoveItem
         should("test ordersControllerRemoveItem") {
             // uncomment below to test ordersControllerRemoveItem
-            //val orderId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-            //val itemId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val orderId : kotlin.Long = 789 // kotlin.Long | 
+            //val itemId : kotlin.Long = 789 // kotlin.Long | 
             //val result : SuccessResponse = apiInstance.ordersControllerRemoveItem(orderId, itemId)
             //result shouldBe ("TODO")
         }
@@ -89,25 +118,17 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerReprintOrder
         should("test ordersControllerReprintOrder") {
             // uncomment below to test ordersControllerReprintOrder
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val reprintOrderDto : ReprintOrderDto =  // ReprintOrderDto | 
             //val result : PrintResponse = apiInstance.ordersControllerReprintOrder(id, reprintOrderDto)
-            //result shouldBe ("TODO")
-        }
-
-        // to test ordersControllerSendOrder
-        should("test ordersControllerSendOrder") {
-            // uncomment below to test ordersControllerSendOrder
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-            //val result : StatusResponse = apiInstance.ordersControllerSendOrder(id)
             //result shouldBe ("TODO")
         }
 
         // to test ordersControllerUpdateItem
         should("test ordersControllerUpdateItem") {
             // uncomment below to test ordersControllerUpdateItem
-            //val orderId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-            //val itemId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val orderId : kotlin.Long = 789 // kotlin.Long | 
+            //val itemId : kotlin.Long = 789 // kotlin.Long | 
             //val updateOrderItemDto : UpdateOrderItemDto =  // UpdateOrderItemDto | 
             //val result : SuccessResponse = apiInstance.ordersControllerUpdateItem(orderId, itemId, updateOrderItemDto)
             //result shouldBe ("TODO")
@@ -116,15 +137,23 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerVerifyAuditChain
         should("test ordersControllerVerifyAuditChain") {
             // uncomment below to test ordersControllerVerifyAuditChain
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : AuditVerifyResponse = apiInstance.ordersControllerVerifyAuditChain(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerVerifyOrderChain
+        should("test ordersControllerVerifyOrderChain") {
+            // uncomment below to test ordersControllerVerifyOrderChain
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : AuditVerifyResponse = apiInstance.ordersControllerVerifyOrderChain(id)
             //result shouldBe ("TODO")
         }
 
         // to test ordersControllerVoidOrder
         should("test ordersControllerVoidOrder") {
             // uncomment below to test ordersControllerVoidOrder
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : StatusResponse = apiInstance.ordersControllerVoidOrder(id)
             //result shouldBe ("TODO")
         }

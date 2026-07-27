@@ -893,13 +893,19 @@ export interface components {
       usernames: string[];
     };
     MeResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example cashier1 */
       username: string;
       /** @example Ahmed */
       name: string;
-      /** @example 2 */
+      /**
+       * Format: int64
+       * @example 2
+       */
       roleId: number;
       /** @example true */
       isActive: boolean;
@@ -929,24 +935,42 @@ export interface components {
       manageSettings: boolean;
     };
     UserResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example cashier1 */
       username: string;
       /** @example Ahmed */
       name: string;
-      /** @example 2 */
+      /**
+       * Format: int64
+       * @example 2
+       */
       roleId: number;
       /** @example true */
       isActive: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreateUserDto: {
       /** @example cashier1 */
@@ -956,6 +980,7 @@ export interface components {
       /** @example Ahmed */
       name: string;
       /**
+       * Format: int64
        * @description role_id — 1 for admin, 2 for staff
        * @example 2
        */
@@ -964,7 +989,10 @@ export interface components {
     UpdateUserDto: {
       /** @example Ahmed Ali */
       name?: string;
-      /** @example 2 */
+      /**
+       * Format: int64
+       * @example 2
+       */
       roleId?: number;
       /** @example false */
       isActive?: boolean;
@@ -975,7 +1003,10 @@ export interface components {
       pin?: string;
     };
     RoleResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example staff */
       name: string;
@@ -999,14 +1030,26 @@ export interface components {
       manageUsers: boolean;
       /** @example false */
       manageSettings: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreateRoleDto: {
       /** @example manager */
@@ -1047,31 +1090,58 @@ export interface components {
       manageSettings?: boolean;
     };
     CategoryResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example Burgers */
       name: string;
-      /** @example 0 */
+      /**
+       * Format: int32
+       * @example 0
+       */
       sortOrder: number;
-      /** @example 1 */
-      printerId: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      printerId: number | null;
       /** @example true */
       isActive: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreateCategoryDto: {
       /** @example Burgers */
       name: string;
-      /** @default 0 */
+      /**
+       * Format: int32
+       * @default 0
+       */
       sortOrder: number;
-      /** @description Printer ID for kitchen routing */
+      /**
+       * Format: int64
+       * @description Printer ID for kitchen routing
+       */
       printerId?: number;
       /** @default true */
       isActive: boolean;
@@ -1079,95 +1149,153 @@ export interface components {
     UpdateCategoryDto: {
       /** @example Burgers */
       name?: string;
+      /** Format: int32 */
       sortOrder?: number;
+      /** Format: int64 */
       printerId?: number;
       isActive?: boolean;
     };
     ItemResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       categoryId: number;
       /** @example Zinger Burger */
       name: string;
       /** @example زنجر برجر */
-      nameAr: Record<string, never> | null;
+      nameAr: string | null;
       /**
+       * Format: int64
        * @description VAT-inclusive price in halalas
        * @example 2300
        */
       priceHalalas: number;
       /**
+       * Format: int32
        * @description VAT rate in basis points
        * @example 1500
        */
       vatRateBp: number;
-      /** @example 0 */
+      /**
+       * Format: int32
+       * @example 0
+       */
       sortOrder: number;
       /** @example true */
       isActive: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreateItemDto: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       categoryId: number;
       /** @example Zinger Burger */
       name: string;
       /** @example زنجر برجر */
       nameAr?: string;
       /**
+       * Format: int64
        * @description VAT-inclusive price in halalas (23.00 SAR)
        * @example 2300
        */
       priceHalalas: number;
       /**
+       * Format: int32
        * @description VAT rate in basis points (1500 = 15%)
        * @default 1500
        */
       vatRateBp: number;
-      /** @default 0 */
+      /**
+       * Format: int32
+       * @default 0
+       */
       sortOrder: number;
       /** @default true */
       isActive: boolean;
     };
     UpdateItemDto: {
+      /** Format: int64 */
       categoryId?: number;
       name?: string;
       nameAr?: string;
+      /** Format: int64 */
       priceHalalas?: number;
+      /** Format: int32 */
       vatRateBp?: number;
+      /** Format: int32 */
       sortOrder?: number;
       isActive?: boolean;
     };
     TableResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example T1 */
       name: string;
-      /** @example 0 */
+      /**
+       * Format: int32
+       * @example 0
+       */
       sortOrder: number;
       /** @example true */
       isActive: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreateTableDto: {
       /** @example T1 */
       name: string;
-      /** @default 0 */
+      /**
+       * Format: int32
+       * @default 0
+       */
       sortOrder: number;
       /** @default true */
       isActive: boolean;
@@ -1175,37 +1303,59 @@ export interface components {
     UpdateTableDto: {
       /** @example T1 */
       name?: string;
+      /** Format: int32 */
       sortOrder?: number;
       isActive?: boolean;
     };
     PrinterResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example Kitchen */
       name: string;
       /** @example 192.168.1.100 */
       ip: string;
-      /** @example 9100 */
+      /**
+       * Format: int32
+       * @example 9100
+       */
       port: number;
       /** @example kitchen */
       role: string;
       /** @example true */
       isActive: boolean;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     CreatePrinterDto: {
       /** @example Kitchen */
       name: string;
       /** @example 192.168.1.100 */
       ip: string;
-      /** @default 9100 */
+      /**
+       * Format: int32
+       * @default 9100
+       */
       port: number;
       /**
        * @example kitchen
@@ -1218,6 +1368,7 @@ export interface components {
     UpdatePrinterDto: {
       name?: string;
       ip?: string;
+      /** Format: int32 */
       port?: number;
       /** @enum {string} */
       role?: 'receipt' | 'kitchen';
@@ -1227,44 +1378,96 @@ export interface components {
       /** @example true */
       reachable: boolean;
     };
+    AddOrderItemResponse: {
+      /** @example true */
+      success: boolean;
+      /**
+       * Format: int64
+       * @description order_items.id of the newly created line
+       * @example 1
+       */
+      orderItemId: number;
+    };
     SuccessResponse: {
       /** @example true */
       success: boolean;
     };
     OrderItemResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderId: number;
-      /** @example 1 */
-      itemId: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      itemId: number | null;
       /** @example Zinger Burger */
       itemName: string;
-      /** @example 2300 */
+      /**
+       * Format: int64
+       * @example 2300
+       */
       unitPriceHalalas: number;
-      /** @example 1500 */
+      /**
+       * Format: int32
+       * @example 1500
+       */
       vatRateBp: number;
-      /** @example 2 */
+      /**
+       * Format: int32
+       * @example 2
+       */
       qty: number;
-      /** @example 4600 */
+      /**
+       * Format: int64
+       * @example 4600
+       */
       totalHalalas: number;
       /** @example no onion */
-      notes: Record<string, never> | null;
-      /** @example 1700000000 */
+      notes: string | null;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
     };
     AuditLogEntry: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderId: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       userId: number;
       /** @example created */
       action: string;
@@ -1274,40 +1477,79 @@ export interface components {
       prevHash: string;
       /** @example abc123... */
       hash: string;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
     };
     OrderResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderNo: number;
       /** @example 550e8400-e29b-41d4-a716-446655440000 */
       uuid: string;
       /** @example dine_in */
       type: string;
-      /** @example 1 */
-      tableId: Record<string, never> | null;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
+      tableId: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
       dayOpeningId: number;
       /** @example open */
       status: string;
-      /** @example 4000 */
+      /**
+       * Format: int64
+       * @example 4000
+       */
       subtotalHalalas: number;
-      /** @example 600 */
+      /**
+       * Format: int64
+       * @example 600
+       */
       vatHalalas: number;
-      /** @example 4600 */
+      /**
+       * Format: int64
+       * @example 4600
+       */
       totalHalalas: number;
-      /** @example 0 */
+      /**
+       * Format: int64
+       * @example 0
+       */
       discountHalalas: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       updatedAt: number;
-      /** @example 1 */
-      createdBy: Record<string, never> | null;
-      /** @example 1 */
-      updatedBy: Record<string, never> | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
       items: components['schemas']['OrderItemResponse'][];
       auditLog: components['schemas']['AuditLogEntry'][];
     };
@@ -1322,29 +1564,45 @@ export interface components {
        */
       type: 'dine_in' | 'takeaway';
       /**
+       * Format: int64
        * @description Required for dine_in
        * @example 1
        */
       tableId?: number;
     };
     CreateOrderResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example 550e8400-e29b-41d4-a716-446655440000 */
       uuid: string;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderNo: number;
     };
     AddOrderItemDto: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       itemId: number;
-      /** @example 2 */
+      /**
+       * Format: int32
+       * @example 2
+       */
       qty: number;
       /** @example no onion */
       notes?: string;
     };
     UpdateOrderItemDto: {
-      /** @example 3 */
+      /**
+       * Format: int32
+       * @example 3
+       */
       qty?: number;
       /** @example extra cheese */
       notes?: string;
@@ -1369,9 +1627,15 @@ export interface components {
       errors: string[];
     };
     RefundItemDto: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderItemId: number;
-      /** @example 1 */
+      /**
+       * Format: int32
+       * @example 1
+       */
       qty: number;
     };
     CreateRefundDto: {
@@ -1383,54 +1647,108 @@ export interface components {
     RefundResponse: {
       /** @example true */
       success: boolean;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       refundId: number;
       /** @example paid */
       status: string;
     };
     RefundItemResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 5 */
+      /**
+       * Format: int64
+       * @example 5
+       */
       orderItemId: number;
       /** @example Burger */
       itemName: string;
-      /** @example 2500 */
+      /**
+       * Format: int64
+       * @example 2500
+       */
       unitPriceHalalas: number;
-      /** @example 1500 */
+      /**
+       * Format: int32
+       * @example 1500
+       */
       vatRateBp: number;
-      /** @example 2 */
+      /**
+       * Format: int32
+       * @example 2
+       */
       qty: number;
-      /** @example 5000 */
+      /**
+       * Format: int64
+       * @example 5000
+       */
       totalHalalas: number;
     };
     OrderRefundResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 10 */
+      /**
+       * Format: int64
+       * @example 10
+       */
       orderId: number;
-      /** @example 3 */
+      /**
+       * Format: int64
+       * @example 3
+       */
       userId: number;
-      /** @example 4348 */
+      /**
+       * Format: int64
+       * @example 4348
+       */
       subtotalHalalas: number;
-      /** @example 652 */
+      /**
+       * Format: int64
+       * @example 652
+       */
       vatHalalas: number;
-      /** @example 5000 */
+      /**
+       * Format: int64
+       * @example 5000
+       */
       totalHalalas: number;
       /** @example Customer changed mind */
-      reason: Record<string, never>;
-      /** @example 1700000000 */
+      reason: string | null;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
       items: components['schemas']['RefundItemResponse'][];
     };
     OrderEventResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       orderId: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       eventIdx: number;
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       userId: number;
       /** @example item_added */
       type: string;
@@ -1440,7 +1758,10 @@ export interface components {
       prevHash: string;
       /** @example abc123... */
       hash: string;
-      /** @example 1700000000 */
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
       createdAt: number;
     };
     SettingResponse: {
@@ -1515,60 +1836,102 @@ export interface components {
     };
     OpenDayDto: {
       /**
+       * Format: int64
        * @description Opening cash counted in halalas
        * @example 50000
        */
       openingCashHalalas: number;
     };
     DayOpeningResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example 2026-07-22 */
       businessDate: string;
       /** @example open */
       status: string;
-      /** @example 50000 */
+      /**
+       * Format: int64
+       * @example 50000
+       */
       openingCashHalalas: number;
+      /** Format: int64 */
       openedAt: number;
+      /** Format: int64 */
       openedBy: number;
-      closedAt?: Record<string, never> | null;
-      closedBy?: Record<string, never> | null;
-      closingCashHalalas?: Record<string, never> | null;
-      totalSalesHalalas?: Record<string, never> | null;
-      totalVatHalalas?: Record<string, never> | null;
-      orderCount?: Record<string, never> | null;
+      /** Format: int64 */
+      closedAt?: number | null;
+      /** Format: int64 */
+      closedBy?: number | null;
+      /** Format: int64 */
+      closingCashHalalas?: number | null;
+      /** Format: int64 */
+      totalSalesHalalas?: number | null;
+      /** Format: int64 */
+      totalVatHalalas?: number | null;
+      /** Format: int64 */
+      orderCount?: number | null;
+      /** Format: int64 */
       createdAt: number;
+      /** Format: int64 */
       updatedAt: number;
-      createdBy?: Record<string, never> | null;
-      updatedBy?: Record<string, never> | null;
+      /** Format: int64 */
+      createdBy?: number | null;
+      /** Format: int64 */
+      updatedBy?: number | null;
     };
     CloseDayDto: {
       /**
+       * Format: int64
        * @description Closing cash counted in halalas
        * @example 125000
        */
       closingCashHalalas: number;
     };
     CloseDayResponse: {
-      /** @example 1 */
+      /**
+       * Format: int64
+       * @example 1
+       */
       id: number;
       /** @example 2026-07-22 */
       businessDate: string;
       /** @example closed */
       status: string;
-      /** @example 50000 */
+      /**
+       * Format: int64
+       * @example 50000
+       */
       openingCashHalalas: number;
+      /** Format: int64 */
       openedAt: number;
+      /** Format: int64 */
       openedBy: number;
+      /** Format: int64 */
       closedAt: number;
+      /** Format: int64 */
       closedBy: number;
-      /** @example 125000 */
+      /**
+       * Format: int64
+       * @example 125000
+       */
       closingCashHalalas: number;
-      /** @example 46000 */
+      /**
+       * Format: int64
+       * @example 46000
+       */
       totalSalesHalalas: number;
-      /** @example 6000 */
+      /**
+       * Format: int64
+       * @example 6000
+       */
       totalVatHalalas: number;
-      /** @example 5 */
+      /**
+       * Format: int64
+       * @example 5
+       */
       orderCount: number;
     };
   };
@@ -2332,7 +2695,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['SuccessResponse'];
+          'application/json': components['schemas']['AddOrderItemResponse'];
         };
       };
     };
@@ -2680,9 +3043,9 @@ export interface operations {
   };
   ZatcaController_listInvoices: {
     parameters: {
-      query: {
-        limit: number;
-        offset: number;
+      query?: {
+        limit?: number;
+        offset?: number;
       };
       header?: never;
       path?: never;

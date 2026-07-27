@@ -9,7 +9,7 @@ sources are committed to `src/generated/`.
 
 - **Generator**: `openapi-generator-cli` 7.14.0 (managed via npm wrapper
   `@openapitools/openapi-generator-cli@2.15.3`).
-- **Library**: `jvm-retrofit2` (Retrofit2 + OkHttp + Gson).
+- **Library**: `jvm-retrofit2` (Retrofit2 + OkHttp + Moshi).
 - **Package**: `com.spicyhome.client`.
 - **Options**: `collectionFormat=csv`, `dateLibrary=string`.
 
@@ -48,7 +48,7 @@ When `rules_kotlin` and `rules_android` are set up:
 
 1. The `filegroup //packages/client-kt:sources` exposes all `.kt` files.
 2. Create a `kt_jvm_library` (or `kt_android_library`) that compiles these sources.
-3. Add Retrofit2, OkHttp, Gson as Maven dependencies (via `rules_jvm_external`).
+3. Add Retrofit2, OkHttp, Moshi as Maven dependencies (via `rules_jvm_external`).
 4. The Android app (`apps/android`) depends on that `kt_jvm_library`.
 
 ## Risks

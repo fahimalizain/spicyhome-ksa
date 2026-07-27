@@ -14,8 +14,6 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Call
 import retrofit2.Response
-import java.math.BigDecimal
-
 class AuthRepositoryTest {
 
     @MockK
@@ -92,10 +90,10 @@ class AuthRepositoryTest {
     @Test
     fun `getMe returns user info`() {
         val me = MeResponse(
-            id = BigDecimal.ONE,
+            id = 1L,
             username = "admin",
             name = "Admin User",
-            roleId = BigDecimal.ONE,
+            roleId = 1L,
             isActive = true,
             roleName = "manager",
             createOrder = true,

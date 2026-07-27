@@ -24,7 +24,7 @@ interface PrintersApi {
      * @return [Call]<[PrinterStatusResponse]>
      */
     @GET("printers/{id}/status")
-    fun printersControllerCheckStatus(@Path("id") id: java.math.BigDecimal): Call<PrinterStatusResponse>
+    fun printersControllerCheckStatus(@Path("id") id: kotlin.Long): Call<PrinterStatusResponse>
 
     /**
      * POST printers
@@ -50,7 +50,7 @@ interface PrintersApi {
      * @return [Call]<[PrinterResponse]>
      */
     @GET("printers/{id}")
-    fun printersControllerGet(@Path("id") id: java.math.BigDecimal): Call<PrinterResponse>
+    fun printersControllerGet(@Path("id") id: kotlin.Long): Call<PrinterResponse>
 
     /**
      * GET printers
@@ -75,7 +75,7 @@ interface PrintersApi {
      * @return [Call]<[SuccessResponse]>
      */
     @POST("printers/{id}/test")
-    fun printersControllerTestPrint(@Path("id") id: java.math.BigDecimal): Call<SuccessResponse>
+    fun printersControllerTestPrint(@Path("id") id: kotlin.Long): Call<SuccessResponse>
 
     /**
      * PUT printers/{id}
@@ -89,6 +89,6 @@ interface PrintersApi {
      * @return [Call]<[PrinterResponse]>
      */
     @PUT("printers/{id}")
-    fun printersControllerUpdate(@Path("id") id: java.math.BigDecimal, @Body updatePrinterDto: UpdatePrinterDto): Call<PrinterResponse>
+    fun printersControllerUpdate(@Path("id") id: kotlin.Long, @Body updatePrinterDto: UpdatePrinterDto): Call<PrinterResponse>
 
 }

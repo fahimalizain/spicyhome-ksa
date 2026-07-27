@@ -25,7 +25,7 @@ Check printer TCP reachability
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(PrintersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : PrinterStatusResponse = webService.printersControllerCheckStatus(id)
 ```
@@ -33,7 +33,7 @@ val result : PrinterStatusResponse = webService.printersControllerCheckStatus(id
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -101,7 +101,7 @@ Get printer by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(PrintersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : PrinterResponse = webService.printersControllerGet(id)
 ```
@@ -109,7 +109,7 @@ val result : PrinterResponse = webService.printersControllerGet(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -174,7 +174,7 @@ Print a test ticket
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(PrintersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : SuccessResponse = webService.printersControllerTestPrint(id)
 ```
@@ -182,7 +182,7 @@ val result : SuccessResponse = webService.printersControllerTestPrint(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -212,14 +212,14 @@ Update a printer
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(PrintersApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updatePrinterDto : UpdatePrinterDto =  // UpdatePrinterDto | 
 
 val result : PrinterResponse = webService.printersControllerUpdate(id, updatePrinterDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updatePrinterDto** | [**UpdatePrinterDto**](UpdatePrinterDto.md)|  | |

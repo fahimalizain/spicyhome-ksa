@@ -91,6 +91,12 @@ class MeResponseTest : ShouldSpec() {
             //modelInstance.refundOrder shouldBe ("TODO")
         }
 
+        // to test the property `payOrder`
+        should("test payOrder") {
+            // uncomment below to test the property
+            //modelInstance.payOrder shouldBe ("TODO")
+        }
+
         // to test the property `manageMenu`
         should("test manageMenu") {
             // uncomment below to test the property

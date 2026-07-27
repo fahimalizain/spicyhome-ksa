@@ -6,7 +6,7 @@
 | ------------ | ------------- | ------------- | ------------- |
 | **name** | **kotlin.String** |  |  [optional] |
 | **ip** | **kotlin.String** |  |  [optional] |
-| **port** | [**java.math.BigDecimal**](java.math.BigDecimal.md) |  |  [optional] |
+| **port** | **kotlin.Int** |  |  [optional] |
 | **role** | [**inline**](#Role) |  |  [optional] |
 | **isActive** | **kotlin.Boolean** |  |  [optional] |
 

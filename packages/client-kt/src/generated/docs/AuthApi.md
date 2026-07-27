@@ -140,7 +140,7 @@ Get user by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(AuthApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : UserResponse = webService.authControllerGetUser(id)
 ```
@@ -148,7 +148,7 @@ val result : UserResponse = webService.authControllerGetUser(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -315,14 +315,14 @@ Update a role
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(AuthApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updateRoleDto : UpdateRoleDto =  // UpdateRoleDto | 
 
 val result : RoleResponse = webService.authControllerUpdateRole(id, updateRoleDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateRoleDto** | [**UpdateRoleDto**](UpdateRoleDto.md)|  | |
@@ -355,14 +355,14 @@ Update a user
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(AuthApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 val updateUserDto : UpdateUserDto =  // UpdateUserDto | 
 
 val result : UserResponse = webService.authControllerUpdateUser(id, updateUserDto)
 ```
 
 ### Parameters
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateUserDto** | [**UpdateUserDto**](UpdateUserDto.md)|  | |

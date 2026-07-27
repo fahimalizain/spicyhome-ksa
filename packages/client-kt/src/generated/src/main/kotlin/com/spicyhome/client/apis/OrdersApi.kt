@@ -34,7 +34,7 @@ interface OrdersApi {
      * @return [Call]<[SuccessResponse]>
      */
     @POST("orders/{id}/items")
-    fun ordersControllerAddItem(@Path("id") id: java.math.BigDecimal, @Body addOrderItemDto: AddOrderItemDto): Call<SuccessResponse>
+    fun ordersControllerAddItem(@Path("id") id: kotlin.Long, @Body addOrderItemDto: AddOrderItemDto): Call<SuccessResponse>
 
     /**
      * POST orders
@@ -60,7 +60,7 @@ interface OrdersApi {
      * @return [Call]<[OrderResponse]>
      */
     @GET("orders/{id}")
-    fun ordersControllerGetOrder(@Path("id") id: java.math.BigDecimal): Call<OrderResponse>
+    fun ordersControllerGetOrder(@Path("id") id: kotlin.Long): Call<OrderResponse>
 
     /**
      * GET orders/{id}/events
@@ -73,7 +73,7 @@ interface OrdersApi {
      * @return [Call]<[kotlin.collections.List<OrderEventResponse>]>
      */
     @GET("orders/{id}/events")
-    fun ordersControllerGetOrderEvents(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderEventResponse>>
+    fun ordersControllerGetOrderEvents(@Path("id") id: kotlin.Long): Call<kotlin.collections.List<OrderEventResponse>>
 
     /**
      * GET orders/{id}/refunds
@@ -86,7 +86,7 @@ interface OrdersApi {
      * @return [Call]<[kotlin.collections.List<OrderRefundResponse>]>
      */
     @GET("orders/{id}/refunds")
-    fun ordersControllerGetOrderRefunds(@Path("id") id: java.math.BigDecimal): Call<kotlin.collections.List<OrderRefundResponse>>
+    fun ordersControllerGetOrderRefunds(@Path("id") id: kotlin.Long): Call<kotlin.collections.List<OrderRefundResponse>>
 
     /**
      * GET orders
@@ -113,7 +113,7 @@ interface OrdersApi {
      * @return [Call]<[StatusResponse]>
      */
     @POST("orders/{id}/pay")
-    fun ordersControllerPayOrder(@Path("id") id: java.math.BigDecimal): Call<StatusResponse>
+    fun ordersControllerPayOrder(@Path("id") id: kotlin.Long): Call<StatusResponse>
 
     /**
      * POST orders/{id}/refund
@@ -127,7 +127,7 @@ interface OrdersApi {
      * @return [Call]<[RefundResponse]>
      */
     @POST("orders/{id}/refund")
-    fun ordersControllerRefundOrder(@Path("id") id: java.math.BigDecimal, @Body createRefundDto: CreateRefundDto): Call<RefundResponse>
+    fun ordersControllerRefundOrder(@Path("id") id: kotlin.Long, @Body createRefundDto: CreateRefundDto): Call<RefundResponse>
 
     /**
      * DELETE orders/{orderId}/items/{itemId}
@@ -141,7 +141,7 @@ interface OrdersApi {
      * @return [Call]<[SuccessResponse]>
      */
     @DELETE("orders/{orderId}/items/{itemId}")
-    fun ordersControllerRemoveItem(@Path("orderId") orderId: java.math.BigDecimal, @Path("itemId") itemId: java.math.BigDecimal): Call<SuccessResponse>
+    fun ordersControllerRemoveItem(@Path("orderId") orderId: kotlin.Long, @Path("itemId") itemId: kotlin.Long): Call<SuccessResponse>
 
     /**
      * POST orders/{id}/print
@@ -155,7 +155,7 @@ interface OrdersApi {
      * @return [Call]<[PrintResponse]>
      */
     @POST("orders/{id}/print")
-    fun ordersControllerReprintOrder(@Path("id") id: java.math.BigDecimal, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
+    fun ordersControllerReprintOrder(@Path("id") id: kotlin.Long, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
 
     /**
      * PATCH orders/{orderId}/items/{itemId}
@@ -170,7 +170,7 @@ interface OrdersApi {
      * @return [Call]<[SuccessResponse]>
      */
     @PATCH("orders/{orderId}/items/{itemId}")
-    fun ordersControllerUpdateItem(@Path("orderId") orderId: java.math.BigDecimal, @Path("itemId") itemId: java.math.BigDecimal, @Body updateOrderItemDto: UpdateOrderItemDto): Call<SuccessResponse>
+    fun ordersControllerUpdateItem(@Path("orderId") orderId: kotlin.Long, @Path("itemId") itemId: kotlin.Long, @Body updateOrderItemDto: UpdateOrderItemDto): Call<SuccessResponse>
 
     /**
      * GET orders/{id}/audit/verify
@@ -183,7 +183,7 @@ interface OrdersApi {
      * @return [Call]<[AuditVerifyResponse]>
      */
     @GET("orders/{id}/audit/verify")
-    fun ordersControllerVerifyAuditChain(@Path("id") id: java.math.BigDecimal): Call<AuditVerifyResponse>
+    fun ordersControllerVerifyAuditChain(@Path("id") id: kotlin.Long): Call<AuditVerifyResponse>
 
     /**
      * GET orders/{id}/events/verify
@@ -196,7 +196,7 @@ interface OrdersApi {
      * @return [Call]<[AuditVerifyResponse]>
      */
     @GET("orders/{id}/events/verify")
-    fun ordersControllerVerifyOrderChain(@Path("id") id: java.math.BigDecimal): Call<AuditVerifyResponse>
+    fun ordersControllerVerifyOrderChain(@Path("id") id: kotlin.Long): Call<AuditVerifyResponse>
 
     /**
      * POST orders/{id}/void
@@ -209,6 +209,6 @@ interface OrdersApi {
      * @return [Call]<[StatusResponse]>
      */
     @POST("orders/{id}/void")
-    fun ordersControllerVoidOrder(@Path("id") id: java.math.BigDecimal): Call<StatusResponse>
+    fun ordersControllerVoidOrder(@Path("id") id: kotlin.Long): Call<StatusResponse>
 
 }

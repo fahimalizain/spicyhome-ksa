@@ -45,7 +45,7 @@ import com.squareup.moshi.JsonClass
 data class MeResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "username")
     val username: kotlin.String,
@@ -54,7 +54,7 @@ data class MeResponse (
     val name: kotlin.String,
 
     @Json(name = "roleId")
-    val roleId: java.math.BigDecimal,
+    val roleId: kotlin.Long,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,

@@ -9,7 +9,6 @@ import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdateOrderItemDto
 import retrofit2.Call
-import java.math.BigDecimal
 
 class OrderRepository(private val ordersApi: OrdersApi) {
 
@@ -17,7 +16,7 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         val dto = if (tableId != null) {
             CreateOrderDto(
                 type = CreateOrderDto.Type.valueOf(type),
-                tableId = BigDecimal.valueOf(tableId)
+                tableId = tableId
             )
         } else {
             CreateOrderDto(type = CreateOrderDto.Type.valueOf(type))
@@ -26,7 +25,7 @@ class OrderRepository(private val ordersApi: OrdersApi) {
     }
 
     fun getOrder(id: Long): Call<OrderResponse> {
-        return ordersApi.ordersControllerGetOrder(BigDecimal.valueOf(id))
+        return ordersApi.ordersControllerGetOrder(id)
     }
 
     fun listOrders(status: String? = null, date: String? = null): Call<List<OrderResponse>> {
@@ -35,10 +34,10 @@ class OrderRepository(private val ordersApi: OrdersApi) {
 
     fun addItem(orderId: Long, itemId: Long, qty: Int, notes: String?): Call<SuccessResponse> {
         return ordersApi.ordersControllerAddItem(
-            BigDecimal.valueOf(orderId),
+            orderId,
             AddOrderItemDto(
-                itemId = BigDecimal.valueOf(itemId),
-                qty = BigDecimal.valueOf(qty.toLong()),
+                itemId = itemId,
+                qty = qty,
                 notes = notes
             )
         )
@@ -46,24 +45,24 @@ class OrderRepository(private val ordersApi: OrdersApi) {
 
     fun updateItem(orderId: Long, itemId: Long, qty: Int?, notes: String?): Call<SuccessResponse> {
         return ordersApi.ordersControllerUpdateItem(
-            BigDecimal.valueOf(orderId),
-            BigDecimal.valueOf(itemId),
-            UpdateOrderItemDto(qty = qty?.let { BigDecimal.valueOf(it.toLong()) }, notes = notes)
+            orderId,
+            itemId,
+            UpdateOrderItemDto(qty = qty, notes = notes)
         )
     }
 
     fun removeItem(orderId: Long, itemId: Long): Call<SuccessResponse> {
         return ordersApi.ordersControllerRemoveItem(
-            BigDecimal.valueOf(orderId),
-            BigDecimal.valueOf(itemId)
+            orderId,
+            itemId
         )
     }
 
     fun payOrder(orderId: Long): Call<StatusResponse> {
-        return ordersApi.ordersControllerPayOrder(BigDecimal.valueOf(orderId))
+        return ordersApi.ordersControllerPayOrder(orderId)
     }
 
     fun voidOrder(orderId: Long): Call<StatusResponse> {
-        return ordersApi.ordersControllerVoidOrder(BigDecimal.valueOf(orderId))
+        return ordersApi.ordersControllerVoidOrder(orderId)
     }
 }

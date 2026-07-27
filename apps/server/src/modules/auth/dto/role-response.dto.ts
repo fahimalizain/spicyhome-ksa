@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class RoleResponse {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
   @ApiProperty({ example: 'staff' })
@@ -37,15 +38,15 @@ export class RoleResponse {
   @ApiProperty({ example: false })
   manageSettings!: boolean;
 
-  @ApiProperty({ example: 1700000000 })
+  @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 
-  @ApiProperty({ example: 1700000000 })
+  @ApiProperty({ ...ApiInt64, example: 1700000000 })
   updatedAt!: number;
 
-  @ApiProperty({ example: 1, nullable: true })
+  @ApiProperty({ ...ApiInt64, example: 1, nullable: true })
   createdBy!: number | null;
 
-  @ApiProperty({ example: 1, nullable: true })
+  @ApiProperty({ ...ApiInt64, example: 1, nullable: true })
   updatedBy!: number | null;
 }

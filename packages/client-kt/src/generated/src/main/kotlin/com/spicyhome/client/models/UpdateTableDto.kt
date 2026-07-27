@@ -34,7 +34,7 @@ data class UpdateTableDto (
     val name: kotlin.String? = null,
 
     @Json(name = "sortOrder")
-    val sortOrder: java.math.BigDecimal? = null,
+    val sortOrder: kotlin.Int? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = null

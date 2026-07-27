@@ -297,7 +297,7 @@ private fun OrderDetailView(
                                 }
                                 Text(
                                     text = MoneyFormatter.halalasToSar(
-                                        item.unitPriceHalalas.multiply(item.qty)
+                                        item.unitPriceHalalas * item.qty
                                     ),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium,

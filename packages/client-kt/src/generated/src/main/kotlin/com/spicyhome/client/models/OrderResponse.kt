@@ -47,10 +47,10 @@ import com.squareup.moshi.JsonClass
 data class OrderResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "orderNo")
-    val orderNo: java.math.BigDecimal,
+    val orderNo: kotlin.Long,
 
     @Json(name = "uuid")
     val uuid: kotlin.String,
@@ -59,37 +59,37 @@ data class OrderResponse (
     val type: kotlin.String,
 
     @Json(name = "tableId")
-    val tableId: kotlin.Any?,
+    val tableId: kotlin.Long?,
 
     @Json(name = "dayOpeningId")
-    val dayOpeningId: java.math.BigDecimal,
+    val dayOpeningId: kotlin.Long,
 
     @Json(name = "status")
     val status: kotlin.String,
 
     @Json(name = "subtotalHalalas")
-    val subtotalHalalas: java.math.BigDecimal,
+    val subtotalHalalas: kotlin.Long,
 
     @Json(name = "vatHalalas")
-    val vatHalalas: java.math.BigDecimal,
+    val vatHalalas: kotlin.Long,
 
     @Json(name = "totalHalalas")
-    val totalHalalas: java.math.BigDecimal,
+    val totalHalalas: kotlin.Long,
 
     @Json(name = "discountHalalas")
-    val discountHalalas: java.math.BigDecimal,
+    val discountHalalas: kotlin.Long,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "updatedAt")
-    val updatedAt: java.math.BigDecimal,
+    val updatedAt: kotlin.Long,
 
     @Json(name = "createdBy")
-    val createdBy: kotlin.Any?,
+    val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Any?,
+    val updatedBy: kotlin.Long?,
 
     @Json(name = "items")
     val items: kotlin.collections.List<OrderItemResponse>,

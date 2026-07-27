@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -62,6 +63,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'User details', type: UserResponse })
   getUser(@Param('id', ParseIntPipe) id: number) {
     return this.authService.getUserById(id);
@@ -80,6 +82,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a user' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated user', type: UserResponse })
   updateUser(
     @Param('id', ParseIntPipe) id: number,
@@ -111,6 +114,7 @@ export class AuthController {
   @RequiresPermission('manage_users')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a role' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Updated role', type: RoleResponse })
   updateRole(
     @Param('id', ParseIntPipe) id: number,

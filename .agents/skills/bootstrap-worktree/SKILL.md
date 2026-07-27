@@ -105,12 +105,12 @@ Read `.env.worktree` or the script summary. Tell the user:
 
 Open **that worktree folder** as the workspace root (not the main repo).
 
-| Config                       | Purpose                                         |
-| ---------------------------- | ----------------------------------------------- |
-| **Debug Server + POS**       | Compound — Nest (ts-node) + Vite                |
-| **Debug Server (ts-node)**   | API only (`envFile` → `.env.worktree`)          |
-| **Debug POS (Vite)**         | SPA only; opens browser via `serverReadyAction` |
-| **Attach to Server (Bazel)** | Main/machine-specific; not worktree-aware       |
+| Config                       | Purpose                                                               |
+| ---------------------------- | --------------------------------------------------------------------- |
+| **Debug Server + POS**       | Compound — Nest (ts-node) + Vite                                      |
+| **Debug Server (ts-node)**   | API only (`envFile` → `.env.worktree`)                                |
+| **Debug POS (Vite)**         | SPA only; opens in VS Code integrated browser via `serverReadyAction` |
+| **Attach to Server (Bazel)** | Main/machine-specific; not worktree-aware                             |
 
 First server launch runs task **Compile shared & db packages for ts-node**
 (which also ensures `.env.worktree` via `scripts/worktree/env.sh`).

@@ -37,7 +37,7 @@ import com.squareup.moshi.JsonClass
 data class UserResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "username")
     val username: kotlin.String,
@@ -46,22 +46,22 @@ data class UserResponse (
     val name: kotlin.String,
 
     @Json(name = "roleId")
-    val roleId: java.math.BigDecimal,
+    val roleId: kotlin.Long,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "updatedAt")
-    val updatedAt: java.math.BigDecimal,
+    val updatedAt: kotlin.Long,
 
     @Json(name = "createdBy")
-    val createdBy: kotlin.Any?,
+    val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Any?
+    val updatedBy: kotlin.Long?
 
 ) {
 

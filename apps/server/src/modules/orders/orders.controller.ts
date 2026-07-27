@@ -15,6 +15,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import {
@@ -54,6 +55,7 @@ export class OrdersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get order by ID with items and audit log' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Order with items and audit log', type: OrderResponse })
   getOrder(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrder(id);
@@ -61,6 +63,7 @@ export class OrdersController {
 
   @Get(':id/audit/verify')
   @ApiOperation({ summary: 'Verify audit log hash chain for an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Audit chain verification result', type: AuditVerifyResponse })
   verifyAuditChain(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.verifyAuditChain(id);
@@ -77,6 +80,7 @@ export class OrdersController {
   @Post(':id/items')
   @RequiresPermission('update_order')
   @ApiOperation({ summary: 'Add an item to an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Item added', type: AddOrderItemResponse })
   addItem(
     @Param('id', ParseIntPipe) orderId: number,
@@ -89,6 +93,8 @@ export class OrdersController {
   @Patch(':orderId/items/:itemId')
   @RequiresPermission('update_order')
   @ApiOperation({ summary: 'Update an order item (qty or notes)' })
+  @ApiParam({ name: 'orderId', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'itemId', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Item updated', type: SuccessResponse })
   updateItem(
     @Param('orderId', ParseIntPipe) orderId: number,
@@ -102,6 +108,8 @@ export class OrdersController {
   @Delete(':orderId/items/:itemId')
   @RequiresPermission('delete_order_item')
   @ApiOperation({ summary: 'Remove an item from an order' })
+  @ApiParam({ name: 'orderId', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'itemId', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Item removed', type: SuccessResponse })
   removeItem(
     @Param('orderId', ParseIntPipe) orderId: number,
@@ -114,6 +122,7 @@ export class OrdersController {
   @Post(':id/pay')
   @RequiresPermission('pay_order')
   @ApiOperation({ summary: 'Mark order as paid (open → paid)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Order paid', type: StatusResponse })
   payOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
     return this.ordersService.payOrder(orderId, user.sub);
@@ -122,6 +131,7 @@ export class OrdersController {
   @Post(':id/void')
   @RequiresPermission('void_order')
   @ApiOperation({ summary: 'Void an order (open → voided)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Order voided', type: StatusResponse })
   voidOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
     return this.ordersService.voidOrder(orderId, user.sub);
@@ -130,6 +140,7 @@ export class OrdersController {
   @Post(':id/print')
   @RequiresPermission('update_order')
   @ApiOperation({ summary: 'Reprint receipt or kitchen ticket for an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Print result', type: PrintResponse })
   reprintOrder(
     @Param('id', ParseIntPipe) orderId: number,
@@ -142,6 +153,7 @@ export class OrdersController {
   @Post(':id/refund')
   @RequiresPermission('refund_order')
   @ApiOperation({ summary: 'Refund items on a paid order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Refund processed', type: RefundResponse })
   refundOrder(
     @Param('id', ParseIntPipe) orderId: number,
@@ -153,6 +165,7 @@ export class OrdersController {
 
   @Get(':id/refunds')
   @ApiOperation({ summary: 'Get all refunds for an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'List of refunds with their items', type: [OrderRefundResponse] })
   getOrderRefunds(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrderRefunds(id);
@@ -160,6 +173,7 @@ export class OrdersController {
 
   @Get(':id/events')
   @ApiOperation({ summary: 'Get the complete event chain for an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'List of order events', type: [OrderEventResponse] })
   getOrderEvents(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrderEvents(id);
@@ -167,6 +181,7 @@ export class OrdersController {
 
   @Get(':id/events/verify')
   @ApiOperation({ summary: 'Verify the hash chain integrity for an order' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Chain verification result', type: AuditVerifyResponse })
   verifyOrderChain(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.verifyOrderChain(id);

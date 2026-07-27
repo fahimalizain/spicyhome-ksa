@@ -38,28 +38,28 @@ import com.squareup.moshi.JsonClass
 data class OrderRefundResponse (
 
     @Json(name = "id")
-    val id: java.math.BigDecimal,
+    val id: kotlin.Long,
 
     @Json(name = "orderId")
-    val orderId: java.math.BigDecimal,
+    val orderId: kotlin.Long,
 
     @Json(name = "userId")
-    val userId: java.math.BigDecimal,
+    val userId: kotlin.Long,
 
     @Json(name = "subtotalHalalas")
-    val subtotalHalalas: java.math.BigDecimal,
+    val subtotalHalalas: kotlin.Long,
 
     @Json(name = "vatHalalas")
-    val vatHalalas: java.math.BigDecimal,
+    val vatHalalas: kotlin.Long,
 
     @Json(name = "totalHalalas")
-    val totalHalalas: java.math.BigDecimal,
+    val totalHalalas: kotlin.Long,
 
     @Json(name = "reason")
-    val reason: kotlin.Any,
+    val reason: kotlin.String?,
 
     @Json(name = "createdAt")
-    val createdAt: java.math.BigDecimal,
+    val createdAt: kotlin.Long,
 
     @Json(name = "items")
     val items: kotlin.collections.List<RefundItemResponse>

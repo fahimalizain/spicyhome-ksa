@@ -39,7 +39,7 @@ data class UpdatePrinterDto (
     val ip: kotlin.String? = null,
 
     @Json(name = "port")
-    val port: java.math.BigDecimal? = null,
+    val port: kotlin.Int? = null,
 
     @Json(name = "role")
     val role: UpdatePrinterDto.Role? = null,

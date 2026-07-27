@@ -34,7 +34,7 @@ data class CreateOrderDto (
 
     /* Required for dine_in */
     @Json(name = "tableId")
-    val tableId: java.math.BigDecimal? = null
+    val tableId: kotlin.Long? = null
 
 ) {
 

@@ -1,5 +1,6 @@
 import { IsString, MinLength, IsInt, IsOptional, IsBoolean, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiInt32 } from '../../../common/api-property-helpers';
 
 export class CreatePrinterDto {
   @ApiProperty({ example: 'Kitchen' })
@@ -12,7 +13,7 @@ export class CreatePrinterDto {
   @MinLength(1)
   ip!: string;
 
-  @ApiPropertyOptional({ default: 9100 })
+  @ApiPropertyOptional({ ...ApiInt32, default: 9100 })
   @IsOptional()
   @IsInt()
   port?: number;
@@ -29,19 +30,19 @@ export class CreatePrinterDto {
 }
 
 export class UpdatePrinterDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String })
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String })
   @IsOptional()
   @IsString()
   @MinLength(1)
   ip?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ ...ApiInt32 })
   @IsOptional()
   @IsInt()
   port?: number;

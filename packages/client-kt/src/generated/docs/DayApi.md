@@ -97,7 +97,7 @@ Get a business day by ID
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(DayApi::class.java)
-val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val id : kotlin.Long = 789 // kotlin.Long | 
 
 val result : DayOpeningResponse = webService.businessDayControllerGetDay(id)
 ```
@@ -105,7 +105,7 @@ val result : DayOpeningResponse = webService.businessDayControllerGetDay(id)
 ### Parameters
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **java.math.BigDecimal**|  | |
+| **id** | **kotlin.Long**|  | |
 
 ### Return type
 
@@ -135,17 +135,17 @@ List past business days (paged)
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(DayApi::class.java)
-val page : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-val limit : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+val page : kotlin.Int = 56 // kotlin.Int | 
+val limit : kotlin.Int = 56 // kotlin.Int | 
 
 webService.businessDayControllerList(page, limit)
 ```
 
 ### Parameters
-| **page** | **java.math.BigDecimal**|  | [optional] |
+| **page** | **kotlin.Int**|  | [optional] |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **limit** | **java.math.BigDecimal**|  | [optional] |
+| **limit** | **kotlin.Int**|  | [optional] |
 
 ### Return type
 

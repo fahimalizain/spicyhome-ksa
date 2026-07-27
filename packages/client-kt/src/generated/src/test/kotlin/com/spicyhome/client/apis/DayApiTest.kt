@@ -46,7 +46,7 @@ class DayApiTest : ShouldSpec() {
         // to test businessDayControllerGetDay
         should("test businessDayControllerGetDay") {
             // uncomment below to test businessDayControllerGetDay
-            //val id : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : DayOpeningResponse = apiInstance.businessDayControllerGetDay(id)
             //result shouldBe ("TODO")
         }
@@ -54,8 +54,8 @@ class DayApiTest : ShouldSpec() {
         // to test businessDayControllerList
         should("test businessDayControllerList") {
             // uncomment below to test businessDayControllerList
-            //val page : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
-            //val limit : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val page : kotlin.Int = 56 // kotlin.Int | 
+            //val limit : kotlin.Int = 56 // kotlin.Int | 
             //apiInstance.businessDayControllerList(page, limit)
         }
 

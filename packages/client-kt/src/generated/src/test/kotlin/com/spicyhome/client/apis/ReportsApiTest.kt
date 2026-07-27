@@ -50,7 +50,7 @@ class ReportsApiTest : ShouldSpec() {
         // to test reportsControllerGetZReport
         should("test reportsControllerGetZReport") {
             // uncomment below to test reportsControllerGetZReport
-            //val dayId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val dayId : kotlin.Long = 789 // kotlin.Long | 
             //apiInstance.reportsControllerGetZReport(dayId)
         }
 
@@ -63,7 +63,7 @@ class ReportsApiTest : ShouldSpec() {
         // to test reportsControllerPrintZReport
         should("test reportsControllerPrintZReport") {
             // uncomment below to test reportsControllerPrintZReport
-            //val dayId : java.math.BigDecimal = 8.14 // java.math.BigDecimal | 
+            //val dayId : kotlin.Long = 789 // kotlin.Long | 
             //apiInstance.reportsControllerPrintZReport(dayId)
         }
 

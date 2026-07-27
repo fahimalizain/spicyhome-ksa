@@ -30,7 +30,7 @@ data class OpenDayDto (
 
     /* Opening cash counted in halalas */
     @Json(name = "openingCashHalalas")
-    val openingCashHalalas: java.math.BigDecimal
+    val openingCashHalalas: kotlin.Long
 
 ) {
 

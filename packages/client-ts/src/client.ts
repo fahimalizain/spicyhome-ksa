@@ -19,7 +19,7 @@ export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type AddOrderItemDto = Schemas['AddOrderItemDto'];
 export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
 
-export type AddOrderItemResponse = { success: boolean; orderItemId: number };
+export type AddOrderItemResponse = Schemas['AddOrderItemResponse'];
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
 export type OrderRefundResponse = Schemas['OrderRefundResponse'];

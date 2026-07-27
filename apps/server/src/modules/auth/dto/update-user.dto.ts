@@ -1,14 +1,15 @@
 import { IsString, MinLength, IsInt, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class UpdateUserDto {
-  @ApiPropertyOptional({ example: 'Ahmed Ali' })
+  @ApiPropertyOptional({ type: String, example: 'Ahmed Ali' })
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
 
-  @ApiPropertyOptional({ example: 2 })
+  @ApiPropertyOptional({ ...ApiInt64, example: 2 })
   @IsOptional()
   @IsInt()
   roleId?: number;
@@ -18,7 +19,7 @@ export class UpdateUserDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ example: '5678', description: 'New PIN (4-6 digits)' })
+  @ApiPropertyOptional({ type: String, example: '5678', description: 'New PIN (4-6 digits)' })
   @IsOptional()
   @IsString()
   @MinLength(4)
