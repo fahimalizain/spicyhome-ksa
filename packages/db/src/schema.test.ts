@@ -45,8 +45,8 @@ describe('schema — invariants', () => {
       'order_events',
       'order_refunds',
       'order_refund_items',
-      'invoices',
-      'credit_notes',
+      'zatca_invoices',
+      'zatca_credit_notes',
       'day_openings',
       'settings',
     ];
@@ -184,7 +184,7 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
-    it('invoices.order_id is unique', () => {
+    it('zatca_invoices.order_id is unique', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
 
@@ -196,19 +196,19 @@ describe('schema — invariants', () => {
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
         VALUES (${orderId}, 1, 'inv-uuid-1', 'hash1', 'prevhash', '<xml/>', 'tlv', 'signed', ${now}, ${now})
       `);
 
       expect(() =>
         sqlite.exec(`
-          INSERT INTO invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
           VALUES (${orderId}, 2, 'inv-uuid-2', 'hash2', 'prevhash', '<xml/>', 'tlv', 'signed', ${now}, ${now})
         `),
       ).toThrow();
     });
 
-    it('credit_notes.refund_id is unique', () => {
+    it('zatca_credit_notes.refund_id is unique', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
       const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
@@ -228,20 +228,20 @@ describe('schema — invariants', () => {
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
         VALUES (${orderId}, ${refundId}, 'inv-uuid-x', 1, 'cn-uuid-1', 'hash1', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
       `);
 
       // Second credit_note for same refund_id should fail
       expect(() =>
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (${orderId}, ${refundId}, 'inv-uuid-y', 2, 'cn-uuid-2', 'hash2', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });
 
-    it('credit_notes.icv is unique', () => {
+    it('zatca_credit_notes.icv is unique', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
       const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
@@ -260,7 +260,7 @@ describe('schema — invariants', () => {
         const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (${orderId}, ${refundId}, 'inv-uuid-icv', ${10 + i}, 'cn-uuid-icv-${i}', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `);
       }
@@ -280,13 +280,13 @@ describe('schema — invariants', () => {
 
       expect(() =>
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (${orderId3}, ${refundId3}, 'inv-uuid-icv-dup', 10, 'cn-uuid-icv-dup', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });
 
-    it('credit_notes.uuid is unique', () => {
+    it('zatca_credit_notes.uuid is unique', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
       const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
@@ -303,7 +303,7 @@ describe('schema — invariants', () => {
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
         VALUES (${orderId}, ${refundId}, 'inv-uuid-uu', 20, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
       `);
 
@@ -321,19 +321,19 @@ describe('schema — invariants', () => {
 
       expect(() =>
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (${orderId2}, ${refundId2}, 'inv-uuid-uu-2', 21, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });
 
-    it('credit_notes FK to orders and order_refunds are enforced', () => {
+    it('zatca_credit_notes FK to orders and order_refunds are enforced', () => {
       const now = Math.floor(Date.now() / 1000);
 
       // FK to non-existent order_id should fail
       expect(() =>
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (99999, 99999, 'inv-uuid-fk', 30, 'cn-uuid-fk', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
@@ -348,7 +348,7 @@ describe('schema — invariants', () => {
 
       expect(() =>
         sqlite.exec(`
-          INSERT INTO credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
           VALUES (${orderId}, 99999, 'inv-uuid-fk2', 31, 'cn-uuid-fk2', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();

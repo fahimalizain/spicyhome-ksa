@@ -13,7 +13,7 @@
  *   6. Sign the hash with the seller's private key.
  *   7. Embed the signature into the UBL XML.
  *   8. Compute the QR TLV payload.
- *   9. Insert into `invoices` table with status `signed`.
+ *   9. Insert into `zatca_invoices` table with status `signed`.
  *  10. Return the invoice data (including QR payload for receipt printing).
  */
 
@@ -23,8 +23,8 @@ import { eq, desc, and } from 'drizzle-orm';
 import {
   orders,
   orderItems,
-  invoices,
-  creditNotes,
+  zatcaInvoices,
+  zatcaCreditNotes,
   orderRefunds,
   orderRefundItems,
   settings,
@@ -121,7 +121,11 @@ export class ZatcaInvoiceService {
    */
   async createInvoice(orderId: number): Promise<CreateInvoiceResult> {
     // Check for existing invoice
-    const existing = this.db.select().from(invoices).where(eq(invoices.orderId, orderId)).get();
+    const existing = this.db
+      .select()
+      .from(zatcaInvoices)
+      .where(eq(zatcaInvoices.orderId, orderId))
+      .get();
 
     if (existing) {
       return {
@@ -278,7 +282,7 @@ export class ZatcaInvoiceService {
 
     // Insert invoice
     const result = this.db
-      .insert(invoices)
+      .insert(zatcaInvoices)
       .values({
         orderId,
         icv,
@@ -400,7 +404,7 @@ export class ZatcaInvoiceService {
       hour12: false,
     });
 
-    // 9. Allocate ICV and get PIH atomically (checks both invoices and credit_notes)
+    // 9. Allocate ICV and get PIH atomically (checks both zatca_invoices and zatca_credit_notes)
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
       return this.allocateICV(tx, env, orgUnit);
     });
@@ -454,7 +458,7 @@ export class ZatcaInvoiceService {
 
     // 15. Insert credit note
     const result = this.db
-      .insert(creditNotes)
+      .insert(zatcaCreditNotes)
       .values({
         orderId,
         refundId,
@@ -486,7 +490,7 @@ export class ZatcaInvoiceService {
    * Get invoice by order ID.
    */
   getByOrderId(orderId: number): any {
-    return this.db.select().from(invoices).where(eq(invoices.orderId, orderId)).get();
+    return this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.orderId, orderId)).get();
   }
 
   /**
@@ -495,8 +499,8 @@ export class ZatcaInvoiceService {
   listInvoices(limit = 50, offset = 0): any[] {
     return this.db
       .select()
-      .from(invoices)
-      .orderBy(desc(invoices.id))
+      .from(zatcaInvoices)
+      .orderBy(desc(zatcaInvoices.id))
       .limit(limit)
       .offset(offset)
       .all();
@@ -506,7 +510,7 @@ export class ZatcaInvoiceService {
    * Get invoice by ID.
    */
   getById(id: number): any {
-    return this.db.select().from(invoices).where(eq(invoices.id, id)).get();
+    return this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, id)).get();
   }
 
   /**
@@ -693,16 +697,16 @@ export class ZatcaInvoiceService {
     if (icv > 1) {
       const prevInvoice = tx
         .select()
-        .from(invoices)
-        .where(eq(invoices.icv, icv - 1))
+        .from(zatcaInvoices)
+        .where(eq(zatcaInvoices.icv, icv - 1))
         .get();
       if (prevInvoice) {
         prevInvoiceHash = prevInvoice.invoiceHash;
       } else {
         const prevCreditNote = tx
           .select()
-          .from(creditNotes)
-          .where(eq(creditNotes.icv, icv - 1))
+          .from(zatcaCreditNotes)
+          .where(eq(zatcaCreditNotes.icv, icv - 1))
           .get();
         prevInvoiceHash = prevCreditNote?.invoiceHash ?? '';
       }
