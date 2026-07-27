@@ -10,7 +10,7 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerGetOrderEvents**](OrdersApi.md#ordersControllerGetOrderEvents) | **GET** orders/{id}/events | Get the complete event chain for an order |
 | [**ordersControllerGetOrderRefunds**](OrdersApi.md#ordersControllerGetOrderRefunds) | **GET** orders/{id}/refunds | Get all refunds for an order |
 | [**ordersControllerListOrders**](OrdersApi.md#ordersControllerListOrders) | **GET** orders | List orders with optional filters |
-| [**ordersControllerPayOrder**](OrdersApi.md#ordersControllerPayOrder) | **POST** orders/{id}/pay | Mark order as paid (open → paid) |
+| [**ordersControllerPayOrder**](OrdersApi.md#ordersControllerPayOrder) | **POST** orders/{id}/pay | Mark order as paid with payment methods (open → paid) |
 | [**ordersControllerRefundOrder**](OrdersApi.md#ordersControllerRefundOrder) | **POST** orders/{id}/refund | Refund items on a paid order |
 | [**ordersControllerRemoveItem**](OrdersApi.md#ordersControllerRemoveItem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
 | [**ordersControllerReprintOrder**](OrdersApi.md#ordersControllerReprintOrder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
@@ -252,7 +252,7 @@ Configure bearer:
  - **Accept**: application/json
 
 
-Mark order as paid (open → paid)
+Mark order as paid with payment methods (open → paid)
 
 ### Example
 ```kotlin
@@ -265,14 +265,16 @@ val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
 val id : kotlin.Long = 789 // kotlin.Long | 
+val payOrderDto : PayOrderDto =  // PayOrderDto | 
 
-val result : StatusResponse = webService.ordersControllerPayOrder(id)
+val result : StatusResponse = webService.ordersControllerPayOrder(id, payOrderDto)
 ```
 
 ### Parameters
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **kotlin.Long**|  | |
+| **payOrderDto** | [**PayOrderDto**](PayOrderDto.md)|  | |
 
 ### Return type
 
@@ -286,7 +288,7 @@ Configure bearer:
 
 ### HTTP request headers
 
- - **Content-Type**: Not defined
+ - **Content-Type**: application/json
  - **Accept**: application/json
 
 

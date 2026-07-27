@@ -21,6 +21,7 @@
 | **updatedBy** | **kotlin.Long** |  |  |
 | **items** | [**kotlin.collections.List&lt;OrderItemResponse&gt;**](OrderItemResponse.md) |  |  |
 | **events** | [**kotlin.collections.List&lt;OrderEventResponse&gt;**](OrderEventResponse.md) |  |  |
+| **payments** | [**kotlin.collections.List&lt;OrderPaymentResponse&gt;**](OrderPaymentResponse.md) |  |  |
 
 
 

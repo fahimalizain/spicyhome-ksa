@@ -11,6 +11,8 @@ export interface ZReportOptions {
   paidOrderCount: number;
   voidedOrderCount: number;
   restaurantName: string;
+  /** Expected cash = opening cash + cash payments. Required — callers must compute explicitly. */
+  expectedCashHalalas: number;
 }
 
 export class ZReportBuilder {
@@ -47,7 +49,7 @@ export class ZReportBuilder {
 
     if (opts.closingCashHalalas > 0 || opts.status === 'closed') {
       eb.columnsWidth('Closing Cash', halalasToSar(opts.closingCashHalalas), 10);
-      const expectedCash = opts.openingCashHalalas + opts.totalSalesHalalas;
+      const expectedCash = opts.expectedCashHalalas;
       eb.columnsWidth('Expected', halalasToSar(expectedCash), 10);
       const diff = opts.closingCashHalalas - expectedCash;
       eb.columnsWidth('Difference', halalasToSar(diff), 10);

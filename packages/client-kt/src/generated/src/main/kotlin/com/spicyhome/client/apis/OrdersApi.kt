@@ -16,6 +16,7 @@ import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
+import com.spicyhome.client.models.PayOrderDto
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
@@ -106,16 +107,17 @@ interface OrdersApi {
 
     /**
      * POST orders/{id}/pay
-     * Mark order as paid (open → paid)
+     * Mark order as paid with payment methods (open → paid)
      * 
      * Responses:
      *  - 201: Order paid
      *
      * @param id 
+     * @param payOrderDto 
      * @return [Call]<[StatusResponse]>
      */
     @POST("orders/{id}/pay")
-    fun ordersControllerPayOrder(@Path("id") id: kotlin.Long): Call<StatusResponse>
+    fun ordersControllerPayOrder(@Path("id") id: kotlin.Long, @Body payOrderDto: PayOrderDto): Call<StatusResponse>
 
     /**
      * POST orders/{id}/refund

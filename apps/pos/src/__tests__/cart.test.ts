@@ -44,6 +44,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     updatedBy: null,
     items: [],
     events: [],
+    payments: [],
     ...overrides,
   };
 }

@@ -117,6 +117,20 @@ describe('seed', () => {
     });
   });
 
+  it('inserts 3 payment methods (cash, card, mada)', () => {
+    seedRaw(sqlite);
+
+    const methods = sqlite
+      .prepare('SELECT * FROM payment_methods ORDER BY sort_order')
+      .all() as any[];
+    expect(methods.length).toBe(3);
+    expect(methods.map((m: any) => m.id)).toEqual(['cash', 'card', 'mada']);
+    expect(methods.map((m: any) => m.title)).toEqual(['Cash', 'Card', 'mada']);
+    methods.forEach((m: any) => {
+      expect(m.enabled).toBe(1);
+    });
+  });
+
   it('is idempotent — running seed twice does not duplicate rows', () => {
     seedRaw(sqlite);
     seedRaw(sqlite);
@@ -137,5 +151,8 @@ describe('seed', () => {
 
     const items = sqlite.prepare('SELECT COUNT(*) as cnt FROM items').get() as any;
     expect(items.cnt).toBe(28);
+
+    const methods = sqlite.prepare('SELECT COUNT(*) as cnt FROM payment_methods').get() as any;
+    expect(methods.cnt).toBe(3);
   });
 });

@@ -29,6 +29,7 @@ import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
+import com.spicyhome.client.models.PayOrderDto
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
@@ -95,7 +96,8 @@ class OrdersApiTest : ShouldSpec() {
         should("test ordersControllerPayOrder") {
             // uncomment below to test ordersControllerPayOrder
             //val id : kotlin.Long = 789 // kotlin.Long | 
-            //val result : StatusResponse = apiInstance.ordersControllerPayOrder(id)
+            //val payOrderDto : PayOrderDto =  // PayOrderDto | 
+            //val result : StatusResponse = apiInstance.ordersControllerPayOrder(id, payOrderDto)
             //result shouldBe ("TODO")
         }
 
@@ -133,14 +135,6 @@ class OrdersApiTest : ShouldSpec() {
             //val itemId : kotlin.Long = 789 // kotlin.Long | 
             //val updateOrderItemDto : UpdateOrderItemDto =  // UpdateOrderItemDto | 
             //val result : SuccessResponse = apiInstance.ordersControllerUpdateItem(orderId, itemId, updateOrderItemDto)
-            //result shouldBe ("TODO")
-        }
-
-        // to test ordersControllerVerifyAuditChain
-        should("test ordersControllerVerifyAuditChain") {
-            // uncomment below to test ordersControllerVerifyAuditChain
-            //val id : kotlin.Long = 789 // kotlin.Long | 
-            //val result : AuditVerifyResponse = apiInstance.ordersControllerVerifyAuditChain(id)
             //result shouldBe ("TODO")
         }
 

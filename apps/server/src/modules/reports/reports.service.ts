@@ -1,6 +1,15 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { eq, inArray } from 'drizzle-orm';
-import { orders, orderItems, dayOpenings, itemCategories, items, users } from '@spicyhome/db';
+import { eq, inArray, and } from 'drizzle-orm';
+import {
+  orders,
+  orderItems,
+  orderPayments,
+  paymentMethods,
+  dayOpenings,
+  itemCategories,
+  items,
+  users,
+} from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
@@ -31,7 +40,7 @@ export interface XReport {
     itemCount: number;
     totalHalalas: number;
   }>;
-  paymentTotals: { cash: number };
+  paymentTotals: Array<{ methodId: string; methodTitle: string; totalHalalas: number }>;
 }
 
 export interface ZReport extends XReport {
@@ -139,6 +148,42 @@ export class ReportsService {
       totalHalalas: agg.totalHalalas,
     }));
 
+    // Per-method payment totals
+    const paymentTotals: Array<{ methodId: string; methodTitle: string; totalHalalas: number }> =
+      [];
+    if (paidOrderIds.length > 0) {
+      const paymentRows = this.db
+        .select({
+          methodId: orderPayments.methodId,
+          total: orderPayments.amountHalalas,
+        })
+        .from(orderPayments)
+        .innerJoin(orders, eq(orderPayments.orderId, orders.id))
+        .where(and(eq(orders.dayOpeningId, dayId), eq(orders.status, 'paid')))
+        .all();
+
+      // Aggregate by method_id
+      const agg = new Map<string, number>();
+      for (const row of paymentRows) {
+        const cur = agg.get(row.methodId) ?? 0;
+        agg.set(row.methodId, cur + row.total);
+      }
+
+      // Use current catalog title for display
+      for (const [methodId, total] of agg.entries()) {
+        const pm = this.db
+          .select()
+          .from(paymentMethods)
+          .where(eq(paymentMethods.id, methodId))
+          .get();
+        paymentTotals.push({
+          methodId,
+          methodTitle: pm?.title ?? methodId,
+          totalHalalas: total,
+        });
+      }
+    }
+
     return {
       dayId: day.id,
       businessDate: day.businessDate,
@@ -152,7 +197,7 @@ export class ReportsService {
       salesByType,
       salesByUser,
       salesByCategory,
-      paymentTotals: { cash: totalSalesHalalas },
+      paymentTotals,
     };
   }
 
@@ -213,8 +258,13 @@ export class ReportsService {
     }
 
     const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+    const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
     const builder = new ZReportBuilder();
-    const buffer = builder.build({ ...report, restaurantName });
+    const buffer = builder.build({
+      ...report,
+      restaurantName,
+      expectedCashHalalas: report.openingCashHalalas + cashTotal,
+    });
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'Z-report printed' };
   }
@@ -231,11 +281,13 @@ export class ReportsService {
     }
 
     const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+    const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
     const builder = new ZReportBuilder();
     const buffer = builder.build({
       ...report,
       closingCashHalalas: 0,
       restaurantName,
+      expectedCashHalalas: report.openingCashHalalas + cashTotal,
     });
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'X-report printed' };

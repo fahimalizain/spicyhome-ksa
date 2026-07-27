@@ -286,6 +286,26 @@ private fun OrderDetailView(
                 }
             }
 
+            // Payments section (display when non-empty)
+            if (order.payments.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Payments", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = OnDarkSecondary)
+                Spacer(modifier = Modifier.height(4.dp))
+                order.payments.forEach { payment ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(payment.methodTitle, color = OnDarkSecondary, fontSize = 14.sp)
+                        Text(
+                            MoneyFormatter.halalasToSar(payment.amountHalalas),
+                            color = OnDark,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             Text("Items", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnDark)

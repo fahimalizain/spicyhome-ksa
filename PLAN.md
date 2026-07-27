@@ -139,9 +139,8 @@ Every step above includes its tests before the step is considered done
   testing against ZATCA's fatoora sandbox environment.
 - **Modifiers**: Item modifiers (size, extras, toppings) — schema is ready but
   the UI and API endpoints are not yet implemented.
-- **Payments table**: Currently payments are tracked via order status
-  (`paid_at`). A dedicated `payments` table (with payment method, amount,
-  reference) is planned for v1.
+- **Payments table** ✅ (implemented): `order_payments` and `payment_methods`
+  tables with split-tender support. See ADR 0002.
 - **Windows 7 smoke test**: Test the packaged zip on real Windows 7 hardware
   with Chrome 109.
 

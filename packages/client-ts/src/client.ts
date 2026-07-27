@@ -18,6 +18,8 @@ export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type AddOrderItemDto = Schemas['AddOrderItemDto'];
 export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
+export type PayOrderDto = Schemas['PayOrderDto'];
+export type PaymentLineDto = Schemas['PaymentLineDto'];
 
 export type AddOrderItemResponse = Schemas['AddOrderItemResponse'];
 export type CreateRefundDto = Schemas['CreateRefundDto'];
@@ -266,8 +268,8 @@ export class SpicyHomeClient {
     removeItem: (orderId: number, itemId: number) =>
       request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
 
-    pay: (orderId: number) =>
-      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`),
+    pay: (orderId: number, dto: PayOrderDto) =>
+      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),
 
     void: (orderId: number) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`),
@@ -327,6 +329,17 @@ export class SpicyHomeClient {
       }),
 
     get: (id: number) => request<any>(this.config, 'GET', `/day/${id}`),
+  };
+
+  paymentMethods = {
+    list: () => request<any[]>(this.config, 'GET', '/payment-methods'),
+
+    listEnabled: () => request<any[]>(this.config, 'GET', '/payment-methods/enabled'),
+
+    create: (dto: { title: string }) => request<any>(this.config, 'POST', '/payment-methods', dto),
+
+    update: (id: string, dto: { title?: string; enabled?: boolean; sortOrder?: number }) =>
+      request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
   };
 
   reports = {

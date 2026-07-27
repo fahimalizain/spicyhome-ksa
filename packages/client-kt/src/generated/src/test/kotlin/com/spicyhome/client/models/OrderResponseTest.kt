@@ -19,7 +19,9 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderItemResponse
+import com.spicyhome.client.models.OrderPaymentResponse
 
 class OrderResponseTest : ShouldSpec() {
     init {
@@ -126,6 +128,12 @@ class OrderResponseTest : ShouldSpec() {
         should("test events") {
             // uncomment below to test the property
             //modelInstance.events shouldBe ("TODO")
+        }
+
+        // to test the property `payments`
+        should("test payments") {
+            // uncomment below to test the property
+            //modelInstance.payments shouldBe ("TODO")
         }
 
     }
