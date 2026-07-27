@@ -31,7 +31,7 @@ VALID_TRANSITIONS:
 | Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                       |
 | ------------------- | ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                              |
-| `open` → `paid`     | `POST /orders/:id/pay`    | **POS SPA only**        | Receipt printed (cash drawer kick), ZATCA invoice created, `order_events` entries for `paid` + `receipt_print_enqueued` + `receipt_print_succeeded`, `order.paid` event                                                                                            |
+| `open` → `paid`     | `POST /orders/:id/pay`    | **POS SPA only**        | Requires payment lines array. Writes `order_payments` rows. Receipt printed (cash drawer kick only if cash payment > 0). ZATCA invoice created. `order_events` entries for `paid` (with payments breakdown) + `receipt_print_enqueued` + `receipt_print_succeeded`. `order.paid` event. |
 | `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                         |
 | `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded) |
 
@@ -141,7 +141,7 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 | Type            | Trigger                   | Payload                                                                                      |
 | --------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
 | `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid }`                                                           |
-| `paid`          | `POST /orders/:id/pay`    | `{ fromStatus: "open", toStatus: "paid" }`                                                   |
+| `paid`          | `POST /orders/:id/pay`    | `{ fromStatus: "open", toStatus: "paid", payments: [{ methodId, methodTitle, amountHalalas, tenderedHalalas?, changeHalalas? }] }` |
 | `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                 |
 | `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
 | `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                               |
@@ -328,6 +328,57 @@ Response: { success: true, refundId: number }
 - Sum of refunded qty across all refunds cannot exceed original ordered qty.
 - Refund amounts use snapshotted price/VAT from `order_items`, not current menu prices.
 
+## Payment Methods & Split Tender
+
+### Payment Method Catalog
+
+Admin-configurable catalog of payment methods (`payment_methods` table). Each method has a text slug (`id`), title, enabled flag (soft-disable), and sort order. Default methods: `cash`, `card`, `mada`.
+
+- `cash` is fully locked: cannot be renamed or disabled. `sort_order` adjustable.
+- Slugs are generated from titles (lowercase, kebab-case). Immutable after creation.
+- No DELETE — soft-disable via `enabled = false`.
+
+### Pay Flow
+
+`POST /orders/:id/pay` requires a `payments` array with at least one line:
+
+```json
+{
+  "payments": [
+    { "methodId": "card", "amountHalalas": 5000 },
+    { "methodId": "cash", "amountHalalas": 3250, "tenderedHalalas": 10000 }
+  ]
+}
+```
+
+Validation (single transaction):
+1. Order must be `open`.
+2. Each `methodId` must exist and be enabled.
+3. Each `amountHalalas` must be positive (> 0).
+4. Sum of amounts must equal `order.totalHalalas` exactly.
+5. No duplicate `methodId`.
+6. Non-cash methods: `tenderedHalalas` absent/null.
+7. Cash: `tenderedHalalas` (if present) ≥ `amountHalalas`. Change auto-computed.
+
+Transaction writes:
+1. `order_payments` rows (snapshot `method_title`)
+2. Updates order to `paid`
+3. `order_events` `paid` with payments breakdown
+4. `order_events` `receipt_print_enqueued` with `kickDrawer: true` only if any cash payment `amountHalalas > 0`
+
+### Cash Drawer Kick
+
+`kickDrawer: true` only when a cash payment line has `amountHalalas > 0`. Card-only payments do not open the cash drawer. Previously, every pay always kicked the drawer.
+
+### `order_payments` (Immutable Ledger)
+
+`UNIQUE(order_id, method_id)` — at most one payment line per method per order. No `updated_at`/`updated_by` — insert-only immutable.
+
+### Reports
+
+- `paymentTotals` is an array of `{ methodId, methodTitle, totalHalalas }`, aggregated from `order_payments` via JOIN with `orders` filtered by `day_opening_id` and `status = 'paid'`. GROUP BY `methodId` only.
+- Expected cash = `openingCashHalalas + SUM(amountHalalas WHERE methodId = 'cash')` (not total sales).
+
 ## Endpoint Summary
 
 | Endpoint                                | Permission          |   POS SPA    | Android Tablet |
@@ -340,7 +391,7 @@ Response: { success: true, refundId: number }
 | `POST /orders/:id/items`                | `update_order`      |     Yes      |      Yes       |
 | `PATCH /orders/:orderId/items/:itemId`  | `update_order`      |     Yes      |      Yes       |
 | `DELETE /orders/:orderId/items/:itemId` | `delete_order_item` |     Yes      |      Yes       |
-| `POST /orders/:id/pay`                  | `pay_order`         |   **Yes**    |     **No**     |
+| `POST /orders/:id/pay`                  | `pay_order`         |   **Yes**    |     **No**     | Requires `{ payments: [{ methodId, amountHalalas, tenderedHalalas? }] }` body |
 | `POST /orders/:id/refund`               | `refund_order`      |   **Yes**    |     **No**     |
 | `GET /orders/:id/refunds`               | none                |     Yes      |       No       |
 | `POST /orders/:id/void`                 | `void_order`        |   **Yes**    |     **No**     |
@@ -382,7 +433,10 @@ Response: { success: true, refundId: number }
 | `OrderEventsService`                   | Hash-chain management, event creation, chain verification, `kitchen_printed_qty` derivation.  |
 | `order_refunds` table                  | Refund transaction headers.                                                                   |
 | `order_refund_items` table             | Individual items refunded per transaction.                                                    |
+| `payment_methods` table                | Catalog of payment methods (cash, card, mada, etc.). Soft-delete via `enabled` flag. Slugs as TEXT PKs. |
+| `order_payments` table                 | Immutable append-only payment ledger. One row per (order_id, method_id). Snapshots method_title. |
 | `pay_order` permission on `user_roles` | New permission for payment operations (was guarded by `create_order`).                        |
+| `PaymentMethodsModule`                 | CRUD for payment method catalog (admin only). Slugs generated from title, cash method locked.  |
 
 ### Modified
 

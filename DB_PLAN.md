@@ -196,6 +196,35 @@ One row per business day. Orders belong to the `day_openings` row that was
 | created_at / updated_at | int not null            |                                                    |
 | created_by / updated_by | int FK → users, null    |                                                    |
 
+## payment_methods
+
+| col                     | type                         | notes                                  |
+| ----------------------- | ---------------------------- | -------------------------------------- |
+| id                      | text PK                      | immutable slug (e.g. "cash", "card")   |
+| title                   | text not null                | display name                           |
+| enabled                 | int bool not null, default 1 | soft-disable (0 = hidden)              |
+| sort_order              | int not null, default 0      | display order in pay modal             |
+| created_at / updated_at | int not null                 |                                        |
+| created_by / updated_by | int FK → users               |                                        |
+
+## order_payments
+
+| col               | type                          | notes                                      |
+| ----------------- | ----------------------------- | ------------------------------------------ |
+| id                | int PK autoincrement          |                                            |
+| order_id          | int FK → orders not null      |                                            |
+| method_id         | text FK → payment_methods not null |                                      |
+| method_title      | text not null                 | snapshot of method title at pay time       |
+| amount_halalas    | int not null                  | applied portion of order total (VAT-incl.) |
+| tendered_halalas  | int nullable                  | cash only: what customer handed over       |
+| change_halalas    | int nullable                  | cash only: auto = tendered - amount        |
+| created_at        | int not null                  |                                            |
+| created_by        | int FK → users                |                                            |
+
+- **UNIQUE(order_id, method_id)** — at most one row per method per order.
+- **No updated_at/updated_by** — insert-only immutable ledger.
+- `method_title` snapshots at pay time for audit stability.
+
 ## settings
 
 | col   | type          | notes                                                                                                             |
@@ -207,13 +236,11 @@ One row per business day. Orders belong to the `day_openings` row that was
 
 - **Modifiers** (extras, size variants) — add later as `item_modifiers` +
   `order_item_modifiers` once the core flow is stable.
-- **Payments table** — initially payment is a status change on the order; split
-  into a `payments` table when multiple tenders/partials are needed.
 
 ## Reports (derived, no extra tables)
 
-All reports are queries over `orders`, `order_items`, `zatca_invoices` and
-`day_openings`, scoped by `day_opening_id` / business date:
+All reports are queries over `orders`, `order_items`, `order_payments`,
+`zatca_invoices` and `day_openings`, scoped by `day_opening_id` / business date:
 
 - **X-report** — mid-day snapshot of the currently open day: sales, VAT,
   order count, by payment status
@@ -234,7 +261,9 @@ users 1──* orders (created_by/updated_by everywhere)
 day_openings 1──* orders
 tables 1──* orders
 orders 1──* order_items ──* items (loose, snapshots keep history)
-orders 1──* order_audit_log
+orders 1──* order_events (immutable ledger)
+orders 1──* order_payments (immutable ledger)
+payment_methods 1──* order_payments
 orders 1──1 zatca_invoices
 item_categories 1──* items
 printers 1──* item_categories (kitchen routing)
