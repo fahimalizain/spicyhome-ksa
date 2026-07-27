@@ -16,12 +16,12 @@ export type UpdateTableDto = Schemas['UpdateTableDto'];
 export type CreatePrinterDto = Schemas['CreatePrinterDto'];
 export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
-export type AddOrderItemDto = Schemas['AddOrderItemDto'];
-export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
 export type PayOrderDto = Schemas['PayOrderDto'];
 export type PaymentLineDto = Schemas['PaymentLineDto'];
 
-export type AddOrderItemResponse = Schemas['AddOrderItemResponse'];
+export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
+export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
+
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
 export type OrderRefundResponse = Schemas['OrderRefundResponse'];
@@ -259,14 +259,8 @@ export class SpicyHomeClient {
     create: (dto: CreateOrderDto) =>
       request<CreateOrderResponse>(this.config, 'POST', '/orders', dto),
 
-    addItem: (orderId: number, dto: AddOrderItemDto) =>
-      request<AddOrderItemResponse>(this.config, 'POST', `/orders/${orderId}/items`, dto),
-
-    updateItem: (orderId: number, itemId: number, dto: UpdateOrderItemDto) =>
-      request<SuccessResponse>(this.config, 'PATCH', `/orders/${orderId}/items/${itemId}`, dto),
-
-    removeItem: (orderId: number, itemId: number) =>
-      request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
+    syncItems: (orderId: number, dto: SyncOrderItemsDto) =>
+      request<OrderResponse>(this.config, 'PUT', `/orders/${orderId}/items/sync`, dto),
 
     pay: (orderId: number, dto: PayOrderDto) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),

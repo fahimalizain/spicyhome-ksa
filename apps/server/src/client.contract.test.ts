@@ -197,13 +197,28 @@ describe('Client contract test', () => {
     orderId = res.id;
   });
 
-  it('adds item to order', async () => {
-    const res: any = await client.orders.addItem(orderId, {
-      itemId,
-      qty: 2,
+  it('syncs items to order via bulk sync', async () => {
+    // Get order to know its updatedAt
+    const getRes: any = await client.orders.get(orderId);
+    const baseUpdatedAt = getRes.updatedAt;
+
+    const syncRes = await fetch(`${baseUrl}/orders/${orderId}/items/sync`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        baseUpdatedAt,
+        items: [{ itemId, qty: 2 }],
+      }),
     });
-    expect(res.success).toBe(true);
-    expect(res.orderItemId).toBeGreaterThan(0);
+    expect(syncRes.status).toBe(200);
+    const data = await syncRes.json();
+    expect(data.items).toBeDefined();
+    expect(data.items.length).toBe(1);
+    expect(data.items[0].itemName).toBe('Zinger Burger');
+    expect(data.items[0].qty).toBe(2);
   });
 
   it('gets order with items', async () => {

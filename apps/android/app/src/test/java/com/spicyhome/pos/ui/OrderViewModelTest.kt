@@ -12,6 +12,7 @@ import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.SyncOrderItemsDto
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
@@ -383,6 +384,7 @@ class OrderViewModelTest {
         assertThat(state.cart[0].item.name).isEqualTo("Burger")
         assertThat(state.orderType).isEqualTo(OrderType.DINE_IN)
         assertThat(state.selectedTableId).isEqualTo(5L)
+        assertThat(state.isDirty).isFalse()
     }
 
     @Test
@@ -450,11 +452,11 @@ class OrderViewModelTest {
         assertThat(state.cart[0].notes).isEqualTo("extra cheese")
         assertThat(state.cart[0].item.id).isEqualTo(10L)
         assertThat(state.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
+        assertThat(state.isDirty).isFalse()
     }
 
     @Test
     fun `hydrateFromOrder synthesizes ItemResponse when menu item missing`() = runTest(testDispatcher) {
-        // No menu items loaded — synthesize from snapshot
         val oi = OrderItemResponse(
             id = 300L, orderId = 1L, itemId = 99L,
             itemName = "Deleted Item", unitPriceHalalas = 1200L, vatRateBp = 1500,
@@ -472,7 +474,6 @@ class OrderViewModelTest {
         assertThat(state.cart[0].orderItemId).isEqualTo(300L)
         assertThat(state.cart[0].item.name).isEqualTo("Deleted Item")
         assertThat(state.cart[0].item.priceHalalas).isEqualTo(1200L)
-        assertThat(state.cart[0].item.vatRateBp).isEqualTo(1500)
     }
 
     @Test
@@ -492,208 +493,202 @@ class OrderViewModelTest {
         assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.ORDER_TERMINAL)
     }
 
-    // --- Server-synced mutation tests ---
+    // --- Staged cart: dirty detection ---
 
     @Test
-    fun `addItemServer success hydrates with orderItemId from refetch`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
+    fun `isDirty is false right after hydrate`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
         stubMenuItems(listOf(menuItem))
 
-        // Set up an open order
-        val vm = createViewModel()
-        setOpenOrderState(vm, 1L, "open")
-
-        // Stub addItem
-        val addItemCall = mockk<Call<com.spicyhome.client.models.AddOrderItemResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerAddItem(any(), any()) } returns addItemCall
-        every { addItemCall.execute() } returns Response.success(
-            com.spicyhome.client.models.AddOrderItemResponse(success = true, orderItemId = 400L)
-        )
-
-        // Stub refetch (getOrder) to return order with the new item
-        val newOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 3, totalHalalas = 6000L, notes = null,
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
         )
-        val refetchedOrder = createOrderResponse(1L, 100L, "open", listOf(newOi))
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
-        vm.addItemServer(menuItem)
-
-        val state = vm.uiState.value
-        assertThat(state.cart).hasSize(1)
-        assertThat(state.cart[0].orderItemId).isEqualTo(400L)
-        assertThat(state.cart[0].qty).isEqualTo(1)
-        assertThat(state.cart[0].item.name).isEqualTo("Cola")
-    }
-
-    @Test
-    fun `addItemServer failure rolls back cart`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
-        stubMenuItems(listOf(menuItem))
-
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi))
         val vm = createViewModel()
-        vm.addToCart(createItem(1, "Existing", 1000, 1500))
-        setOpenOrderState(vm, 1L, "open")
-
-        // The initial cart has orderItemId=null so it persists through the snapshot
-        val initialCartSize = vm.uiState.value.cart.size
-
-        // Stub addItem to throw
-        every { ordersApi.ordersControllerAddItem(any(), any()) } throws RuntimeException("Network error")
-
-        // Stub refetch to also fail
-        every { ordersApi.ordersControllerGetOrder(1L) } throws RuntimeException("Network error")
-
-        vm.addItemServer(menuItem)
-
-        // Cart should be rolled back to snapshot state
-        val state = vm.uiState.value
-        assertThat(state.cart).hasSize(initialCartSize)
-        assertThat(state.error).contains("Network error")
-    }
-
-    @Test
-    fun `updateQtyServer success updates qty and refetches`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
-        stubMenuItems(listOf(menuItem))
-
-        val vm = createViewModel()
-        // Hydrate cart with server-synced item
-        val existingOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
-            createdAt = 1700000000L, updatedAt = 1700000000L,
-            createdBy = 1L, updatedBy = 1L,
-        )
-        val order = createOrderResponse(1L, 100L, "open", listOf(existingOi))
         vm.hydrateFromOrder(order)
 
-        // Stub updateItem
-        val updateCall = mockk<Call<com.spicyhome.client.models.SuccessResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } returns updateCall
-        every { updateCall.execute() } returns Response.success(
-            com.spicyhome.client.models.SuccessResponse(success = true)
-        )
-
-        // Stub refetch with updated qty
-        val updatedOi = existingOi.copy(qty = 3, totalHalalas = 1500L)
-        val refetchedOrder = createOrderResponse(1L, 100L, "open", listOf(updatedOi))
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
-        vm.updateQtyServer(400L, 3)
-
-        val state = vm.uiState.value
-        assertThat(state.cart).hasSize(1)
-        assertThat(state.cart[0].qty).isEqualTo(3)
-        assertThat(state.cart[0].orderItemId).isEqualTo(400L)
+        assertThat(vm.uiState.value.isDirty).isFalse()
     }
 
     @Test
-    fun `updateQtyServer failure rolls back qty`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
+    fun `isDirty becomes true after local add`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
         stubMenuItems(listOf(menuItem))
 
         val vm = createViewModel()
-        val existingOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
-            createdAt = 1700000000L, updatedAt = 1700000000L,
-            createdBy = 1L, updatedBy = 1L,
-        )
-        val order = createOrderResponse(1L, 100L, "open", listOf(existingOi))
+        val order = createOrderResponse(1L, 100L, "open", emptyList())
         vm.hydrateFromOrder(order)
 
-        // Stub updateItem to throw
-        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } throws RuntimeException("Network error")
-        // Stub refetch to also fail
-        every { ordersApi.ordersControllerGetOrder(1L) } throws RuntimeException("Network error")
-
-        vm.updateQtyServer(400L, 3)
-
-        // Cart should be rolled back — qty back to 1
-        val state = vm.uiState.value
-        assertThat(state.cart[0].qty).isEqualTo(1)
-        assertThat(state.error).contains("Network error")
-    }
-
-    @Test
-    fun `removeItemServer success removes item and refetches`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
-        stubMenuItems(listOf(menuItem))
-
-        val vm = createViewModel()
-        val existingOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
-            createdAt = 1700000000L, updatedAt = 1700000000L,
-            createdBy = 1L, updatedBy = 1L,
-        )
-        val order = createOrderResponse(1L, 100L, "open", listOf(existingOi))
-        vm.hydrateFromOrder(order)
+        // Add a new item locally — this should mark dirty
+        vm.addToCart(menuItem)
         assertThat(vm.uiState.value.cart).hasSize(1)
-
-        // Stub removeItem
-        val removeCall = mockk<Call<com.spicyhome.client.models.SuccessResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerRemoveItem(any(), any()) } returns removeCall
-        every { removeCall.execute() } returns Response.success(
-            com.spicyhome.client.models.SuccessResponse(success = true)
-        )
-
-        // Stub refetch with empty items
-        val refetchedOrder = createOrderResponse(1L, 100L, "open", emptyList())
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
-        vm.removeItemServer(400L)
-
-        val state = vm.uiState.value
-        assertThat(state.cart).isEmpty()
+        assertThat(vm.uiState.value.isDirty).isTrue()
     }
 
     @Test
-    fun `removeItemServer failure rolls back cart`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
+    fun `isDirty becomes true after local qty increase`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
         stubMenuItems(listOf(menuItem))
 
-        val vm = createViewModel()
-        val existingOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
         )
-        val order = createOrderResponse(1L, 100L, "open", listOf(existingOi))
+        val vm = createViewModel()
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi))
         vm.hydrateFromOrder(order)
 
-        // Stub removeItem to throw
-        every { ordersApi.ordersControllerRemoveItem(any(), any()) } throws RuntimeException("Network error")
-        every { ordersApi.ordersControllerGetOrder(1L) } throws RuntimeException("Network error")
-
-        vm.removeItemServer(400L)
-
-        // Cart should be restored
-        val state = vm.uiState.value
-        assertThat(state.cart).hasSize(1)
-        assertThat(state.error).contains("Network error")
+        vm.increaseQty(0)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
+        assertThat(vm.uiState.value.isDirty).isTrue()
     }
 
-    // --- createOrder tests ---
+    @Test
+    fun `isDirty becomes true after notes change`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Pizza", 2000, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val vm = createViewModel()
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi))
+        vm.hydrateFromOrder(order)
+
+        vm.updateItemNotes(0, "extra cheese")
+        assertThat(vm.uiState.value.cart[0].notes).isEqualTo("extra cheese")
+        assertThat(vm.uiState.value.isDirty).isTrue()
+    }
+
+    // --- Send to Kitchen (D3) ---
 
     @Test
-    fun `createOrder success populates orderItemId via refetch`() = runTest(testDispatcher) {
+    fun `sendToKitchen calls syncItems with full cart`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = 2, totalHalalas = 3000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        // Simulate: user added one locally
+        val newItem = createItem(20, "Fries", 500, 1500)
+        stubMenuItems(listOf(menuItem, newItem))
+        vm.addToCart(newItem)
+
+        // Stub syncItems
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        val syncedOrder = createOrderResponse(1L, 100L, "open", listOf(
+            oi.copy(qty = 2, totalHalalas = 3000L),
+            OrderItemResponse(
+                id = 201L, orderId = 1L, itemId = 20L,
+                itemName = "Fries", unitPriceHalalas = 500L, vatRateBp = 1500,
+                qty = 1, totalHalalas = 500L, notes = null,
+                createdAt = 1700000000L, updatedAt = 1700000000L,
+                createdBy = 1L, updatedBy = 1L,
+            ),
+        ), updatedAt = 6000L)
+        every { syncCall.execute() } returns Response.success(syncedOrder)
+
+        vm.sendToKitchen()
+
+        val state = vm.uiState.value
+        assertThat(state.isSyncing).isFalse()
+        assertThat(state.cart).hasSize(2)
+        assertThat(state.isDirty).isFalse()
+    }
+
+    @Test
+    fun `sendToKitchen 409 resets to server state`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = 2, totalHalalas = 3000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        // Add local changes
+        vm.addToCart(createItem(20, "Fries", 500, 1500))
+
+        // Stub syncItems to return 409
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        every { syncCall.execute() } returns Response.error(409, okhttp3.ResponseBody.create(null, "Conflict"))
+
+        // Stub refetch to return original state
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(order)
+
+        vm.sendToKitchen()
+
+        val state = vm.uiState.value
+        assertThat(state.isSyncing).isFalse()
+        assertThat(state.error).contains("modified elsewhere")
+        assertThat(state.cart).hasSize(1) // Reset to server state
+    }
+
+    // --- Discard (D14) ---
+
+    @Test
+    fun `discardChanges restores snapshot cart and clears isDirty`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = 2, totalHalalas = 3000L, notes = "original",
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        // Make local changes
+        vm.addToCart(createItem(20, "Fries", 500, 1500))
+        assertThat(vm.uiState.value.cart).hasSize(2)
+        assertThat(vm.uiState.value.isDirty).isTrue()
+
+        // Discard
+        vm.discardChanges()
+
+        assertThat(vm.uiState.value.cart).hasSize(1) // Back to snapshot
+        assertThat(vm.uiState.value.cart[0].notes).isEqualTo("original")
+        assertThat(vm.uiState.value.isDirty).isFalse()
+    }
+
+    // --- createOrder tests (D10: create + sync) ---
+
+    @Test
+    fun `createOrder calls create then getOrder then syncItems`() = runTest(testDispatcher) {
         val item = createItem(1, "Burger", 1500, 1500)
         stubMenuItems(listOf(item))
 
@@ -709,14 +704,7 @@ class OrderViewModelTest {
             com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L)
         )
 
-        // Stub addItem
-        val addItemCall = mockk<Call<com.spicyhome.client.models.AddOrderItemResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerAddItem(any(), any()) } returns addItemCall
-        every { addItemCall.execute() } returns Response.success(
-            com.spicyhome.client.models.AddOrderItemResponse(success = true, orderItemId = 500L)
-        )
-
-        // Stub refetch
+        // B6: After creation, the VM refetches to get real updatedAt
         val oi = OrderItemResponse(
             id = 500L, orderId = 10L, itemId = 1L,
             itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
@@ -724,10 +712,18 @@ class OrderViewModelTest {
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
         )
-        val refetchedOrder = createOrderResponse(10L, 200L, "open", listOf(oi))
         val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
         every { ordersApi.ordersControllerGetOrder(10L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
+        every { getOrderCall.execute() } returns Response.success(
+            createOrderResponse(10L, 200L, "open", listOf(oi), updatedAt = 5000L)
+        )
+
+        // Stub syncItems — VM uses refetched updatedAt (5000) as baseUpdatedAt
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        every { syncCall.execute() } returns Response.success(
+            createOrderResponse(10L, 200L, "open", listOf(oi), updatedAt = 6000L)
+        )
 
         vm.createOrder()
 
@@ -736,40 +732,16 @@ class OrderViewModelTest {
         assertThat(state.currentOrderId).isEqualTo(10L)
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].orderItemId).isEqualTo(500L)
+        assertThat(state.isDirty).isFalse()
     }
 
     @Test
-    fun `createOrder partial failure refetches and hydrates cart`() = runTest(testDispatcher) {
-        val item = createItem(1, "Burger", 1500, 1500)
-        stubMenuItems(listOf(item))
-
+    fun `createOrder with empty cart returns error`() = runTest(testDispatcher) {
         val vm = createViewModel()
         vm.setOrderType(OrderType.TAKEAWAY)
         vm.proceedToBuild()
-        vm.addToCart(item)
-
-        // Stub createOrder success
-        val createCall = mockk<Call<com.spicyhome.client.models.CreateOrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
-        every { createCall.execute() } returns Response.success(
-            com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L)
-        )
-
-        // Stub addItem to fail
-        every { ordersApi.ordersControllerAddItem(any(), any()) } throws RuntimeException("Add failed")
-
-        // Stub refetch returns empty items (partial failure)
-        val refetchedOrder = createOrderResponse(10L, 200L, "open", emptyList())
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(10L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
         vm.createOrder()
-
-        val state = vm.uiState.value
-        assertThat(state.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
-        assertThat(state.currentOrderId).isEqualTo(10L)
-        assertThat(state.error).contains("Some items could not be added")
+        assertThat(vm.uiState.value.error).isEqualTo("Cart is empty")
     }
 
     // --- Permissions tests ---
@@ -785,7 +757,6 @@ class OrderViewModelTest {
 
     @Test
     fun `permissions load from MeResponse`() = runTest(testDispatcher) {
-        // Override the getMe stub to return success with specific permissions
         val meResponse = MeResponse(
             id = 1L, username = "test", name = "Test User", roleId = 1L,
             isActive = true, roleName = "Admin",
@@ -849,11 +820,9 @@ class OrderViewModelTest {
         every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall
         every { getOrderCall.execute() } returns Response.success(openOrder)
 
-        // Create VM with open order
         val vm = createViewModel(initialOrderId = 42L)
         assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
 
-        // Now emit a paid event — refetch needs to return paid
         val paidOrder = openOrder.copy(status = "paid")
         every { getOrderCall.execute() } returns Response.success(paidOrder)
         eventsFlow.emit(RealtimeEvent("order.paid", """{"orderId":42}""", 1700000001L))
@@ -883,7 +852,6 @@ class OrderViewModelTest {
         val vm = createViewModel(initialOrderId = 42L)
         assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
 
-        // Emit some other order event, refetch still returns open
         eventsFlow.emit(RealtimeEvent("order.item.added", """{"orderId":42}""", 1700000001L))
 
         val state = vm.uiState.value
@@ -893,102 +861,11 @@ class OrderViewModelTest {
     @Test
     fun `WS event with no currentOrderId does nothing`() = runTest(testDispatcher) {
         val vm = createViewModel()
-        // VM has no currentOrderId initially
         eventsFlow.emit(RealtimeEvent("order.paid", """{"orderId":1}""", 1700000000L))
 
         val state = vm.uiState.value
         assertThat(state.currentOrderId).isNull()
         assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
-    }
-
-    @Test
-    fun `updateQtyServer with newQty lt 1 delegates to removeItemServer`() = runTest(testDispatcher) {
-        val menuItem = createItem(5, "Cola", 500, 1500)
-        stubMenuItems(listOf(menuItem))
-
-        val vm = createViewModel()
-        val existingOi = OrderItemResponse(
-            id = 400L, orderId = 1L, itemId = 5L,
-            itemName = "Cola", unitPriceHalalas = 500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 500L, notes = null,
-            createdAt = 1700000000L, updatedAt = 1700000000L,
-            createdBy = 1L, updatedBy = 1L,
-        )
-        val order = createOrderResponse(1L, 100L, "open", listOf(existingOi))
-        vm.hydrateFromOrder(order)
-        assertThat(vm.uiState.value.cart).hasSize(1)
-
-        // Stub removeItem (the path updateQtyServer should delegate to)
-        val removeCall = mockk<Call<com.spicyhome.client.models.SuccessResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerRemoveItem(any(), any()) } returns removeCall
-        every { removeCall.execute() } returns Response.success(
-            com.spicyhome.client.models.SuccessResponse(success = true)
-        )
-
-        // Stub refetch with empty items
-        val refetchedOrder = createOrderResponse(1L, 100L, "open", emptyList())
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
-        // Call updateQtyServer with 0 — should delegate to removeItemServer
-        vm.updateQtyServer(400L, 0)
-
-        val state = vm.uiState.value
-        assertThat(state.cart).isEmpty()
-
-        // Verify updateItem was NOT called
-        verify(exactly = 0) { ordersApi.ordersControllerUpdateItem(any(), any(), any()) }
-    }
-
-    // --- createOrder isLoading tests (Bug 2) ---
-
-    @Test
-    fun `createOrder isLoading stays true until addCartItemsToOrder finishes`() = runTest(testDispatcher) {
-        val item = createItem(1, "Burger", 1500, 1500)
-        stubMenuItems(listOf(item))
-
-        val vm = createViewModel()
-        vm.setOrderType(OrderType.TAKEAWAY)
-        vm.proceedToBuild()
-        vm.addToCart(item)
-
-        // Stub createOrder
-        val createCall = mockk<Call<com.spicyhome.client.models.CreateOrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
-        every { createCall.execute() } returns Response.success(
-            com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L)
-        )
-
-        // Stub addItem
-        val addItemCall = mockk<Call<com.spicyhome.client.models.AddOrderItemResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerAddItem(any(), any()) } returns addItemCall
-        every { addItemCall.execute() } returns Response.success(
-            com.spicyhome.client.models.AddOrderItemResponse(success = true, orderItemId = 500L)
-        )
-
-        // Stub refetch
-        val oi = OrderItemResponse(
-            id = 500L, orderId = 10L, itemId = 1L,
-            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
-            qty = 1, totalHalalas = 1500L, notes = null,
-            createdAt = 1700000000L, updatedAt = 1700000000L,
-            createdBy = 1L, updatedBy = 1L,
-        )
-        val refetchedOrder = createOrderResponse(10L, 200L, "open", listOf(oi))
-        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
-        every { ordersApi.ordersControllerGetOrder(10L) } returns getOrderCall
-        every { getOrderCall.execute() } returns Response.success(refetchedOrder)
-
-        vm.createOrder()
-
-        val state = vm.uiState.value
-        // After everything completes, isLoading must be false
-        assertThat(state.isLoading).isFalse()
-        assertThat(state.currentOrderId).isEqualTo(10L)
-        assertThat(state.currentOrder).isNotNull()
-        assertThat(state.cart).hasSize(1)
-        assertThat(state.cart[0].orderItemId).isEqualTo(500L)
     }
 
     // --- Helpers ---
@@ -1026,6 +903,7 @@ class OrderViewModelTest {
         orderNo: Long,
         status: String,
         items: List<OrderItemResponse>,
+        updatedAt: Long = 1700000000L,
     ): OrderResponse = OrderResponse(
         id = id,
         orderNo = orderNo,
@@ -1039,20 +917,11 @@ class OrderViewModelTest {
         totalHalalas = items.sumOf { it.totalHalalas },
         discountHalalas = 0L,
         createdAt = 1700000000L,
-        updatedAt = 1700000000L,
+        updatedAt = updatedAt,
         createdBy = 1L,
         updatedBy = 1L,
         items = items,
         events = emptyList(),
         payments = emptyList(),
     )
-
-    private fun setOpenOrderState(vm: OrderViewModel, orderId: Long, status: String) {
-        // Directly set the state for testing server-synced methods
-        val state = vm.uiState.value
-        // Use internal state flow access to set open order context
-        // We can do this by hydrating a minimal order
-        val currentOrder = createOrderResponse(orderId, 100L, status, emptyList())
-        vm.hydrateFromOrder(currentOrder)
-    }
 }

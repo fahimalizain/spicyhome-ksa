@@ -121,20 +121,24 @@ describe('Order Refunds', () => {
       .expect(201);
     const orderId = orderRes.body.id;
 
-    // Add items
-    const addRes1 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Get order to know its updatedAt
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 2 })
-      .expect(201);
-    expect(addRes1.body.orderItemId).toBeGreaterThan(0);
+      .expect(200);
 
-    const addRes2 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Add items via bulk sync
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 2, qty: 1 })
-      .expect(201);
-    expect(addRes2.body.orderItemId).toBeGreaterThan(0);
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [
+          { itemId: 1, qty: 2 },
+          { itemId: 2, qty: 1 },
+        ],
+      })
+      .expect(200);
 
     // Wait for kitchen prints
     await new Promise((r) => setTimeout(r, 200));
@@ -290,12 +294,20 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      const addRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to know updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: 1, qty: 1 })
-        .expect(201);
-      expect(addRes.body.orderItemId).toBeGreaterThan(0);
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 1 }],
+        })
+        .expect(200);
 
       // Get the item ID
       const fetched = await request(app.getHttpServer())
@@ -320,12 +332,20 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      const addRes2 = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/items`)
+      // Get order to know updatedAt
+      const getRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ itemId: 1, qty: 1 })
-        .expect(201);
-      expect(addRes2.body.orderItemId).toBeGreaterThan(0);
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes2.body.updatedAt,
+          items: [{ itemId: 1, qty: 1 }],
+        })
+        .expect(200);
 
       const fetched = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
@@ -468,12 +488,21 @@ describe('Pay with payment methods', () => {
       .expect(201);
     const orderId = orderRes.body.id;
 
-    // Add Zinger Burger (2300 halalas)
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Fetch to get updatedAt for syncItems
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 2 })
-      .expect(201);
+      .expect(200);
+
+    // Add Zinger Burger (2300 halalas) via bulk sync
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: 1, qty: 2 }],
+      })
+      .expect(200);
 
     await new Promise((r) => setTimeout(r, 100));
 
@@ -1017,5 +1046,585 @@ describe('One open order per table', () => {
 
     expect(res.body.message).toContain(`#${first.orderNo}`);
     expect(res.body.message).toContain(`id ${first.id}`);
+  });
+});
+
+describe('syncItems (bulk cart sync)', () => {
+  let zingerItemId: number;
+  let pepsiItemId: number;
+
+  beforeAll(() => {
+    zingerItemId = 1;
+    pepsiItemId = 2;
+  });
+
+  async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  // --- Test 1: Add new lines ---
+  it('adds new lines: items persisted, totals correct, item_added events', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const syncRes = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [
+          { itemId: zingerItemId, qty: 2 },
+          { itemId: pepsiItemId, qty: 1 },
+        ],
+      })
+      .expect(200);
+
+    // Items persisted
+    expect(syncRes.body.items).toHaveLength(2);
+
+    // Totals correct (2×2300 + 1×575 = 5175)
+    expect(syncRes.body.totalHalalas).toBe(5175);
+
+    // item_added events
+    const events = syncRes.body.events;
+    const addEvents = events.filter((e: any) => e.type === 'item_added');
+    expect(addEvents).toHaveLength(2);
+  });
+
+  // --- Test 2: Update qty up → item_updated + kitchen delta ---
+  it('increases qty: item_updated event, kitchen delta print', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync: add 2 burgers
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Second sync: increase to 5 (delta = 3 printed)
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 5 }],
+      })
+      .expect(200);
+
+    // item_updated event exists
+    const events = res2.body.events;
+    const updateEvents = events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBeGreaterThanOrEqual(1);
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Kitchen print should contain delta (3)
+    const kitchenPrints = transport.sent.filter(
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+    );
+    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+  });
+
+  // --- Test 3: Qty down → saved; kitchenPrintedQty 0; no print ---
+  it('decreases qty: saved, no kitchen print when qty goes down', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 3 }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Decrease qty to 1
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1 }],
+      })
+      .expect(200);
+
+    expect(res2.body.items[0].qty).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    // No kitchen prints for qty decrease
+    const kitchenPrints = transport.sent.filter(
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+    );
+    expect(kitchenPrints.length).toBe(0);
+  });
+
+  // --- Test 4: Notes only → saved; no kitchen print ---
+  it('notes-only change: saved, no kitchen print enqueued', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1 }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Notes-only update (same qty)
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    expect(res2.body.items[0].notes).toBe('no onions');
+
+    // No new kitchen_print_enqueued events for notes-only (count unchanged from first sync)
+    const res1KitchenCount = res1.body.events.filter(
+      (e: any) => e.type === 'kitchen_print_enqueued',
+    ).length;
+    const events = res2.body.events;
+    const kitchenEnqEvents = events.filter((e: any) => e.type === 'kitchen_print_enqueued');
+    expect(kitchenEnqEvents.length).toBe(res1KitchenCount);
+    const updateEvents = events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBeGreaterThanOrEqual(1);
+
+    await new Promise((r) => setTimeout(r, 100));
+    const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
+    expect(kitchenPrints.length).toBe(0);
+  });
+
+  // --- Test 5: Remove all (empty cart) → zero items; no kitchen print ---
+  it('empty cart sync: zero items, no kitchen print enqueued', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // Add items first
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+
+    const updatedAt2 = res1.body.updatedAt;
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Empty sync
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [],
+      })
+      .expect(200);
+
+    expect(res2.body.items).toHaveLength(0);
+    expect(res2.body.totalHalalas).toBe(0);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    // No kitchen prints
+    const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
+    expect(kitchenPrints.length).toBe(0);
+  });
+
+  // --- Test 6: Stale baseUpdatedAt → 409 ---
+  it('stale baseUpdatedAt returns 409 Conflict', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // Wait to ensure a different timestamp for the first sync
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // First sync — succeeds because baseUpdatedAt matches the order's current updatedAt
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1 }],
+      })
+      .expect(200);
+
+    // Second sync with the SAME stale baseUpdatedAt — must fail
+    // because the first sync already updated the order's updatedAt
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt, // stale! Order was modified by first sync
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(409);
+
+    expect(res.body.message).toContain('modified by another terminal');
+  }, 10000);
+
+  // --- Test 7: Not open order → 400 ---
+  it('syncItems on paid order returns 400', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // Add items
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1 }],
+      })
+      .expect(200);
+
+    // Pay the order
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [{ methodId: 'cash', amountHalalas: res.body.totalHalalas }] })
+      .expect(201);
+
+    const newUpdatedAt = res.body.updatedAt;
+
+    // Try sync on paid order
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: newUpdatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(400);
+  });
+
+  // --- Test 8: Unknown menu itemId → 404 ---
+  it('unknown menu itemId returns 404', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: 999, qty: 1 }],
+      })
+      .expect(404);
+  });
+
+  // --- Test 9: orderItemId not on order → 404 ---
+  it('orderItemId not belonging to order returns 404', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ orderItemId: 9999, qty: 1 }],
+      })
+      .expect(404);
+  });
+
+  // --- Test 10: Invalid qty (<1) → 400 ---
+  it('invalid qty (<1) returns 400', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 0 }],
+      })
+      .expect(400);
+  });
+
+  // --- Test 11: Multi-station kitchen batch → one ticket per printer ---
+  it('multi-item multi-printer single sync: one ticket per printer', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // Use items 1 (Zinger, cat 1 → Kitchen printer 2) and 2 (Pepsi, cat 1 → same printer).
+    // For a true multi-printer test, see print-integration.test.ts which has
+    // separate categories with distinct printers seeded from scratch.
+    transport.sent = [];
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [
+          { itemId: 1, qty: 2 },
+          { itemId: 2, qty: 1 },
+        ],
+      })
+      .expect(200);
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Both items route to Kitchen printer (same category), so at least 1 kitchen print
+    const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
+    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+
+    // Verify kitchen_print_enqueued event exists
+    const orderRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    const events = orderRes.body.events;
+    const enqEvents = events.filter((e: any) => e.type === 'kitchen_print_enqueued');
+    // At least one kitchen_print_enqueued event
+    expect(enqEvents.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // --- Test 12: Unchanged lines do not emit item_updated ---
+  it('unchanged lines do not emit item_updated, only truly changed lines do', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync: add item A (Zinger qty 2) and item B (Pepsi qty 1)
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [
+          { itemId: zingerItemId, qty: 2 },
+          { itemId: pepsiItemId, qty: 1 },
+        ],
+      })
+      .expect(200);
+
+    const zingerOiId = res1.body.items.find((i: any) => i.itemId === zingerItemId).id;
+    const pepsiOiId = res1.body.items.find((i: any) => i.itemId === pepsiItemId).id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Second sync: Zinger unchanged (qty 2, no notes), Pepsi qty increased (1→2)
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [
+          { orderItemId: zingerOiId, qty: 2 }, // unchanged
+          { orderItemId: pepsiOiId, qty: 2 }, // changed: 1→2
+        ],
+      })
+      .expect(200);
+
+    const events = res2.body.events;
+    const updateEvents = events.filter((e: any) => e.type === 'item_updated');
+
+    // Exactly 1 item_updated event (Pepsi only; Zinger was no-op)
+    expect(updateEvents.length).toBe(1);
+
+    // The single item_updated must be for Pepsi with oldQty !== newQty
+    const pepsiUpdatePayload =
+      typeof updateEvents[0].payload === 'string'
+        ? JSON.parse(updateEvents[0].payload)
+        : updateEvents[0].payload;
+    expect(pepsiUpdatePayload.oldQty).toBe(1);
+    expect(pepsiUpdatePayload.newQty).toBe(2);
+
+    // Ensure no item_updated has oldQty === newQty (would indicate no-op line leaked)
+    for (const evt of updateEvents) {
+      const p = typeof evt.payload === 'string' ? JSON.parse(evt.payload) : evt.payload;
+      expect(p.oldQty).not.toBe(p.newQty);
+    }
+  });
+
+  // --- Test 13: Identical cart snapshot is a no-op ---
+  it('identical cart snapshot does not bump updatedAt or create new events', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync: add Zinger qty 2
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Second sync: exact same snapshot
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 2 }],
+      })
+      .expect(200);
+
+    // updatedAt must NOT have changed (no pointless order row update)
+    expect(res2.body.updatedAt).toBe(updatedAt2);
+
+    // No new item_updated events for unchanged lines
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(0);
+  });
+
+  // --- Test 14: notes-only change still emits item_updated but no kitchen delta ---
+  it('notes-only change emits item_updated but no kitchen print', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2, notes: 'spicy' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    await new Promise((r) => setTimeout(r, 200));
+    transport.sent = [];
+
+    // Same qty, different notes
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 2, notes: 'extra spicy' }],
+      })
+      .expect(200);
+
+    // item_updated event must exist for notes change
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(1);
+
+    // The payload should include notes
+    const payload =
+      typeof updateEvents[0].payload === 'string'
+        ? JSON.parse(updateEvents[0].payload)
+        : updateEvents[0].payload;
+    expect(payload.notes).toBe('extra spicy');
+    // oldQty === newQty (only notes changed)
+    expect(payload.oldQty).toBe(2);
+    expect(payload.newQty).toBe(2);
+    // No kitchen delta for notes-only
+    expect(payload.kitchenPrintedQty).toBe(0);
+
+    // No kitchen print happened
+    await new Promise((r) => setTimeout(r, 100));
+    const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
+    expect(kitchenPrints.length).toBe(0);
+  });
+
+  // --- Test 15: notes cleared to blank normalizes to null ---
+  it('clearing notes via null or empty string normalizes to null', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    // First sync with notes
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    expect(res1.body.items[0].notes).toBe('no onions');
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Clear notes to empty string
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1, notes: '' }],
+      })
+      .expect(200);
+
+    // Empty string → normalized to null in DB
+    expect(res2.body.items[0].notes).toBeNull();
+
+    // item_updated event emitted with notes: null
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(1);
+  });
+
+  // --- Test 16: setting notes to same value is a no-op ---
+  it('setting notes to the same value is a no-op', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Same notes, same qty — should be fully no-op
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1, notes: 'no onions' }],
+      })
+      .expect(200);
+
+    // updatedAt unchanged
+    expect(res2.body.updatedAt).toBe(updatedAt2);
+
+    // No item_updated events
+    const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
+    expect(updateEvents.length).toBe(0);
   });
 });

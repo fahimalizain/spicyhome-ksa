@@ -4,7 +4,6 @@ All URIs are relative to *http://localhost*
 
 | Method | HTTP request | Description |
 | ------------- | ------------- | ------------- |
-| [**ordersControllerAddItem**](OrdersApi.md#ordersControllerAddItem) | **POST** orders/{id}/items | Add an item to an order |
 | [**ordersControllerCreateOrder**](OrdersApi.md#ordersControllerCreateOrder) | **POST** orders | Create a new order |
 | [**ordersControllerGetOrder**](OrdersApi.md#ordersControllerGetOrder) | **GET** orders/{id} | Get order by ID with items and events |
 | [**ordersControllerGetOrderEvents**](OrdersApi.md#ordersControllerGetOrderEvents) | **GET** orders/{id}/events | Get the complete event chain for an order |
@@ -12,52 +11,11 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerListOrders**](OrdersApi.md#ordersControllerListOrders) | **GET** orders | List orders with optional filters |
 | [**ordersControllerPayOrder**](OrdersApi.md#ordersControllerPayOrder) | **POST** orders/{id}/pay | Mark order as paid with payment methods (open → paid) |
 | [**ordersControllerRefundOrder**](OrdersApi.md#ordersControllerRefundOrder) | **POST** orders/{id}/refund | Refund items on a paid order |
-| [**ordersControllerRemoveItem**](OrdersApi.md#ordersControllerRemoveItem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
 | [**ordersControllerReprintOrder**](OrdersApi.md#ordersControllerReprintOrder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
-| [**ordersControllerUpdateItem**](OrdersApi.md#ordersControllerUpdateItem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
+| [**ordersControllerSyncItems**](OrdersApi.md#ordersControllerSyncItems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
 | [**ordersControllerVerifyOrderChain**](OrdersApi.md#ordersControllerVerifyOrderChain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | [**ordersControllerVoidOrder**](OrdersApi.md#ordersControllerVoidOrder) | **POST** orders/{id}/void | Void an order (open → voided) |
 
-
-
-Add an item to an order
-
-### Example
-```kotlin
-// Import classes:
-//import com.spicyhome.client.*
-//import com.spicyhome.client.infrastructure.*
-//import com.spicyhome.client.models.*
-
-val apiClient = ApiClient()
-apiClient.setBearerToken("TOKEN")
-val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : kotlin.Long = 789 // kotlin.Long | 
-val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
-
-val result : AddOrderItemResponse = webService.ordersControllerAddItem(id, addOrderItemDto)
-```
-
-### Parameters
-| **id** | **kotlin.Long**|  | |
-| Name | Type | Description  | Notes |
-| ------------- | ------------- | ------------- | ------------- |
-| **addOrderItemDto** | [**AddOrderItemDto**](AddOrderItemDto.md)|  | |
-
-### Return type
-
-[**AddOrderItemResponse**](AddOrderItemResponse.md)
-
-### Authorization
-
-
-Configure bearer:
-    ApiClient().setBearerToken("TOKEN")
-
-### HTTP request headers
-
- - **Content-Type**: application/json
- - **Accept**: application/json
 
 
 Create a new order
@@ -332,46 +290,6 @@ Configure bearer:
  - **Accept**: application/json
 
 
-Remove an item from an order
-
-### Example
-```kotlin
-// Import classes:
-//import com.spicyhome.client.*
-//import com.spicyhome.client.infrastructure.*
-//import com.spicyhome.client.models.*
-
-val apiClient = ApiClient()
-apiClient.setBearerToken("TOKEN")
-val webService = apiClient.createWebservice(OrdersApi::class.java)
-val orderId : kotlin.Long = 789 // kotlin.Long | 
-val itemId : kotlin.Long = 789 // kotlin.Long | 
-
-val result : SuccessResponse = webService.ordersControllerRemoveItem(orderId, itemId)
-```
-
-### Parameters
-| **orderId** | **kotlin.Long**|  | |
-| Name | Type | Description  | Notes |
-| ------------- | ------------- | ------------- | ------------- |
-| **itemId** | **kotlin.Long**|  | |
-
-### Return type
-
-[**SuccessResponse**](SuccessResponse.md)
-
-### Authorization
-
-
-Configure bearer:
-    ApiClient().setBearerToken("TOKEN")
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
- - **Accept**: application/json
-
-
 Reprint receipt or kitchen ticket for an order
 
 ### Example
@@ -412,7 +330,7 @@ Configure bearer:
  - **Accept**: application/json
 
 
-Update an order item (qty or notes)
+Bulk sync cart items (add, update, remove) for an open order
 
 ### Example
 ```kotlin
@@ -425,22 +343,20 @@ val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
 val orderId : kotlin.Long = 789 // kotlin.Long | 
-val itemId : kotlin.Long = 789 // kotlin.Long | 
-val updateOrderItemDto : UpdateOrderItemDto =  // UpdateOrderItemDto | 
+val syncOrderItemsDto : SyncOrderItemsDto =  // SyncOrderItemsDto | 
 
-val result : SuccessResponse = webService.ordersControllerUpdateItem(orderId, itemId, updateOrderItemDto)
+val result : OrderResponse = webService.ordersControllerSyncItems(orderId, syncOrderItemsDto)
 ```
 
 ### Parameters
 | **orderId** | **kotlin.Long**|  | |
-| **itemId** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **updateOrderItemDto** | [**UpdateOrderItemDto**](UpdateOrderItemDto.md)|  | |
+| **syncOrderItemsDto** | [**SyncOrderItemsDto**](SyncOrderItemsDto.md)|  | |
 
 ### Return type
 
-[**SuccessResponse**](SuccessResponse.md)
+[**OrderResponse**](OrderResponse.md)
 
 ### Authorization
 

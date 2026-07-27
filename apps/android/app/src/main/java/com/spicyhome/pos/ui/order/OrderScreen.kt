@@ -193,13 +193,27 @@ private fun OrderEditingPanel(
     val isServerSynced = state.currentOrderId != null
     val isOpenOrder = isServerSynced && state.currentOrder?.status == "open"
 
+    // ── Local guard state for navigation ──
+    var showLeaveGuard by remember { mutableStateOf(false) }
+    var pendingNavAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // ── Wrapper that guards navigation when dirty ──
+    fun guardedNavigate(action: () -> Unit) {
+        if (state.isDirty == true && isOpenOrder) {
+            showLeaveGuard = true
+            pendingNavAction = action
+        } else {
+            action()
+        }
+    }
+
     Row(modifier = Modifier.fillMaxSize()) {
         // Left: categories + items
         Column(modifier = Modifier.weight(0.65f)) {
             TopBar(
                 title = if (isOpenOrder) "Order #${state.currentOrder?.orderNo ?: state.currentOrderId}" else "New Order",
-                onViewOrders = onViewOrders,
-                onViewTables = onViewTables,
+                onViewOrders = { guardedNavigate(onViewOrders) },
+                onViewTables = { guardedNavigate(onViewTables) },
             )
 
             // Category tabs
@@ -259,19 +273,8 @@ private fun OrderEditingPanel(
                         ItemCard(
                             item = item,
                             onClick = {
-                                if (isServerSynced) {
-                                    // D16 branching: merge qty if existing server-synced line
-                                    val existing = state.cart.find {
-                                        it.item.id == item.id && it.orderItemId != null
-                                    }
-                                    if (existing != null) {
-                                        viewModel.updateQtyServer(existing.orderItemId!!, existing.qty + 1)
-                                    } else {
-                                        viewModel.addItemServer(item)
-                                    }
-                                } else {
-                                    viewModel.addToCart(item)
-                                }
+                                // D6/D14: All cart mutations are local — never call server directly
+                                viewModel.addToCart(item)
                             },
                             enabled = !isServerSynced || state.permissions.updateOrder,
                         )
@@ -283,44 +286,58 @@ private fun OrderEditingPanel(
         // Right: cart panel
         UnifiedCartPanel(
             state = state,
-            isOpenOrder = isServerSynced,
+            isOpenOrder = isOpenOrder,
             onCreateOrder = { viewModel.createOrder() },
-            onDecrease = { index, cartItem ->
-                if (cartItem.orderItemId != null) {
-                    if (cartItem.qty <= 1) {
-                        viewModel.removeItemServer(cartItem.orderItemId!!)
-                    } else {
-                        viewModel.updateQtyServer(cartItem.orderItemId!!, cartItem.qty - 1)
-                    }
-                } else {
-                    viewModel.decreaseQty(index)
-                }
-            },
-            onIncrease = { index, cartItem ->
-                if (cartItem.orderItemId != null) {
-                    viewModel.updateQtyServer(cartItem.orderItemId!!, cartItem.qty + 1)
-                } else {
-                    viewModel.increaseQty(index)
-                }
-            },
-            onRemove = { index, cartItem ->
-                if (cartItem.orderItemId != null) {
-                    viewModel.removeItemServer(cartItem.orderItemId!!)
-                } else {
-                    viewModel.removeFromCart(index)
-                }
-            },
-            onUpdateNotes = { index, cartItem, notes ->
-                if (cartItem.orderItemId != null) {
-                    viewModel.updateNotesServer(cartItem.orderItemId!!, notes)
-                } else {
-                    viewModel.updateItemNotes(index, notes)
-                }
-            },
-            onNewOrder = { viewModel.newOrder() },
+            onDecrease = { index, _ -> viewModel.decreaseQty(index) },
+            onIncrease = { index, _ -> viewModel.increaseQty(index) },
+            onRemove = { index, _ -> viewModel.removeFromCart(index) },
+            onUpdateNotes = { index, _, notes -> viewModel.updateItemNotes(index, notes) },
+            onNewOrder = { guardedNavigate { viewModel.newOrder() } },
+            onSendToKitchen = { viewModel.sendToKitchen() },
+            onDiscard = { viewModel.discardChanges() },
             modifier = Modifier
                 .weight(0.35f)
                 .fillMaxHeight(),
+        )
+    }
+
+    // ── Leave guard dialog (D7) ──
+    if (showLeaveGuard) {
+        AlertDialog(
+            onDismissRequest = { showLeaveGuard = false },
+            title = { Text("Unsent Changes", color = OnDark, fontWeight = FontWeight.Bold) },
+            text = { Text("You have unsent changes. What would you like to do?", color = OnDarkSecondary) },
+            confirmButton = {
+                TextButton(onClick = { showLeaveGuard = false }) {
+                    Text("Keep Editing", color = Accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.discardChanges()
+                    showLeaveGuard = false
+                    pendingNavAction?.invoke()
+                    pendingNavAction = null
+                }) {
+                    Text("Discard Changes", color = OnDarkSecondary)
+                }
+            },
+            containerColor = DarkSurface,
+        )
+    }
+
+    // ── Realtime conflict dialog (D8) ──
+    if (state.showRemoteConflict) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Order Updated Elsewhere", color = OnDark, fontWeight = FontWeight.Bold) },
+            text = { Text("This order was modified by another terminal. Your changes will be reset.", color = OnDarkSecondary) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissRemoteConflict() }) {
+                    Text("OK", color = Accent)
+                }
+            },
+            containerColor = DarkSurface,
         )
     }
 }
@@ -383,6 +400,8 @@ private fun UnifiedCartPanel(
     onRemove: (Int, CartItem) -> Unit,
     onUpdateNotes: (Int, CartItem, String) -> Unit,
     onNewOrder: () -> Unit,
+    onSendToKitchen: () -> Unit,
+    onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -390,12 +409,25 @@ private fun UnifiedCartPanel(
             .background(DarkSurface)
             .padding(12.dp),
     ) {
-        Text(
-            text = "Cart",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = OnDark,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Cart",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = OnDark,
+            )
+            if (state.isDirty == true) {
+                Text(
+                    text = "Unsent changes",
+                    fontSize = 11.sp,
+                    color = Warning,
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -496,8 +528,33 @@ private fun UnifiedCartPanel(
                         )
                     }
                 }
+            } else if (state.isDirty == true) {
+                // ── Open + Dirty: Send to Kitchen + Discard (D12, D14) ──
+                Button(
+                    onClick = onSendToKitchen,
+                    enabled = !state.isSyncing && !state.isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) {
+                    Text(
+                        text = if (state.isSyncing) "Syncing..." else "Send to Kitchen",
+                        fontSize = 18.sp,
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = onDiscard,
+                    enabled = !state.isSyncing && !state.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                ) {
+                    Text("Discard", fontSize = 16.sp)
+                }
             } else {
-                // New Order button for open orders
+                // ── Open + Clean: New Order button ──
                 OutlinedButton(
                     onClick = onNewOrder,
                     enabled = !state.isLoading,

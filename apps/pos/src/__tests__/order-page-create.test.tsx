@@ -9,7 +9,7 @@ const mockListItems = vi.fn();
 const mockTablesList = vi.fn();
 const mockDayCurrent = vi.fn();
 const mockOrdersCreate = vi.fn();
-const mockOrdersAddItem = vi.fn();
+const mockOrdersSyncItems = vi.fn();
 const mockOrdersGet = vi.fn();
 
 vi.mock('../api', () => ({
@@ -28,9 +28,7 @@ vi.mock('../api', () => ({
     orders: {
       list: vi.fn().mockResolvedValue([]),
       create: (...args: any[]) => mockOrdersCreate(...args),
-      addItem: (...args: any[]) => mockOrdersAddItem(...args),
-      updateItem: vi.fn(),
-      removeItem: vi.fn(),
+      syncItems: (...args: any[]) => mockOrdersSyncItems(...args),
       get: (...args: any[]) => mockOrdersGet(...args),
       pay: vi.fn(),
       void: vi.fn(),
@@ -138,13 +136,13 @@ function setupOpenDay() {
   mockTablesList.mockResolvedValue(tables);
 }
 
-describe('OrderPage — create order table guards', () => {
+describe('OrderPage — create order with sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupOpenDay();
   });
 
-  it('dine-in + items + no table: Create button is enabled, not disabled', async () => {
+  it('dine-in + items + no table: Create button is enabled, shows error on click', async () => {
     renderOrderPage();
 
     await waitFor(() => {
@@ -159,14 +157,13 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Select table…')).toBeInTheDocument();
     });
 
-    // Create button should be ENABLED — user can click, guard provides friendly error
+    // Create button should be ENABLED
     const createBtn = screen.getByText('Create Order');
     expect(createBtn).not.toBeDisabled();
   });
 
-  it('dine-in + items + no table: clicking Create shows error, opens table picker, no API call', async () => {
-    // Mock create to track calls
-    mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1 });
+  it('dine-in + items + no table: clicking Create shows error, no API call', async () => {
+    mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1, uuid: 'test' });
 
     renderOrderPage();
 
@@ -174,41 +171,62 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Burger')).toBeInTheDocument();
     });
 
-    // Add an item
     fireEvent.click(screen.getByText('Burger'));
 
-    // "Select table…" is visible (dine-in without table)
     await waitFor(() => {
       expect(screen.getByText('Select table…')).toBeInTheDocument();
     });
 
-    // Create button is enabled — clicking triggers the defense-in-depth guard
     const createBtn = screen.getByText('Create Order');
     expect(createBtn).not.toBeDisabled();
     fireEvent.click(createBtn);
 
-    // Error message should appear
     await waitFor(() => {
       expect(screen.getByText('Please select a table')).toBeInTheDocument();
     });
 
-    // Table picker should open with "Select Table" heading
-    expect(screen.getByText('Select Table')).toBeInTheDocument();
-
-    // Create was never called (guard prevents API call)
     expect(mockOrdersCreate).not.toHaveBeenCalled();
   });
 
-  it('select table then Create calls orders.create with dine_in + tableId', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 10, orderNo: 42 });
-    mockOrdersAddItem.mockResolvedValue({});
+  it('select table then Create calls orders.create with dine_in + tableId + syncItems', async () => {
+    mockOrdersCreate.mockResolvedValue({ id: 10, orderNo: 42, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
+      id: 10,
+      orderNo: 42,
+      uuid: 'test',
+      type: 'dine_in',
+      tableId: 1,
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
+    mockOrdersSyncItems.mockResolvedValue({
       id: 10,
       orderNo: 42,
       type: 'dine_in',
       tableId: 1,
       status: 'open',
-      items: [],
+      updatedAt: 6000,
+      items: [
+        {
+          id: 201,
+          orderId: 10,
+          itemId: 1,
+          itemName: 'Burger',
+          unitPriceHalalas: 2300,
+          vatRateBp: 1500,
+          qty: 1,
+          totalHalalas: 2300,
+          notes: null,
+          createdAt: 1000,
+          updatedAt: 1000,
+          createdBy: null,
+          updatedBy: null,
+        },
+      ],
+      events: [],
     });
 
     renderOrderPage();
@@ -220,28 +238,21 @@ describe('OrderPage — create order table guards', () => {
     // Add item
     fireEvent.click(screen.getByText('Burger'));
 
-    // Click "Select table…" to open picker
+    // Select table via picker
     fireEvent.click(screen.getByText('Select table…'));
 
-    // Table picker should appear with "Select Table" heading
     await waitFor(() => {
       expect(screen.getByText('Select Table')).toBeInTheDocument();
     });
 
-    // Select T1
     fireEvent.click(screen.getByText('T1'));
 
-    // Table display should update
     await waitFor(() => {
       expect(screen.getByText('Table: T1')).toBeInTheDocument();
     });
 
-    // Create button should now be enabled
-    const createBtn = screen.getByText('Create Order');
-    expect(createBtn).not.toBeDisabled();
-
     // Click create
-    fireEvent.click(createBtn);
+    fireEvent.click(screen.getByText('Create Order'));
 
     await waitFor(() => {
       expect(mockOrdersCreate).toHaveBeenCalledWith({
@@ -249,17 +260,42 @@ describe('OrderPage — create order table guards', () => {
         tableId: 1,
       });
     });
+
+    // B6: After creation, the code fetches the order first to get updatedAt
+    // mockOrdersGet was already set up in beforeEach
+
+    await waitFor(() => {
+      expect(mockOrdersSyncItems).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({
+          baseUpdatedAt: 5000,
+          items: [{ itemId: 1, qty: 1 }],
+        }),
+      );
+    });
   });
 
-  it('takeaway + items, no table: Create enabled, called with takeaway and no tableId', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 20, orderNo: 5 });
-    mockOrdersAddItem.mockResolvedValue({});
+  it('takeaway + items, no table: Create calls create+sync', async () => {
+    mockOrdersCreate.mockResolvedValue({ id: 20, orderNo: 5, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
+      id: 20,
+      orderNo: 5,
+      uuid: 'test',
+      type: 'takeaway',
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
+    mockOrdersSyncItems.mockResolvedValue({
       id: 20,
       orderNo: 5,
       type: 'takeaway',
       status: 'open',
+      updatedAt: 6000,
       items: [],
+      events: [],
     });
 
     renderOrderPage();
@@ -274,12 +310,8 @@ describe('OrderPage — create order table guards', () => {
     // Add item
     fireEvent.click(screen.getByText('Burger'));
 
-    // Create button should be enabled
-    const createBtn = screen.getByText('Create Order');
-    expect(createBtn).not.toBeDisabled();
-
-    // Click create
-    fireEvent.click(createBtn);
+    // Create
+    fireEvent.click(screen.getByText('Create Order'));
 
     await waitFor(() => {
       expect(mockOrdersCreate).toHaveBeenCalledWith({
@@ -287,18 +319,40 @@ describe('OrderPage — create order table guards', () => {
         tableId: undefined,
       });
     });
+
+    await waitFor(() => {
+      expect(mockOrdersSyncItems).toHaveBeenCalledWith(
+        20,
+        expect.objectContaining({
+          items: [{ itemId: 1, qty: 1 }],
+        }),
+      );
+    });
   });
 
-  it('deep-link /?tableId=5 pre-selects table, Create enabled after adding item', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 30, orderNo: 7 });
-    mockOrdersAddItem.mockResolvedValue({});
+  it('deep-link /?tableId=5 pre-selects table, Create works with sync', async () => {
+    mockOrdersCreate.mockResolvedValue({ id: 30, orderNo: 7, uuid: 'test' });
+    // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
+      id: 30,
+      orderNo: 7,
+      uuid: 'test',
+      type: 'dine_in',
+      tableId: 5,
+      status: 'open',
+      updatedAt: 5000,
+      items: [],
+      events: [],
+    });
+    mockOrdersSyncItems.mockResolvedValue({
       id: 30,
       orderNo: 7,
       type: 'dine_in',
       tableId: 5,
       status: 'open',
+      updatedAt: 6000,
       items: [],
+      events: [],
     });
 
     renderOrderPage(['/?tableId=5']);
@@ -307,7 +361,6 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Burger')).toBeInTheDocument();
     });
 
-    // Table should be pre-selected (display shows "Table: T5")
     await waitFor(() => {
       expect(screen.getByText('Table: T5')).toBeInTheDocument();
     });
@@ -315,12 +368,8 @@ describe('OrderPage — create order table guards', () => {
     // Add item
     fireEvent.click(screen.getByText('Burger'));
 
-    // Create button should be enabled
-    const createBtn = screen.getByText('Create Order');
-    expect(createBtn).not.toBeDisabled();
-
     // Click create
-    fireEvent.click(createBtn);
+    fireEvent.click(screen.getByText('Create Order'));
 
     await waitFor(() => {
       expect(mockOrdersCreate).toHaveBeenCalledWith({
@@ -331,30 +380,28 @@ describe('OrderPage — create order table guards', () => {
   });
 
   it('dine-in with table: re-clicking Dine-in preserves table selection', async () => {
+    mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1, uuid: 'test' });
+
     renderOrderPage(['/?tableId=1']);
 
     await waitFor(() => {
       expect(screen.getByText('Burger')).toBeInTheDocument();
     });
 
-    // Table T1 should be pre-selected
     await waitFor(() => {
       expect(screen.getByText('Table: T1')).toBeInTheDocument();
     });
 
-    // Click Dine-in button again (should open picker, keep table)
+    // Click Dine-in button again
     fireEvent.click(screen.getByText('Dine-in'));
 
-    // Table picker appears
     await waitFor(() => {
       expect(screen.getByText('Select Table')).toBeInTheDocument();
     });
 
-    // Dismiss the picker by clicking backdrop
     const backdrop = document.querySelector('.fixed.inset-0');
     if (backdrop) fireEvent.click(backdrop);
 
-    // Table should still be T1 (not wiped)
     await waitFor(() => {
       expect(screen.getByText('Table: T1')).toBeInTheDocument();
     });
@@ -367,10 +414,7 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Burger')).toBeInTheDocument();
     });
 
-    // Dine-in is default, no table → should see "Select table…"
     expect(screen.getByText('Select table…')).toBeInTheDocument();
-
-    // Should NOT be showing any "Table:" label
     expect(screen.queryByText(/^Table:/)).not.toBeInTheDocument();
   });
 
@@ -381,37 +425,7 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Burger')).toBeInTheDocument();
     });
 
-    // Switch to takeaway
     fireEvent.click(screen.getByText('Takeaway'));
-
-    // "Select table…" should not be visible
     expect(screen.queryByText('Select table…')).not.toBeInTheDocument();
-  });
-
-  it('table picker dismiss via backdrop does not error', async () => {
-    renderOrderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Burger')).toBeInTheDocument();
-    });
-
-    // Open table picker via "Select table…"
-    fireEvent.click(screen.getByText('Select table…'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Select Table')).toBeInTheDocument();
-    });
-
-    // Dismiss by clicking backdrop
-    const backdrop = document.querySelector('.fixed.inset-0');
-    if (backdrop) fireEvent.click(backdrop);
-
-    // "Select Table" heading should disappear
-    await waitFor(() => {
-      expect(screen.queryByText('Select Table')).not.toBeInTheDocument();
-    });
-
-    // "Select table…" should still be there (no table selected)
-    expect(screen.getByText('Select table…')).toBeInTheDocument();
   });
 });

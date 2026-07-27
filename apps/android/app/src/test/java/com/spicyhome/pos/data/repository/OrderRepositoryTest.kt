@@ -6,10 +6,8 @@ import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.AddOrderItemDto
-import com.spicyhome.client.models.AddOrderItemResponse
-import com.spicyhome.client.models.SuccessResponse
-import com.spicyhome.client.models.UpdateOrderItemDto
+import com.spicyhome.client.models.SyncOrderItemDto
+import com.spicyhome.client.models.SyncOrderItemsDto
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -34,13 +32,7 @@ class OrderRepositoryTest {
     private lateinit var listOrdersCall: Call<List<OrderSummaryResponse>>
 
     @MockK
-    private lateinit var addItemCall: Call<AddOrderItemResponse>
-
-    @MockK
-    private lateinit var updateItemCall: Call<SuccessResponse>
-
-    @MockK
-    private lateinit var removeItemCall: Call<SuccessResponse>
+    private lateinit var syncCall: Call<OrderResponse>
 
     private lateinit var repository: OrderRepository
 
@@ -135,63 +127,39 @@ class OrderRepositoryTest {
     }
 
     @Test
-    fun `addItem delegates correctly`() {
-        every { ordersApi.ordersControllerAddItem(any(), any()) } returns addItemCall
+    fun `syncItems delegates correctly`() {
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
 
-        repository.addItem(orderId = 1, itemId = 10, qty = 3, notes = "no onions")
+        val items = listOf(
+            SyncOrderItemDto(orderItemId = 100L, qty = 2, notes = "no onion"),
+            SyncOrderItemDto(itemId = 50L, qty = 1, notes = null),
+        )
+        repository.syncItems(orderId = 1, baseUpdatedAt = 5000L, items = items)
 
         verify {
-            ordersApi.ordersControllerAddItem(
+            ordersApi.ordersControllerSyncItems(
                 1L,
                 match { dto ->
-                    dto.itemId == 10L &&
-                        dto.qty == 3 &&
-                        dto.notes == "no onions"
+                    dto.baseUpdatedAt == 5000L &&
+                        dto.items.size == 2 &&
+                        dto.items[0].orderItemId == 100L &&
+                        dto.items[0].qty == 2 &&
+                        dto.items[1].itemId == 50L &&
+                        dto.items[1].qty == 1
                 }
             )
         }
     }
 
     @Test
-    fun `updateItem delegates correctly`() {
-        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } returns updateItemCall
+    fun `syncItems 409 conflict`() {
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        every { syncCall.execute() } returns Response.error(409, okhttp3.ResponseBody.create(null, "Conflict"))
 
-        repository.updateItem(orderId = 1, itemId = 42, qty = 2, notes = "extra spicy")
+        val items = listOf(SyncOrderItemDto(itemId = 1L, qty = 1))
+        val result = repository.syncItems(orderId = 1, baseUpdatedAt = 1000L, items = items).execute()
 
-        verify {
-            ordersApi.ordersControllerUpdateItem(
-                1L,
-                42L,
-                match { dto ->
-                    dto.qty == 2 && dto.notes == "extra spicy"
-                }
-            )
-        }
-    }
-
-    @Test
-    fun `updateItem delegates qty only`() {
-        every { ordersApi.ordersControllerUpdateItem(any(), any(), any()) } returns updateItemCall
-
-        repository.updateItem(orderId = 1, itemId = 42, qty = 3, notes = null)
-
-        verify {
-            ordersApi.ordersControllerUpdateItem(
-                1L,
-                42L,
-                match { dto ->
-                    dto.qty == 3 && dto.notes == null
-                }
-            )
-        }
-    }
-
-    @Test
-    fun `removeItem delegates correctly`() {
-        every { ordersApi.ordersControllerRemoveItem(any(), any()) } returns removeItemCall
-
-        repository.removeItem(orderId = 1, itemId = 42)
-
-        verify { ordersApi.ordersControllerRemoveItem(1L, 42L) }
+        assertThat(result.code()).isEqualTo(409)
+        assertThat(result.isSuccessful).isFalse()
     }
 }

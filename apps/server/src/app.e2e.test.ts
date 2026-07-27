@@ -178,11 +178,17 @@ describe('Orders (e2e)', () => {
   });
 
   it('POST /orders/:id/items adds item', async () => {
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Get order to know its updatedAt
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 2 })
-      .expect(201);
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
+      .expect(200);
   });
 
   it('GET /orders/:id returns order with items', async () => {
@@ -235,12 +241,20 @@ describe('Orders (e2e)', () => {
       .expect(201);
     secondOrderId = createRes.body.id;
 
-    // Add an item so we can pay later
-    await request(app.getHttpServer())
-      .post(`/orders/${secondOrderId}/items`)
+    // Add an item so we can pay later — use bulk sync
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${secondOrderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 1 })
-      .expect(201);
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put(`/orders/${secondOrderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: 1, qty: 1 }],
+      })
+      .expect(200);
 
     // Leave it open — should block close
     await request(app.getHttpServer())

@@ -339,7 +339,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/orders/{id}/items': {
+  '/orders/{orderId}/items/sync': {
     parameters: {
       query?: never;
       header?: never;
@@ -347,31 +347,13 @@ export interface paths {
       cookie?: never;
     };
     get?: never;
-    put?: never;
-    /** Add an item to an order */
-    post: operations['OrdersController_addItem'];
+    /** Bulk sync cart items (add, update, remove) for an open order */
+    put: operations['OrdersController_syncItems'];
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
-    trace?: never;
-  };
-  '/orders/{orderId}/items/{itemId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Remove an item from an order */
-    delete: operations['OrdersController_removeItem'];
-    options?: never;
-    head?: never;
-    /** Update an order item (qty or notes) */
-    patch: operations['OrdersController_updateItem'];
     trace?: never;
   };
   '/orders/{id}/pay': {
@@ -1709,38 +1691,37 @@ export interface components {
        */
       orderNo: number;
     };
-    AddOrderItemDto: {
+    SyncOrderItemDto: {
       /**
        * Format: int64
-       * @example 1
+       * @description Existing order item ID to update
+       * @example 10
        */
-      itemId: number;
+      orderItemId?: number;
+      /**
+       * Format: int64
+       * @description Menu item ID for new lines (required when orderItemId absent)
+       * @example 5
+       */
+      itemId?: number;
       /**
        * Format: int32
+       * @description Desired quantity (≥1)
        * @example 2
        */
       qty: number;
       /** @example no onion */
-      notes?: string;
+      notes?: string | null;
     };
-    AddOrderItemResponse: {
-      /** @example true */
-      success: boolean;
+    SyncOrderItemsDto: {
       /**
        * Format: int64
-       * @description order_items.id of the newly created line
-       * @example 1
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
        */
-      orderItemId: number;
-    };
-    UpdateOrderItemDto: {
-      /**
-       * Format: int32
-       * @example 3
-       */
-      qty?: number;
-      /** @example extra cheese */
-      notes?: string;
+      baseUpdatedAt: number;
+      /** @description Full desired cart — missing existing lines are removed */
+      items: components['schemas']['SyncOrderItemDto'][];
     };
     PaymentLineDto: {
       /**
@@ -2828,78 +2809,28 @@ export interface operations {
       };
     };
   };
-  OrdersController_addItem: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['AddOrderItemDto'];
-      };
-    };
-    responses: {
-      /** @description Item added */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['AddOrderItemResponse'];
-        };
-      };
-    };
-  };
-  OrdersController_removeItem: {
+  OrdersController_syncItems: {
     parameters: {
       query?: never;
       header?: never;
       path: {
         orderId: number;
-        itemId: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Item removed */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['SuccessResponse'];
-        };
-      };
-    };
-  };
-  OrdersController_updateItem: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        orderId: number;
-        itemId: number;
       };
       cookie?: never;
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['UpdateOrderItemDto'];
+        'application/json': components['schemas']['SyncOrderItemsDto'];
       };
     };
     responses: {
-      /** @description Item updated */
+      /** @description Order with items and events */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['SuccessResponse'];
+          'application/json': components['schemas']['OrderResponse'];
         };
       };
     };

@@ -6,8 +6,6 @@ import retrofit2.Call
 import okhttp3.RequestBody
 import com.squareup.moshi.Json
 
-import com.spicyhome.client.models.AddOrderItemDto
-import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
@@ -21,24 +19,9 @@ import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
-import com.spicyhome.client.models.SuccessResponse
-import com.spicyhome.client.models.UpdateOrderItemDto
+import com.spicyhome.client.models.SyncOrderItemsDto
 
 interface OrdersApi {
-    /**
-     * POST orders/{id}/items
-     * Add an item to an order
-     * 
-     * Responses:
-     *  - 201: Item added
-     *
-     * @param id 
-     * @param addOrderItemDto 
-     * @return [Call]<[AddOrderItemResponse]>
-     */
-    @POST("orders/{id}/items")
-    fun ordersControllerAddItem(@Path("id") id: kotlin.Long, @Body addOrderItemDto: AddOrderItemDto): Call<AddOrderItemResponse>
-
     /**
      * POST orders
      * Create a new order
@@ -134,20 +117,6 @@ interface OrdersApi {
     fun ordersControllerRefundOrder(@Path("id") id: kotlin.Long, @Body createRefundDto: CreateRefundDto): Call<RefundResponse>
 
     /**
-     * DELETE orders/{orderId}/items/{itemId}
-     * Remove an item from an order
-     * 
-     * Responses:
-     *  - 200: Item removed
-     *
-     * @param orderId 
-     * @param itemId 
-     * @return [Call]<[SuccessResponse]>
-     */
-    @DELETE("orders/{orderId}/items/{itemId}")
-    fun ordersControllerRemoveItem(@Path("orderId") orderId: kotlin.Long, @Path("itemId") itemId: kotlin.Long): Call<SuccessResponse>
-
-    /**
      * POST orders/{id}/print
      * Reprint receipt or kitchen ticket for an order
      * 
@@ -162,19 +131,18 @@ interface OrdersApi {
     fun ordersControllerReprintOrder(@Path("id") id: kotlin.Long, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
 
     /**
-     * PATCH orders/{orderId}/items/{itemId}
-     * Update an order item (qty or notes)
+     * PUT orders/{orderId}/items/sync
+     * Bulk sync cart items (add, update, remove) for an open order
      * 
      * Responses:
-     *  - 200: Item updated
+     *  - 200: Order with items and events
      *
      * @param orderId 
-     * @param itemId 
-     * @param updateOrderItemDto 
-     * @return [Call]<[SuccessResponse]>
+     * @param syncOrderItemsDto 
+     * @return [Call]<[OrderResponse]>
      */
-    @PATCH("orders/{orderId}/items/{itemId}")
-    fun ordersControllerUpdateItem(@Path("orderId") orderId: kotlin.Long, @Path("itemId") itemId: kotlin.Long, @Body updateOrderItemDto: UpdateOrderItemDto): Call<SuccessResponse>
+    @PUT("orders/{orderId}/items/sync")
+    fun ordersControllerSyncItems(@Path("orderId") orderId: kotlin.Long, @Body syncOrderItemsDto: SyncOrderItemsDto): Call<OrderResponse>
 
     /**
      * GET orders/{id}/events/verify
