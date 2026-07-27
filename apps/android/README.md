@@ -114,7 +114,7 @@ dependencies are declared in the app's `build.gradle.kts` with matching versions
 ### Screen flow
 
 ```
-Setup → Login → Order (category tabs, items, cart, create/send/pay) → Orders list
+Setup → Login → Order (category tabs, items, cart, create/edit items) → Orders list
 ```
 
 ### Key design decisions

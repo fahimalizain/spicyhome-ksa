@@ -24,6 +24,7 @@ import com.spicyhome.pos.util.MoneyFormatter
 fun OrdersScreen(
     viewModel: OrdersViewModel,
     onBack: () -> Unit,
+    onContinue: (Long) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -43,6 +44,7 @@ fun OrdersScreen(
             OrderDetailView(
                 order = state.selectedOrder!!,
                 onBack = { viewModel.closeDetail() },
+                onContinue = onContinue,
             )
         } else {
             // Detail failed to load, show error
@@ -131,8 +133,8 @@ fun OrdersScreen(
 private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
     val statusColor = when (order.status) {
         "paid" -> Success
-        "sent" -> StatusSent
         "voided" -> StatusVoided
+        "refunded" -> StatusRefunded
         else -> StatusOpen
     }
 
@@ -187,6 +189,7 @@ private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
 private fun OrderDetailView(
     order: OrderResponse,
     onBack: () -> Unit,
+    onContinue: (Long) -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Detail top bar
@@ -212,8 +215,8 @@ private fun OrderDetailView(
                 fontSize = 16.sp,
                 color = when (order.status) {
                     "paid" -> Success
-                    "sent" -> StatusSent
                     "voided" -> StatusVoided
+                    "refunded" -> StatusRefunded
                     else -> StatusOpen
                 },
             )
@@ -327,6 +330,18 @@ private fun OrderDetailView(
                             }
                         }
                     }
+                }
+            }
+
+            // Continue Editing button for open orders
+            if (order.status == "open") {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { onContinue(order.id.toLong()) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Continue Editing", fontSize = 16.sp)
                 }
             }
         }

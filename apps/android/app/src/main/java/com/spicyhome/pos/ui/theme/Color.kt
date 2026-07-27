@@ -15,6 +15,6 @@ val Error = Color(0xFFF44336)
 
 // Order status colors
 val StatusOpen = Color(0xFF2196F3)
-val StatusSent = Color(0xFFFF9800)
 val StatusPaid = Color(0xFF4CAF50)
 val StatusVoided = Color(0xFFF44336)
+val StatusRefunded = Color(0xFF9C27B0)

@@ -76,10 +76,10 @@ class RealtimeClientTest {
 
     @Test
     fun `parseWsMessage parses nested payload correctly`() {
-        val json = """{"type":"order.sent","payload":{"orderId":5,"status":"sent","items":[1,2]},"at":1700000000}"""
+        val json = """{"type":"order.paid","payload":{"orderId":5,"status":"paid","items":[1,2]},"at":1700000000}"""
         val event = RealtimeClient.parseWsMessage(json)
         assertThat(event).isNotNull()
-        assertThat(event!!.payload).isEqualTo("""{"orderId":5,"status":"sent","items":[1,2]}""")
+        assertThat(event!!.payload).isEqualTo("""{"orderId":5,"status":"paid","items":[1,2]}""")
     }
 
     // ── Connection & URL ─────────────────────────────────────────────
