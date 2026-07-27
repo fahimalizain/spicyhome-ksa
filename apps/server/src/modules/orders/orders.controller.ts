@@ -13,7 +13,7 @@ import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { OrderSummaryResponse } from './dto/order-summary-response.dto';
-import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
+import { StatusResponse, RefundResponse } from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { OrderEventResponse } from './dto/order-event-response.dto';
 import { OrderRefundResponse } from './dto/refund-response.dto';

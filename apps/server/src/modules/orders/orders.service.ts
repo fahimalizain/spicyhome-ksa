@@ -303,11 +303,9 @@ export class OrdersService {
           const oldTotal = oi.totalHalalas;
 
           const updates: Record<string, any> = { ...updateAuditFields(userId, now) };
-          let newQty = oldQty;
-          let newTotal = oldTotal;
-          updates.qty = line.qty;
-          newQty = line.qty;
-          newTotal = oi.unitPriceHalalas * line.qty;
+          const newQty = line.qty;
+          const newTotal = oi.unitPriceHalalas * line.qty;
+          updates.qty = newQty;
           updates.totalHalalas = newTotal;
 
           if (line.notes !== undefined) {

@@ -102,7 +102,6 @@ export function OrderPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tableParamApplied = useRef(false);
-  const wsEventSeenForCurrentOrder = useRef(false);
 
   useEffect(() => {
     if (tableParamApplied.current) return;

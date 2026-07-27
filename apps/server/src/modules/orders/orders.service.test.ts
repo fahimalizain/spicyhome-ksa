@@ -127,7 +127,7 @@ describe('Order Refunds', () => {
       .expect(200);
 
     // Add items via bulk sync
-    const syncRes = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .put(`/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
@@ -765,11 +765,13 @@ describe('syncItems (bulk cart sync)', () => {
 
     expect(res2.body.items[0].notes).toBe('no onions');
 
-    // No kitchen_print_enqueued events for notes-only
+    // No new kitchen_print_enqueued events for notes-only (count unchanged from first sync)
+    const res1KitchenCount = res1.body.events.filter(
+      (e: any) => e.type === 'kitchen_print_enqueued',
+    ).length;
     const events = res2.body.events;
     const kitchenEnqEvents = events.filter((e: any) => e.type === 'kitchen_print_enqueued');
-    // The last kitchen_print_enqueued should be from the first sync, not this one
-    // (new items added to event log; notes-only won't add a kitchen event)
+    expect(kitchenEnqEvents.length).toBe(res1KitchenCount);
     const updateEvents = events.filter((e: any) => e.type === 'item_updated');
     expect(updateEvents.length).toBeGreaterThanOrEqual(1);
 
