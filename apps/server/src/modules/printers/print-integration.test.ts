@@ -407,16 +407,16 @@ describe('Print Integration', () => {
       // Wait for async receipt print
       await new Promise((r) => setTimeout(r, 300));
 
-      // Check audit log
+      // Check events
       const orderRes2 = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
-      const auditLog = orderRes2.body.auditLog;
+      const events = orderRes2.body.events;
 
       // Verify event types
-      const types = auditLog.map((e: any) => e.type);
+      const types = events.map((e: any) => e.type);
 
       // created event
       expect(types).toContain('created');
@@ -433,7 +433,7 @@ describe('Print Integration', () => {
 
       // Verify chain is still valid
       const verifyRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/audit/verify`)
+        .get(`/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);

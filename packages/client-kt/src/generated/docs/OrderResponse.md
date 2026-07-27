@@ -20,7 +20,7 @@
 | **createdBy** | **kotlin.Long** |  |  |
 | **updatedBy** | **kotlin.Long** |  |  |
 | **items** | [**kotlin.collections.List&lt;OrderItemResponse&gt;**](OrderItemResponse.md) |  |  |
-| **auditLog** | [**kotlin.collections.List&lt;AuditLogEntry&gt;**](AuditLogEntry.md) |  |  |
+| **events** | [**kotlin.collections.List&lt;OrderEventResponse&gt;**](OrderEventResponse.md) |  |  |
 
 
 

@@ -194,9 +194,9 @@ describe('Orders (e2e)', () => {
     expect(res.body.totalHalalas).toBe(4600);
   });
 
-  it('GET /orders/:id/audit/verify returns valid', async () => {
+  it('GET /orders/:id/events/verify returns valid', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/audit/verify`)
+      .get(`/orders/${orderId}/events/verify`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.valid).toBe(true);

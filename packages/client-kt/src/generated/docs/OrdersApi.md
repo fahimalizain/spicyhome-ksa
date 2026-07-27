@@ -6,7 +6,7 @@ All URIs are relative to *http://localhost*
 | ------------- | ------------- | ------------- |
 | [**ordersControllerAddItem**](OrdersApi.md#ordersControllerAddItem) | **POST** orders/{id}/items | Add an item to an order |
 | [**ordersControllerCreateOrder**](OrdersApi.md#ordersControllerCreateOrder) | **POST** orders | Create a new order |
-| [**ordersControllerGetOrder**](OrdersApi.md#ordersControllerGetOrder) | **GET** orders/{id} | Get order by ID with items and audit log |
+| [**ordersControllerGetOrder**](OrdersApi.md#ordersControllerGetOrder) | **GET** orders/{id} | Get order by ID with items and events |
 | [**ordersControllerGetOrderEvents**](OrdersApi.md#ordersControllerGetOrderEvents) | **GET** orders/{id}/events | Get the complete event chain for an order |
 | [**ordersControllerGetOrderRefunds**](OrdersApi.md#ordersControllerGetOrderRefunds) | **GET** orders/{id}/refunds | Get all refunds for an order |
 | [**ordersControllerListOrders**](OrdersApi.md#ordersControllerListOrders) | **GET** orders | List orders with optional filters |
@@ -15,7 +15,6 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerRemoveItem**](OrdersApi.md#ordersControllerRemoveItem) | **DELETE** orders/{orderId}/items/{itemId} | Remove an item from an order |
 | [**ordersControllerReprintOrder**](OrdersApi.md#ordersControllerReprintOrder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
 | [**ordersControllerUpdateItem**](OrdersApi.md#ordersControllerUpdateItem) | **PATCH** orders/{orderId}/items/{itemId} | Update an order item (qty or notes) |
-| [**ordersControllerVerifyAuditChain**](OrdersApi.md#ordersControllerVerifyAuditChain) | **GET** orders/{id}/audit/verify | Verify audit log hash chain for an order |
 | [**ordersControllerVerifyOrderChain**](OrdersApi.md#ordersControllerVerifyOrderChain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | [**ordersControllerVoidOrder**](OrdersApi.md#ordersControllerVoidOrder) | **POST** orders/{id}/void | Void an order (open → voided) |
 
@@ -99,7 +98,7 @@ Configure bearer:
  - **Accept**: application/json
 
 
-Get order by ID with items and audit log
+Get order by ID with items and events
 
 ### Example
 ```kotlin
@@ -450,44 +449,6 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: application/json
- - **Accept**: application/json
-
-
-Verify audit log hash chain for an order
-
-### Example
-```kotlin
-// Import classes:
-//import com.spicyhome.client.*
-//import com.spicyhome.client.infrastructure.*
-//import com.spicyhome.client.models.*
-
-val apiClient = ApiClient()
-apiClient.setBearerToken("TOKEN")
-val webService = apiClient.createWebservice(OrdersApi::class.java)
-val id : kotlin.Long = 789 // kotlin.Long | 
-
-val result : AuditVerifyResponse = webService.ordersControllerVerifyAuditChain(id)
-```
-
-### Parameters
-| Name | Type | Description  | Notes |
-| ------------- | ------------- | ------------- | ------------- |
-| **id** | **kotlin.Long**|  | |
-
-### Return type
-
-[**AuditVerifyResponse**](AuditVerifyResponse.md)
-
-### Authorization
-
-
-Configure bearer:
-    ApiClient().setBearerToken("TOKEN")
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
  - **Accept**: application/json
 
 

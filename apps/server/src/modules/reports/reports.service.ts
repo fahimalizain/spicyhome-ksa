@@ -16,7 +16,6 @@ export interface XReport {
   totalSalesHalalas: number;
   totalVatHalalas: number;
   paidOrderCount: number;
-  sentOrderCount: number;
   openOrderCount: number;
   voidedOrderCount: number;
   salesByType: Record<string, { count: number; totalHalalas: number }>;
@@ -72,7 +71,6 @@ export class ReportsService {
     const allOrders = this.db.select().from(orders).where(eq(orders.dayOpeningId, dayId)).all();
 
     const paidOrders = allOrders.filter((o) => o.status === 'paid');
-    const sentOrders = allOrders.filter((o) => o.status === 'sent');
     const openOrders = allOrders.filter((o) => o.status === 'open');
     const voidedOrders = allOrders.filter((o) => o.status === 'voided');
 
@@ -149,7 +147,6 @@ export class ReportsService {
       totalSalesHalalas,
       totalVatHalalas,
       paidOrderCount: paidOrders.length,
-      sentOrderCount: sentOrders.length,
       openOrderCount: openOrders.length,
       voidedOrderCount: voidedOrders.length,
       salesByType,

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderItemResponse } from './order-item-response.dto';
-import { AuditLogEntry } from './audit-log-entry.dto';
+import { OrderEventResponse } from './order-event-response.dto';
 import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class OrderResponse {
@@ -52,6 +52,6 @@ export class OrderResponse {
   @ApiProperty({ type: [OrderItemResponse] })
   items!: OrderItemResponse[];
 
-  @ApiProperty({ type: [AuditLogEntry] })
-  auditLog!: AuditLogEntry[];
+  @ApiProperty({ type: [OrderEventResponse] })
+  events!: OrderEventResponse[];
 }

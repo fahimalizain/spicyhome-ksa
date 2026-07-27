@@ -63,7 +63,7 @@ const mockOrder: OrderResponse = {
       updatedBy: null,
     },
   ],
-  auditLog: [],
+  events: [],
 };
 
 const emptyRefunds: OrderRefundResponse[] = [];

@@ -343,7 +343,7 @@ class OrderViewModelTest {
             createdBy = 1L,
             updatedBy = 1L,
             items = emptyList(),
-            auditLog = emptyList(),
+            events = emptyList(),
         )
         val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
         every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall

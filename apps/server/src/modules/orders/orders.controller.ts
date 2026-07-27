@@ -55,19 +55,11 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get order by ID with items and audit log' })
+  @ApiOperation({ summary: 'Get order by ID with items and events' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiOkResponse({ description: 'Order with items and audit log', type: OrderResponse })
+  @ApiOkResponse({ description: 'Order with items and events', type: OrderResponse })
   getOrder(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrder(id);
-  }
-
-  @Get(':id/audit/verify')
-  @ApiOperation({ summary: 'Verify audit log hash chain for an order' })
-  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiOkResponse({ description: 'Audit chain verification result', type: AuditVerifyResponse })
-  verifyAuditChain(@Param('id', ParseIntPipe) id: number) {
-    return this.ordersService.verifyAuditChain(id);
   }
 
   @Post()

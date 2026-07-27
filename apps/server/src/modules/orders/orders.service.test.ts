@@ -448,17 +448,6 @@ describe('Order Refunds', () => {
 
       expect(res.body.valid).toBe(true);
     });
-
-    it('GET /orders/:id/audit/verify backwards-compatible alias works', async () => {
-      const { orderId } = await createPaidOrder();
-
-      const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/audit/verify`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .expect(200);
-
-      expect(res.body.valid).toBe(true);
-    });
   });
 });
 

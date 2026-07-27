@@ -1097,7 +1097,7 @@
     "/orders/{id}": {
       "get": {
         "operationId": "OrdersController_getOrder",
-        "summary": "Get order by ID with items and audit log",
+        "summary": "Get order by ID with items and events",
         "parameters": [
           {
             "name": "id",
@@ -1111,48 +1111,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Order with items and audit log",
+            "description": "Order with items and events",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OrderResponse"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "orders"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/orders/{id}/audit/verify": {
-      "get": {
-        "operationId": "OrdersController_verifyAuditChain",
-        "summary": "Verify audit log hash chain for an order",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Audit chain verification result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuditVerifyResponse"
                 }
               }
             }
@@ -3452,7 +3415,7 @@
           "updatedBy"
         ]
       },
-      "AuditLogEntry": {
+      "OrderEventResponse": {
         "type": "object",
         "properties": {
           "id": {
@@ -3465,18 +3428,23 @@
             "format": "int64",
             "example": 1
           },
+          "eventIdx": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
           "userId": {
             "type": "integer",
             "format": "int64",
             "example": 1
           },
-          "action": {
+          "type": {
             "type": "string",
-            "example": "created"
+            "example": "item_added"
           },
           "payload": {
             "type": "string",
-            "example": "{\"type\":\"dine_in\",\"tableId\":1}"
+            "example": "{\"orderItemId\":1,\"itemName\":\"Burger\",\"qty\":1}"
           },
           "prevHash": {
             "type": "string",
@@ -3495,8 +3463,9 @@
         "required": [
           "id",
           "orderId",
+          "eventIdx",
           "userId",
-          "action",
+          "type",
           "payload",
           "prevHash",
           "hash",
@@ -3587,10 +3556,10 @@
               "$ref": "#/components/schemas/OrderItemResponse"
             }
           },
-          "auditLog": {
+          "events": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/AuditLogEntry"
+              "$ref": "#/components/schemas/OrderEventResponse"
             }
           }
         },
@@ -3611,19 +3580,7 @@
           "createdBy",
           "updatedBy",
           "items",
-          "auditLog"
-        ]
-      },
-      "AuditVerifyResponse": {
-        "type": "object",
-        "properties": {
-          "valid": {
-            "type": "boolean",
-            "example": true
-          }
-        },
-        "required": [
-          "valid"
+          "events"
         ]
       },
       "CreateOrderDto": {
@@ -3952,61 +3909,16 @@
           "items"
         ]
       },
-      "OrderEventResponse": {
+      "AuditVerifyResponse": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "orderId": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "eventIdx": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "userId": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "type": {
-            "type": "string",
-            "example": "item_added"
-          },
-          "payload": {
-            "type": "string",
-            "example": "{\"orderItemId\":1,\"itemName\":\"Burger\",\"qty\":1}"
-          },
-          "prevHash": {
-            "type": "string",
-            "example": ""
-          },
-          "hash": {
-            "type": "string",
-            "example": "abc123..."
-          },
-          "createdAt": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1700000000
+          "valid": {
+            "type": "boolean",
+            "example": true
           }
         },
         "required": [
-          "id",
-          "orderId",
-          "eventIdx",
-          "userId",
-          "type",
-          "payload",
-          "prevHash",
-          "hash",
-          "createdAt"
+          "valid"
         ]
       },
       "SettingResponse": {
