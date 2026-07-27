@@ -1,4 +1,5 @@
 import { buildUnsignedInvoiceXML, InvoiceXMLInput, SellerInfo } from './zatca-xml-builder.service';
+import { ZATCA_INITIAL_PIH } from '@spicyhome/shared';
 
 describe('UBL XML Builder', () => {
   const defaultSeller: SellerInfo = {
@@ -155,9 +156,7 @@ describe('UBL XML Builder', () => {
 
   it('uses SDK initial PIH hash when prevInvoiceHash is empty', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
-    expect(xml).toContain(
-      'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==',
-    );
+    expect(xml).toContain(ZATCA_INITIAL_PIH);
   });
 
   it('uses prevInvoiceHash in PIH when provided', () => {

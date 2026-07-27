@@ -241,7 +241,7 @@ export function computeInvoiceHashHex(xml: string): string {
  * The cert body is the raw base64 string (e.g. "MIID3j...") as stored in
  * ZATCA's binarySecurityToken (after one layer of base64 decode).
  */
-function wrapCertInPem(certBodyB64: string): string {
+export function wrapCertInPem(certBodyB64: string): string {
   const lines: string[] = ['-----BEGIN CERTIFICATE-----'];
   for (let i = 0; i < certBodyB64.length; i += 64) {
     lines.push(certBodyB64.slice(i, i + 64));
@@ -1149,6 +1149,41 @@ export function extractCertSignature(certBodyB64: string): string {
   // The actual signature bytes are the remaining bytes minus the unused-bits byte
   const sigBytes = rawDer.slice(offset, offset + sigLen - 1);
   return Buffer.from(sigBytes).toString('base64');
+}
+
+/**
+ * Extract the SubjectPublicKeyInfo (SPKI) DER bytes from a ZATCA-issued X.509
+ * certificate, returned as base64.
+ *
+ * ZATCA SDK (QrGenerationService.generateQr) uses:
+ *   Tag 8 = X509Certificate.getPublicKey().getEncoded()
+ * which returns the SubjectPublicKeyInfo DER for the cert's public key.
+ * ZATCA's validator compares Tag 8 byte-for-byte against
+ * certPublicKey.getEncoded().
+ *
+ * This function uses Node's built-in X509Certificate to parse the cert and
+ * exports the public key as SPKI DER — the exact equivalent of Java's
+ * PublicKey.getEncoded() / SubjectPublicKeyInfo DER bytes.
+ *
+ * @param certBodyB64  The cert body base64 string (e.g. "MIID3j...") as
+ *                     embedded in <ds:X509Certificate> — NOT the outer
+ *                     binarySecurityToken wrapper.
+ * @returns Base64-encoded SubjectPublicKeyInfo DER bytes.
+ */
+export function extractPublicKeySpkiFromCert(certBodyB64: string): string {
+  const pem = wrapCertInPem(certBodyB64);
+  const x509 = new X509Certificate(pem);
+
+  // x509.publicKey.export({type:'spki', format:'der'}) returns the
+  // DER-encoded SubjectPublicKeyInfo — exactly what Java's
+  // PublicKey.getEncoded() returns and what ZATCA expects in Tag 8.
+  const spkiDer = x509.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+
+  if (!spkiDer || spkiDer.length === 0) {
+    throw new Error('Failed to extract public key SPKI from certificate: empty result');
+  }
+
+  return spkiDer.toString('base64');
 }
 
 function readDerLength(buf: Buffer, offset: number): number {

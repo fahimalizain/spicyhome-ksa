@@ -329,25 +329,8 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get order by ID with items and audit log */
+    /** Get order by ID with items and events */
     get: operations['OrdersController_getOrder'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/orders/{id}/audit/verify': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Verify audit log hash chain for an order */
-    get: operations['OrdersController_verifyAuditChain'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1511,7 +1494,7 @@ export interface components {
        */
       updatedBy: number | null;
     };
-    AuditLogEntry: {
+    OrderEventResponse: {
       /**
        * Format: int64
        * @example 1
@@ -1526,10 +1509,15 @@ export interface components {
        * Format: int64
        * @example 1
        */
+      eventIdx: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
       userId: number;
-      /** @example created */
-      action: string;
-      /** @example {"type":"dine_in","tableId":1} */
+      /** @example item_added */
+      type: string;
+      /** @example {"orderItemId":1,"itemName":"Burger","qty":1} */
       payload: string;
       /** @example  */
       prevHash: string;
@@ -1609,11 +1597,7 @@ export interface components {
        */
       updatedBy: number | null;
       items: components['schemas']['OrderItemResponse'][];
-      auditLog: components['schemas']['AuditLogEntry'][];
-    };
-    AuditVerifyResponse: {
-      /** @example true */
-      valid: boolean;
+      events: components['schemas']['OrderEventResponse'][];
     };
     CreateOrderDto: {
       /**
@@ -1798,40 +1782,9 @@ export interface components {
       createdAt: number;
       items: components['schemas']['RefundItemResponse'][];
     };
-    OrderEventResponse: {
-      /**
-       * Format: int64
-       * @example 1
-       */
-      id: number;
-      /**
-       * Format: int64
-       * @example 1
-       */
-      orderId: number;
-      /**
-       * Format: int64
-       * @example 1
-       */
-      eventIdx: number;
-      /**
-       * Format: int64
-       * @example 1
-       */
-      userId: number;
-      /** @example item_added */
-      type: string;
-      /** @example {"orderItemId":1,"itemName":"Burger","qty":1} */
-      payload: string;
-      /** @example  */
-      prevHash: string;
-      /** @example abc123... */
-      hash: string;
-      /**
-       * Format: int64
-       * @example 1700000000
-       */
-      createdAt: number;
+    AuditVerifyResponse: {
+      /** @example true */
+      valid: boolean;
     };
     SettingResponse: {
       /** @example restaurant_name */
@@ -2710,35 +2663,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Order with items and audit log */
+      /** @description Order with items and events */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'application/json': components['schemas']['OrderResponse'];
-        };
-      };
-    };
-  };
-  OrdersController_verifyAuditChain: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Audit chain verification result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['AuditVerifyResponse'];
         };
       };
     };

@@ -216,8 +216,8 @@ describe('Client contract test', () => {
     expect(res.totalHalalas).toBe(4600);
   });
 
-  it('verifies audit chain is valid', async () => {
-    const res: any = await client.orders.verifyAuditChain(orderId);
+  it('verifies events chain is valid', async () => {
+    const res: any = await client.orders.verifyEvents(orderId);
     expect(res.valid).toBe(true);
   });
 

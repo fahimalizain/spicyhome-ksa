@@ -944,12 +944,7 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Order not found');
     const itemsList = this.db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
     const logs = this.orderEvents.getEvents(this.db, id);
-    return { ...order, items: itemsList, auditLog: logs };
-  }
-
-  verifyAuditChain(orderId: number): any {
-    const logs = this.orderEvents.getEvents(this.db, orderId);
-    return this.orderEvents.verifyChain(orderId, logs);
+    return { ...order, items: itemsList, events: logs };
   }
 
   getOrderEvents(orderId: number): any[] {

@@ -172,7 +172,7 @@ describe('ReportsService', () => {
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'paid', 4000, 600, 4600, ${now}, ${now}, 1);
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
-        VALUES (3, 3, 'c', 'dine_in', ${day.id}, 'sent', 1000, 150, 1150, ${now}, ${now});
+        VALUES (3, 3, 'c', 'dine_in', ${day.id}, 'open', 1000, 150, 1150, ${now}, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
         VALUES (4, 4, 'd', 'takeaway', ${day.id}, 'voided', 500, 75, 575, ${now}, ${now});
       `);
@@ -181,8 +181,7 @@ describe('ReportsService', () => {
       expect(report.totalSalesHalalas).toBe(6900);
       expect(report.totalVatHalalas).toBe(900);
       expect(report.paidOrderCount).toBe(2);
-      expect(report.sentOrderCount).toBe(1);
-      expect(report.openOrderCount).toBe(0);
+      expect(report.openOrderCount).toBe(1);
       expect(report.voidedOrderCount).toBe(1);
     });
 

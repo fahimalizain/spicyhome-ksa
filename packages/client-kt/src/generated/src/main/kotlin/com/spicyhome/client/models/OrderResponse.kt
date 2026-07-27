@@ -15,7 +15,7 @@
 
 package com.spicyhome.client.models
 
-import com.spicyhome.client.models.AuditLogEntry
+import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderItemResponse
 
 import com.squareup.moshi.Json
@@ -40,7 +40,7 @@ import com.squareup.moshi.JsonClass
  * @param createdBy 
  * @param updatedBy 
  * @param items 
- * @param auditLog 
+ * @param events 
  */
 
 
@@ -94,8 +94,8 @@ data class OrderResponse (
     @Json(name = "items")
     val items: kotlin.collections.List<OrderItemResponse>,
 
-    @Json(name = "auditLog")
-    val auditLog: kotlin.collections.List<AuditLogEntry>
+    @Json(name = "events")
+    val events: kotlin.collections.List<OrderEventResponse>
 
 ) {
 

@@ -20,11 +20,13 @@ import {
   extractCertInfo,
   buildSignedPropertiesXml,
   computeSignedPropertiesHash,
+  extractPublicKeySpkiFromCert,
+  wrapCertInPem,
 } from './zatca-crypto.service';
 
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
-import { createHash } from 'crypto';
+import { createHash, X509Certificate } from 'crypto';
 import * as forge from 'node-forge';
 
 const { asn1 } = forge;
@@ -556,6 +558,100 @@ describe('Signed Properties', () => {
       '12345',
     );
     expect(computeSignedPropertiesHash(xml)).toBe(computeSignedPropertiesHash(xml));
+  });
+});
+
+// ── Certificate Public Key SPKI Extraction ────────────────────────────────────
+
+describe('extractPublicKeySpkiFromCert', () => {
+  // Real ZATCA sandbox cert body base64 (secp256k1, from a ZATCA-issued CSID cert)
+  const certBodyB64 =
+    'MIID3jCCA4SgAwIBAgITEQAAOAPF90Ajs/xcXwABAAA4AzAKBggqhkjOPQQDAjBi' +
+    'MRUwEwYKCZImiZPyLGQBGRYFbG9jYWwxEzARBgoJkiaJk/IsZAEZFgNnb3YxFzAV' +
+    'BgoJkiaJk/IsZAEZFgdleHRnYXp0MRswGQYDVQQDExJQUlpFSU5WT0lDRVNDQTQt' +
+    'Q0EwHhcNMjQwMTExMDkxOTMwWhcNMjkwMTA5MDkxOTMwWjB1MQswCQYDVQQGEwJT' +
+    'QTEmMCQGA1UEChMdTWF4aW11bSBTcGVlZCBUZWNoIFN1cHBseSBMVEQxFjAUBgNV' +
+    'BAsTDVJpeWFkaCBCcmFuY2gxJjAkBgNVBAMTHVRTVC04ODY0MzExNDUtMzk5OTk5' +
+    'OTk5OTAwMDAzMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEoWCKa0Sa9FIErTOv0uAk' +
+    'C1VIKXxU9nPpx2vlf4yhMejy8c02XJblDq7tPydo8mq0ahOMmNo8gwni7Xt1KT9U' +
+    'eKOCAgcwggIDMIGtBgNVHREEgaUwgaKkgZ8wgZwxOzA5BgNVBAQMMjEtVFNUfDIt' +
+    'VFNUfDMtZWQyMmYxZDgtZTZhMi0xMTE4LTliNTgtZDlhOGYxMWU0NDVmMR8wHQYK' +
+    'CZImiZPyLGQBAQwPMzk5OTk5OTk5OTAwMDAzMQ0wCwYDVQQMDAQxMTAwMREwDwYD' +
+    'VQQaDAhSUlJEMjkyOTEaMBgGA1UEDwwRU3VwcGx5IGFjdGl2aXRpZXMwHQYDVR0O' +
+    'BBYEFEX+YvmmtnYoDf9BGbKo7ocTKYK1MB8GA1UdIwQYMBaAFJvKqqLtmqwskIFz' +
+    'VvpP2PxT+9NnMHsGCCsGAQUFBwEBBG8wbTBrBggrBgEFBQcwAoZfaHR0cDovL2Fp' +
+    'YTQuemF0Y2EuZ292LnNhL0NlcnRFbnJvbGwvUFJaRUludm9pY2VTQ0E0LmV4dGdh' +
+    'enQuZ292LmxvY2FsX1BSWkVJTlZPSUNFU0NBNC1DQSgxKS5jcnQwDgYDVR0PAQH/' +
+    'BAQDAgeAMDwGCSsGAQQBgjcVBwQvMC0GJSsGAQQBgjcVCIGGqB2E0PsShu2dJIfO' +
+    '+xnTwFVmh/qlZYXZhD4CAWQCARIwHQYDVR0lBBYwFAYIKwYBBQUHAwMGCCsGAQUF' +
+    'BwMCMCcGCSsGAQQBgjcVCgQaMBgwCgYIKwYBBQUHAwMwCgYIKwYBBQUHAwIwCgYI' +
+    'KoZIzj0EAwIDSAAwRQIhALE/ichmnWXCUKUbca3yci8oqwaLvFdHVjQrveI9uqAb' +
+    'AiA9hC4M8jgMBADPSzmd2uiPJA6gKR3LE03U75eqbC/rXA==';
+
+  it('returns valid base64', () => {
+    const result = extractPublicKeySpkiFromCert(certBodyB64);
+    expect(result).toBeTruthy();
+    expect(typeof result).toBe('string');
+    expect(() => Buffer.from(result, 'base64')).not.toThrow();
+  });
+
+  it('decodes to DER starting with 0x30 (SEQUENCE)', () => {
+    const result = extractPublicKeySpkiFromCert(certBodyB64);
+    const der = Buffer.from(result, 'base64');
+    expect(der.length).toBeGreaterThan(0);
+    expect(der[0]).toBe(0x30); // SEQUENCE tag for SubjectPublicKeyInfo
+  });
+
+  it('produces SPKI DER length between 80 and 100 bytes for secp256k1', () => {
+    const result = extractPublicKeySpkiFromCert(certBodyB64);
+    const der = Buffer.from(result, 'base64');
+    // secp256k1 SPKI DER is typically ~88 bytes
+    expect(der.length).toBeGreaterThanOrEqual(80);
+    expect(der.length).toBeLessThanOrEqual(100);
+  });
+
+  it('round-trip identity: SPKI matches Node cert publicKey export', () => {
+    const result = extractPublicKeySpkiFromCert(certBodyB64);
+
+    // Manually wrap in PEM and use Node's X509Certificate to extract SPKI
+    const pem = wrapCertInPem(certBodyB64);
+    const x509 = new X509Certificate(pem);
+    const expectedSpkiDer = x509.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+    const expected = expectedSpkiDer.toString('base64');
+
+    // Tag 8 must be byte-identical to what ZATCA's validator extracts from the cert
+    expect(result).toBe(expected);
+  });
+
+  it('throws for invalid cert body', () => {
+    expect(() => extractPublicKeySpkiFromCert('invalid-base64!!!')).toThrow();
+  });
+
+  it('throws for empty string', () => {
+    expect(() => extractPublicKeySpkiFromCert('')).toThrow();
+  });
+
+  it('SPKI DER can be parsed as a valid ASN.1 SEQUENCE', () => {
+    const result = extractPublicKeySpkiFromCert(certBodyB64);
+    const der = Buffer.from(result, 'base64');
+
+    // Parse with forge to verify it's a valid SubjectPublicKeyInfo
+    const parsed = asn1.fromDer(der.toString('binary'));
+    expect(parsed.tagClass).toBe(asn1.Class.UNIVERSAL);
+    expect(parsed.type).toBe(asn1.Type.SEQUENCE);
+    expect(parsed.constructed).toBe(true);
+
+    // Should have 2 children: AlgorithmIdentifier + BIT STRING (public key)
+    const children = getAsn1Children(parsed);
+    expect(children.length).toBe(2);
+
+    // AlgorithmIdentifier is a SEQUENCE
+    expect(children[0].tagClass).toBe(asn1.Class.UNIVERSAL);
+    expect(children[0].type).toBe(asn1.Type.SEQUENCE);
+
+    // Public key is a BIT STRING
+    expect(children[1].tagClass).toBe(asn1.Class.UNIVERSAL);
+    expect(children[1].type).toBe(asn1.Type.BITSTRING);
   });
 });
 

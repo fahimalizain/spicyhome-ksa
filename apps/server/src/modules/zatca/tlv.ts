@@ -78,7 +78,9 @@ export interface TLVInput {
   invoiceHashBase64: string;
   /** Base64-encoded DER ECDSA signature */
   signatureBase64: string;
-  /** Base64-encoded raw uncompressed secp256k1 public key (65 bytes) */
+  /** Base64-encoded SubjectPublicKeyInfo DER bytes from the X.509 certificate's
+   *  public key (equivalent to Java PublicKey.getEncoded()). Extracted via
+   *  extractPublicKeySpkiFromCert(). ~88 bytes raw DER for secp256k1. */
   publicKeyBase64: string;
   /** Base64-encoded raw ECDSA signature bytes from the ZATCA-issued X.509 certificate
    *  (extracted by extractCertSignature() — the CA's signature over the cert, NOT our

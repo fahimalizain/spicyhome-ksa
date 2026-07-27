@@ -64,7 +64,6 @@ describe('SpicyHomeClient', () => {
 
     expect(typeof client.orders.list).toBe('function');
     expect(typeof client.orders.get).toBe('function');
-    expect(typeof client.orders.verifyAuditChain).toBe('function');
     expect(typeof client.orders.create).toBe('function');
     expect(typeof client.orders.addItem).toBe('function');
     expect(typeof client.orders.updateItem).toBe('function');

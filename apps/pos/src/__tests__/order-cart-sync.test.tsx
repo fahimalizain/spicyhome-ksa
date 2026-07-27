@@ -151,7 +151,7 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     createdBy: null,
     updatedBy: null,
     items: [makeOrderItem()],
-    auditLog: [],
+    events: [],
     ...overrides,
   };
 }

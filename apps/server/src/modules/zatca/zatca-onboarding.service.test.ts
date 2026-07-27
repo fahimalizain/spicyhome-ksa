@@ -1,4 +1,8 @@
-import { ZatcaOnboardingService } from './zatca-onboarding.service';
+import {
+  ZatcaOnboardingService,
+  normalizeComplianceRequestId,
+  formatRequestId,
+} from './zatca-onboarding.service';
 import type { ComplianceResultEntry } from './zatca-onboarding.service';
 
 type MockPrintersService = ReturnType<typeof createMockPrintersService>;
@@ -913,5 +917,349 @@ describe('generateCSR subject OU', () => {
     await expect(service.generateCSR()).rejects.toThrow(
       'Org Unit not configured. Set Org Unit in ZATCA settings first.',
     );
+  });
+});
+
+// ── normalizeComplianceRequestId ──────────────────────────────────────────
+
+describe('normalizeComplianceRequestId', () => {
+  it('accepts a 13-digit number and returns the string', () => {
+    expect(normalizeComplianceRequestId(1234567890123)).toBe('1234567890123');
+  });
+
+  it('accepts a 13-digit string as-is', () => {
+    expect(normalizeComplianceRequestId('1234567890123')).toBe('1234567890123');
+  });
+
+  it('trims whitespace from a 13-digit string', () => {
+    expect(normalizeComplianceRequestId('  1234567890123  ')).toBe('1234567890123');
+  });
+
+  it('strips .0 suffix from a 13-digit string', () => {
+    expect(normalizeComplianceRequestId('1234567890123.0')).toBe('1234567890123');
+  });
+
+  it('strips .000 suffix from a 13-digit string', () => {
+    expect(normalizeComplianceRequestId('1234567890123.000')).toBe('1234567890123');
+  });
+
+  it('rejects a float whose integer part is not 13 digits', () => {
+    // Math.trunc strips the fractional part, but the integer part (42) is not 13 digits
+    expect(() => normalizeComplianceRequestId(42.7)).toThrow('must be exactly 13 digits');
+  });
+
+  it('rejects a string that is too short', () => {
+    expect(() => normalizeComplianceRequestId('123')).toThrow('must be exactly 13 digits');
+  });
+
+  it('rejects a string that is too long', () => {
+    expect(() => normalizeComplianceRequestId('12345678901234')).toThrow(
+      'must be exactly 13 digits',
+    );
+  });
+
+  it('rejects a non-numeric string', () => {
+    expect(() => normalizeComplianceRequestId('abc')).toThrow('must be exactly 13 digits');
+  });
+
+  it('rejects an empty string', () => {
+    expect(() => normalizeComplianceRequestId('')).toThrow('must be exactly 13 digits');
+  });
+
+  it('rejects whitespace-only string', () => {
+    expect(() => normalizeComplianceRequestId('   ')).toThrow('must be exactly 13 digits');
+  });
+
+  it('rejects null', () => {
+    expect(() => normalizeComplianceRequestId(null)).toThrow('null/undefined');
+  });
+
+  it('rejects undefined', () => {
+    expect(() => normalizeComplianceRequestId(undefined)).toThrow('null/undefined');
+  });
+
+  it('rejects a non-number non-string type', () => {
+    expect(() => normalizeComplianceRequestId({})).toThrow('must be a number or string');
+  });
+
+  it('handles float string with extra .0 but wrong digit count', () => {
+    expect(() => normalizeComplianceRequestId('123.0')).toThrow('must be exactly 13 digits');
+  });
+
+  it('strips .0 and then validates (only .0 suffix, not mid-float)', () => {
+    // After stripping .0 we get 1234567890123 which is 13 digits → OK
+    expect(normalizeComplianceRequestId('1234567890123.0')).toBe('1234567890123');
+  });
+
+  it('handles the exact .0 corruption pattern from stored settings', () => {
+    // This is the exact bug scenario: JSON.parse returned number,
+    // SQLite persisted it as "1234567890123.0"
+    expect(normalizeComplianceRequestId('1234567890123.0')).toBe('1234567890123');
+  });
+});
+
+// ── formatRequestId ───────────────────────────────────────────────────────
+
+describe('formatRequestId', () => {
+  it('returns string from number', () => {
+    expect(formatRequestId(9876543210987)).toBe('9876543210987');
+  });
+
+  it('returns trimmed string', () => {
+    expect(formatRequestId('  9876543210987  ')).toBe('9876543210987');
+  });
+
+  it('strips .0 suffix', () => {
+    expect(formatRequestId('1234567890123.0')).toBe('1234567890123');
+  });
+
+  it('returns "unknown" for null', () => {
+    expect(formatRequestId(null)).toBe('unknown');
+  });
+
+  it('returns "unknown" for undefined', () => {
+    expect(formatRequestId(undefined)).toBe('unknown');
+  });
+
+  it('returns "unknown" for object', () => {
+    expect(formatRequestId({ key: 'val' })).toBe('unknown');
+  });
+
+  it('returns "unknown" for empty string', () => {
+    expect(formatRequestId('')).toBe('unknown');
+  });
+
+  it('does not enforce 13-digit constraint (soft formatter)', () => {
+    // Production CSIDs may have different formats
+    expect(formatRequestId('123')).toBe('123');
+    expect(formatRequestId('abc')).toBe('abc');
+  });
+
+  it('returns "unknown" for whitespace-only string', () => {
+    expect(formatRequestId('   ')).toBe('unknown');
+  });
+
+  it('strips .0 suffix from longer IDs', () => {
+    expect(formatRequestId('123456789012345.0')).toBe('123456789012345');
+  });
+});
+
+// ── onboardCompliance: requestID normalization ────────────────────────────
+
+describe('onboardCompliance requestID storage', () => {
+  let store: Map<string, string>;
+  let printersService: MockPrintersService;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+
+    store.set('zatca_org_unit', 'SpicyHome POS');
+    store.set('zatca_simulation_spicyhome-pos_csr_base64', 'fake-csr-base64');
+  });
+
+  function mockComplianceResponse(status: number, body: Record<string, unknown>) {
+    httpClient.post.mockResolvedValue({
+      status,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('stores numeric requestID as a clean 13-digit string (no .0)', async () => {
+    mockComplianceResponse(200, {
+      binarySecurityToken: 'fake-cert',
+      secret: 'fake-secret',
+      requestID: 1234567890123, // JSON.parse would produce this as a number
+    });
+
+    const result = await service.onboardCompliance('123456');
+
+    // Stored setting must be the clean string
+    const stored = store.get('zatca_simulation_spicyhome-pos_compliance_request_id');
+    expect(stored).toBe('1234567890123');
+
+    // Return value must also be clean
+    expect(result.requestId).toBe('1234567890123');
+    expect(result.success).toBe(true);
+  });
+
+  it('stores string requestID as-is when valid 13 digits', async () => {
+    mockComplianceResponse(200, {
+      binarySecurityToken: 'fake-cert',
+      secret: 'fake-secret',
+      requestID: '9876543210987',
+    });
+
+    const result = await service.onboardCompliance('123456');
+
+    const stored = store.get('zatca_simulation_spicyhome-pos_compliance_request_id');
+    expect(stored).toBe('9876543210987');
+    expect(result.requestId).toBe('9876543210987');
+  });
+
+  it('strips .0 suffix from string requestID before storing', async () => {
+    mockComplianceResponse(200, {
+      binarySecurityToken: 'fake-cert',
+      secret: 'fake-secret',
+      requestID: '1234567890123.0', // corrupted float string
+    });
+
+    const result = await service.onboardCompliance('123456');
+
+    const stored = store.get('zatca_simulation_spicyhome-pos_compliance_request_id');
+    expect(stored).toBe('1234567890123');
+    expect(result.requestId).toBe('1234567890123');
+  });
+
+  it('throws when requestID is missing from compliance response', async () => {
+    mockComplianceResponse(200, {
+      binarySecurityToken: 'fake-cert',
+      secret: 'fake-secret',
+      // no requestID
+    });
+
+    await expect(service.onboardCompliance('123456')).rejects.toThrow('null/undefined');
+  });
+
+  it('throws when requestID is not a valid 13-digit number', async () => {
+    mockComplianceResponse(200, {
+      binarySecurityToken: 'fake-cert',
+      secret: 'fake-secret',
+      requestID: 42, // too short
+    });
+
+    await expect(service.onboardCompliance('123456')).rejects.toThrow('must be exactly 13 digits');
+  });
+});
+
+// ── onboardProduction: compliance_request_id normalization ────────────────
+
+describe('onboardProduction compliance_request_id', () => {
+  let store: Map<string, string>;
+  let printersService: MockPrintersService;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+
+    store.set('zatca_org_unit', 'SpicyHome POS');
+    store.set('zatca_simulation_spicyhome-pos_compliance_secret', 'fake-secret');
+    store.set('zatca_simulation_spicyhome-pos_compliance_cert', 'fake-cert');
+  });
+
+  function mockProductionResponse(status: number, body: Record<string, unknown>) {
+    httpClient.post.mockResolvedValue({
+      status,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('normalizes corrupted "1234567890123.0" from settings and sends clean number', async () => {
+    // Simulate the corrupted stored value (the bug we're fixing)
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', '1234567890123.0');
+
+    mockProductionResponse(200, {
+      binarySecurityToken: 'prod-cert',
+      secret: 'prod-secret',
+      requestID: '9998887776665',
+    });
+
+    await service.onboardProduction();
+
+    // Verify the HTTP body sent to ZATCA
+    const postCallArgs = httpClient.post.mock.calls[0];
+    const sentBody = JSON.parse(postCallArgs[1].body);
+
+    // Must be a JSON number, not a string (ZATCA validates digit count on numeric id)
+    expect(sentBody.compliance_request_id).toBe(1234567890123);
+    expect(typeof sentBody.compliance_request_id).toBe('number');
+  });
+
+  it('sends 13-digit numeric compliance_request_id when setting is clean', async () => {
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', '9876543210987');
+
+    mockProductionResponse(200, {
+      binarySecurityToken: 'prod-cert',
+      secret: 'prod-secret',
+      requestID: '1112223334445',
+    });
+
+    await service.onboardProduction();
+
+    const sentBody = JSON.parse(httpClient.post.mock.calls[0][1].body);
+    expect(sentBody.compliance_request_id).toBe(9876543210987);
+    expect(typeof sentBody.compliance_request_id).toBe('number');
+  });
+
+  it('throws before calling ZATCA when compliance_request_id is missing', async () => {
+    // Setting never stored
+    await expect(service.onboardProduction()).rejects.toThrow('Compliance request ID not found');
+    expect(httpClient.post).not.toHaveBeenCalled();
+  });
+
+  it('throws before calling ZATCA when compliance_request_id is not 13 digits', async () => {
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', 'abc');
+
+    await expect(service.onboardProduction()).rejects.toThrow('must be exactly 13 digits');
+    expect(httpClient.post).not.toHaveBeenCalled();
+  });
+
+  it('throws before calling ZATCA when compliance_request_id is empty string', async () => {
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', '');
+
+    await expect(service.onboardProduction()).rejects.toThrow('Compliance request ID not found');
+    expect(httpClient.post).not.toHaveBeenCalled();
+  });
+
+  it('returns clean production requestId without .0 suffix', async () => {
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', '1234567890123');
+
+    mockProductionResponse(200, {
+      binarySecurityToken: 'prod-cert',
+      secret: 'prod-secret',
+      requestID: 9998887776665, // numeric from JSON.parse
+    });
+
+    const result = await service.onboardProduction();
+
+    // Production requestID should be clean string, no .0
+    expect(result.requestId).toBe('9998887776665');
+    expect(result.success).toBe(true);
+  });
+
+  it('returns "unknown" when production response has no requestID', async () => {
+    store.set('zatca_simulation_spicyhome-pos_compliance_request_id', '1234567890123');
+
+    mockProductionResponse(200, {
+      binarySecurityToken: 'prod-cert',
+      secret: 'prod-secret',
+      // no requestID
+    });
+
+    const result = await service.onboardProduction();
+
+    expect(result.requestId).toBe('unknown');
   });
 });
