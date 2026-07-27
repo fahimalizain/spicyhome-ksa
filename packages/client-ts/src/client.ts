@@ -266,8 +266,8 @@ export class SpicyHomeClient {
     removeItem: (orderId: number, itemId: number) =>
       request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
 
-    pay: (orderId: number) =>
-      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`),
+    pay: (orderId: number, dto?: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> }) =>
+      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),
 
     void: (orderId: number) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`),
@@ -327,6 +327,18 @@ export class SpicyHomeClient {
       }),
 
     get: (id: number) => request<any>(this.config, 'GET', `/day/${id}`),
+  };
+
+  paymentMethods = {
+    list: () => request<any[]>(this.config, 'GET', '/payment-methods'),
+
+    listEnabled: () => request<any[]>(this.config, 'GET', '/payment-methods/enabled'),
+
+    create: (dto: { title: string }) =>
+      request<any>(this.config, 'POST', '/payment-methods', dto),
+
+    update: (id: string, dto: { title?: string; enabled?: boolean; sortOrder?: number }) =>
+      request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
   };
 
   reports = {
