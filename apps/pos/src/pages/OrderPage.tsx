@@ -3,21 +3,35 @@ import { useSearchParams } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useCart } from '../hooks/useCart';
-import type { CategoryResponse, ItemResponse, TableResponse } from '@spicyhome/client-ts';
+import { usePermissions } from '../hooks/usePermissions';
+import { RefundPanel } from '../components/RefundPanel';
+import { OrderActionBar } from '../components/OrderActionBar';
+import type { CartItem } from '../hooks/useCart';
+import type {
+  CategoryResponse,
+  ItemResponse,
+  TableResponse,
+  OrderResponse,
+} from '@spicyhome/client-ts';
 
 export function OrderPage() {
   const cart = useCart();
+  const permissions = usePermissions();
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
+  const [refundLoading, setRefundLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<{
     id: number;
     status: string;
     orderNo: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mutating, setMutating] = useState(false);
   const [error, setError] = useState('');
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
@@ -109,10 +123,32 @@ export function OrderPage() {
     ? items.filter((i) => i.categoryId === selectedCategory)
     : items;
 
+  async function handleOpenRefund() {
+    if (!currentOrder) return;
+    setShowRefundModal(true);
+    setRefundLoading(true);
+    setRefundOrder(null);
+    try {
+      const order = await client.orders.get(currentOrder.id);
+      setRefundOrder(order);
+    } catch {
+      setShowRefundModal(false);
+    } finally {
+      setRefundLoading(false);
+    }
+  }
+
+  function handleCloseRefund() {
+    setShowRefundModal(false);
+    setRefundOrder(null);
+  }
+
   function handleNewOrder() {
     cart.clear();
     setCurrentOrder(null);
     setShowTablePicker(false);
+    setShowRefundModal(false);
+    setRefundOrder(null);
     setSearchParams({}, { replace: true });
   }
 
@@ -151,20 +187,6 @@ export function OrderPage() {
     }
   }
 
-  async function handleSend() {
-    if (!currentOrder) return;
-    setLoading(true);
-    setError('');
-    try {
-      await client.orders.send(currentOrder.id);
-      setCurrentOrder((prev) => (prev ? { ...prev, status: 'sent' } : null));
-    } catch (e: any) {
-      setError(e.message || 'Failed to send order');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function handlePay() {
     if (!currentOrder) return;
     setLoading(true);
@@ -193,7 +215,108 @@ export function OrderPage() {
     }
   }
 
+  // ---- Server-synced cart mutation handlers ----
+
+  async function handleAddItem(item: ItemResponse) {
+    if (currentOrder && currentOrder.status === 'open') {
+      // Post-order: optimistic append → server addItem → refetch
+      setMutating(true);
+      setError('');
+      cart.appendItem(item);
+      try {
+        await client.orders.addItem(currentOrder.id, {
+          itemId: item.id,
+          qty: 1,
+        });
+        const order = await client.orders.get(currentOrder.id);
+        cart.loadOrder(order);
+      } catch (e: any) {
+        // Rollback: refetch server state
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          cart.loadOrder(order);
+        } catch {
+          // If refetch also fails, leave optimistic state + error
+        }
+        setError(e.message || 'Failed to add item');
+      } finally {
+        setMutating(false);
+      }
+    } else {
+      // Pre-order: local merge behavior
+      cart.addItem(item);
+    }
+  }
+
+  async function handleUpdateQty(cartItem: CartItem, newQty: number) {
+    if (currentOrder && cartItem.orderItemId != null && currentOrder.status === 'open') {
+      setMutating(true);
+      setError('');
+      if (newQty <= 0) {
+        // Remove via DELETE
+        cart.removeByOrderItem(cartItem.orderItemId);
+        try {
+          await client.orders.removeItem(currentOrder.id, cartItem.orderItemId);
+        } catch (e: any) {
+          await refetchOrderSafe();
+          setError(e.message || 'Failed to remove item');
+        } finally {
+          setMutating(false);
+        }
+      } else {
+        // Update qty via PATCH
+        cart.updateQtyByOrderItem(cartItem.orderItemId, newQty);
+        try {
+          await client.orders.updateItem(currentOrder.id, cartItem.orderItemId, { qty: newQty });
+        } catch (e: any) {
+          await refetchOrderSafe();
+          setError(e.message || 'Failed to update item');
+        } finally {
+          setMutating(false);
+        }
+      }
+    } else {
+      // Pre-order: local
+      cart.updateQty(cartItem.itemId, newQty);
+    }
+  }
+
+  async function handleRemove(cartItem: CartItem) {
+    if (currentOrder && cartItem.orderItemId != null && currentOrder.status === 'open') {
+      setMutating(true);
+      setError('');
+      cart.removeByOrderItem(cartItem.orderItemId);
+      try {
+        await client.orders.removeItem(currentOrder.id, cartItem.orderItemId);
+      } catch (e: any) {
+        await refetchOrderSafe();
+        setError(e.message || 'Failed to remove item');
+      } finally {
+        setMutating(false);
+      }
+    } else {
+      // Pre-order: local
+      cart.removeItem(cartItem.itemId);
+    }
+  }
+
+  async function refetchOrderSafe() {
+    if (!currentOrder) return;
+    try {
+      const order = await client.orders.get(currentOrder.id);
+      cart.loadOrder(order);
+    } catch {
+      // If refetch fails, leave optimistic state + error
+    }
+  }
+
+  // ---- End mutation handlers ----
+
   const orderReadonly = currentOrder ? currentOrder.status !== 'open' : false;
+  // If no updateOrder permission, treat as readonly for post-order mutations
+  const permissionsReadonly = currentOrder ? !permissions.updateOrder : false;
+  const cartDisabled = orderReadonly || permissionsReadonly || loading || mutating;
+  const canCreateOrder = !currentOrder && permissions.createOrder;
 
   if (dayOpen === null) {
     return (
@@ -281,7 +404,7 @@ export function OrderPage() {
             >
               {cart.tableId
                 ? `Table: ${tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}`
-                : 'Select table\u2026'}
+                : 'Select table…'}
             </button>
           )}
         </div>
@@ -319,8 +442,8 @@ export function OrderPage() {
             {filteredItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => cart.addItem(item)}
-                disabled={orderReadonly}
+                onClick={() => handleAddItem(item)}
+                disabled={cartDisabled}
                 className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
               >
                 <span className="text-sm font-medium text-white">{item.name}</span>
@@ -349,35 +472,45 @@ export function OrderPage() {
             <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
           ) : (
             <div className="space-y-2">
-              {cart.items.map((item) => (
-                <div key={item.itemId} className="bg-gray-800 rounded-lg p-2">
+              {cart.items.map((item, idx) => (
+                <div
+                  key={
+                    item.orderItemId != null ? `oi-${item.orderItemId}` : `mi-${item.itemId}-${idx}`
+                  }
+                  className="bg-gray-800 rounded-lg p-2"
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-white flex-1">{item.name}</span>
                     <span className="text-xs text-gray-400 ml-2">
                       {halalasToSar(item.unitPriceHalalas * item.qty)}
                     </span>
                   </div>
-                  {!orderReadonly && (
+                  {!orderReadonly && !permissionsReadonly && (
                     <div className="flex items-center gap-1 mt-1">
                       <button
-                        onClick={() => cart.updateQty(item.itemId, item.qty - 1)}
-                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                        onClick={() => handleUpdateQty(item, item.qty - 1)}
+                        disabled={cartDisabled}
+                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
                       >
                         -
                       </button>
                       <span className="text-sm text-gray-300 w-7 text-center">{item.qty}</span>
                       <button
-                        onClick={() => cart.updateQty(item.itemId, item.qty + 1)}
-                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                        onClick={() => handleUpdateQty(item, item.qty + 1)}
+                        disabled={cartDisabled}
+                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
                       >
                         +
                       </button>
-                      <button
-                        onClick={() => cart.removeItem(item.itemId)}
-                        className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 rounded text-xs text-white ml-auto"
-                      >
-                        ✕
-                      </button>
+                      {(currentOrder ? permissions.deleteOrderItem : true) && (
+                        <button
+                          onClick={() => handleRemove(item)}
+                          disabled={cartDisabled}
+                          className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded text-xs text-white ml-auto"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -406,7 +539,7 @@ export function OrderPage() {
           {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
 
           <div className="space-y-2">
-            {!currentOrder && (
+            {canCreateOrder && (
               <button
                 onClick={handleCreateOrder}
                 disabled={cart.items.length === 0 || loading}
@@ -418,43 +551,47 @@ export function OrderPage() {
 
             {currentOrder && currentOrder.status === 'open' && (
               <>
-                <button
-                  onClick={handleSend}
-                  disabled={loading || cart.items.length === 0}
-                  className="w-full touch-target bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  {loading ? 'Sending...' : 'Send to Kitchen'}
-                </button>
-                <button
-                  onClick={handleVoid}
-                  disabled={loading}
-                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                >
-                  Void Order
-                </button>
+                {permissions.payOrder && (
+                  <button
+                    onClick={handlePay}
+                    disabled={loading || cart.items.length === 0 || mutating}
+                    className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                  >
+                    {loading ? 'Paying...' : 'Pay'}
+                  </button>
+                )}
+                {permissions.voidOrder && (
+                  <button
+                    onClick={handleVoid}
+                    disabled={loading}
+                    className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
+                  >
+                    Void Order
+                  </button>
+                )}
               </>
             )}
 
-            {currentOrder && currentOrder.status === 'sent' && (
-              <>
-                <button
-                  onClick={handlePay}
-                  disabled={loading}
-                  className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  {loading ? 'Paying...' : 'Pay'}
-                </button>
-                <button
-                  onClick={handleVoid}
-                  disabled={loading}
-                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                >
-                  Void Order
-                </button>
-              </>
+            {currentOrder && currentOrder.status === 'paid' && permissions.refundOrder && (
+              <button
+                onClick={handleOpenRefund}
+                disabled={loading || refundLoading}
+                className="w-full touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+              >
+                Refund
+              </button>
             )}
 
-            {(currentOrder?.status === 'paid' || currentOrder?.status === 'voided') && (
+            {/* OrderActionBar for reprints */}
+            {currentOrder && (
+              <div className="pt-1">
+                <OrderActionBar orderId={currentOrder.id} status={currentOrder.status} />
+              </div>
+            )}
+
+            {(currentOrder?.status === 'paid' ||
+              currentOrder?.status === 'voided' ||
+              currentOrder?.status === 'refunded') && (
               <button
                 onClick={handleNewOrder}
                 className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
@@ -495,6 +632,43 @@ export function OrderPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund modal */}
+      {showRefundModal && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={handleCloseRefund}
+        >
+          <div
+            className="bg-gray-850 rounded-xl p-4 w-96 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {refundLoading || !refundOrder ? (
+              <div className="text-sm text-gray-400 text-center py-4">Loading order...</div>
+            ) : (
+              <RefundPanel
+                order={refundOrder}
+                onClose={handleCloseRefund}
+                onRefunded={() => {
+                  handleCloseRefund();
+                  // Reload order to get updated status
+                  client.orders
+                    .get(currentOrder!.id)
+                    .then((order) => {
+                      cart.loadOrder(order);
+                      setCurrentOrder({
+                        id: order.id,
+                        status: order.status,
+                        orderNo: order.orderNo,
+                      });
+                    })
+                    .catch(() => {});
+                }}
+              />
+            )}
           </div>
         </div>
       )}

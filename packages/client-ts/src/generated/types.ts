@@ -1656,6 +1656,16 @@ export interface components {
       /** @example no onion */
       notes?: string;
     };
+    AddOrderItemResponse: {
+      /** @example true */
+      success: boolean;
+      /**
+       * Format: int64
+       * @description order_items.id of the newly created line
+       * @example 1
+       */
+      orderItemId: number;
+    };
     UpdateOrderItemDto: {
       /**
        * Format: int32
@@ -1673,10 +1683,11 @@ export interface components {
     };
     ReprintOrderDto: {
       /**
+       * @description Reprint target (receipt only; kitchen reprints are not supported)
        * @example receipt
        * @enum {string}
        */
-      target: 'receipt' | 'kitchen';
+      target: 'receipt';
     };
     PrintResponse: {
       /** @example true */
@@ -2753,7 +2764,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['SuccessResponse'];
+          'application/json': components['schemas']['AddOrderItemResponse'];
         };
       };
     };

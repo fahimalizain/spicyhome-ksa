@@ -116,6 +116,7 @@ All URIs are relative to *http://localhost*
 ## Documentation for Models
 
  - [com.spicyhome.client.models.AddOrderItemDto](docs/AddOrderItemDto.md)
+ - [com.spicyhome.client.models.AddOrderItemResponse](docs/AddOrderItemResponse.md)
  - [com.spicyhome.client.models.AuditLogEntry](docs/AuditLogEntry.md)
  - [com.spicyhome.client.models.AuditVerifyResponse](docs/AuditVerifyResponse.md)
  - [com.spicyhome.client.models.CategoryResponse](docs/CategoryResponse.md)

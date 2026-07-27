@@ -2,6 +2,7 @@ package com.spicyhome.pos.data.repository
 
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.models.AddOrderItemDto
+import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
@@ -33,7 +34,7 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         return ordersApi.ordersControllerListOrders(status ?: "", date ?: "")
     }
 
-    fun addItem(orderId: Long, itemId: Long, qty: Int, notes: String?): Call<SuccessResponse> {
+    fun addItem(orderId: Long, itemId: Long, qty: Int, notes: String?): Call<AddOrderItemResponse> {
         return ordersApi.ordersControllerAddItem(
             orderId,
             AddOrderItemDto(

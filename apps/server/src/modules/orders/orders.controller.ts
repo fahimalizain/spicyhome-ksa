@@ -28,7 +28,12 @@ import {
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { OrderSummaryResponse } from './dto/order-summary-response.dto';
-import { SuccessResponse, StatusResponse, RefundResponse } from './dto/success-response.dto';
+import {
+  SuccessResponse,
+  AddOrderItemResponse,
+  StatusResponse,
+  RefundResponse,
+} from './dto/success-response.dto';
 import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { OrderEventResponse } from './dto/order-event-response.dto';
 import { OrderRefundResponse } from './dto/refund-response.dto';
@@ -77,7 +82,7 @@ export class OrdersController {
   @RequiresPermission('update_order')
   @ApiOperation({ summary: 'Add an item to an order' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Item added', type: SuccessResponse })
+  @ApiCreatedResponse({ description: 'Item added', type: AddOrderItemResponse })
   addItem(
     @Param('id', ParseIntPipe) orderId: number,
     @Body() dto: AddOrderItemDto,

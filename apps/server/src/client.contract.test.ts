@@ -203,6 +203,7 @@ describe('Client contract test', () => {
       qty: 2,
     });
     expect(res.success).toBe(true);
+    expect(res.orderItemId).toBeGreaterThan(0);
   });
 
   it('gets order with items', async () => {

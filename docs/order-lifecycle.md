@@ -44,7 +44,7 @@ VALID_TRANSITIONS:
 | Make payment                         |      **Yes**      |     **No**     |
 | Issue refund                         |      **Yes**      |     **No**     |
 | Void order                           |      **Yes**      |     **No**     |
-| Reprint receipt / kitchen ticket     |        Yes        |       No       |
+| Reprint receipt                      |        Yes        |       No       |
 | Open / close business day            |        Yes        |       No       |
 | Manage menu, tables, printers, users |        Yes        |       No       |
 
@@ -129,7 +129,7 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 
 | Type                      | Trigger                                                    | Payload                                                                                  |
 | ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `kitchen_print_enqueued`  | Auto: item add / qty increase / reprint                    | `{ printer: "<name>", printerId: <id>, items: [{ orderItemId, itemName, printedQty }] }` |
+| `kitchen_print_enqueued`  | Auto: item add / qty increase                              | `{ printer: "<name>", printerId: <id>, items: [{ orderItemId, itemName, printedQty }] }` |
 | `kitchen_print_succeeded` | Printer confirms kitchen ticket                            | `{ printer: "<name>", printerId: <id> }`                                                 |
 | `receipt_print_enqueued`  | `POST /orders/:id/pay`, `POST /orders/:id/refund`, reprint | `{ printer: "<name>", printerId: <id>, totalHalalas, kickDrawer: bool }`                 |
 | `receipt_print_succeeded` | Printer confirms receipt                                   | `{ printer: "<name>", printerId: <id> }`                                                 |
@@ -330,21 +330,21 @@ Response: { success: true, refundId: number }
 
 ## Endpoint Summary
 
-| Endpoint                                | Permission          | POS SPA | Android Tablet |
-| --------------------------------------- | ------------------- | :-----: | :------------: |
-| `POST /orders`                          | `create_order`      |   Yes   |      Yes       |
-| `GET /orders`                           | none                |   Yes   |      Yes       |
-| `GET /orders/:id`                       | none                |   Yes   |      Yes       |
-| `GET /orders/:id/events`                | none                |   Yes   |       No       |
-| `GET /orders/:id/events/verify`         | none                |   Yes   |       No       |
-| `POST /orders/:id/items`                | `update_order`      |   Yes   |      Yes       |
-| `PATCH /orders/:orderId/items/:itemId`  | `update_order`      |   Yes   |      Yes       |
-| `DELETE /orders/:orderId/items/:itemId` | `delete_order_item` |   Yes   |      Yes       |
-| `POST /orders/:id/pay`                  | `pay_order`         | **Yes** |     **No**     |
-| `POST /orders/:id/refund`               | `refund_order`      | **Yes** |     **No**     |
-| `GET /orders/:id/refunds`               | none                |   Yes   |       No       |
-| `POST /orders/:id/void`                 | `void_order`        | **Yes** |     **No**     |
-| `POST /orders/:id/print`                | `update_order`      |   Yes   |       No       |
+| Endpoint                                | Permission          |   POS SPA    | Android Tablet |
+| --------------------------------------- | ------------------- | :----------: | :------------: |
+| `POST /orders`                          | `create_order`      |     Yes      |      Yes       |
+| `GET /orders`                           | none                |     Yes      |      Yes       |
+| `GET /orders/:id`                       | none                |     Yes      |      Yes       |
+| `GET /orders/:id/events`                | none                |     Yes      |       No       |
+| `GET /orders/:id/events/verify`         | none                |     Yes      |       No       |
+| `POST /orders/:id/items`                | `update_order`      |     Yes      |      Yes       |
+| `PATCH /orders/:orderId/items/:itemId`  | `update_order`      |     Yes      |      Yes       |
+| `DELETE /orders/:orderId/items/:itemId` | `delete_order_item` |     Yes      |      Yes       |
+| `POST /orders/:id/pay`                  | `pay_order`         |   **Yes**    |     **No**     |
+| `POST /orders/:id/refund`               | `refund_order`      |   **Yes**    |     **No**     |
+| `GET /orders/:id/refunds`               | none                |     Yes      |       No       |
+| `POST /orders/:id/void`                 | `void_order`        |   **Yes**    |     **No**     |
+| `POST /orders/:id/print`                | `update_order`      | Receipt only |       No       |
 
 > The Android app should only bind to endpoints for order creation and item management. The server enforces via permission guards; the Android client is a restricted UI surface.
 

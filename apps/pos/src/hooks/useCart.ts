@@ -3,7 +3,8 @@ import { decomposeVat } from '@spicyhome/shared';
 import type { ItemResponse, OrderResponse } from '@spicyhome/client-ts';
 
 export interface CartItem {
-  itemId: number;
+  itemId: number; // menu item ID
+  orderItemId?: number; // order_items.id — set after server creates it
   name: string;
   unitPriceHalalas: number;
   vatRateBp: number;
@@ -29,7 +30,12 @@ type CartAction =
       items: CartItem[];
       orderType: 'dine_in' | 'takeaway';
       tableId: number | null;
-    };
+    }
+  // Post-order (server-synced) actions
+  | { type: 'APPEND_ITEM'; item: CartItem }
+  | { type: 'UPDATE_QTY_BY_ORDER_ITEM'; orderItemId: number; qty: number }
+  | { type: 'REMOVE_BY_ORDER_ITEM'; orderItemId: number }
+  | { type: 'UPDATE_NOTES_BY_ORDER_ITEM'; orderItemId: number; notes: string };
 
 export interface CartTotals {
   subtotalHalalas: number;
@@ -79,6 +85,7 @@ function decomposeTotalVat(items: CartItem[]): { vatHalalas: number; priceExclHa
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD_ITEM': {
+      // Pre-order merge behavior: same menu itemId → increase qty
       const existing = state.items.find((i) => i.itemId === action.item.itemId);
       if (existing) {
         return {
@@ -120,6 +127,41 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       return { items: [], orderType: 'dine_in', tableId: null };
     case 'LOAD_ORDER':
       return { items: action.items, orderType: action.orderType, tableId: action.tableId };
+
+    // Post-order (server-synced) actions — operate by orderItemId
+    case 'APPEND_ITEM':
+      // Always append as a new line, never merge (server addItem always inserts a new row)
+      return { ...state, items: [...state.items, action.item] };
+
+    case 'UPDATE_QTY_BY_ORDER_ITEM': {
+      if (action.qty <= 0) {
+        return {
+          ...state,
+          items: state.items.filter((i) => i.orderItemId !== action.orderItemId),
+        };
+      }
+      return {
+        ...state,
+        items: state.items.map((i) =>
+          i.orderItemId === action.orderItemId ? { ...i, qty: action.qty } : i,
+        ),
+      };
+    }
+
+    case 'REMOVE_BY_ORDER_ITEM':
+      return {
+        ...state,
+        items: state.items.filter((i) => i.orderItemId !== action.orderItemId),
+      };
+
+    case 'UPDATE_NOTES_BY_ORDER_ITEM':
+      return {
+        ...state,
+        items: state.items.map((i) =>
+          i.orderItemId === action.orderItemId ? { ...i, notes: action.notes } : i,
+        ),
+      };
+
     default:
       return state;
   }
@@ -166,19 +208,47 @@ export function useCart() {
 
   const loadOrder = useCallback((order: OrderResponse) => {
     const items: CartItem[] = (order.items || []).map((oi) => ({
-      itemId: (oi.itemId as unknown as number) || 0,
+      itemId: oi.itemId ?? 0,
+      orderItemId: oi.id,
       name: oi.itemName,
       unitPriceHalalas: oi.unitPriceHalalas,
       vatRateBp: oi.vatRateBp,
       qty: oi.qty,
-      notes: (oi.notes as unknown as string) || '',
+      notes: oi.notes ?? '',
     }));
     dispatch({
       type: 'LOAD_ORDER',
       items,
       orderType: order.type as 'dine_in' | 'takeaway',
-      tableId: (order.tableId as unknown as number) || null,
+      tableId: order.tableId,
     });
+  }, []);
+
+  // Post-order methods — operate by orderItemId, no API calls (those are in OrderPage)
+  const appendItem = useCallback((item: ItemResponse, qty = 1) => {
+    dispatch({
+      type: 'APPEND_ITEM',
+      item: {
+        itemId: item.id,
+        name: item.name,
+        unitPriceHalalas: item.priceHalalas,
+        vatRateBp: item.vatRateBp,
+        qty,
+        notes: '',
+      },
+    });
+  }, []);
+
+  const updateQtyByOrderItem = useCallback((orderItemId: number, qty: number) => {
+    dispatch({ type: 'UPDATE_QTY_BY_ORDER_ITEM', orderItemId, qty });
+  }, []);
+
+  const removeByOrderItem = useCallback((orderItemId: number) => {
+    dispatch({ type: 'REMOVE_BY_ORDER_ITEM', orderItemId });
+  }, []);
+
+  const updateNotesByOrderItem = useCallback((orderItemId: number, notes: string) => {
+    dispatch({ type: 'UPDATE_NOTES_BY_ORDER_ITEM', orderItemId, notes });
   }, []);
 
   const totals = computeTotals(state.items);
@@ -195,5 +265,10 @@ export function useCart() {
     setOrderType,
     clear,
     loadOrder,
+    // Post-order methods
+    appendItem,
+    updateQtyByOrderItem,
+    removeByOrderItem,
+    updateNotesByOrderItem,
   };
 }

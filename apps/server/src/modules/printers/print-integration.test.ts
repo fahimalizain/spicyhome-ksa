@@ -353,7 +353,7 @@ describe('Print Integration', () => {
       expect(str).toContain('Zinger Burger');
     });
 
-    it('POST /orders/:id/print reprints kitchen tickets', async () => {
+    it('POST /orders/:id/print rejects kitchen target with 400', async () => {
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
@@ -369,20 +369,15 @@ describe('Print Integration', () => {
 
       transport.sent = [];
 
-      const reprintRes = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post(`/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'kitchen' })
-        .expect(201);
+        .expect(400);
 
-      expect(reprintRes.body.success).toBe(true);
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      const kitchenPrints = transport.sent.filter(
-        (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
-      );
-      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      // No kitchen prints should have been sent to the transport
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBe(0);
     });
   });
 

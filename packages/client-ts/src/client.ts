@@ -19,6 +19,16 @@ export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type AddOrderItemDto = Schemas['AddOrderItemDto'];
 export type UpdateOrderItemDto = Schemas['UpdateOrderItemDto'];
 
+export type AddOrderItemResponse = Schemas['AddOrderItemResponse'];
+export type CreateRefundDto = Schemas['CreateRefundDto'];
+export type RefundResponse = Schemas['RefundResponse'];
+export type OrderRefundResponse = Schemas['OrderRefundResponse'];
+export type RefundItemDto = Schemas['RefundItemDto'];
+export type RefundItemResponse = Schemas['RefundItemResponse'];
+export type OrderEventResponse = Schemas['OrderEventResponse'];
+export type PrintResponse = Schemas['PrintResponse'];
+export type ReprintOrderDto = Schemas['ReprintOrderDto'];
+
 export type LoginResponse = Schemas['LoginResponse'];
 export type MeResponse = Schemas['MeResponse'];
 export type UserResponse = Schemas['UserResponse'];
@@ -244,6 +254,7 @@ export class SpicyHomeClient {
 
     get: (id: number) => request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
 
+    /** @deprecated Use verifyEvents instead — maps to legacy /audit/verify endpoint. */
     verifyAuditChain: (id: number) =>
       request<AuditVerifyResponse>(this.config, 'GET', `/orders/${id}/audit/verify`),
 
@@ -251,7 +262,7 @@ export class SpicyHomeClient {
       request<CreateOrderResponse>(this.config, 'POST', '/orders', dto),
 
     addItem: (orderId: number, dto: AddOrderItemDto) =>
-      request<SuccessResponse>(this.config, 'POST', `/orders/${orderId}/items`, dto),
+      request<AddOrderItemResponse>(this.config, 'POST', `/orders/${orderId}/items`, dto),
 
     updateItem: (orderId: number, itemId: number, dto: UpdateOrderItemDto) =>
       request<SuccessResponse>(this.config, 'PATCH', `/orders/${orderId}/items/${itemId}`, dto),
@@ -259,14 +270,26 @@ export class SpicyHomeClient {
     removeItem: (orderId: number, itemId: number) =>
       request<SuccessResponse>(this.config, 'DELETE', `/orders/${orderId}/items/${itemId}`),
 
-    send: (orderId: number) =>
-      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/send`),
-
     pay: (orderId: number) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`),
 
     void: (orderId: number) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`),
+
+    refund: (orderId: number, dto: CreateRefundDto) =>
+      request<RefundResponse>(this.config, 'POST', `/orders/${orderId}/refund`, dto),
+
+    getRefunds: (orderId: number) =>
+      request<OrderRefundResponse[]>(this.config, 'GET', `/orders/${orderId}/refunds`),
+
+    getEvents: (orderId: number) =>
+      request<OrderEventResponse[]>(this.config, 'GET', `/orders/${orderId}/events`),
+
+    verifyEvents: (orderId: number) =>
+      request<AuditVerifyResponse>(this.config, 'GET', `/orders/${orderId}/events/verify`),
+
+    reprint: (orderId: number, dto: ReprintOrderDto) =>
+      request<PrintResponse>(this.config, 'POST', `/orders/${orderId}/print`, dto),
   };
 
   tables = {

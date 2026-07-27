@@ -20,6 +20,7 @@ import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.models.AddOrderItemDto
+import com.spicyhome.client.models.AddOrderItemResponse
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
@@ -45,7 +46,7 @@ class OrdersApiTest : ShouldSpec() {
             // uncomment below to test ordersControllerAddItem
             //val id : kotlin.Long = 789 // kotlin.Long | 
             //val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
-            //val result : SuccessResponse = apiInstance.ordersControllerAddItem(id, addOrderItemDto)
+            //val result : AddOrderItemResponse = apiInstance.ordersControllerAddItem(id, addOrderItemDto)
             //result shouldBe ("TODO")
         }
 

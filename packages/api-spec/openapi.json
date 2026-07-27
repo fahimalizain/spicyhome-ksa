@@ -1199,7 +1199,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/AddOrderItemResponse"
                 }
               }
             }
@@ -3695,6 +3695,25 @@
           "qty"
         ]
       },
+      "AddOrderItemResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "orderItemId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "order_items.id of the newly created line"
+          }
+        },
+        "required": [
+          "success",
+          "orderItemId"
+        ]
+      },
       "UpdateOrderItemDto": {
         "type": "object",
         "properties": {
@@ -3732,10 +3751,10 @@
           "target": {
             "type": "string",
             "enum": [
-              "receipt",
-              "kitchen"
+              "receipt"
             ],
-            "example": "receipt"
+            "example": "receipt",
+            "description": "Reprint target (receipt only; kitchen reprints are not supported)"
           }
         },
         "required": [

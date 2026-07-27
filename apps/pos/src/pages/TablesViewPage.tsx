@@ -45,9 +45,10 @@ export function TablesViewPage() {
       loadData();
     };
     unsubs.push(realtime.subscribe('order.created', refresh));
-    unsubs.push(realtime.subscribe('order.sent', refresh));
     unsubs.push(realtime.subscribe('order.paid', refresh));
     unsubs.push(realtime.subscribe('order.voided', refresh));
+    unsubs.push(realtime.subscribe('order.refund.issued', refresh));
+    unsubs.push(realtime.subscribe('order.refunded', refresh));
     unsubs.push(realtime.subscribe('order.item.added', refresh));
     unsubs.push(realtime.subscribe('order.item.updated', refresh));
     unsubs.push(realtime.subscribe('order.item.removed', refresh));
