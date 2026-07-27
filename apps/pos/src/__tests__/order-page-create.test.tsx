@@ -120,7 +120,7 @@ describe('OrderPage — create order table guards', () => {
     setupOpenDay();
   });
 
-  it('disables Create Order when dine-in has no table (even with items)', async () => {
+  it('dine-in + items + no table: Create button is enabled, not disabled', async () => {
     renderOrderPage();
 
     await waitFor(() => {
@@ -135,12 +135,12 @@ describe('OrderPage — create order table guards', () => {
       expect(screen.getByText('Select table…')).toBeInTheDocument();
     });
 
-    // Create button should be disabled
+    // Create button should be ENABLED — user can click, guard provides friendly error
     const createBtn = screen.getByText('Create Order');
-    expect(createBtn).toBeDisabled();
+    expect(createBtn).not.toBeDisabled();
   });
 
-  it('dine-in + items + no table: Create disabled, Select table… visible, no API call', async () => {
+  it('dine-in + items + no table: clicking Create shows error, opens table picker, no API call', async () => {
     // Mock create to track calls
     mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1 });
 
@@ -153,14 +153,25 @@ describe('OrderPage — create order table guards', () => {
     // Add an item
     fireEvent.click(screen.getByText('Burger'));
 
-    // Create Order button is disabled (dine-in without table)
+    // "Select table…" is visible (dine-in without table)
+    await waitFor(() => {
+      expect(screen.getByText('Select table…')).toBeInTheDocument();
+    });
+
+    // Create button is enabled — clicking triggers the defense-in-depth guard
     const createBtn = screen.getByText('Create Order');
-    expect(createBtn).toBeDisabled();
+    expect(createBtn).not.toBeDisabled();
+    fireEvent.click(createBtn);
 
-    // "Select table…" is visible
-    expect(screen.getByText('Select table…')).toBeInTheDocument();
+    // Error message should appear
+    await waitFor(() => {
+      expect(screen.getByText('Please select a table')).toBeInTheDocument();
+    });
 
-    // Create was never called (button disabled prevents click handler from firing)
+    // Table picker should open with "Select Table" heading
+    expect(screen.getByText('Select Table')).toBeInTheDocument();
+
+    // Create was never called (guard prevents API call)
     expect(mockOrdersCreate).not.toHaveBeenCalled();
   });
 

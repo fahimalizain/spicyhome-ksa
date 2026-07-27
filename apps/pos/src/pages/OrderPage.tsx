@@ -409,11 +409,7 @@ export function OrderPage() {
             {!currentOrder && (
               <button
                 onClick={handleCreateOrder}
-                disabled={
-                  cart.items.length === 0 ||
-                  loading ||
-                  (cart.orderType === 'dine_in' && !cart.tableId)
-                }
+                disabled={cart.items.length === 0 || loading}
                 className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
               >
                 {loading ? 'Creating...' : 'Create Order'}
