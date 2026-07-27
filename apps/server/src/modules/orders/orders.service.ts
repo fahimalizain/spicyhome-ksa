@@ -97,6 +97,20 @@ export class OrdersService {
     const orderUuid = uuidv4();
 
     const result: any = await this.db.transaction((tx: any) => {
+      // Prevent multiple open orders on the same table
+      if (dto.type === 'dine_in' && dto.tableId) {
+        const existingOpen = tx
+          .select({ id: orders.id, orderNo: orders.orderNo })
+          .from(orders)
+          .where(and(eq(orders.tableId, dto.tableId), eq(orders.status, 'open')))
+          .get();
+        if (existingOpen) {
+          throw new ConflictException(
+            `Table already has an open order #${existingOpen.orderNo} (id ${existingOpen.id}).`,
+          );
+        }
+      }
+
       const orderNo = this.getNextOrderNo(tx, now);
 
       const insertResult = tx
