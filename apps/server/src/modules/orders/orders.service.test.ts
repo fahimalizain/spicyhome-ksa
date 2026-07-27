@@ -121,17 +121,19 @@ describe('Order Refunds', () => {
     const orderId = orderRes.body.id;
 
     // Add items
-    await request(app.getHttpServer())
+    const addRes1 = await request(app.getHttpServer())
       .post(`/orders/${orderId}/items`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ itemId: 1, qty: 2 })
       .expect(201);
+    expect(addRes1.body.orderItemId).toBeGreaterThan(0);
 
-    await request(app.getHttpServer())
+    const addRes2 = await request(app.getHttpServer())
       .post(`/orders/${orderId}/items`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ itemId: 2, qty: 1 })
       .expect(201);
+    expect(addRes2.body.orderItemId).toBeGreaterThan(0);
 
     // Wait for kitchen prints
     await new Promise((r) => setTimeout(r, 200));
@@ -284,11 +286,12 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
+      const addRes = await request(app.getHttpServer())
         .post(`/orders/${orderId}/items`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ itemId: 1, qty: 1 })
         .expect(201);
+      expect(addRes.body.orderItemId).toBeGreaterThan(0);
 
       // Get the item ID
       const fetched = await request(app.getHttpServer())
@@ -313,11 +316,12 @@ describe('Order Refunds', () => {
         .expect(201);
       const orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
+      const addRes2 = await request(app.getHttpServer())
         .post(`/orders/${orderId}/items`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ itemId: 1, qty: 1 })
         .expect(201);
+      expect(addRes2.body.orderItemId).toBeGreaterThan(0);
 
       const fetched = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)

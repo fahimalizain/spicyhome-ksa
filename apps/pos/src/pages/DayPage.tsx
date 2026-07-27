@@ -171,10 +171,6 @@ export function DayPage() {
                       <span>{xReport.paidOrderCount}</span>
                     </div>
                     <div className="flex justify-between text-gray-300">
-                      <span>Sent</span>
-                      <span>{xReport.sentOrderCount}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-300">
                       <span>Open</span>
                       <span>{xReport.openOrderCount}</span>
                     </div>

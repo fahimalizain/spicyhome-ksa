@@ -5,6 +5,14 @@ export class SuccessResponse {
   success!: boolean;
 }
 
+export class AddOrderItemResponse {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 1, description: 'order_items.id of the newly created line' })
+  orderItemId!: number;
+}
+
 export class StatusResponse {
   @ApiProperty({ example: true })
   success!: boolean;

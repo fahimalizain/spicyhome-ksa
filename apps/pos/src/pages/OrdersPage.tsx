@@ -3,21 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
+import { usePermissions } from '../hooks/usePermissions';
+import { OrderEventTimeline } from '../components/OrderEventTimeline';
+import { RefundPanel } from '../components/RefundPanel';
+import { OrderActionBar } from '../components/OrderActionBar';
 import type { OrderResponse } from '@spicyhome/client-ts';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
-  sent: 'Sent',
   paid: 'Paid',
   voided: 'Voided',
   refunded: 'Refunded',
 };
 
 export function OrdersPage() {
+  const permissions = usePermissions();
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
+  const [showRefund, setShowRefund] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,9 +35,11 @@ export function OrdersPage() {
       loadOrders();
     };
     unsubs.push(realtime.subscribe('order.created', refresh));
-    unsubs.push(realtime.subscribe('order.sent', refresh));
     unsubs.push(realtime.subscribe('order.paid', refresh));
     unsubs.push(realtime.subscribe('order.voided', refresh));
+    unsubs.push(realtime.subscribe('order.refund.issued', refresh));
+    unsubs.push(realtime.subscribe('order.refunded', refresh));
+    unsubs.push(realtime.subscribe('order.updated', refresh));
     unsubs.push(realtime.subscribe('order.item.added', refresh));
     unsubs.push(realtime.subscribe('order.item.updated', refresh));
     unsubs.push(realtime.subscribe('order.item.removed', refresh));
@@ -59,6 +66,7 @@ export function OrdersPage() {
     try {
       const order = await client.orders.get(id);
       setSelectedOrder(order);
+      setShowRefund(false);
     } catch {
       setError('Failed to load order details');
     }
@@ -181,20 +189,43 @@ export function OrdersPage() {
             </div>
           </div>
 
-          {/* Audit trail */}
-          {selectedOrder.auditLog && selectedOrder.auditLog.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-sm font-semibold text-gray-300 mb-2">Audit Trail</h3>
-              <div className="space-y-1">
-                {selectedOrder.auditLog.map((entry) => (
-                  <div key={entry.id} className="text-xs text-gray-500 flex justify-between">
-                    <span>{entry.action}</span>
-                    <span>{new Date(entry.createdAt * 1000).toLocaleTimeString()}</span>
-                  </div>
-                ))}
-              </div>
+          {/* OrderActionBar for reprints */}
+          <div className="mt-3">
+            <OrderActionBar orderId={selectedOrder.id} status={selectedOrder.status} />
+          </div>
+
+          {/* Refund button */}
+          {selectedOrder.status === 'paid' && permissions.refundOrder && !showRefund && (
+            <button
+              onClick={() => setShowRefund(true)}
+              className="touch-target mt-3 w-full bg-amber-600 hover:bg-amber-700 rounded-lg py-2 text-sm font-bold text-white"
+            >
+              Refund
+            </button>
+          )}
+
+          {/* RefundPanel */}
+          {showRefund && selectedOrder.status === 'paid' && (
+            <div className="mt-3">
+              <RefundPanel
+                order={selectedOrder}
+                onClose={() => setShowRefund(false)}
+                onRefunded={async () => {
+                  setShowRefund(false);
+                  try {
+                    const updated = await client.orders.get(selectedOrder.id);
+                    setSelectedOrder(updated);
+                    loadOrders();
+                  } catch {
+                    // Refetch failed, keep current state
+                  }
+                }}
+              />
             </div>
           )}
+
+          {/* Event timeline (replaces legacy audit trail) */}
+          <OrderEventTimeline orderId={selectedOrder.id} />
         </div>
       )}
     </div>

@@ -1183,7 +1183,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/AddOrderItemResponse"
                 }
               }
             }
@@ -3161,6 +3161,24 @@
         },
         "required": [
           "reachable"
+        ]
+      },
+      "AddOrderItemResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "orderItemId": {
+            "type": "number",
+            "description": "order_items.id of the newly created line",
+            "example": 1
+          }
+        },
+        "required": [
+          "success",
+          "orderItemId"
         ]
       },
       "SuccessResponse": {

@@ -273,7 +273,7 @@ export class OrdersService {
     }
 
     this.emitDomainEvent('order.item.added', orderId, userId, { itemId: dto.itemId, qty: dto.qty });
-    return { success: true };
+    return { success: true, orderItemId };
   }
 
   async updateItem(

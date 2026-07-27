@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCart, computeTotals } from '../hooks/useCart';
-import type { ItemResponse } from '@spicyhome/client-ts';
+import type { ItemResponse, OrderResponse } from '@spicyhome/client-ts';
 
 const mockItem: ItemResponse = {
   id: 1,
@@ -24,6 +24,48 @@ const mockItem2: ItemResponse = {
   name: 'Fries',
   priceHalalas: 1150,
 };
+
+function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderResponse {
+  return {
+    id: 1,
+    orderNo: 42,
+    uuid: 'test-uuid',
+    type: 'dine_in',
+    tableId: null as any,
+    dayOpeningId: 1,
+    status: 'open',
+    subtotalHalalas: 0,
+    vatHalalas: 0,
+    totalHalalas: 0,
+    discountHalalas: 0,
+    createdAt: 1000,
+    updatedAt: 1000,
+    createdBy: null as any,
+    updatedBy: null as any,
+    items: [],
+    auditLog: [],
+    ...overrides,
+  };
+}
+
+function makeOrderItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    orderId: 1,
+    itemId: 1 as unknown as Record<string, never>,
+    itemName: 'Burger',
+    unitPriceHalalas: 2300,
+    vatRateBp: 1500,
+    qty: 2,
+    totalHalalas: 4600,
+    notes: null as any,
+    createdAt: 1000,
+    updatedAt: 1000,
+    createdBy: null as any,
+    updatedBy: null as any,
+    ...overrides,
+  };
+}
 
 describe('useCart', () => {
   it('starts with empty cart', () => {
@@ -143,6 +185,321 @@ describe('useCart', () => {
     });
     expect(result.current.items).toHaveLength(0);
   });
+
+  // ---- Pre-order merge behavior ----
+
+  it('pre-order: addItem merges same menu itemId into one line', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].qty).toBe(2);
+  });
+
+  // ---- loadOrder ----
+
+  it('loadOrder sets orderItemId from oi.id and itemId from oi.itemId', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      type: 'takeaway',
+      tableId: null as any,
+      items: [
+        makeOrderItem({
+          id: 101,
+          itemId: 5 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          unitPriceHalalas: 2300,
+          vatRateBp: 1500,
+          qty: 3,
+          notes: 'extra cheese' as unknown as Record<string, never>,
+        }),
+        makeOrderItem({
+          id: 102,
+          itemId: 7 as unknown as Record<string, never>,
+          itemName: 'Fries',
+          unitPriceHalalas: 1150,
+          vatRateBp: 1500,
+          qty: 1,
+          notes: null as any,
+        }),
+      ],
+    });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].orderItemId).toBe(101);
+    expect(result.current.items[0].itemId).toBe(5);
+    expect(result.current.items[0].name).toBe('Burger');
+    expect(result.current.items[0].unitPriceHalalas).toBe(2300);
+    expect(result.current.items[0].vatRateBp).toBe(1500);
+    expect(result.current.items[0].qty).toBe(3);
+    expect(result.current.items[0].notes).toBe('extra cheese');
+
+    expect(result.current.items[1].orderItemId).toBe(102);
+    expect(result.current.items[1].itemId).toBe(7);
+    expect(result.current.items[1].name).toBe('Fries');
+    expect(result.current.items[1].qty).toBe(1);
+
+    expect(result.current.orderType).toBe('takeaway');
+  });
+
+  it('loadOrder handles empty items array', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({ items: [] });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    expect(result.current.items).toHaveLength(0);
+  });
+
+  it('loadOrder handles null tableId', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({ tableId: null as any });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    expect(result.current.tableId).toBeNull();
+  });
+
+  // ---- appendItem (post-order, always new line) ----
+
+  it('appendItem always appends a new line, never merges', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.appendItem(mockItem);
+    });
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].name).toBe('Zinger Burger');
+    expect(result.current.items[0].qty).toBe(1);
+    expect(result.current.items[0].orderItemId).toBeUndefined();
+
+    // Append same menu item again — should be a new line
+    act(() => {
+      result.current.appendItem(mockItem);
+    });
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].name).toBe('Zinger Burger');
+    expect(result.current.items[1].name).toBe('Zinger Burger');
+    expect(result.current.items[0].qty).toBe(1);
+    expect(result.current.items[1].qty).toBe(1);
+  });
+
+  it('appendItem adds multiple different items', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.appendItem(mockItem);
+    });
+    act(() => {
+      result.current.appendItem(mockItem2);
+    });
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].name).toBe('Zinger Burger');
+    expect(result.current.items[1].name).toBe('Fries');
+  });
+
+  // ---- updateQtyByOrderItem ----
+
+  it('updateQtyByOrderItem updates qty of the matching orderItemId', () => {
+    const { result } = renderHook(() => useCart());
+    // Set up via loadOrder so items have orderItemIds
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 201,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 2,
+        }),
+        makeOrderItem({
+          id: 202,
+          itemId: 2 as unknown as Record<string, never>,
+          itemName: 'Fries',
+          qty: 1,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.updateQtyByOrderItem(201, 5);
+    });
+
+    expect(result.current.items[0].qty).toBe(5);
+    expect(result.current.items[1].qty).toBe(1); // unchanged
+    expect(result.current.items).toHaveLength(2);
+  });
+
+  it('updateQtyByOrderItem removes item when qty <= 0', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 301,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 1,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.updateQtyByOrderItem(301, 0);
+    });
+
+    expect(result.current.items).toHaveLength(0);
+  });
+
+  it('updateQtyByOrderItem does not affect other orderItemIds', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 401,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 2,
+        }),
+        makeOrderItem({
+          id: 402,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 3,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.updateQtyByOrderItem(401, 1);
+    });
+
+    expect(result.current.items[0].qty).toBe(1);
+    expect(result.current.items[1].qty).toBe(3);
+  });
+
+  // ---- removeByOrderItem ----
+
+  it('removeByOrderItem removes the matching line', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 501,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 1,
+        }),
+        makeOrderItem({
+          id: 502,
+          itemId: 2 as unknown as Record<string, never>,
+          itemName: 'Fries',
+          qty: 1,
+        }),
+        makeOrderItem({
+          id: 503,
+          itemId: 3 as unknown as Record<string, never>,
+          itemName: 'Cola',
+          qty: 1,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.removeByOrderItem(502);
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].orderItemId).toBe(501);
+    expect(result.current.items[1].orderItemId).toBe(503);
+  });
+
+  it('removeByOrderItem does nothing for non-existent id', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 601,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 1,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.removeByOrderItem(999);
+    });
+
+    expect(result.current.items).toHaveLength(1);
+  });
+
+  // ---- updateNotesByOrderItem ----
+
+  it('updateNotesByOrderItem updates notes on matching line', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      items: [
+        makeOrderItem({
+          id: 701,
+          itemId: 1 as unknown as Record<string, never>,
+          itemName: 'Burger',
+          qty: 1,
+          notes: null as any,
+        }),
+        makeOrderItem({
+          id: 702,
+          itemId: 2 as unknown as Record<string, never>,
+          itemName: 'Fries',
+          qty: 1,
+          notes: 'no salt' as unknown as Record<string, never>,
+        }),
+      ],
+    });
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    act(() => {
+      result.current.updateNotesByOrderItem(701, 'no onions');
+    });
+
+    expect(result.current.items[0].notes).toBe('no onions');
+    expect(result.current.items[1].notes).toBe('no salt'); // unchanged
+  });
+
+  // ---- CartItem has optional orderItemId ----
+
+  it('CartItem has orderItemId as optional field', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.addItem(mockItem);
+    });
+    expect(result.current.items[0].orderItemId).toBeUndefined();
+  });
 });
 
 describe('computeTotals', () => {
@@ -156,6 +513,23 @@ describe('computeTotals', () => {
   it('computes single item totals', () => {
     const totals = computeTotals([
       { itemId: 1, name: 'Burger', unitPriceHalalas: 2300, vatRateBp: 1500, qty: 1, notes: '' },
+    ]);
+    expect(totals.totalHalalas).toBe(2300);
+    expect(totals.subtotalHalalas).toBe(2000);
+    expect(totals.vatHalalas).toBe(300);
+  });
+
+  it('computes single item totals with orderItemId', () => {
+    const totals = computeTotals([
+      {
+        itemId: 1,
+        orderItemId: 101,
+        name: 'Burger',
+        unitPriceHalalas: 2300,
+        vatRateBp: 1500,
+        qty: 1,
+        notes: '',
+      },
     ]);
     expect(totals.totalHalalas).toBe(2300);
     expect(totals.subtotalHalalas).toBe(2000);
