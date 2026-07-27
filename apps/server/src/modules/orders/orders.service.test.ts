@@ -488,12 +488,21 @@ describe('Pay with payment methods', () => {
       .expect(201);
     const orderId = orderRes.body.id;
 
-    // Add Zinger Burger (2300 halalas)
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/items`)
+    // Fetch to get updatedAt for syncItems
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ itemId: 1, qty: 2 })
-      .expect(201);
+      .expect(200);
+
+    // Add Zinger Burger (2300 halalas) via bulk sync
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: 1, qty: 2 }],
+      })
+      .expect(200);
 
     await new Promise((r) => setTimeout(r, 100));
 
@@ -1311,6 +1320,7 @@ describe('syncItems (bulk cart sync)', () => {
     await request(app.getHttpServer())
       .post(`/orders/${orderId}/pay`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [{ methodId: 'cash', amountHalalas: res.body.totalHalalas }] })
       .expect(201);
 
     const newUpdatedAt = res.body.updatedAt;
