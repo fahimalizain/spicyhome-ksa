@@ -40,6 +40,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [tenderedHalalas, setTenderedHalalas] = useState<number | undefined>(undefined);
+  const [tenderedInput, setTenderedInput] = useState('');
   const [numpadInput, setNumpadInput] = useState('');
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const outstanding = calcOutstanding(orderTotalHalalas, amounts);
 
   function handleMethodTap(methodId: string) {
+    const switching = methodId !== selectedMethodId;
     setSelectedMethodId(methodId);
     const newAmounts = tapToFill(
       {
@@ -80,6 +82,11 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     setAmounts(newAmounts);
     // Reset numpad
     setNumpadInput('');
+    // Clear tendered when switching to a different method
+    if (switching) {
+      setTenderedInput('');
+      setTenderedHalalas(undefined);
+    }
   }
 
   function handleNumpadKey(key: string) {
@@ -120,8 +127,17 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     }));
   }
 
-  function handleTenderedChange(tendered: number) {
-    setTenderedHalalas(tendered);
+  function handleTenderedChange(value: string) {
+    setTenderedInput(value);
+    if (!value) {
+      setTenderedHalalas(undefined);
+      return;
+    }
+    // Only parse valid SAR display strings (digits + optional up-to-2 decimal places)
+    if (/^\d+(\.\d{0,2})?$/.test(value)) {
+      setTenderedHalalas(sarDisplayToHalalas(value));
+    }
+    // Invalid format: keep previous tenderedHalalas, don't update
   }
 
   const isCashSelected = selectedMethodId === 'cash';
@@ -163,14 +179,8 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const numpadKeys = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['C', '0', '.'], ['⌫']];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-white mb-3">Payment</h2>
 
         {/* Order total */}
@@ -246,11 +256,10 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
             <div>
               <label className="block text-xs text-gray-500 mb-1">Tendered (SAR)</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={tenderedHalalas !== undefined ? (tenderedHalalas / 100).toFixed(2) : ''}
-                onChange={(e) => handleTenderedChange(sarDisplayToHalalas(e.target.value))}
+                type="text"
+                inputMode="decimal"
+                value={tenderedInput}
+                onChange={(e) => handleTenderedChange(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                 placeholder="0.00"
               />
