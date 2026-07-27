@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import {
   slugifyOrgUnit,
   zatcaKey,
@@ -23,6 +25,20 @@ describe('ZATCA_SIMPLIFIED_SUBTYPES', () => {
 });
 
 describe('ZATCA_INITIAL_PIH', () => {
+  const EXPECTED_PIH =
+    'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==';
+
+  it('equals the canonical ZATCA SDK initial PIH', () => {
+    expect(ZATCA_INITIAL_PIH).toBe(EXPECTED_PIH);
+  });
+
+  it('equals computed base64(hex(SHA-256("0")))', () => {
+    const expected = Buffer.from(createHash('sha256').update('0').digest('hex'), 'utf8').toString(
+      'base64',
+    );
+    expect(ZATCA_INITIAL_PIH).toBe(expected);
+  });
+
   it('is a non-empty string', () => {
     expect(typeof ZATCA_INITIAL_PIH).toBe('string');
     expect(ZATCA_INITIAL_PIH.length).toBeGreaterThan(0);

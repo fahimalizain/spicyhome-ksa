@@ -199,13 +199,16 @@ export class ZatcaReportingService implements OnModuleInit {
     const body = JSON.stringify({
       invoiceHash: inv.invoiceHash,
       uuid: inv.uuid,
-      invoice: inv.xml,
+      invoice: Buffer.from(inv.xml).toString('base64'),
     });
 
     const response = await this.httpClient.post(url, {
       body,
       headers: {
+        'Content-Type': 'application/json',
         'Accept-Version': 'V2',
+        'Clearance-Status': '0',
+        'Accept-Language': 'en',
       },
       auth: {
         username: cert,

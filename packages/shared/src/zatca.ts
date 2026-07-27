@@ -14,8 +14,16 @@ export const ZATCA_SIMPLIFIED_SUBTYPES: Record<ZATCAInvoiceDocumentType, string>
   debit_note: '0211000',
 };
 
+/**
+ * ZATCA SDK initial Previous Invoice Hash for the first invoice in a chain.
+ *
+ * Computed as `base64(hex(SHA-256("0")))`. This is the canonical value used by
+ * the ZATCA SDK for both compliance and production environments.
+ *
+ * See: tools/zatca-sdk/Data/PIH/pih.txt
+ */
 export const ZATCA_INITIAL_PIH =
-  'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjYzQ0OTg1YTJlN2I3MjZiZTk3Mjg3YjUyZjFhM2E0M2Q1YjViMTI5Zg==';
+  'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==';
 
 /**
  * Slugify an org unit name for use in settings keys.
