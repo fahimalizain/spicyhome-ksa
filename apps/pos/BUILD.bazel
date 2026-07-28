@@ -45,6 +45,11 @@ js_run_binary(
     chdir = package_name(),
     out_dirs = ["dist"],
     tool = ":vite_bin",
+    # use_default_shell_env is required so that --action_env flags on the
+    # command line (e.g. VITE_SENTRY_DSN, VITE_APP_VERSION) are forwarded
+    # to the Vite build process. Without this, only the fixed_env from
+    # js_run_binary is used and --action_env has no effect.
+    use_default_shell_env = True,
     visibility = ["//visibility:public"],
 )
 

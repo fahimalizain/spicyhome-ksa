@@ -76,6 +76,7 @@ To run the server automatically on boot, use NSSM
      SPA_DIST=C:\SpicyHome\pos
      SPICYHOME_DB=C:\SpicyHome\data\spicyhome.db
      PORT=3000
+     SENTRY_DSN=https://...  (optional; may already be baked into start-server.ps1)
 7. Start the service: nssm start SpicyHomePOS
 
 The server will now start automatically on system boot.
@@ -92,3 +93,7 @@ environment variables before starting the server:
 
 When SENTRY_DSN is not set, the server runs without error monitoring.
 Sentry is never required — the system works offline without it.
+
+In official release builds, the Sentry DSN may already be pre-configured
+in start-server.ps1. Check the file for a $env:SENTRY_DSN assignment.
+To disable a baked DSN, comment out or remove that line.

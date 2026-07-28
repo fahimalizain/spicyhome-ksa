@@ -111,6 +111,11 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_POS_DSN || '' }}
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: spicyhome-pos@${{ steps.bump.outputs.next_version }}
+          VITE_APP_VERSION: ${{ steps.bump.outputs.next_version }}
+          SENTRY_DSN: ${{ secrets.SENTRY_SERVER_DSN || '' }}
+          SENTRY_ENVIRONMENT: production
+          SENTRY_TRACES_SAMPLE_RATE: '1.0'
+          SENTRY_PROFILES_SAMPLE_RATE: '1.0'
 
       - name: Stage release assets
         run: |
