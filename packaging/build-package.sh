@@ -320,20 +320,27 @@ if (-not (Test-Path $nodeModules)) {
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
     $logOut = Join-Path $logsDir "npm-out.log"
-    # Use cmd /c to redirect output (Start-Process -RedirectStandardOutput
-    # not available in PowerShell 2.0 on Windows 7).
-    $cmdLine = '"' + $npmCmd + '" install --production --ignore-scripts > "' + $logOut + '" 2>&1'
-    $installProcess = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $cmdLine) -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru
+    $logErr = Join-Path $logsDir "npm-err.log"
+    # NODE_SKIP_PLATFORM_CHECK already set at script top for Win7.
+    # Call npm.cmd directly (cmd /c nested quotes break on Windows).
+    $installProcess = Start-Process -FilePath $npmCmd `
+        -ArgumentList @("install", "--production", "--ignore-scripts") `
+        -WorkingDirectory $serverDir `
+        -Wait -NoNewWindow -PassThru `
+        -RedirectStandardOutput $logOut `
+        -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
         Write-Host ""
         if (Test-Path $logOut) { Get-Content $logOut | Write-Output }
+        if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
         Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
+        Write-Host "(Ensure NODE_SKIP_PLATFORM_CHECK=1 on Windows 7)"
         Read-Host "Press Enter to exit"
         exit 1
     }
-    Remove-Item $logOut -ErrorAction SilentlyContinue
+    Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
 
     # better-sqlite3's native binary is pre-bundled at prebuilt/better_sqlite3.node.
     # npm install wipes server/node_modules so we copy it in afterwards.

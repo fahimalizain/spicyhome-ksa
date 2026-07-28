@@ -60,6 +60,10 @@ try {
   Write-Warning "Could not set TLS 1.2. HTTPS downloads may fail."
 }
 
+# Node 18 refuses to start on Windows 7 unless this is set (same as start-server.ps1).
+# Must be set before any npm.cmd / node.exe child process.
+$env:NODE_SKIP_PLATFORM_CHECK = "1"
+
 # Capture engine script path at top level (before any function calls)
 # Inside functions $MyInvocation refers to the function call, not the script.
 $script:EngineScriptPath = $MyInvocation.MyCommand.Path
@@ -362,6 +366,8 @@ function Install-NpmDeps {
   Write-Log "Running npm install in $serverDir ..."
   Write-Log "npm: $npm"
   try {
+    # Ensure Win7 platform check is skipped for this child (and any nested node).
+    $env:NODE_SKIP_PLATFORM_CHECK = "1"
     # Invoke npm.cmd directly. Avoid cmd /c with nested quotes - on Windows
     # that often yields "The filename, directory name, or volume label syntax
     # is incorrect." Start-Process -RedirectStandard* works on PS 2.0+.
