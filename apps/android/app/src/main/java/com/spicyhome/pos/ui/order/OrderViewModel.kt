@@ -104,12 +104,27 @@ data class OrderUiState(
     val snapshotCart: List<CartItem>? = null,
     /** Whether a WS realtime conflict is pending (another terminal changed this order while we had local edits). */
     val showRemoteConflict: Boolean = false,
+    /** Client-side item name / nameAr search query. */
+    val itemSearchQuery: String = "",
 ) {
     val filteredItems: List<ItemResponse>
-        get() = if (selectedCategoryId == null) {
-            items
-        } else {
-            items.filter { it.categoryId.toLong() == selectedCategoryId }
+        get() {
+            val categoryFiltered = if (selectedCategoryId == null) {
+                items
+            } else {
+                items.filter { it.categoryId.toLong() == selectedCategoryId }
+            }
+            val q = itemSearchQuery.trim()
+            if (q.isEmpty()) return categoryFiltered
+            val qLower = q.lowercase()
+            return categoryFiltered.filter { item ->
+                if (item.name.lowercase().contains(qLower)) {
+                    true
+                } else {
+                    val ar = item.nameAr
+                    ar != null && ar.toString() != "null" && ar.toString().lowercase().contains(qLower)
+                }
+            }
         }
 
     val cartTotalHalalas: Long
@@ -333,6 +348,12 @@ class OrderViewModel(
     fun selectCategory(categoryId: Long?) {
         _uiState.value = _uiState.value.copy(
             selectedCategoryId = categoryId,
+        )
+    }
+
+    fun setItemSearch(query: String) {
+        _uiState.value = _uiState.value.copy(
+            itemSearchQuery = query,
         )
     }
 

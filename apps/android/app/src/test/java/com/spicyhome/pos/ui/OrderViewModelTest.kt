@@ -341,6 +341,135 @@ class OrderViewModelTest {
         assertThat(vm.uiState.value.filteredItems).containsExactly(active1)
     }
 
+    // --- Item search filtering tests ---
+
+    @Test
+    fun `setItemSearch filters by English name substring`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Butter Chicken", 3450L, 1500, categoryId = 1, nameAr = "\u062F\u062C\u0627\u062C \u0628\u0627\u0644\u0632\u0628\u062F\u0629")
+        val item2 = createItem(2, "Chicken Biryani", 2875L, 1500, categoryId = 1, nameAr = "\u0628\u0631\u064A\u0627\u0646\u064A \u062F\u062C\u0627\u062C")
+        val item3 = createItem(3, "Falafel Wrap", 1150L, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.setItemSearch("chick")
+        val state = vm.uiState.value
+
+        assertThat(state.filteredItems).hasSize(2)
+        assertThat(state.filteredItems.map { it.name }).containsExactly("Butter Chicken", "Chicken Biryani")
+    }
+
+    @Test
+    fun `setItemSearch matches nameAr`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Butter Chicken", 3450L, 1500, nameAr = "\u062F\u062C\u0627\u062C \u0628\u0627\u0644\u0632\u0628\u062F\u0629")
+        val item2 = createItem(2, "Chicken Biryani", 2875L, 1500, nameAr = "\u0628\u0631\u064A\u0627\u0646\u064A \u062F\u062C\u0627\u062C")
+        val item3 = createItem(3, "Falafel Wrap", 1150L, 1500)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.setItemSearch("\u062F\u062C\u0627\u062C")
+        val state = vm.uiState.value
+
+        assertThat(state.filteredItems).hasSize(2)
+        assertThat(state.filteredItems.map { it.name }).containsExactly("Butter Chicken", "Chicken Biryani")
+    }
+
+    @Test
+    fun `category and search compose`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Butter Chicken", 3450L, 1500, categoryId = 1, nameAr = "\u062F\u062C\u0627\u062C \u0628\u0627\u0644\u0632\u0628\u062F\u0629")
+        val item2 = createItem(2, "Falafel Wrap", 1150L, 1500, categoryId = 2)
+        val item3 = createItem(3, "Chicken Biryani", 2875L, 1500, categoryId = 1)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.setItemSearch("chick")
+        val state = vm.uiState.value
+
+        assertThat(state.filteredItems).hasSize(2)
+        assertThat(state.filteredItems.map { it.name }).containsExactly("Butter Chicken", "Chicken Biryani")
+    }
+
+    @Test
+    fun `category plus non-matching search returns empty`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000L, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000L, 1500, categoryId = 1)
+        val item3 = createItem(3, "Hummus", 800L, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.setItemSearch("hummus")
+        val state = vm.uiState.value
+
+        assertThat(state.filteredItems).isEmpty()
+    }
+
+    @Test
+    fun `whitespace-only query shows full category list`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000L, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000L, 1500, categoryId = 1)
+        val item3 = createItem(3, "Hummus", 800L, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.setItemSearch("   ")
+        val state = vm.uiState.value
+
+        assertThat(state.filteredItems).hasSize(2)
+    }
+
+    @Test
+    fun `clear search restores full list`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000L, 1500, categoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000L, 1500, categoryId = 2)
+        stubMenuItems(listOf(item1, item2))
+
+        val vm = createViewModel()
+        vm.setItemSearch("burger")
+        assertThat(vm.uiState.value.filteredItems).hasSize(1)
+
+        vm.setItemSearch("")
+        assertThat(vm.uiState.value.filteredItems).hasSize(2)
+    }
+
+    @Test
+    fun `no match returns empty filteredItems`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000L, 1500)
+        stubMenuItems(listOf(item1))
+
+        val vm = createViewModel()
+        vm.setItemSearch("xyzzy")
+        assertThat(vm.uiState.value.filteredItems).isEmpty()
+    }
+
+    @Test
+    fun `newOrder clears search query`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Burger", 1000L, 1500)
+        stubMenuItems(listOf(item1))
+
+        val vm = createViewModel()
+        vm.setOrderType(OrderType.TAKEAWAY)
+        vm.proceedToBuild()
+        vm.setItemSearch("burger")
+        assertThat(vm.uiState.value.itemSearchQuery).isEqualTo("burger")
+
+        vm.newOrder()
+        assertThat(vm.uiState.value.itemSearchQuery).isEmpty()
+    }
+
+    @Test
+    fun `case insensitive search`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Butter Chicken", 3450L, 1500)
+        val item2 = createItem(2, "Falafel", 1150L, 1500)
+        stubMenuItems(listOf(item1, item2))
+
+        val vm = createViewModel()
+        vm.setItemSearch("BUTTER")
+        assertThat(vm.uiState.value.filteredItems).hasSize(1)
+        assertThat(vm.uiState.value.filteredItems[0].name).isEqualTo("Butter Chicken")
+    }
+
     // --- initialOrderId tests ---
 
     @Test
@@ -883,11 +1012,12 @@ class OrderViewModelTest {
         vatRateBp: Int,
         categoryId: Long = 1,
         isActive: Boolean = true,
+        nameAr: String? = null,
     ): ItemResponse = ItemResponse(
         id = id,
         categoryId = categoryId,
         name = name,
-        nameAr = null,
+        nameAr = nameAr,
         priceHalalas = priceHalalas,
         vatRateBp = vatRateBp,
         sortOrder = 0,
