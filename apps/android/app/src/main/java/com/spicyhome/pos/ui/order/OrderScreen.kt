@@ -8,16 +8,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -216,43 +224,112 @@ private fun OrderEditingPanel(
                 onViewTables = { guardedNavigate(onViewTables) },
             )
 
-            // Category tabs
-            if (state.categories.isNotEmpty()) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        FilterChip(
-                            selected = state.selectedCategoryId == null,
-                            onClick = { viewModel.selectCategory(null) },
-                            label = { Text("All", fontSize = 15.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                            ),
-                        )
-                    }
-                    items(state.categories) { cat ->
-                        FilterChip(
-                            selected = state.selectedCategoryId == cat.id.toLong(),
-                            onClick = { viewModel.selectCategory(cat.id.toLong()) },
-                            label = {
-                                Text(
-                                    text = cat.name,
-                                    fontSize = 15.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                            ),
-                        )
+            // Category tabs + inline search
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Left: horizontally scrollable category chips with right-edge fade
+                val listState = rememberLazyListState()
+
+                val showRightFade by remember {
+                    derivedStateOf {
+                        val info = listState.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
+                        last.index < info.totalItemsCount - 1 ||
+                            last.offset + last.size > info.viewportEndOffset
                     }
                 }
+
+                val density = LocalDensity.current
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .drawWithContent {
+                            drawContent()
+                            if (showRightFade) {
+                                val fadeW = with(density) { 32.dp.toPx() }
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color.Transparent, DarkSurfaceVariant),
+                                        startX = size.width - fadeW,
+                                        endX = size.width,
+                                    ),
+                                    topLeft = Offset(size.width - fadeW, 0f),
+                                    size = Size(fadeW, size.height),
+                                )
+                            }
+                        },
+                ) {
+                    LazyRow(
+                        state = listState,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = state.selectedCategoryId == null,
+                                onClick = { viewModel.selectCategory(null) },
+                                label = { Text("All", fontSize = 15.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Accent,
+                                ),
+                            )
+                        }
+                        items(state.categories) { cat ->
+                            FilterChip(
+                                selected = state.selectedCategoryId == cat.id.toLong(),
+                                onClick = { viewModel.selectCategory(cat.id.toLong()) },
+                                label = {
+                                    Text(
+                                        text = cat.name,
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Accent,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                // Right: compact search, fixed width
+                OutlinedTextField(
+                    value = state.itemSearchQuery,
+                    onValueChange = { viewModel.setItemSearch(it) },
+                    singleLine = true,
+                    placeholder = { Text("Search\u2026", color = OnDarkSecondary) },
+                    modifier = Modifier
+                        .widthIn(min = 140.dp, max = 200.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = DarkSurfaceVariant,
+                        focusedTextColor = OnDark,
+                        unfocusedTextColor = OnDark,
+                        cursorColor = Accent,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface,
+                    ),
+                    trailingIcon = {
+                        if (state.itemSearchQuery.isNotEmpty()) {
+                            TextButton(
+                                onClick = { viewModel.setItemSearch("") },
+                                modifier = Modifier.width(32.dp).height(32.dp),
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
+                            }
+                        }
+                    },
+                )
             }
 
             // Item grid
@@ -262,6 +339,13 @@ private fun OrderEditingPanel(
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = Accent)
+                }
+            } else if (state.filteredItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No items match", color = OnDarkSecondary, fontSize = 16.sp)
                 }
             } else {
                 LazyColumn(
