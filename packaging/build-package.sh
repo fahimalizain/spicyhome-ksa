@@ -280,7 +280,6 @@ if (-not (Test-Path $nodeModules)) {
         if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
         Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
-        Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -315,7 +314,7 @@ Set-Location $scriptDir
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $nodeExe
-$psi.Arguments = $mainJs
+$psi.Arguments = '"' + $mainJs + '"'
 $psi.UseShellExecute = $false
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
@@ -329,7 +328,8 @@ $process.StartInfo = $psi
 # the server.  GetNewClosure() ensures the log-path variables are
 # captured so the handlers work reliably on PS 2.0 background threads.
 $outHandler = {
-    $line = $EventArgs.Data
+    param($sender, $e)
+    $line = $e.Data
     if ($line -ne $null) {
         try { [System.IO.File]::AppendAllText($outLog, $line + "`r`n") } catch {}
         [Console]::Out.WriteLine($line)
@@ -337,7 +337,8 @@ $outHandler = {
 }.GetNewClosure()
 
 $errHandler = {
-    $line = $EventArgs.Data
+    param($sender, $e)
+    $line = $e.Data
     if ($line -ne $null) {
         try { [System.IO.File]::AppendAllText($errLog, $line + "`r`n") } catch {}
         [Console]::Error.WriteLine($line)
