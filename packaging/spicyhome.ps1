@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-  SpicyHome POS — Unified Install, Update & Service Engine for Windows 7+
+  SpicyHome POS - Unified Install, Update and Service Engine for Windows 7+
 .DESCRIPTION
   Single PowerShell script that handles install, update, health check,
   rollback, and NSSM Windows service management. PowerShell 2.0 compatible.
@@ -307,7 +307,7 @@ function Remove-Junction {
     cmd /c "rmdir `"$Path`"" 2>$null
     Write-Log "Removed junction: $Path"
   } elseif (Test-Path $Path) {
-    # It exists but is not a junction — just a regular dir. Remove it.
+    # It exists but is not a junction - just a regular dir. Remove it.
     # This can happen if someone created current as a real dir.
     Remove-Item -Recurse -Force $Path -ErrorAction SilentlyContinue
     Write-Log "Removed directory (was not a junction): $Path"
@@ -1040,7 +1040,7 @@ if ($InstallService)      { $modeCount++ }
 if ($UninstallService)    { $modeCount++ }
 
 if ($modeCount -eq 0) {
-  Write-Host "SpicyHome POS — Install, Update & Service Engine"
+  Write-Host "SpicyHome POS - Install, Update and Service Engine"
   Write-Host ""
   Write-Host "Usage:"
   Write-Host "  install.bat   -InstallDir X:\path [-LocalZip release.zip]  Full install"
