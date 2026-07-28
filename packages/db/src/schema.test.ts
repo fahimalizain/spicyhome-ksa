@@ -18,6 +18,60 @@ describe('schema — migrations', () => {
     const sqlite = createTestDb(migrationsDir);
     expect(() => sqlite.close()).not.toThrow();
   });
+
+  describe('journal idempotency', () => {
+    it('__drizzle_migrations has exactly 2 rows after apply', () => {
+      const sqlite = new Database(':memory:');
+      applyMigrations(sqlite, migrationsDir);
+
+      const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
+        cnt: number;
+      };
+      expect(rows.cnt).toBe(2);
+
+      sqlite.close();
+    });
+
+    it('second applyMigrations is a no-op on the same DB', () => {
+      const sqlite = new Database(':memory:');
+      applyMigrations(sqlite, migrationsDir);
+
+      const before = (
+        sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
+          cnt: number;
+        }
+      ).cnt;
+
+      // Second apply must not throw and must not add entries
+      expect(() => applyMigrations(sqlite, migrationsDir)).not.toThrow();
+
+      const after = (
+        sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
+          cnt: number;
+        }
+      ).cnt;
+      expect(after).toBe(before);
+      expect(after).toBe(2);
+
+      sqlite.close();
+    });
+
+    it('order_events triggers exist after apply', () => {
+      const sqlite = new Database(':memory:');
+      applyMigrations(sqlite, migrationsDir);
+
+      const triggers = sqlite
+        .prepare("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name")
+        .all() as { name: string }[];
+
+      const names = triggers.map((t) => t.name);
+      expect(names).toContain('order_events_no_update');
+      expect(names).toContain('order_events_no_delete');
+      expect(names.length).toBe(2);
+
+      sqlite.close();
+    });
+  });
 });
 
 describe('schema — invariants', () => {
@@ -26,6 +80,18 @@ describe('schema — invariants', () => {
   beforeAll(() => {
     const migrationsDir = findMigrationsDir();
     sqlite = createTestDb(migrationsDir);
+
+    // Payment methods are no longer in migration SQL — they live in seed().
+    // Insert them here so FK tests against payment_methods / order_payments work.
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+    `);
   });
 
   afterAll(() => {
@@ -356,11 +422,11 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
-    it('order_payments (order_id, method_id) is unique', () => {
+    it('order_payments FK to payment_methods is enforced', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
 
-      // Ensure payment methods exist (seeded by migration)
+      // Ensure payment methods exist
       const pmCash = sqlite
         .prepare("SELECT id FROM payment_methods WHERE id = 'cash'")
         .get() as any;
@@ -368,52 +434,25 @@ describe('schema — invariants', () => {
 
       sqlite.exec(`
         INSERT INTO orders (order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
-        VALUES (500, 'uuid-op-unique', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
+        VALUES (500, 'uuid-op-fk', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-      sqlite.exec(`
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (${orderId}, 'cash', 'Cash', 500, ${now})
-      `);
-
-      // Second payment for same order + method should fail
+      // Valid payment method insert should succeed
       expect(() =>
         sqlite.exec(`
           INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
           VALUES (${orderId}, 'cash', 'Cash', 500, ${now})
         `),
-      ).toThrow();
-    });
+      ).not.toThrow();
 
-    it('order_payments FK to payment_methods is enforced', () => {
-      const now = Math.floor(Date.now() / 1000);
-      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
-
-      sqlite.exec(`
-        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
-        VALUES (501, 'uuid-op-fk', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
-      `);
-      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
-
+      // FK to non-existent method_id should fail
       expect(() =>
         sqlite.exec(`
           INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
           VALUES (${orderId}, 'nonexistent', 'Bad', 500, ${now})
         `),
       ).toThrow();
-    });
-  });
-
-  describe('payment methods seed', () => {
-    it('cash, card, and mada are seeded', () => {
-      const rows = sqlite
-        .prepare('SELECT id, title, enabled, sort_order FROM payment_methods ORDER BY sort_order')
-        .all() as any[];
-      expect(rows.length).toBe(3);
-      expect(rows[0]).toMatchObject({ id: 'cash', title: 'Cash', enabled: 1, sort_order: 0 });
-      expect(rows[1]).toMatchObject({ id: 'card', title: 'Card', enabled: 1, sort_order: 1 });
-      expect(rows[2]).toMatchObject({ id: 'mada', title: 'mada', enabled: 1, sort_order: 2 });
     });
   });
 });

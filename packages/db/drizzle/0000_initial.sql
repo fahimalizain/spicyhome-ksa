@@ -21,26 +21,6 @@ CREATE TABLE `day_openings` (
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE TABLE `zatca_invoices` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`order_id` integer NOT NULL,
-	`icv` integer NOT NULL,
-	`uuid` text NOT NULL,
-	`invoice_hash` text NOT NULL,
-	`prev_invoice_hash` text NOT NULL,
-	`xml` text NOT NULL,
-	`qr_tlv` text NOT NULL,
-	`status` text NOT NULL,
-	`reported_at` integer,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	`created_by` integer,
-	`updated_by` integer,
-	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
-);
---> statement-breakpoint
 CREATE TABLE `item_categories` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
@@ -88,38 +68,6 @@ CREATE TABLE `order_events` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE TABLE `order_refunds` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`order_id` integer NOT NULL,
-	`user_id` integer NOT NULL,
-	`subtotal_halalas` integer NOT NULL,
-	`vat_halalas` integer NOT NULL,
-	`total_halalas` integer NOT NULL,
-	`reason` text,
-	`created_at` integer NOT NULL,
-	`created_by` integer,
-	`updated_at` integer,
-	`updated_by` integer,
-	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
-);
---> statement-breakpoint
-CREATE TABLE `order_refund_items` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`refund_id` integer NOT NULL,
-	`order_item_id` integer,
-	`item_name` text NOT NULL,
-	`unit_price_halalas` integer NOT NULL,
-	`vat_rate_bp` integer NOT NULL,
-	`qty` integer NOT NULL,
-	`total_halalas` integer NOT NULL,
-	`created_at` integer NOT NULL,
-	FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`order_item_id`) REFERENCES `order_items`(`id`) ON UPDATE no action ON DELETE no action
-);
---> statement-breakpoint
 CREATE TABLE `order_items` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`order_id` integer NOT NULL,
@@ -136,6 +84,53 @@ CREATE TABLE `order_items` (
 	`updated_by` integer,
 	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `order_payments` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`method_id` text NOT NULL,
+	`method_title` text NOT NULL,
+	`amount_halalas` integer NOT NULL,
+	`tendered_halalas` integer,
+	`change_halalas` integer,
+	`created_at` integer NOT NULL,
+	`created_by` integer,
+	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`method_id`) REFERENCES `payment_methods`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `order_refund_items` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`refund_id` integer NOT NULL,
+	`order_item_id` integer,
+	`item_name` text NOT NULL,
+	`unit_price_halalas` integer NOT NULL,
+	`vat_rate_bp` integer NOT NULL,
+	`qty` integer NOT NULL,
+	`total_halalas` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`order_item_id`) REFERENCES `order_items`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `order_refunds` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`user_id` integer NOT NULL,
+	`subtotal_halalas` integer NOT NULL,
+	`vat_halalas` integer NOT NULL,
+	`total_halalas` integer NOT NULL,
+	`reason` text,
+	`created_at` integer NOT NULL,
+	`created_by` integer,
+	`updated_at` integer,
+	`updated_by` integer,
+	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -158,6 +153,19 @@ CREATE TABLE `orders` (
 	`updated_by` integer,
 	FOREIGN KEY (`table_id`) REFERENCES `tables`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`day_opening_id`) REFERENCES `day_openings`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `payment_methods` (
+	`id` text PRIMARY KEY NOT NULL,
+	`title` text NOT NULL,
+	`enabled` integer DEFAULT 1 NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`created_by` integer,
+	`updated_by` integer,
 	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -234,41 +242,50 @@ CREATE TABLE `users` (
 );
 --> statement-breakpoint
 CREATE TABLE `zatca_credit_notes` (
-  `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-  `order_id` integer NOT NULL,
-  `refund_id` integer NOT NULL,
-  `related_invoice_uuid` text NOT NULL,
-  `icv` integer NOT NULL,
-  `uuid` text NOT NULL,
-  `invoice_hash` text NOT NULL,
-  `prev_invoice_hash` text NOT NULL,
-  `xml` text NOT NULL,
-  `qr_tlv` text NOT NULL,
-  `status` text NOT NULL,
-  `total_halalas` integer NOT NULL,
-  `vat_halalas` integer NOT NULL,
-  `reason` text,
-  `created_at` integer NOT NULL,
-  `updated_at` integer NOT NULL,
-  `created_by` integer,
-  `updated_by` integer,
-  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
-  FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE no action,
-  FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
-  FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`refund_id` integer NOT NULL,
+	`related_invoice_uuid` text NOT NULL,
+	`icv` integer NOT NULL,
+	`uuid` text NOT NULL,
+	`invoice_hash` text NOT NULL,
+	`prev_invoice_hash` text NOT NULL,
+	`xml` text NOT NULL,
+	`qr_tlv` text NOT NULL,
+	`status` text NOT NULL,
+	`total_halalas` integer NOT NULL,
+	`vat_halalas` integer NOT NULL,
+	`reason` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`created_by` integer,
+	`updated_by` integer,
+	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`refund_id`) REFERENCES `order_refunds`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_credit_notes_refund_id_unique` ON `zatca_credit_notes` (`refund_id`);
+CREATE TABLE `zatca_invoices` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`icv` integer NOT NULL,
+	`uuid` text NOT NULL,
+	`invoice_hash` text NOT NULL,
+	`prev_invoice_hash` text NOT NULL,
+	`xml` text NOT NULL,
+	`qr_tlv` text NOT NULL,
+	`status` text NOT NULL,
+	`reported_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`created_by` integer,
+	`updated_by` integer,
+	FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`updated_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
 --> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_credit_notes_icv_unique` ON `zatca_credit_notes` (`icv`);
---> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_credit_notes_uuid_unique` ON `zatca_credit_notes` (`uuid`);
---> statement-breakpoint
-CREATE INDEX `zatca_credit_notes_order_id_idx` ON `zatca_credit_notes` (`order_id`);
---> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_invoices_order_id_unique` ON `zatca_invoices` (`order_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_invoices_icv_unique` ON `zatca_invoices` (`icv`);--> statement-breakpoint
-CREATE UNIQUE INDEX `zatca_invoices_uuid_unique` ON `zatca_invoices` (`uuid`);--> statement-breakpoint
 CREATE UNIQUE INDEX `orders_uuid_unique` ON `orders` (`uuid`);--> statement-breakpoint
 CREATE INDEX `idx_orders_day_opening` ON `orders` (`day_opening_id`);--> statement-breakpoint
 CREATE INDEX `idx_orders_status` ON `orders` (`status`);--> statement-breakpoint
@@ -276,22 +293,10 @@ CREATE INDEX `idx_orders_type` ON `orders` (`type`);--> statement-breakpoint
 CREATE UNIQUE INDEX `printers_name_unique` ON `printers` (`name`);--> statement-breakpoint
 CREATE UNIQUE INDEX `tables_name_unique` ON `tables` (`name`);--> statement-breakpoint
 CREATE UNIQUE INDEX `user_roles_name_unique` ON `user_roles` (`name`);--> statement-breakpoint
-CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);
-
---> statement-breakpoint
-CREATE UNIQUE INDEX `order_events_order_id_event_idx_unique` ON `order_events` (`order_id`, `event_idx`);
-
---> statement-breakpoint
--- Immutable order_events: prevent UPDATE and DELETE via triggers
-CREATE TRIGGER order_events_no_update
-BEFORE UPDATE ON order_events
-BEGIN
-  SELECT RAISE(FAIL, 'UPDATE not allowed on order_events');
-END;
-
---> statement-breakpoint
-CREATE TRIGGER order_events_no_delete
-BEFORE DELETE ON order_events
-BEGIN
-  SELECT RAISE(FAIL, 'DELETE not allowed on order_events');
-END;
+CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_credit_notes_refund_id_unique` ON `zatca_credit_notes` (`refund_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_credit_notes_icv_unique` ON `zatca_credit_notes` (`icv`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_credit_notes_uuid_unique` ON `zatca_credit_notes` (`uuid`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_order_id_unique` ON `zatca_invoices` (`order_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_icv_unique` ON `zatca_invoices` (`icv`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_uuid_unique` ON `zatca_invoices` (`uuid`);
