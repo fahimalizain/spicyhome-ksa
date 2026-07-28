@@ -6,13 +6,22 @@ set -euo pipefail
 # Produces dist/spicyhome-pos-win7.zip containing:
 #   node/node.exe + node/npm.cmd  — Node.js v18.20.5 win-x64 (portable)
 #   server/                       — compiled NestJS server JS + package.json
-#   server/migrations/            — Drizzle SQL migration files
+#   packages/db/drizzle/          — Drizzle SQL migration files
 #   pos/                          — SPA static dist (from Vite)
-#   start-server.bat              — startup script
+#   VERSION                       — release version file
+#   start-server.bat / .ps1       — debug startup scripts
+#   spicyhome.ps1                 — install/update/service engine
+#   install.bat / update.bat      — engine wrappers
+#   rollback.bat / check.bat      — engine wrappers
+#   spicyhome.config.example.json — example config
 #   README.txt                    — setup instructions
-#   data/                         — created at runtime on target machine
+#   data/                         — created at runtime (flat layout: under package dir;
+#                                   side-by-side: under installDir, outside releases/)
+#   logs/server/                  — server stdout/stderr (side-by-side: under installDir;
+#                                   flat: under installDir/logs/server/)
 #
-# The start-server.bat runs 'npm install --production' on first launch
+# The start-server.ps1 auto-detects flat vs side-by-side layouts and adjusts
+# paths for data, logs, and SPA accordingly. npm install runs on first launch
 # to download server dependencies. The Windows-native better-sqlite3 binary
 # is pre-bundled so the target machine does not need a C++ toolchain.
 
@@ -217,11 +226,23 @@ $ErrorActionPreference = "Stop"
 $env:NODE_SKIP_PLATFORM_CHECK = "1"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# ── Layout detection: side-by-side vs flat ──
+# Side-by-side: script lives in releases\{ver}\ or current\ under installDir.
+#   installDir has spicyhome.config.json and/or releases\ directory.
+# Flat: script lives at the root of an unzipped package (no parent config).
+$parentDir = Split-Path -Parent $scriptDir
+if ((Test-Path (Join-Path $parentDir 'spicyhome.config.json')) -or (Test-Path (Join-Path $parentDir 'releases'))) {
+    $installRoot = $parentDir
+} else {
+    $installRoot = $scriptDir
+}
+
 $env:TZ = "Asia/Riyadh"
 $env:SPA_DIST = Join-Path $scriptDir "pos"
-$env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
+$env:SPICYHOME_DB = Join-Path $installRoot "data\spicyhome.db"
 $env:PORT = "3742"
-$env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
+$env:MIGRATIONS_DIR = Join-Path $scriptDir "packages\db\drizzle"
 $env:APP_VERSION = "__PACKAGE_VERSION__"
 
 __SENTRY_ENV_BLOCK__
@@ -230,20 +251,24 @@ Write-Host "=========================================="
 Write-Host "  SpicyHome POS Server"
 Write-Host "=========================================="
 Write-Host ""
+Write-Host "Layout:   $(if ($installRoot -eq $scriptDir) { 'flat' } else { 'side-by-side' })"
+Write-Host "Root:     $installRoot"
 Write-Host "Server:   $(Join-Path $scriptDir 'server\main.js')"
 Write-Host "SPA:      $($env:SPA_DIST)"
 Write-Host "Database: $($env:SPICYHOME_DB)"
 Write-Host "Port:     $($env:PORT)"
 Write-Host ""
 
-# Create data directory
-$dataDir = Join-Path $scriptDir "data"
+# Create data directory (persists outside releases in side-by-side layout)
+$dataDir = Join-Path $installRoot "data"
 if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
 }
 
 # Create logs directory for server stdout/stderr capture
-$logsDir = Join-Path $dataDir "logs"
+# In side-by-side: {installDir}\logs\server\ (outside data\)
+# In flat:        {installDir}\logs\server\ (installRoot=scriptDir, so alongside data\)
+$logsDir = Join-Path $installRoot "logs\server"
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir | Out-Null
 }
@@ -294,21 +319,21 @@ if (-not (Test-Path $nodeModules)) {
     $serverDir = Join-Path $scriptDir "server"
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
-    $installArgs = @("install", "--production", "--ignore-scripts")
     $logOut = Join-Path $logsDir "npm-out.log"
-    $logErr = Join-Path $logsDir "npm-err.log"
-    $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr
+    # Use cmd /c to redirect output (Start-Process -RedirectStandardOutput
+    # not available in PowerShell 2.0 on Windows 7).
+    $cmdLine = '"' + $npmCmd + '" install --production --ignore-scripts > "' + $logOut + '" 2>&1'
+    $installProcess = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $cmdLine) -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
         Write-Host ""
         if (Test-Path $logOut) { Get-Content $logOut | Write-Output }
-        if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
         Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
         Read-Host "Press Enter to exit"
         exit 1
     }
-    Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
+    Remove-Item $logOut -ErrorAction SilentlyContinue
 
     # better-sqlite3's native binary is pre-bundled at prebuilt/better_sqlite3.node.
     # npm install wipes server/node_modules so we copy it in afterwards.
@@ -466,12 +491,47 @@ done
 echo "start-server.bat and start-server.ps1 created."
 
 # ──────────────────────────────────────────────────
-# 7. Copy README.txt
+# 7. Copy VERSION file
+# ──────────────────────────────────────────────────
+echo "Copying VERSION file..."
+cp "$ROOT_DIR/VERSION" "$PACKAGE_DIR/VERSION"
+echo "VERSION: $PACKAGE_VERSION"
+
+# ──────────────────────────────────────────────────
+# 8. Copy install/update engine and wrappers
+# ──────────────────────────────────────────────────
+echo "Copying install/update engine and wrappers..."
+
+# Main engine script
+cp "$SCRIPT_DIR/spicyhome.ps1" "$PACKAGE_DIR/spicyhome.ps1"
+
+# Bat wrappers (install, update, rollback, check)
+for bat in install.bat update.bat rollback.bat check.bat; do
+  if [ -f "$SCRIPT_DIR/$bat" ]; then
+    cp "$SCRIPT_DIR/$bat" "$PACKAGE_DIR/$bat"
+  fi
+done
+
+# Config example
+cp "$SCRIPT_DIR/spicyhome.config.example.json" "$PACKAGE_DIR/spicyhome.config.example.json"
+
+# Ensure line endings are Windows CRLF for all bat/ps1 files
+for f in "$PACKAGE_DIR"/*.bat "$PACKAGE_DIR"/*.ps1; do
+  if [ -f "$f" ]; then
+    sed 's/$/\r/' "$f" > "$f.crlf"
+    mv "$f.crlf" "$f"
+  fi
+done
+
+echo "Engine and wrappers packaged."
+
+# ──────────────────────────────────────────────────
+# 9. Copy README.txt
 # ──────────────────────────────────────────────────
 cp "$SCRIPT_DIR/README.txt" "$PACKAGE_DIR/README.txt"
 
 # ──────────────────────────────────────────────────
-# 8. Verification guardrails
+# 10. Verification guardrails
 # ──────────────────────────────────────────────────
 echo ""
 echo "=== Post-package verification ==="
@@ -515,6 +575,33 @@ if [ -n "$SERVER_DSN" ]; then
   fi
 fi
 
+# d) Engine scripts and VERSION must be present
+for f in \
+  VERSION \
+  spicyhome.ps1 \
+  install.bat \
+  update.bat \
+  rollback.bat \
+  check.bat \
+  spicyhome.config.example.json
+do
+  if [ -f "$PACKAGE_DIR/$f" ]; then
+    echo "  $f: present"
+  else
+    echo "ERROR: $f missing from package"
+    VERIFY_FAILED=1
+  fi
+done
+
+# e) VERSION file content must match package version
+PACKAGE_VERSION_FILE=$(cat "$PACKAGE_DIR/VERSION" | tr -d '[:space:]')
+if [ "$PACKAGE_VERSION_FILE" = "$PACKAGE_VERSION" ]; then
+  echo "  VERSION content matches: $PACKAGE_VERSION"
+else
+  echo "ERROR: VERSION file mismatch. Expected: $PACKAGE_VERSION, Got: $PACKAGE_VERSION_FILE"
+  VERIFY_FAILED=1
+fi
+
 if [ "$VERIFY_FAILED" -ne 0 ]; then
   echo ""
   echo "=== Verification FAILED ==="
@@ -525,7 +612,7 @@ echo "=== Verification passed ==="
 echo ""
 
 # ──────────────────────────────────────────────────
-# 9. Zip
+# 11. Zip
 # ──────────────────────────────────────────────────
 echo "Creating zip..."
 # Fix permissions before zipping (Bazel outputs are read-only)
