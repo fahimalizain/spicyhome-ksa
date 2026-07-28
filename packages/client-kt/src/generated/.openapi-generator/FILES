@@ -148,4 +148,3 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
-src/test/kotlin/com/spicyhome/client/models/CurrentDayResponseTest.kt

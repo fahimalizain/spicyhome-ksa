@@ -47,6 +47,7 @@ export type {
   ZatcaOnboardingState,
   ComplianceResultEntry,
   ZatcaInvoice,
+  ZatcaCreditNote,
   ZatcaReportingResult,
 } from './client';
 export type { paths, components, operations } from './generated/types';

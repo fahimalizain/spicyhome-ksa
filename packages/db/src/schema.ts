@@ -273,7 +273,8 @@ export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
   prevInvoiceHash: text('prev_invoice_hash').notNull(),
   xml: text('xml').notNull(),
   qrTlv: text('qr_tlv').notNull(),
-  status: text('status').notNull(),
+  status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
+  reportedAt: integer('reported_at'),
   totalHalalas: integer('total_halalas').notNull(),
   vatHalalas: integer('vat_halalas').notNull(),
   reason: text('reason'),

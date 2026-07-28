@@ -86,6 +86,26 @@ export interface ZatcaInvoice {
   updatedAt: number;
 }
 
+export interface ZatcaCreditNote {
+  id: number;
+  orderId: number;
+  refundId: number;
+  relatedInvoiceUuid: string;
+  icv: number;
+  uuid: string;
+  invoiceHash: string;
+  prevInvoiceHash: string;
+  xml: string;
+  qrTlv: string;
+  status: string;
+  reportedAt: number | null;
+  totalHalalas: number;
+  vatHalalas: number;
+  reason: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ZatcaReportingResult {
   processed: number;
   succeeded: number;
@@ -394,9 +414,19 @@ export class SpicyHomeClient {
 
     getInvoice: (id: number) => request<ZatcaInvoice>(this.config, 'GET', `/zatca/invoices/${id}`),
 
-    retryReporting: (invoiceId?: number) =>
+    listCreditNotes: (limit?: number, offset?: number) =>
+      request<ZatcaCreditNote[]>(this.config, 'GET', '/zatca/credit-notes', undefined, {
+        limit: limit?.toString(),
+        offset: offset?.toString(),
+      }),
+
+    getCreditNote: (id: number) =>
+      request<ZatcaCreditNote>(this.config, 'GET', `/zatca/credit-notes/${id}`),
+
+    retryReporting: (invoiceId?: number, creditNoteId?: number) =>
       request<ZatcaReportingResult>(this.config, 'POST', '/zatca/reporting/retry', {
         invoiceId,
+        creditNoteId,
       }),
   };
 }

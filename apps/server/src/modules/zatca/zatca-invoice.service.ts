@@ -470,6 +470,7 @@ export class ZatcaInvoiceService {
         xml: finalSignedXml,
         qrTlv: qrTlvBase64,
         status: 'signed',
+        reportedAt: null,
         totalHalalas,
         vatHalalas,
         reason: refund.reason || 'Refund',
@@ -511,6 +512,26 @@ export class ZatcaInvoiceService {
    */
   getById(id: number): any {
     return this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, id)).get();
+  }
+
+  /**
+   * List all credit notes (paginated).
+   */
+  listCreditNotes(limit = 50, offset = 0): any[] {
+    return this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .orderBy(desc(zatcaCreditNotes.id))
+      .limit(limit)
+      .offset(offset)
+      .all();
+  }
+
+  /**
+   * Get credit note by ID.
+   */
+  getCreditNoteById(id: number): any | undefined {
+    return this.db.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, id)).get();
   }
 
   /**

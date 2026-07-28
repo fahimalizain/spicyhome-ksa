@@ -1,21 +1,20 @@
 /**
  * ZATCA Reporting Service — background worker that reports signed invoices
- * to the ZATCA reporting API.
+ * and credit notes to the ZATCA reporting API.
  *
- * The worker polls the zatca_invoices table every N minutes (default 5) and
- * POSTs invoices with status 'signed' or 'failed' (retry) to the
- * ZATCA reporting API.
+ * The worker polls the zatca_invoices and zatca_credit_notes tables every
+ * N minutes (default 5) and POSTs documents with status 'signed' or 'failed'
+ * (retry) to the ZATCA reporting API.
  *
  * On success: status → 'reported', reportedAt set.
- * On failure: status → 'failed', error logged. Exponential backoff
- *   is implemented by skipping invoices that were last attempted recently.
+ * On failure: status → 'failed', error logged.
  *
  * Manual retry: POST /zatca/reporting/retry triggers immediate attempt.
  */
 
 import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { eq, or } from 'drizzle-orm';
-import { zatcaInvoices } from '@spicyhome/db';
+import { zatcaInvoices, zatcaCreditNotes } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { ZatcaHttpService } from './zatca-http.service';
@@ -24,13 +23,23 @@ import type { ZATCAEnvironment } from '@spicyhome/shared';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
+type DocumentKind = 'invoice' | 'credit_note';
+
+interface ReportableDocument {
+  id: number;
+  icv: number;
+  uuid: string;
+  invoiceHash: string;
+  xml: string;
+  kind: DocumentKind;
+}
+
 @Injectable()
 export class ZatcaReportingService implements OnModuleInit {
   private readonly logger = new Logger(ZatcaReportingService.name);
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly POLL_INTERVAL_MS: number;
-  private readonly MAX_RETRIES = 5;
-  private readonly BASE_BACKOFF_MS = 60000; // 1 minute
+  private readonly BATCH_LIMIT = 10;
 
   constructor(
     @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
@@ -68,17 +77,36 @@ export class ZatcaReportingService implements OnModuleInit {
   }
 
   /**
-   * Manually trigger reporting for all pending invoices or a specific one.
+   * Manually trigger reporting for all pending documents (invoices + credit notes),
+   * a specific invoice by ID, or a specific credit note by ID.
+   *
+   * If both invoiceId and creditNoteId are provided, invoice takes precedence.
+   * If neither is provided, runs processQueue() for all pending documents.
+   */
+  async retryReporting(opts?: { invoiceId?: number; creditNoteId?: number }): Promise<{
+    processed: number;
+    succeeded: number;
+    failed: number;
+  }> {
+    if (opts?.invoiceId) {
+      return this.reportSingleInvoice(opts.invoiceId);
+    }
+    if (opts?.creditNoteId) {
+      return this.reportSingleCreditNote(opts.creditNoteId);
+    }
+    return this.processQueue();
+  }
+
+  /**
+   * Legacy wrapper: retry reporting for all pending documents or a specific invoice.
+   * Kept for backward compatibility.
    */
   async retryInvoice(invoiceId?: number): Promise<{
     processed: number;
     succeeded: number;
     failed: number;
   }> {
-    if (invoiceId) {
-      return this.reportSingleInvoice(invoiceId);
-    }
-    return this.processQueue();
+    return this.retryReporting({ invoiceId });
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
@@ -108,31 +136,65 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 
+    // Collect pending documents from both tables
+    const pendingDocs: ReportableDocument[] = [];
+
+    // Pending invoices
     const pendingInvoices = this.db
       .select()
       .from(zatcaInvoices)
       .where(or(eq(zatcaInvoices.status, 'signed'), eq(zatcaInvoices.status, 'failed')))
-      .limit(10)
+      .limit(this.BATCH_LIMIT)
       .all();
+
+    for (const inv of pendingInvoices) {
+      pendingDocs.push({
+        id: inv.id,
+        icv: inv.icv,
+        uuid: inv.uuid,
+        invoiceHash: inv.invoiceHash,
+        xml: inv.xml,
+        kind: 'invoice',
+      });
+    }
+
+    // Pending credit notes
+    const pendingCreditNotes = this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(or(eq(zatcaCreditNotes.status, 'signed'), eq(zatcaCreditNotes.status, 'failed')))
+      .limit(this.BATCH_LIMIT)
+      .all();
+
+    for (const cn of pendingCreditNotes) {
+      pendingDocs.push({
+        id: cn.id,
+        icv: cn.icv,
+        uuid: cn.uuid,
+        invoiceHash: cn.invoiceHash,
+        xml: cn.xml,
+        kind: 'credit_note',
+      });
+    }
 
     let succeeded = 0;
     let failed = 0;
 
-    for (const inv of pendingInvoices) {
+    for (const doc of pendingDocs) {
       try {
-        const result = await this.reportInvoice(inv);
+        const result = await this.reportDocument(doc);
         if (result) {
           succeeded++;
         } else {
           failed++;
         }
       } catch (err: any) {
-        this.logger.error(`Failed to report invoice ICV=${inv.icv}: ${err.message}`);
+        this.logger.error(`Failed to report ${doc.kind} ICV=${doc.icv}: ${err.message}`);
         failed++;
       }
     }
 
-    return { processed: pendingInvoices.length, succeeded, failed };
+    return { processed: pendingDocs.length, succeeded, failed };
   }
 
   private async reportSingleInvoice(invoiceId: number): Promise<{
@@ -146,8 +208,17 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 
+    const doc: ReportableDocument = {
+      id: inv.id,
+      icv: inv.icv,
+      uuid: inv.uuid,
+      invoiceHash: inv.invoiceHash,
+      xml: inv.xml,
+      kind: 'invoice',
+    };
+
     try {
-      const success = await this.reportInvoice(inv);
+      const success = await this.reportDocument(doc);
       return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
     } catch (err: any) {
       this.logger.error(`Retry invoice ${invoiceId} failed: ${err.message}`);
@@ -155,13 +226,44 @@ export class ZatcaReportingService implements OnModuleInit {
     }
   }
 
+  private async reportSingleCreditNote(creditNoteId: number): Promise<{
+    processed: number;
+    succeeded: number;
+    failed: number;
+  }> {
+    const cn = this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(eq(zatcaCreditNotes.id, creditNoteId))
+      .get();
+
+    if (!cn) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    const doc: ReportableDocument = {
+      id: cn.id,
+      icv: cn.icv,
+      uuid: cn.uuid,
+      invoiceHash: cn.invoiceHash,
+      xml: cn.xml,
+      kind: 'credit_note',
+    };
+
+    try {
+      const success = await this.reportDocument(doc);
+      return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
+    } catch (err: any) {
+      this.logger.error(`Retry credit note ${creditNoteId} failed: ${err.message}`);
+      return { processed: 1, succeeded: 0, failed: 1 };
+    }
+  }
+
   /**
-   * Report a single invoice to the ZATCA reporting API.
+   * Report a single document (invoice or credit note) to the ZATCA reporting API.
    * Returns true on success, false on rejection.
    */
-  private async reportInvoice(inv: any): Promise<boolean> {
-    // Check retry count from reported_at (we store attempt count in a pattern)
-    // For now: just try and mark failed on non-200.
+  private async reportDocument(doc: ReportableDocument): Promise<boolean> {
     const now = Math.floor(Date.now() / 1000);
 
     const baseUrl = this.getApiBaseUrl();
@@ -193,13 +295,14 @@ export class ZatcaReportingService implements OnModuleInit {
 
     if (!cert || !secret) {
       this.logger.warn('No ZATCA credentials available for reporting');
+      this.updateStatus(doc.kind, doc.id, 'failed', null);
       return false;
     }
 
     const body = JSON.stringify({
-      invoiceHash: inv.invoiceHash,
-      uuid: inv.uuid,
-      invoice: Buffer.from(inv.xml).toString('base64'),
+      invoiceHash: doc.invoiceHash,
+      uuid: doc.uuid,
+      invoice: Buffer.from(doc.xml).toString('base64'),
     });
 
     const response = await this.httpClient.post(url, {
@@ -218,34 +321,52 @@ export class ZatcaReportingService implements OnModuleInit {
     });
 
     if (response.status === 200 || response.status === 202) {
-      // Success — mark as reported
-      this.db
-        .update(zatcaInvoices)
-        .set({
-          status: 'reported',
-          reportedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(zatcaInvoices.id, inv.id))
-        .run();
-
-      this.logger.log(`Invoice ICV=${inv.icv} reported successfully`);
+      // Success — mark as reported in the correct table
+      this.updateStatus(doc.kind, doc.id, 'reported', now);
+      this.logger.log(
+        `${doc.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ICV=${doc.icv} reported successfully`,
+      );
       return true;
     } else {
-      // Mark as failed with the error
-      this.db
-        .update(zatcaInvoices)
-        .set({
-          status: 'failed',
-          updatedAt: now,
-        })
-        .where(eq(zatcaInvoices.id, inv.id))
-        .run();
-
+      // Mark as failed
+      this.updateStatus(doc.kind, doc.id, 'failed', null);
       this.logger.warn(
-        `Invoice ICV=${inv.icv} reporting failed (${response.status}): ${response.body.slice(0, 200)}`,
+        `${doc.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ICV=${doc.icv} reporting failed (${response.status}): ${response.body.slice(0, 200)}`,
       );
       return false;
+    }
+  }
+
+  /**
+   * Update the status of a document (invoice or credit note) in the DB.
+   */
+  private updateStatus(
+    kind: DocumentKind,
+    id: number,
+    status: string,
+    reportedAt: number | null,
+  ): void {
+    const now = Math.floor(Date.now() / 1000);
+    const setData: Record<string, any> = {
+      status,
+      updatedAt: now,
+    };
+    if (reportedAt !== null) {
+      setData.reportedAt = reportedAt;
+    }
+
+    if (kind === 'invoice') {
+      this.db
+        .update(zatcaInvoices)
+        .set(setData as any)
+        .where(eq(zatcaInvoices.id, id))
+        .run();
+    } else {
+      this.db
+        .update(zatcaCreditNotes)
+        .set(setData as any)
+        .where(eq(zatcaCreditNotes.id, id))
+        .run();
     }
   }
 

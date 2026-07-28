@@ -26,6 +26,8 @@ import com.squareup.moshi.JsonClass
  * @param id 
  * @param orderId 
  * @param userId 
+ * @param methodId Payment method slug used for this refund
+ * @param methodTitle Payment method title snapshot at refund time
  * @param subtotalHalalas 
  * @param vatHalalas 
  * @param totalHalalas 
@@ -45,6 +47,14 @@ data class OrderRefundResponse (
 
     @Json(name = "userId")
     val userId: kotlin.Long,
+
+    /* Payment method slug used for this refund */
+    @Json(name = "methodId")
+    val methodId: kotlin.String,
+
+    /* Payment method title snapshot at refund time */
+    @Json(name = "methodTitle")
+    val methodTitle: kotlin.String,
 
     @Json(name = "subtotalHalalas")
     val subtotalHalalas: kotlin.Long,

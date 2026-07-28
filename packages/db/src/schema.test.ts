@@ -356,6 +356,18 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
+    it('zatca_credit_notes.reported_at column is nullable, zatca_invoices.reported_at column exists', () => {
+      // Verify both tables have reported_at column
+      const cnInfo = sqlite.prepare('PRAGMA table_info(zatca_credit_notes)').all() as any[];
+      const cnReportedAt = cnInfo.find((c: any) => c.name === 'reported_at');
+      expect(cnReportedAt).toBeDefined();
+      expect(cnReportedAt.notnull).toBe(0); // nullable
+
+      const invInfo = sqlite.prepare('PRAGMA table_info(zatca_invoices)').all() as any[];
+      const invReportedAt = invInfo.find((c: any) => c.name === 'reported_at');
+      expect(invReportedAt).toBeDefined();
+    });
+
     it('order_payments (order_id, method_id) is unique', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;

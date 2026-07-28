@@ -1706,6 +1706,74 @@
         ]
       }
     },
+    "/zatca/credit-notes": {
+      "get": {
+        "operationId": "ZatcaController_listCreditNotes",
+        "summary": "List ZATCA credit notes",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/zatca/credit-notes/{id}": {
+      "get": {
+        "operationId": "ZatcaController_getCreditNote",
+        "summary": "Get credit note detail including XML",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/zatca/config": {
       "get": {
         "operationId": "ZatcaController_getConfig",
@@ -1771,7 +1839,7 @@
     "/zatca/reporting/retry": {
       "post": {
         "operationId": "ZatcaController_retryReporting",
-        "summary": "Retry reporting for all pending or a specific invoice",
+        "summary": "Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note",
         "parameters": [],
         "responses": {
           "201": {

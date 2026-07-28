@@ -612,6 +612,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/zatca/credit-notes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List ZATCA credit notes */
+    get: operations['ZatcaController_listCreditNotes'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/zatca/credit-notes/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get credit note detail including XML */
+    get: operations['ZatcaController_getCreditNote'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/zatca/config': {
     parameters: {
       query?: never;
@@ -639,7 +673,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Retry reporting for all pending or a specific invoice */
+    /** Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note */
     post: operations['ZatcaController_retryReporting'];
     delete?: never;
     options?: never;
@@ -3226,6 +3260,45 @@ export interface operations {
     };
   };
   ZatcaController_getInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_listCreditNotes: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ZatcaController_getCreditNote: {
     parameters: {
       query?: never;
       header?: never;
