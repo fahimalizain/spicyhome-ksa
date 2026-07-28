@@ -51,8 +51,17 @@ pnpm package:win7
 # → dist/spicyhome-pos-win7.zip
 ```
 
-Unzip on target Windows PC, run `start-server.bat`, open http://localhost:3000.
-Default login: admin / 1234. Change PIN immediately.
+The package supports two deployment layouts:
+
+- **Flat** (unzip and run): extract anywhere, run `start-server.bat`, open
+  `http://localhost:3742`. Default login: admin / 1234. Change PIN immediately.
+- **Side-by-side** (production): run `install.bat -InstallDir D:\SpicyHomePOS`.
+  Creates `releases\{version}\`, a `current\` junction, an NSSM Windows service,
+  and `data\` outside the release tree for persistence across updates. Use
+  `update.bat` and `rollback.bat` to manage releases.
+
+See [packaging/README.txt](packaging/README.txt) for full setup instructions.
+See [ADR 0003](docs/adr/0003-win7-deploy-update-service.md) for design rationale.
 
 ## Observability (Sentry)
 

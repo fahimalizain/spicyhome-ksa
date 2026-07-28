@@ -1,0 +1,8 @@
+{
+  "installDir": "D:\\path\\to\\install",
+  "port": 3742,
+  "serviceName": "SpicyHomePOS",
+  "repo": "fahimalizain/spicyhome-ksa",
+  "assetPrefix": "spicyhome-pos-win7-v",
+  "keepReleases": 2
+}

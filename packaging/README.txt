@@ -1,39 +1,118 @@
 SpicyHome POS — Windows Setup
 ================================
 
-This package contains the SpicyHome POS server and frontend.
+This package contains the SpicyHome POS server, frontend, and
+install/update engine.
 
 Requirements
 ------------
 - Windows 7 SP1 or newer (64-bit)
-- Internet connection (first run only, for dependency install)
+- Internet connection (for initial dependency install and updates)
+- Administrator privileges (for service installation)
 
-Quick Start
------------
-1. Unzip this folder to C:\SpicyHome or any location.
+Quick Start (flat — unzip and run)
+----------------------------------
+1. Unzip this folder to any location.
 2. Double-click start-server.bat
 3. On first run, npm will download server dependencies (~50 MB).
    This requires an active internet connection.
-4. Open http://localhost:3000 in Chrome.
+4. Open http://localhost:3742 in Chrome.
 5. Log in with:
      Username: admin
      PIN: 1234
 6. Change your PIN immediately (Admin > Users).
 
-File Structure
---------------
-  node/               Portable Node.js v18.20.5 + npm
-  server/             NestJS server code
-  server/main.js      Server entry point
-  pos/                POS SPA (served by the server)
-  data/               SQLite database + server logs (created automatically)
-  data/logs/          Server stdout/stderr logs (for troubleshooting)
-  start-server.bat    Launch script
+Production Install (side-by-side + service)
+-------------------------------------------
+The recommended production setup uses the side-by-side install layout
+with a Windows service for automatic startup on boot:
+
+  install.bat -InstallDir D:\SpicyHomePOS
+
+This will:
+  1. Create D:\SpicyHomePOS with data\ + logs\ + releases\ + tools\
+  2. Download the latest release from GitHub
+  3. Extract to D:\SpicyHomePOS\releases\{version}\
+  4. Run npm install for server dependencies
+  5. Create a "current" directory junction pointing to the release
+  6. Download NSSM and install a Windows service "SpicyHomePOS"
+  7. Start the service and verify health
+
+For air-gapped (no internet) deployment:
+
+  install.bat -InstallDir D:\SpicyHomePOS -LocalZip E:\spicyhome-pos-win7-v202607.28.0.zip
+
+File Structure (side-by-side)
+-----------------------------
+  spicyhome.config.json     Configuration file
+  spicyhome.ps1             Install/update engine
+  install.bat               Thin wrapper: engine -Install
+  update.bat                Thin wrapper: engine -Update
+  rollback.bat              Thin wrapper: engine -Rollback
+  check.bat                 Thin wrapper: engine -Check (version status)
+  tools\nssm.exe            NSSM service manager (downloaded on first use)
+  data\spicyhome.db         SQLite database (persists across updates)
+  logs\server\              Server stdout/stderr logs
+  logs\updater\             Engine/update logs
+  releases\{version}\       Side-by-side release directories
+  current\                  Junction -> releases\{active-version}
+
+File Structure (flat unzip)
+---------------------------
+  node\                     Portable Node.js v18.20.5 + npm
+  server\                   NestJS server code
+  packages\db\drizzle\      Drizzle SQL migrations
+  pos\                      POS SPA (served by the server)
+  data\spicyhome.db         SQLite database (created automatically)
+  logs\server\              Server logs (created at runtime)
+  VERSION                   Release version file
+  start-server.bat          Launch script
+  spicyhome.ps1             Install/update engine (use from install root)
+  install.bat / update.bat  Engine wrappers
+
+Production vs Debug
+-------------------
+- Production: NSSM Windows service "SpicyHomePOS" (installed via install.bat).
+  The service starts the server automatically on system boot.
+- Debug: start-server.bat (or start-server.ps1) runs the server in the
+  foreground. Press Ctrl+C to stop. Use for troubleshooting only.
+
+Updates
+-------
+Check for updates:
+
+  check.bat
+
+Apply the latest release:
+
+  update.bat
+
+Update flow:
+  1. Download latest release zip from GitHub
+  2. Extract to releases\{new-version}\
+  3. Run npm install in the new release
+  4. Stop the service
+  5. Flip the "current" junction to the new release
+  6. Prune old releases (keep latest 2 by default)
+  7. Start the service
+  8. Health check
+
+Rollback
+--------
+If an update causes problems:
+
+  rollback.bat
+
+This flips the "current" junction to the previous release, restarts
+the service, and verifies health.
 
 Default Port
 ------------
-The server listens on port 3000.
-To change the port, edit start-server.bat and set PORT=xxxx.
+The server listens on port 3742.
+To change the port:
+  - Edit spicyhome.config.json and set "port" to the desired value
+  - Re-run: install.bat -InstallService to update the service config
+  - Or for flat/debug: set PORT=xxxx in start-server.bat
 
 Time Zone
 ---------
@@ -42,56 +121,40 @@ All timestamps and business dates are in +03:00.
 
 Database
 --------
-Data is stored in data/spicyhome.db (SQLite).
+Data is stored in data\spicyhome.db (SQLite).
 Backup this file regularly. It contains all orders,
 menu items, user accounts, and settings.
+
+In side-by-side layout, data\ is outside the releases\ tree,
+so it survives version updates and rollbacks.
 
 Troubleshooting
 ---------------
 Problem: "node.exe is not a valid Win32 application"
-  → Make sure you are on 64-bit Windows. This package
-    requires Windows 7 x64 or newer.
+  -> Make sure you are on 64-bit Windows. This package
+     requires Windows 7 x64 or newer.
 
 Problem: Server fails to start
-  → Make sure port 3000 is not in use by another program.
-    Try a different port in start-server.bat.
+  -> Make sure port 3742 is not in use by another program.
+     Try a different port in spicyhome.config.json.
 
 Problem: Server crashes or behaves unexpectedly
-  → Check the log files in data/logs/server.out.log
-    and data/logs/server.err.log for error messages.
-  → For support, zip data/logs/ and data/spicyhome.db
-    and attach them to your support request.
+  -> Check the log files in logs\server\server.out.log
+     and logs\server\server.err.log for error messages.
+  -> For support, zip logs\server\ and data\spicyhome.db
+     and attach them to your support request.
 
 Problem: npm install fails
-  → Check internet connection. Try running manually:
-      cd server
-      ..\node\npm.cmd install --production --ignore-scripts
-      ..\node\npm.cmd rebuild better-sqlite3
+  -> Check internet connection. Try running manually:
+       cd server
+       ..\node\npm.cmd install --production --ignore-scripts
+       ..\node\npm.cmd rebuild better-sqlite3
 
-Running as a Windows Service (optional)
----------------------------------------
-To run the server automatically on boot, use NSSM
-(the Non-Sucking Service Manager):
-
-1. Download NSSM from https://nssm.cc/download
-2. Run: nssm install SpicyHomePOS
-3. Application path: C:\SpicyHome\node\node.exe
-4. Arguments: C:\SpicyHome\server\main.js
-5. Start directory: C:\SpicyHome\server
-6. On the "Environment" tab, add:
-     TZ=Asia/Riyadh
-     SPA_DIST=C:\SpicyHome\pos
-     SPICYHOME_DB=C:\SpicyHome\data\spicyhome.db
-     PORT=3000
-     SENTRY_DSN=https://...  (optional; may already be baked into start-server.ps1)
-7. Start the service: nssm start SpicyHomePOS
-
-The server will now start automatically on system boot.
-
-When running via NSSM, set AppStdout and AppStderr on the
-Process tab to capture logs:
-  AppStdout:  C:\SpicyHome\data\logs\server.out.log
-  AppStderr:  C:\SpicyHome\data\logs\server.err.log
+Problem: Service won't start
+  -> Check Windows Event Viewer for service errors
+  -> Check logs\server\server.err.log
+  -> Re-run: install.bat -InstallDir X:\path -InstallService
+     to repair the service configuration
 
 Error Monitoring (Sentry)
 -------------------------
@@ -109,3 +172,9 @@ Sentry is never required — the system works offline without it.
 In official release builds, the Sentry DSN may already be pre-configured
 in start-server.ps1. Check the file for a $env:SENTRY_DSN assignment.
 To disable a baked DSN, comment out or remove that line.
+
+ZATCA E-Invoicing
+-----------------
+This release supports ZATCA Phase 2 e-invoicing with ECDSA signing,
+UBL 2.1 XML generation, and TLV QR codes. See the ZATCA configuration
+guide for setup instructions.
