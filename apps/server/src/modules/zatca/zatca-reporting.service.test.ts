@@ -217,8 +217,9 @@ describe('ZatcaReportingService', () => {
   }
 
   beforeEach(() => {
-    // Reset fake HTTP responses between tests
+    // Reset fake HTTP responses and recorded requests between tests
     fakeHttp.responses.clear();
+    fakeHttp.requests = [];
 
     // Clean up ZATCA documents from previous tests (FK-aware order)
     sqlite.exec(`
@@ -491,6 +492,110 @@ describe('ZatcaReportingService', () => {
         .get(creditNoteId) as any;
       expect(cn.status).toBe('reported');
       expect(cn.reported_at).toBeGreaterThan(0);
+    });
+
+    it('reports mixed invoices and credit notes in ascending ICV order', async () => {
+      // Insert one shared day_opening
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-08-15', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Order 1 → invoice icv=3 (deliberately higher, to test sort)
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (5001, 'uuid-order-5001', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId3}, 3, 'uuid-icv-3', 'hash-icv-3', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+
+      // Order 2 → credit note icv=2 (needs a refund)
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (5002, 'uuid-order-5002', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId2}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId2}, ${refundId}, 'any-inv-uuid', 2, 'uuid-icv-2', 'hash-icv-2', '', '<CreditNote/>', 'tlv', 'signed', NULL, 11500, 1500, 'Test', ${now}, ${now})
+      `);
+
+      // Order 3 → invoice icv=1
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (5003, 'uuid-order-5003', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId1 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId1}, 1, 'uuid-icv-1', 'hash-icv-1', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      const result = await reportingService.retryInvoice();
+      expect(result.processed).toBe(3);
+      expect(result.succeeded).toBe(3);
+      expect(result.failed).toBe(0);
+
+      // Verify reporting order: icv=1, icv=2, icv=3
+      const reportedUuids = fakeHttp.requests
+        .filter((r) => r.url.includes('reporting'))
+        .map((r) => JSON.parse(r.options.body).uuid);
+      expect(reportedUuids).toEqual(['uuid-icv-1', 'uuid-icv-2', 'uuid-icv-3']);
+    });
+
+    it('processes a large backlog of more than 10 documents in one run', async () => {
+      // Insert one shared day_opening
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-08-16', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const count = 12;
+      for (let i = 1; i <= count; i++) {
+        const orderNo = 6000 + i;
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+          VALUES (${orderNo}, 'uuid-large-${i}', 'dine_in', ${doId}, 'paid', ${i * 1000}, ${Math.round(i * 150)}, ${Math.round(i * 1150)}, ${now}, ${now})
+        `);
+        const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+        sqlite.exec(`
+          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+          VALUES (${orderId}, ${i}, 'uuid-icv-${i}', 'hash-icv-${i}', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+        `);
+      }
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      const result = await reportingService.retryInvoice();
+      expect(result.processed).toBe(count);
+      expect(result.succeeded).toBe(count);
+      expect(result.failed).toBe(0);
+
+      // All invoices should now be 'reported'
+      const remaining = sqlite
+        .prepare("SELECT COUNT(*) as c FROM zatca_invoices WHERE status != 'reported'")
+        .get() as any;
+      expect(remaining.c).toBe(0);
     });
   });
 

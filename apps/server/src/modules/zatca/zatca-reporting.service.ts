@@ -13,7 +13,7 @@
  */
 
 import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { eq, or } from 'drizzle-orm';
+import { asc, eq, or } from 'drizzle-orm';
 import { zatcaInvoices, zatcaCreditNotes } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
@@ -39,7 +39,6 @@ export class ZatcaReportingService implements OnModuleInit {
   private readonly logger = new Logger(ZatcaReportingService.name);
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly POLL_INTERVAL_MS: number;
-  private readonly BATCH_LIMIT = 10;
 
   constructor(
     @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
@@ -136,15 +135,15 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 
-    // Collect pending documents from both tables
+    // Collect pending documents from both tables, ordered by ICV ascending.
     const pendingDocs: ReportableDocument[] = [];
 
-    // Pending invoices
+    // Pending invoices — fetch all, no limit
     const pendingInvoices = this.db
       .select()
       .from(zatcaInvoices)
       .where(or(eq(zatcaInvoices.status, 'signed'), eq(zatcaInvoices.status, 'failed')))
-      .limit(this.BATCH_LIMIT)
+      .orderBy(asc(zatcaInvoices.icv))
       .all();
 
     for (const inv of pendingInvoices) {
@@ -158,12 +157,12 @@ export class ZatcaReportingService implements OnModuleInit {
       });
     }
 
-    // Pending credit notes
+    // Pending credit notes — fetch all, no limit
     const pendingCreditNotes = this.db
       .select()
       .from(zatcaCreditNotes)
       .where(or(eq(zatcaCreditNotes.status, 'signed'), eq(zatcaCreditNotes.status, 'failed')))
-      .limit(this.BATCH_LIMIT)
+      .orderBy(asc(zatcaCreditNotes.icv))
       .all();
 
     for (const cn of pendingCreditNotes) {
@@ -176,6 +175,9 @@ export class ZatcaReportingService implements OnModuleInit {
         kind: 'credit_note',
       });
     }
+
+    // Merge and sort by ICV ascending for deterministic reporting order
+    pendingDocs.sort((a, b) => a.icv - b.icv);
 
     let succeeded = 0;
     let failed = 0;
