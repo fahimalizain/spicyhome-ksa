@@ -7,6 +7,7 @@ import type {
   ZatcaCreditNote,
 } from '@spicyhome/client-ts';
 import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import { useZatcaSandboxDefaults } from '../../hooks/useZatcaSandboxDefaults';
 
 const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal';
 const ZATCA_SIMULATION_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation';
@@ -53,6 +54,17 @@ export function ZatcaPage() {
   const [generatingCsr, setGeneratingCsr] = useState(false);
   const [submittingOtp, setSubmittingOtp] = useState(false);
   const [promotingProduction, setPromotingProduction] = useState(false);
+
+  // ── Sandbox autofill ──
+  const { config: sandboxDefaults, otp: sandboxOtp } = useZatcaSandboxDefaults();
+
+  function selectEnvironment(env: ZATCAEnvironment) {
+    setZatcaEnv(env);
+    if (env === 'sandbox') {
+      setConfig((prev) => ({ ...prev, ...sandboxDefaults }));
+      setOtpValue(sandboxOtp);
+    }
+  }
 
   // ── Documents (Invoices + Credit Notes) state ──
   const [invoices, setInvoices] = useState<ZatcaInvoice[]>([]);
@@ -492,7 +504,7 @@ export function ZatcaPage() {
                 <div className="inline-flex rounded-md overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setZatcaEnv('sandbox')}
+                    onClick={() => selectEnvironment('sandbox')}
                     className={
                       'touch-target px-3 py-2 text-sm rounded-l-md ' +
                       (zatcaEnv === 'sandbox'
@@ -504,7 +516,7 @@ export function ZatcaPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setZatcaEnv('simulation')}
+                    onClick={() => selectEnvironment('simulation')}
                     className={
                       'touch-target px-3 py-2 text-sm ' +
                       (zatcaEnv === 'simulation'
@@ -516,7 +528,7 @@ export function ZatcaPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setZatcaEnv('production')}
+                    onClick={() => selectEnvironment('production')}
                     className={
                       'touch-target px-3 py-2 text-sm rounded-r-md ' +
                       (zatcaEnv === 'production'
