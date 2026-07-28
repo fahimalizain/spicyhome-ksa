@@ -359,7 +359,9 @@ export class TestTicketBuilder {
     eb.blankLine();
 
     // ── 7. ARABIC CONFIGURED SETTINGS ──────────────────────────────────────
-    this.buildSection7ArabicConfigured(eb, config.arabic);
+    if (config.arabic.encoding !== 'none') {
+      this.buildSection7ArabicConfigured(eb, config.arabic);
+    }
 
     // ── 8. QR CODE ──────────────────────────────────────────────────────────
     eb.bold(true);

@@ -58,7 +58,7 @@ describe('TestTicketBuilder', () => {
     expect(s).toContain('Time (Asia/Riyadh):');
   });
 
-  it('contains all section labels', () => {
+  it('contains all section labels (section 7 omitted when encoding=none)', () => {
     const s = str(build());
     expect(s).toContain('1. ALIGNMENT');
     expect(s).toContain('2. TEXT STYLES');
@@ -66,9 +66,10 @@ describe('TestTicketBuilder', () => {
     expect(s).toContain('4. COLUMNS');
     expect(s).toContain('5. ENGLISH');
     expect(s).toContain('6. ARABIC');
-    expect(s).toContain('7. ARABIC');
     expect(s).toContain('8. QR CODE');
     expect(s).toContain('END DIAGNOSTIC');
+    // Section 7 is omitted when encoding=none (default)
+    expect(s).not.toContain('7. ARABIC');
   });
 
   describe('alignment commands', () => {
@@ -172,42 +173,42 @@ describe('TestTicketBuilder', () => {
 
     it('preserves English text after Arabic probe section', () => {
       const s = str(build());
-      // After Arabic probe section, section 7 configured section follows
-      const configLabelIdx = s.indexOf('7. ARABIC CONFIGURED');
-      expect(configLabelIdx).toBeGreaterThan(s.indexOf('End of Arabic probes.'));
+      // After Arabic probe section, section 8 QR follows (section 7 omitted when encoding=none)
+      const qrLabelIdx = s.indexOf('8. QR CODE');
+      expect(qrLabelIdx).toBeGreaterThan(s.indexOf('End of Arabic probes.'));
     });
   });
 
   // ── Section 7: Arabic Configured Settings ───────────────────────────────────
 
   describe('Arabic configured settings (section 7)', () => {
-    it('contains section 7 title and config summary with defaults (encoding=none)', () => {
+    it('with encoding=none (default): section 7 title and body are entirely absent', () => {
       const s = str(build());
-      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
-      expect(s).toContain('encoding=none codePage=0 visualRtl=false');
-      expect(s).toContain('Arabic disabled (encoding=none).');
-      expect(s).toContain('Configure in Admin > Printers after');
-      expect(s).toContain('reviewing section 6 probes.');
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).not.toContain('encoding=none');
+      expect(s).not.toContain('Arabic disabled');
+      expect(s).not.toContain('Configure in Admin');
+      expect(s).not.toContain('End of configured Arabic.');
+      expect(s).not.toContain('Restore CP0.');
+      // Section 8 and section 6 should still be present
+      expect(s).toContain('8. QR CODE');
+      expect(s).toContain('6. ARABIC ENCODING PROBES');
+      expect(s).toContain('End of Arabic probes.');
     });
 
-    it('does NOT contain Arabic UTF-8 from configured section when encoding=none', () => {
+    it('does NOT contain Arabic configured samples when encoding=none', () => {
       // The probes section (section 6) still has مرحبا UTF-8.
-      // But the configured section (section 7) should NOT add sample Arabic UTF-8.
+      // But configured samples from section 7 are absent entirely (encoding=none).
       const buf = build();
       const s = str(buf);
 
-      // شكرا should not appear in ASCII (it would be garbled if raw UTF-8 leaked)
-      // Actually شكرا is Arabic so wouldn't show in ASCII. Instead check that
-      // the "End of configured Arabic." label comes right after the encoding=none message,
-      // with no raw Arabic bytes between them.
-      const disabledIdx = s.indexOf('Arabic disabled');
-      const endIdx = s.indexOf('End of configured Arabic.');
-      expect(endIdx).toBeGreaterThan(disabledIdx);
+      // No section 7 labels at all
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).not.toContain('Arabic disabled');
 
-      // The gap between the disabled message and end label should be small
-      // (just the "Configure in Admin" and "reviewing section 6" lines)
-      const gap = endIdx - disabledIdx;
-      expect(gap).toBeLessThan(200);
+      // Section 6 probes are still present
+      expect(s).toContain('6. ARABIC ENCODING PROBES');
+      expect(s).toContain('End of Arabic probes.');
     });
 
     it('with encoding=utf8: contains UTF-8 bytes of a configured sample', () => {
@@ -272,8 +273,9 @@ describe('TestTicketBuilder', () => {
       // (They still appear in the probes section; we verify the pc864 bytes DO appear.)
     });
 
-    it('contains End of configured Arabic and Restore CP0 labels', () => {
-      const s = str(build());
+    it('contains End of configured Arabic and Restore CP0 labels when encoding is configured', () => {
+      // With encoding=none the section is omitted; use utf8 to see the labels
+      const s = str(build({ encoding: 'utf8' }));
       expect(s).toContain('End of configured Arabic.');
       expect(s).toContain('Restore CP0.');
     });
