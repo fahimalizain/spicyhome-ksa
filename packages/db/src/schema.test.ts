@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 2 rows after apply', () => {
+    it('__drizzle_migrations has exactly 4 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(3);
+      expect(rows.cnt).toBe(4);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(3);
+      expect(after).toBe(4);
 
       sqlite.close();
     });
@@ -495,6 +495,140 @@ describe('schema — invariants', () => {
           VALUES (${orderId}, 'nonexistent', 'Bad', 500, ${now})
         `),
       ).toThrow();
+    });
+  });
+
+  describe('orders — standard invoice buyer columns', () => {
+    it('has is_standard_invoice and zatca_buyer_details columns on orders table', () => {
+      const info = sqlite.prepare('PRAGMA table_info(orders)').all() as any[];
+      const names = info.map((c: any) => c.name);
+
+      expect(names).toContain('is_standard_invoice');
+      expect(names).toContain('zatca_buyer_details');
+      // Old buyer columns should be gone
+      expect(names).not.toContain('buyer_name');
+      expect(names).not.toContain('buyer_vat_number');
+      expect(names).not.toContain('buyer_street');
+      expect(names).not.toContain('buyer_building_number');
+      expect(names).not.toContain('buyer_city_subdivision');
+      expect(names).not.toContain('buyer_city');
+      expect(names).not.toContain('buyer_postal_code');
+      expect(names).not.toContain('buyer_country');
+    });
+
+    it('is_standard_invoice defaults to 0 when omitted on insert', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (601, 'uuid-sv-default', 'dine_in', ${doId}, 'open', ${now}, ${now})
+      `);
+      const row = sqlite
+        .prepare('SELECT is_standard_invoice FROM orders WHERE order_no = 601')
+        .get() as any;
+      expect(row.is_standard_invoice).toBe(0);
+    });
+
+    it('can insert with is_standard_invoice = 1 and buyer JSON, round-trip matches', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      const buyerJson = JSON.stringify({
+        name: 'Fatoora Samples LTD',
+        vatNumber: '399999999800003',
+        street: 'Salah Al-Din',
+        buildingNumber: '1111',
+        citySubdivision: 'Al-Murooj',
+        city: 'Riyadh',
+        postalCode: '12222',
+        country: 'SA',
+      });
+
+      sqlite.exec(`
+        INSERT INTO orders (
+          order_no, uuid, type, day_opening_id, status, created_at, updated_at,
+          is_standard_invoice, zatca_buyer_details
+        ) VALUES (
+          602, 'uuid-sv-buyer-full', 'dine_in', ${doId}, 'open', ${now}, ${now},
+          1, '${buyerJson.replace(/'/g, "''")}'
+        )
+      `);
+
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 602').get() as any;
+      expect(row.is_standard_invoice).toBe(1);
+      const parsed = JSON.parse(row.zatca_buyer_details);
+      expect(parsed.name).toBe('Fatoora Samples LTD');
+      expect(parsed.vatNumber).toBe('399999999800003');
+      expect(parsed.street).toBe('Salah Al-Din');
+      expect(parsed.buildingNumber).toBe('1111');
+      expect(parsed.citySubdivision).toBe('Al-Murooj');
+      expect(parsed.city).toBe('Riyadh');
+      expect(parsed.postalCode).toBe('12222');
+      expect(parsed.country).toBe('SA');
+    });
+
+    it('zatca_buyer_details accepts NULL', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (
+          order_no, uuid, type, day_opening_id, status, created_at, updated_at
+        ) VALUES (
+          603, 'uuid-sv-buyer-null', 'dine_in', ${doId}, 'open', ${now}, ${now}
+        )
+      `);
+
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 603').get() as any;
+      expect(row.zatca_buyer_details).toBeNull();
+    });
+
+    it('can update is_standard_invoice from 0 to 1 and back', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (604, 'uuid-sv-update', 'dine_in', ${doId}, 'open', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT id FROM orders WHERE order_no = 604').get() as any)
+        .id;
+
+      // Set to 1
+      sqlite.exec(`
+        UPDATE orders SET is_standard_invoice = 1 WHERE id = ${orderId}
+      `);
+      let row = sqlite
+        .prepare('SELECT is_standard_invoice FROM orders WHERE id = ?')
+        .get(orderId) as any;
+      expect(row.is_standard_invoice).toBe(1);
+
+      // Set back to 0
+      sqlite.exec(`
+        UPDATE orders SET is_standard_invoice = 0 WHERE id = ${orderId}
+      `);
+      row = sqlite
+        .prepare('SELECT is_standard_invoice FROM orders WHERE id = ?')
+        .get(orderId) as any;
+      expect(row.is_standard_invoice).toBe(0);
+    });
+
+    it('existing order insert without buyer fields still works', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // This is identical to inserts used elsewhere in the test suite — must still work
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+          VALUES (605, 'uuid-sv-existing', 'dine_in', ${doId}, 'open', ${now}, ${now})
+        `),
+      ).not.toThrow();
+
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 605').get() as any;
+      expect(row.uuid).toBe('uuid-sv-existing');
+      expect(row.status).toBe('open');
     });
   });
 });

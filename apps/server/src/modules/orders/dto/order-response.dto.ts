@@ -1,8 +1,9 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderItemResponse } from './order-item-response.dto';
 import { OrderEventResponse } from './order-event-response.dto';
 import { OrderPaymentResponse } from './order-payment-response.dto';
 import { ApiInt64 } from '../../../common/api-property-helpers';
+import { ZatcaBuyerDetailsDto } from './zatca-buyer-details.dto';
 
 export class OrderResponse {
   @ApiProperty({ ...ApiInt64, example: 1 })
@@ -37,6 +38,18 @@ export class OrderResponse {
 
   @ApiProperty({ ...ApiInt64, example: 0 })
   discountHalalas!: number;
+
+  // ── Standard invoice (ZATCA) buyer fields ───────────────────────────────────
+
+  @ApiProperty({ description: 'Whether this order is a ZATCA standard invoice', example: false })
+  isStandardInvoice!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'ZATCA standard invoice buyer details (JSON)',
+    type: ZatcaBuyerDetailsDto,
+    nullable: true,
+  })
+  zatcaBuyerDetails?: ZatcaBuyerDetailsDto | null;
 
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;

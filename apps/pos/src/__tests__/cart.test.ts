@@ -38,6 +38,8 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     vatHalalas: 0,
     totalHalalas: 0,
     discountHalalas: 0,
+    isStandardInvoice: false,
+    zatcaBuyerDetails: null,
     createdAt: 1000,
     updatedAt: 1000,
     createdBy: null,

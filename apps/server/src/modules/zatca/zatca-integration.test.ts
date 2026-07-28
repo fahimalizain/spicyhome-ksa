@@ -367,6 +367,14 @@ describe('ZATCA Integration', () => {
         .expect(400);
     });
 
+    it('rejects with 400 when documentType is unknown', async () => {
+      await request(app.getHttpServer())
+        .post('/zatca/onboard/compliance-check')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ documentType: 'unknown_doc_type' })
+        .expect(400);
+    });
+
     it('rejects unauthenticated requests with 401', async () => {
       await request(app.getHttpServer())
         .post('/zatca/onboard/compliance-check')
@@ -445,6 +453,128 @@ describe('ZATCA Integration', () => {
           .send({ documentType: 'debit_note' })
           .expect(201);
         expect(res.body.success).toBe(true);
+      });
+
+      // ── Standard compliance checks ──
+
+      it('standard_invoice generates XML with subtype 0100000, buyer, and sends Clearance-Status', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const invoiceService = app.get(ZatcaInvoiceService);
+        const generated = await invoiceService.buildComplianceStandardInvoice('standard_invoice');
+
+        // Standard profile: subtype 0100000, not 0200000
+        expect(generated.signedXml).toContain(
+          '<cbc:InvoiceTypeCode name="0100000">388</cbc:InvoiceTypeCode>',
+        );
+        // Must include buyer party
+        expect(generated.signedXml).toContain('Compliance Buyer LTD');
+        expect(generated.signedXml).toContain('399999999800003');
+        // Not simplified
+        expect(generated.signedXml).not.toContain('name="0200000"');
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'standard_invoice' })
+          .expect(201);
+        expect(res.body.success).toBe(true);
+
+        // Verify Clearance-Status header was sent (look at last matching request,
+        // since previous simplified compliance checks have also populated requests)
+        const req = [...fakeHttp.requests]
+          .reverse()
+          .find((r) => r.url.includes('/compliance/invoices'));
+        expect(req).toBeTruthy();
+        expect(req?.options.headers['Clearance-Status']).toBe('1');
+      });
+
+      it('standard_credit_note generates XML with subtype 0100000, buyer, and BillingReference', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const invoiceService = app.get(ZatcaInvoiceService);
+        const generated =
+          await invoiceService.buildComplianceStandardInvoice('standard_credit_note');
+
+        expect(generated.signedXml).toContain(
+          '<cbc:InvoiceTypeCode name="0100000">381</cbc:InvoiceTypeCode>',
+        );
+        expect(generated.signedXml).toContain('BillingReference');
+        expect(generated.signedXml).toContain('SME00001');
+        expect(generated.signedXml).toContain('Compliance Buyer LTD');
+        expect(generated.signedXml).not.toContain('name="0200000"');
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'standard_credit_note' })
+          .expect(201);
+        expect(res.body.success).toBe(true);
+      });
+
+      it('standard_debit_note generates XML with subtype 0100000, buyer, and BillingReference', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        const invoiceService = app.get(ZatcaInvoiceService);
+        const generated =
+          await invoiceService.buildComplianceStandardInvoice('standard_debit_note');
+
+        expect(generated.signedXml).toContain(
+          '<cbc:InvoiceTypeCode name="0100000">383</cbc:InvoiceTypeCode>',
+        );
+        expect(generated.signedXml).toContain('BillingReference');
+        expect(generated.signedXml).toContain('SME00001');
+        expect(generated.signedXml).toContain('Compliance Buyer LTD');
+        expect(generated.signedXml).not.toContain('name="0200000"');
+
+        const res = await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'standard_debit_note' })
+          .expect(201);
+        expect(res.body.success).toBe(true);
+      });
+
+      it('standard compliance results persist separately from simplified', async () => {
+        fakeHttp.responses.set('/compliance/invoices', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ validationResults: { status: 'PASS' } }),
+        });
+
+        // Run both checks
+        await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'invoice' });
+
+        await request(app.getHttpServer())
+          .post('/zatca/onboard/compliance-check')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ documentType: 'standard_invoice' });
+
+        // Verify status shows both results
+        const statusRes = await request(app.getHttpServer())
+          .get('/zatca/status')
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .expect(200);
+
+        const results = statusRes.body.complianceResults || [];
+        const keys = results.map((r: any) => r.key).sort();
+        expect(keys).toContain('invoice');
+        expect(keys).toContain('standard_invoice');
       });
 
       it('requires onboarding state to be at least compliance for type-based checks', async () => {

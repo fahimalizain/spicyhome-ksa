@@ -6,7 +6,7 @@ import type {
   ZatcaInvoice,
   ZatcaCreditNote,
 } from '@spicyhome/client-ts';
-import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
 import { useZatcaSandboxDefaults } from '../../hooks/useZatcaSandboxDefaults';
 
 const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal';
@@ -259,7 +259,7 @@ export function ZatcaPage() {
     }
   }
 
-  async function handleComplianceTypeCheck(type: ZATCAInvoiceDocumentType) {
+  async function handleComplianceTypeCheck(type: ZATCAComplianceDocumentType) {
     setComplianceTypeChecking(type);
     setOnboardingError('');
     try {
@@ -675,9 +675,18 @@ export function ZatcaPage() {
                     Quick Checks (auto-generated)
                   </h4>
                   {[
-                    { type: 'invoice', label: 'Simplified Tax Invoice' },
-                    { type: 'credit_note', label: 'Simplified Credit Note' },
-                    { type: 'debit_note', label: 'Simplified Debit Note' },
+                    {
+                      type: 'invoice' as ZATCAComplianceDocumentType,
+                      label: 'Simplified Tax Invoice',
+                    },
+                    {
+                      type: 'credit_note' as ZATCAComplianceDocumentType,
+                      label: 'Simplified Credit Note',
+                    },
+                    {
+                      type: 'debit_note' as ZATCAComplianceDocumentType,
+                      label: 'Simplified Debit Note',
+                    },
                   ].map(({ type, label }) => {
                     const result = complianceTypeResults[type];
                     const checkedAt = complianceCheckedAt[type];
@@ -730,9 +739,89 @@ export function ZatcaPage() {
                             </div>
                           )}
                           <button
-                            onClick={() =>
-                              handleComplianceTypeCheck(type as ZATCAInvoiceDocumentType)
-                            }
+                            onClick={() => handleComplianceTypeCheck(type)}
+                            disabled={complianceTypeChecking === type}
+                            className="touch-target bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded px-3 py-1.5 text-xs text-white"
+                          >
+                            {complianceTypeChecking === type ? 'Checking...' : 'Check'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Part A2: Standard compliance checks (B2B, dummy buyer) */}
+                <div className="space-y-1">
+                  <h4 className="text-xs font-semibold text-gray-500">
+                    Standard Checks (B2B, dummy buyer)
+                  </h4>
+                  {[
+                    {
+                      type: 'standard_invoice' as ZATCAComplianceDocumentType,
+                      label: 'Standard Tax Invoice',
+                    },
+                    {
+                      type: 'standard_credit_note' as ZATCAComplianceDocumentType,
+                      label: 'Standard Credit Note',
+                    },
+                    {
+                      type: 'standard_debit_note' as ZATCAComplianceDocumentType,
+                      label: 'Standard Debit Note',
+                    },
+                  ].map(({ type, label }) => {
+                    const result = complianceTypeResults[type];
+                    const checkedAt = complianceCheckedAt[type];
+                    return (
+                      <div
+                        key={type}
+                        className="flex items-center justify-between bg-gray-700/50 rounded px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white">{label}</span>
+                          {result && (
+                            <span
+                              className={
+                                'px-1.5 py-0.5 rounded text-xs ' +
+                                (result.status === 200
+                                  ? 'bg-green-700 text-green-100'
+                                  : result.status === 202
+                                    ? 'bg-yellow-700 text-yellow-100'
+                                    : 'bg-red-700 text-red-100')
+                              }
+                            >
+                              {result.status === 200
+                                ? 'Passed'
+                                : result.status === 202
+                                  ? 'Warning'
+                                  : `Failed (${result.status})`}
+                            </span>
+                          )}
+                          {checkedAt && (
+                            <span className="text-xs text-gray-500">
+                              {new Date(checkedAt * 1000).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {result && result.warnings.length > 0 && (
+                            <div
+                              className="text-xs text-yellow-400 max-w-40 truncate"
+                              title={result.warnings.join('\n')}
+                            >
+                              {result.warnings[0]}
+                            </div>
+                          )}
+                          {result && result.errors.length > 0 && (
+                            <div
+                              className="text-xs text-red-400 max-w-40 truncate"
+                              title={result.errors.join('\n')}
+                            >
+                              {result.errors[0]}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleComplianceTypeCheck(type)}
                             disabled={complianceTypeChecking === type}
                             className="touch-target bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded px-3 py-1.5 text-xs text-white"
                           >

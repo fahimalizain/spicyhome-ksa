@@ -1,6 +1,7 @@
 import {
   IsString,
   IsInt,
+  IsBoolean,
   IsArray,
   IsOptional,
   Min,
@@ -10,6 +11,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiInt64 } from '../../../common/api-property-helpers';
+import { ZatcaBuyerDetailsDto } from './zatca-buyer-details.dto';
 
 export class PaymentLineDto {
   @ApiProperty({ example: 'card', description: 'Payment method slug' })
@@ -43,4 +45,21 @@ export class PayOrderDto {
   @Type(() => PaymentLineDto)
   @ArrayNotEmpty()
   payments!: PaymentLineDto[];
+
+  // ── Standard invoice (ZATCA) ──────────────────────────────────────────────
+
+  @ApiPropertyOptional({
+    description: 'Enable standard invoice with buyer details for ZATCA',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isStandardInvoice?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'ZATCA standard invoice buyer details (required when isStandardInvoice is true)',
+    type: ZatcaBuyerDetailsDto,
+  })
+  @IsOptional()
+  zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
 }

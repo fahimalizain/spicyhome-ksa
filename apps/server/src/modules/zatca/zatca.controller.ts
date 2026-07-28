@@ -17,7 +17,8 @@ import { ZatcaReportingService } from './zatca-reporting.service';
 import { PrintersService } from '../printers/printers.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { ZatcaConfigDto } from './dto/zatca-config.dto';
-import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
+import { ZATCA_ALL_COMPLIANCE_DOC_TYPES } from '@spicyhome/shared';
 
 @ApiTags('zatca')
 @ApiBearerAuth()
@@ -67,7 +68,15 @@ export class ZatcaController {
     if (!invoiceId && !documentType) {
       throw new BadRequestException('Either invoiceId or documentType is required');
     }
-    const type = documentType as ZATCAInvoiceDocumentType | undefined;
+    if (
+      documentType &&
+      !(ZATCA_ALL_COMPLIANCE_DOC_TYPES as readonly string[]).includes(documentType)
+    ) {
+      throw new BadRequestException(
+        `Invalid documentType "${documentType}". Valid values: ${ZATCA_ALL_COMPLIANCE_DOC_TYPES.join(', ')}`,
+      );
+    }
+    const type = documentType as ZATCAComplianceDocumentType | undefined;
     return this.onboardingService.runComplianceCheck(invoiceId ?? null, type, debug ?? false);
   }
 

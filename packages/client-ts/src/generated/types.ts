@@ -1501,6 +1501,24 @@ export interface components {
        */
       updatedBy: number | null;
     };
+    ZatcaBuyerDetailsDto: {
+      /** @example Abdullah Al-Otaibi Est. */
+      name: string;
+      /** @example 300123456789012 */
+      vatNumber: string;
+      /** @example King Fahd Road */
+      street: string;
+      /** @example 7845 */
+      buildingNumber: string;
+      /** @example Al-Olaya */
+      citySubdivision: string;
+      /** @example Riyadh */
+      city: string;
+      /** @example 12271 */
+      postalCode: string;
+      /** @example SA */
+      country?: string;
+    };
     OrderItemResponse: {
       /**
        * Format: int64
@@ -1675,6 +1693,13 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description Whether this order is a ZATCA standard invoice
+       * @example false
+       */
+      isStandardInvoice: boolean;
+      /** @description ZATCA standard invoice buyer details (JSON) */
+      zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'] | null;
+      /**
        * Format: int64
        * @example 1700000000
        */
@@ -1779,6 +1804,13 @@ export interface components {
     PayOrderDto: {
       /** @description Payment lines (at least one required) */
       payments: components['schemas']['PaymentLineDto'][];
+      /**
+       * @description Enable standard invoice with buyer details for ZATCA
+       * @example false
+       */
+      isStandardInvoice?: boolean;
+      /** @description ZATCA standard invoice buyer details (required when isStandardInvoice is true) */
+      zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'];
     };
     StatusResponse: {
       /** @example true */

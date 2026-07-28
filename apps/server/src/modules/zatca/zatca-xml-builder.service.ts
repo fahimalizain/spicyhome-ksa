@@ -21,6 +21,7 @@ import {
   ZATCAInvoiceDocumentType,
   ZATCA_INVOICE_TYPE_CODES,
   ZATCA_SIMPLIFIED_SUBTYPES,
+  ZATCA_STANDARD_SUBTYPES,
   ZATCA_INITIAL_PIH,
 } from '@spicyhome/shared';
 
@@ -51,6 +52,17 @@ export interface SellerInfo {
   crNumber?: string;
 }
 
+export interface BuyerInfo {
+  name: string;
+  vatNumber: string;
+  street: string;
+  buildingNumber: string;
+  citySubdivision: string;
+  city: string;
+  postalCode: string;
+  country?: string; // default SA
+}
+
 export interface InvoiceXMLInput {
   /** Document type */
   type?: ZATCAInvoiceDocumentType;
@@ -74,6 +86,10 @@ export interface InvoiceXMLInput {
   billingReferenceId?: string;
   /** Payment instruction note (KSA-10 reason for credit/debit notes) */
   paymentNote?: string;
+  /** default 'simplified' — existing callers unchanged */
+  invoiceProfile?: 'simplified' | 'standard';
+  /** Buyer details for standard invoices */
+  buyer?: BuyerInfo;
 }
 
 // ── XML Builder ───────────────────────────────────────────────────────────────
@@ -101,6 +117,10 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
 
   const typeCode = ZATCA_INVOICE_TYPE_CODES[type];
   const isCorrection = type === 'credit_note' || type === 'debit_note';
+  const isStandard = input.invoiceProfile === 'standard';
+  const invoiceSubtype = isStandard
+    ? ZATCA_STANDARD_SUBTYPES[type]
+    : ZATCA_SIMPLIFIED_SUBTYPES[type];
 
   // Compute line totals and tax breakdown
   const lines = items.map((item, idx) => {
@@ -161,9 +181,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`  <cbc:UUID>${uuid}</cbc:UUID>`);
   parts.push(`  <cbc:IssueDate>${issueDate}</cbc:IssueDate>`);
   parts.push(`  <cbc:IssueTime>${issueTime}</cbc:IssueTime>`);
-  parts.push(
-    `  <cbc:InvoiceTypeCode name="${ZATCA_SIMPLIFIED_SUBTYPES[type]}">${typeCode}</cbc:InvoiceTypeCode>`,
-  );
+  parts.push(`  <cbc:InvoiceTypeCode name="${invoiceSubtype}">${typeCode}</cbc:InvoiceTypeCode>`);
 
   // ── Currencies ──
   parts.push(`  <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>`);
@@ -250,12 +268,49 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   parts.push(`    </cac:Party>`);
   parts.push(`  </cac:AccountingSupplierParty>`);
 
-  // ── AccountingCustomerParty (empty for simplified B2C) ──
-  parts.push(`  <cac:AccountingCustomerParty>`);
-  parts.push(`  </cac:AccountingCustomerParty>`);
+  // ── AccountingCustomerParty ──
+  if (isStandard && input.buyer) {
+    const buyer = input.buyer;
+    const buyerCountry = buyer.country || 'SA';
+    parts.push(`  <cac:AccountingCustomerParty>`);
+    parts.push(`    <cac:Party>`);
+    parts.push(`      <cac:PostalAddress>`);
+    parts.push(`        <cbc:StreetName>${escapeXml(buyer.street)}</cbc:StreetName>`);
+    parts.push(
+      `        <cbc:BuildingNumber>${escapeXml(buyer.buildingNumber)}</cbc:BuildingNumber>`,
+    );
+    parts.push(
+      `        <cbc:CitySubdivisionName>${escapeXml(buyer.citySubdivision)}</cbc:CitySubdivisionName>`,
+    );
+    parts.push(`        <cbc:CityName>${escapeXml(buyer.city)}</cbc:CityName>`);
+    parts.push(`        <cbc:PostalZone>${escapeXml(buyer.postalCode)}</cbc:PostalZone>`);
+    parts.push(`        <cac:Country>`);
+    parts.push(
+      `          <cbc:IdentificationCode>${escapeXml(buyerCountry)}</cbc:IdentificationCode>`,
+    );
+    parts.push(`        </cac:Country>`);
+    parts.push(`      </cac:PostalAddress>`);
+    parts.push(`      <cac:PartyTaxScheme>`);
+    parts.push(`        <cbc:CompanyID>${escapeXml(buyer.vatNumber)}</cbc:CompanyID>`);
+    parts.push(`        <cac:TaxScheme>`);
+    parts.push(`          <cbc:ID>VAT</cbc:ID>`);
+    parts.push(`        </cac:TaxScheme>`);
+    parts.push(`      </cac:PartyTaxScheme>`);
+    parts.push(`      <cac:PartyLegalEntity>`);
+    parts.push(`        <cbc:RegistrationName>${escapeXml(buyer.name)}</cbc:RegistrationName>`);
+    parts.push(`      </cac:PartyLegalEntity>`);
+    parts.push(`    </cac:Party>`);
+    parts.push(`  </cac:AccountingCustomerParty>`);
+  } else {
+    // Simplified B2C — empty customer party
+    parts.push(`  <cac:AccountingCustomerParty>`);
+    parts.push(`  </cac:AccountingCustomerParty>`);
+  }
 
-  // ── Delivery (credit/debit notes only) ──
-  if (isCorrection) {
+  // ── Delivery ──
+  // Always included for standard invoices; also included for simplified
+  // credit/debit notes.
+  if (isStandard || isCorrection) {
     parts.push(`  <cac:Delivery>`);
     parts.push(`    <cbc:ActualDeliveryDate>${issueDate}</cbc:ActualDeliveryDate>`);
     parts.push(`  </cac:Delivery>`);

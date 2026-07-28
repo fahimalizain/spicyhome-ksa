@@ -1009,6 +1009,255 @@ describe('Pay with payment methods', () => {
       expect(res.body.payments[0].amountHalalas).toBe(totalHalalas);
     });
   });
+
+  describe('Standard invoice buyer fields', () => {
+    async function createOpenOrderWithItemsAndPay(payOverrides?: Partial<any>): Promise<{
+      orderId: number;
+      res: any;
+    }> {
+      // Create order with items (Zinger × 2)
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 2 }],
+        })
+        .expect(200);
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const fetched = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const payBody: any = {
+        payments: [{ methodId: 'cash', amountHalalas: fetched.body.totalHalalas }],
+        ...(payOverrides || {}),
+      };
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/pay`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send(payBody);
+
+      return { orderId, res };
+    }
+
+    it('pay without standard fields keeps is_standard_invoice=0, buyers null', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('paid');
+
+      const orderRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(orderRes.body.isStandardInvoice).toBe(false);
+      expect(orderRes.body.zatcaBuyerDetails).toBeNull();
+    });
+
+    const FULL_BUYER = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+
+    it('pay with isStandardInvoice:true and full buyer → persisted correctly', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('paid');
+
+      const orderRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(orderRes.body.isStandardInvoice).toBe(true);
+      expect(orderRes.body.zatcaBuyerDetails).toBeDefined();
+      expect(orderRes.body.zatcaBuyerDetails.name).toBe('Abdullah Al-Otaibi Est.');
+      expect(orderRes.body.zatcaBuyerDetails.vatNumber).toBe('300123456789012');
+      expect(orderRes.body.zatcaBuyerDetails.street).toBe('King Fahd Road');
+      expect(orderRes.body.zatcaBuyerDetails.buildingNumber).toBe('7845');
+      expect(orderRes.body.zatcaBuyerDetails.citySubdivision).toBe('Al-Olaya');
+      expect(orderRes.body.zatcaBuyerDetails.city).toBe('Riyadh');
+      expect(orderRes.body.zatcaBuyerDetails.postalCode).toBe('12271');
+      expect(orderRes.body.zatcaBuyerDetails.country).toBe('SA');
+    });
+
+    it('isStandardInvoice:true defaults country to SA when omitted', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          name: 'Test Co.',
+          vatNumber: '300123456789013',
+          street: 'Main St',
+          buildingNumber: '1',
+          citySubdivision: 'Central',
+          city: 'Jeddah',
+          postalCode: '22222',
+        },
+      });
+
+      expect(res.status).toBe(201);
+
+      const orderRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(orderRes.body.zatcaBuyerDetails.country).toBe('SA');
+    });
+
+    it('isStandardInvoice:true missing name → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          ...FULL_BUYER,
+          name: '',
+        },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('isStandardInvoice:true missing vatNumber → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          ...FULL_BUYER,
+          vatNumber: '',
+        },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('isStandardInvoice:true with invalid VAT format → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          ...FULL_BUYER,
+          vatNumber: '12345',
+        },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('isStandardInvoice:true with VAT containing letters → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          ...FULL_BUYER,
+          vatNumber: '30012345678901A',
+        },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('isStandardInvoice:true with invalid country code → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: {
+          ...FULL_BUYER,
+          country: 'SAU',
+        },
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('pay event includes isStandardInvoice flag and buyer summary when standard', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      expect(res.status).toBe(201);
+
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+      expect(paidEvent).toBeDefined();
+      const paidPayload =
+        typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+      expect(paidPayload.isStandardInvoice).toBe(true);
+      expect(paidPayload.buyerVatNumber).toBe('300123456789012');
+      expect(paidPayload.buyerName).toBe('Abdullah Al-Otaibi Est.');
+    });
+
+    it('pay event does NOT include isStandardInvoice flag when not standard', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+
+      expect(res.status).toBe(201);
+
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+      expect(paidEvent).toBeDefined();
+      const paidPayload =
+        typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+      expect(paidPayload.isStandardInvoice).toBeUndefined();
+      expect(paidPayload.buyerVatNumber).toBeUndefined();
+      expect(paidPayload.buyerName).toBeUndefined();
+    });
+
+    it('isStandardInvoice:true missing zatcaBuyerDetails → 400', async () => {
+      const { res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('isStandardInvoice:false ignores zatcaBuyerDetails entirely', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: false,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      expect(res.status).toBe(201);
+
+      const orderRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(orderRes.body.isStandardInvoice).toBe(false);
+      expect(orderRes.body.zatcaBuyerDetails).toBeNull();
+    });
+  });
 });
 
 describe('One open order per table', () => {

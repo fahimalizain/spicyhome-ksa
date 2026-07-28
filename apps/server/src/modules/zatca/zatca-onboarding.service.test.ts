@@ -29,6 +29,7 @@ function createMockInvoiceService() {
     getOnboardingState: jest.fn().mockReturnValue('not_started'),
     getById: jest.fn(),
     buildComplianceInvoice: jest.fn(),
+    buildComplianceStandardInvoice: jest.fn(),
     setOnboardingState: jest.fn(),
     storePrivateKey: jest.fn(),
   };
@@ -51,6 +52,12 @@ function setupComplianceState(invoiceService: MockInvoiceService, store: Map<str
       '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>1</cbc:ID></Invoice>',
     invoiceHash: 'dGVzdEludm9pY2VIYXNoQmFzZTY0PT0=',
     uuid: '00000000-0000-0000-0000-000000000001',
+  });
+  invoiceService.buildComplianceStandardInvoice.mockResolvedValue({
+    signedXml:
+      '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"><cbc:ID>2</cbc:ID></Invoice>',
+    invoiceHash: 'dGVzdFN0YW5kYXJkSW52b2ljZUhhc2g2NA==',
+    uuid: '00000000-0000-0000-0000-000000000002',
   });
 }
 
@@ -683,6 +690,158 @@ describe('runComplianceCheck response and persistence', () => {
     await expect(service.runComplianceCheck(null, 'invoice')).rejects.toThrow(
       'Compliance credentials not found',
     );
+  });
+});
+
+// ── runComplianceCheck: standard compliance types ─────────────────────────
+
+describe('runComplianceCheck standard compliance types', () => {
+  let store: Map<string, string>;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    const printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+  });
+
+  it('calls buildComplianceStandardInvoice for standard_invoice and sends Clearance-Status: 1', async () => {
+    setupComplianceState(invoiceService, store);
+    mockComplianceHttpSuccess(httpClient);
+
+    await service.runComplianceCheck(null, 'standard_invoice');
+
+    expect(invoiceService.buildComplianceStandardInvoice).toHaveBeenCalledWith('standard_invoice');
+    expect(invoiceService.buildComplianceInvoice).not.toHaveBeenCalled();
+
+    // Verify Clearance-Status header was set
+    const postArgs = httpClient.post.mock.calls[0];
+    const headers = postArgs[1].headers;
+    expect(headers['Clearance-Status']).toBe('1');
+
+    const entries = parseComplianceResults(store);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      key: 'standard_invoice',
+      success: true,
+      status: 200,
+    });
+  });
+
+  it('calls buildComplianceStandardInvoice for standard_credit_note', async () => {
+    setupComplianceState(invoiceService, store);
+    mockComplianceHttpSuccess(httpClient);
+
+    await service.runComplianceCheck(null, 'standard_credit_note');
+
+    expect(invoiceService.buildComplianceStandardInvoice).toHaveBeenCalledWith(
+      'standard_credit_note',
+    );
+
+    const postArgs = httpClient.post.mock.calls[0];
+    expect(postArgs[1].headers['Clearance-Status']).toBe('1');
+
+    const entries = parseComplianceResults(store);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].key).toBe('standard_credit_note');
+    expect(entries[0].success).toBe(true);
+  });
+
+  it('calls buildComplianceStandardInvoice for standard_debit_note', async () => {
+    setupComplianceState(invoiceService, store);
+    mockComplianceHttpSuccess(httpClient);
+
+    await service.runComplianceCheck(null, 'standard_debit_note');
+
+    expect(invoiceService.buildComplianceStandardInvoice).toHaveBeenCalledWith(
+      'standard_debit_note',
+    );
+
+    const postArgs = httpClient.post.mock.calls[0];
+    expect(postArgs[1].headers['Clearance-Status']).toBe('1');
+
+    const entries = parseComplianceResults(store);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].key).toBe('standard_debit_note');
+    expect(entries[0].success).toBe(true);
+  });
+
+  it('standard compliance results have distinct keys from simplified', async () => {
+    setupComplianceState(invoiceService, store);
+    mockComplianceHttpSuccess(httpClient);
+
+    await service.runComplianceCheck(null, 'invoice');
+    await service.runComplianceCheck(null, 'standard_invoice');
+
+    const entries = parseComplianceResults(store);
+    expect(entries).toHaveLength(2);
+
+    const keys = entries.map((e) => e.key).sort();
+    expect(keys).toEqual(['invoice', 'standard_invoice']);
+  });
+
+  it('standard compliance sends Clearance-Status header', async () => {
+    setupComplianceState(invoiceService, store);
+    mockComplianceHttpSuccess(httpClient);
+
+    await service.runComplianceCheck(null, 'standard_invoice');
+
+    const postArgs = httpClient.post.mock.calls[0];
+    expect(postArgs[1].headers['Clearance-Status']).toBe('1');
+  });
+
+  it('standard compliance 202 with warnings persists correctly', async () => {
+    setupComplianceState(invoiceService, store);
+
+    httpClient.post.mockResolvedValue({
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        warnings: [{ message: 'Buyer VAT not found in ZATCA registry' }],
+      }),
+    });
+
+    const result = await service.runComplianceCheck(null, 'standard_invoice');
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe(202);
+    expect(result.warnings).toContain('Buyer VAT not found in ZATCA registry');
+
+    const entries = parseComplianceResults(store);
+    expect(entries[0].key).toBe('standard_invoice');
+    expect(entries[0].success).toBe(true);
+    expect(entries[0].status).toBe(202);
+  });
+
+  it('standard compliance 400 error persists as failure', async () => {
+    setupComplianceState(invoiceService, store);
+
+    httpClient.post.mockResolvedValue({
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        errors: [{ message: 'Standard invoice XML missing buyer VAT' }],
+      }),
+    });
+
+    const result = await service.runComplianceCheck(null, 'standard_credit_note');
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe(400);
+    expect(result.errors).toContain('Standard invoice XML missing buyer VAT');
+
+    const entries = parseComplianceResults(store);
+    expect(entries[0].key).toBe('standard_credit_note');
+    expect(entries[0].success).toBe(false);
+    expect(entries[0].status).toBe(400);
   });
 });
 

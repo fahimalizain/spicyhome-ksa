@@ -95,6 +95,8 @@ describe('ReportsService', () => {
         vat_halalas INTEGER NOT NULL DEFAULT 0,
         total_halalas INTEGER NOT NULL DEFAULT 0,
         discount_halalas INTEGER NOT NULL DEFAULT 0,
+        is_standard_invoice INTEGER NOT NULL DEFAULT 0,
+        zatca_buyer_details TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),

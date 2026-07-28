@@ -3459,6 +3459,52 @@
           "updatedBy"
         ]
       },
+      "ZatcaBuyerDetailsDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Abdullah Al-Otaibi Est."
+          },
+          "vatNumber": {
+            "type": "string",
+            "example": "300123456789012"
+          },
+          "street": {
+            "type": "string",
+            "example": "King Fahd Road"
+          },
+          "buildingNumber": {
+            "type": "string",
+            "example": "7845"
+          },
+          "citySubdivision": {
+            "type": "string",
+            "example": "Al-Olaya"
+          },
+          "city": {
+            "type": "string",
+            "example": "Riyadh"
+          },
+          "postalCode": {
+            "type": "string",
+            "example": "12271"
+          },
+          "country": {
+            "type": "string",
+            "example": "SA"
+          }
+        },
+        "required": [
+          "name",
+          "vatNumber",
+          "street",
+          "buildingNumber",
+          "citySubdivision",
+          "city",
+          "postalCode"
+        ]
+      },
       "OrderItemResponse": {
         "type": "object",
         "properties": {
@@ -3701,6 +3747,20 @@
             "format": "int64",
             "example": 0
           },
+          "isStandardInvoice": {
+            "type": "boolean",
+            "description": "Whether this order is a ZATCA standard invoice",
+            "example": false
+          },
+          "zatcaBuyerDetails": {
+            "description": "ZATCA standard invoice buyer details (JSON)",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaBuyerDetailsDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -3754,6 +3814,7 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "isStandardInvoice",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -3898,6 +3959,19 @@
             "items": {
               "$ref": "#/components/schemas/PaymentLineDto"
             }
+          },
+          "isStandardInvoice": {
+            "type": "boolean",
+            "description": "Enable standard invoice with buyer details for ZATCA",
+            "example": false
+          },
+          "zatcaBuyerDetails": {
+            "description": "ZATCA standard invoice buyer details (required when isStandardInvoice is true)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaBuyerDetailsDto"
+              }
+            ]
           }
         },
         "required": [

@@ -131,6 +131,31 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
         </button>
       </div>
 
+      {/* Standard invoice notice */}
+      {order.isStandardInvoice && (
+        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 mb-3">
+          <h4 className="text-sm font-bold text-amber-400 mb-1">Standard Tax Invoice</h4>
+          <p className="text-xs text-gray-300">
+            A ZATCA Standard Credit Note will be issued for this refund. Buyer details from the
+            original invoice will be used.
+          </p>
+          {(order.zatcaBuyerDetails?.name || order.zatcaBuyerDetails?.vatNumber) && (
+            <div className="mt-2 pt-2 border-t border-amber-700/30 text-xs text-gray-400 space-y-0.5">
+              {order.zatcaBuyerDetails?.name && (
+                <div>
+                  Buyer: <span className="text-gray-300">{order.zatcaBuyerDetails.name}</span>
+                </div>
+              )}
+              {order.zatcaBuyerDetails?.vatNumber && (
+                <div>
+                  VAT: <span className="text-gray-300">{order.zatcaBuyerDetails.vatNumber}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2 mb-3">
         {rows.map((row) => {
           const remaining = getRemainingQty(row.originalQty, row.orderItemId, refunds);

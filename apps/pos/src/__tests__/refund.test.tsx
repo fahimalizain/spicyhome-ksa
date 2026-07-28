@@ -36,6 +36,8 @@ const mockOrder: OrderResponse = {
   vatHalalas: 600,
   totalHalalas: 4600,
   discountHalalas: 0,
+  isStandardInvoice: false,
+  zatcaBuyerDetails: null,
   createdAt: 1700000000,
   updatedAt: 1700000000,
   createdBy: null,
@@ -77,6 +79,23 @@ const mockOrder: OrderResponse = {
 };
 
 const emptyRefunds: OrderRefundResponse[] = [];
+
+const mockStandardOrder: OrderResponse = {
+  ...mockOrder,
+  id: 2,
+  orderNo: 43,
+  isStandardInvoice: true,
+  zatcaBuyerDetails: {
+    name: 'Abdullah Al-Otaibi Est.',
+    vatNumber: '300123456789012',
+    street: 'King Fahd Road',
+    buildingNumber: '7845',
+    citySubdivision: 'Al-Olaya',
+    city: 'Riyadh',
+    postalCode: '12271',
+    country: 'SA',
+  },
+};
 
 describe('RefundPanel', () => {
   beforeEach(() => {
@@ -227,6 +246,36 @@ describe('RefundPanel', () => {
 
     fireEvent.click(screen.getByText('\u2715'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('renders standard invoice notice when order.isStandardInvoice is true', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order #43')).toBeInTheDocument();
+    });
+
+    // Notice banner
+    expect(screen.getByText('Standard Tax Invoice')).toBeInTheDocument();
+    expect(
+      screen.getByText(/A ZATCA Standard Credit Note will be issued for this refund/),
+    ).toBeInTheDocument();
+
+    // Buyer read-only info
+    expect(screen.getByText('Abdullah Al-Otaibi Est.')).toBeInTheDocument();
+    expect(screen.getByText('300123456789012')).toBeInTheDocument();
+  });
+
+  it('does not render standard invoice notice when order.isStandardInvoice is false', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Standard Tax Invoice')).not.toBeInTheDocument();
   });
 });
 

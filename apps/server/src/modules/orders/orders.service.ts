@@ -21,11 +21,17 @@ import {
   settings,
   items,
 } from '@spicyhome/db';
-import { decomposeVat } from '@spicyhome/shared';
+import {
+  decomposeVat,
+  parseZatcaBuyerDetails,
+  formatZatcaBuyerDetailsErrors,
+} from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import { OrderEventsService } from './order-events.service';
 import { PrintJobService } from '../printers/print-job.service';
+import { ZatcaBuyerDetailsDto } from './dto/zatca-buyer-details.dto';
 import type { PrinterRecord } from '../printers/printers.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -507,13 +513,43 @@ export class OrdersService {
     return updatedOrder;
   }
 
+  private validateStandardInvoiceBuyer(dto: {
+    isStandardInvoice?: boolean;
+    zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+  }): Record<string, unknown> | null {
+    if (!dto.isStandardInvoice) return null;
+
+    if (!dto.zatcaBuyerDetails) {
+      throw new BadRequestException('zatcaBuyerDetails is required when isStandardInvoice is true');
+    }
+
+    const parsed = parseZatcaBuyerDetails(dto.zatcaBuyerDetails as unknown);
+    if (!parsed.success) {
+      const formatted = formatZatcaBuyerDetailsErrors(parsed.error);
+      throw new BadRequestException(
+        `Invalid buyer details: ${Object.entries(formatted)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('; ')}`,
+      );
+    }
+    return parsed.data as unknown as Record<string, unknown>;
+  }
+
   async payOrder(
     orderId: number,
     userId: number,
-    dto: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> },
+    dto: {
+      payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }>;
+      isStandardInvoice?: boolean;
+      zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+    },
   ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
+
+    // Validate standard invoice buyer fields outside transaction
+    const validatedBuyer = this.validateStandardInvoiceBuyer(dto);
+    const isStandardInvoice = dto.isStandardInvoice === true;
 
     // Payment validation happens inside the transaction
     let hasCashPayment = false;
@@ -639,32 +675,38 @@ export class OrdersService {
           .run();
       }
 
-      // Update order status
-      tx.update(orders)
-        .set({ status: 'paid', ...updateAuditFields(userId, now) })
-        .where(eq(orders.id, orderId))
-        .run();
+      // Update order status (plus buyer fields if standard invoice)
+      const orderUpdate: Record<string, any> = {
+        status: 'paid',
+        ...updateAuditFields(userId, now),
+      };
+      if (isStandardInvoice) {
+        orderUpdate.isStandardInvoice = 1;
+        orderUpdate.zatcaBuyerDetails = JSON.stringify(validatedBuyer);
+      }
+      tx.update(orders).set(orderUpdate).where(eq(orders.id, orderId)).run();
 
-      // Write paid event with payment breakdown
-      this.orderEvents.createEvent(
-        tx,
-        orderId,
-        userId,
-        'paid',
-        {
-          fromStatus: 'open',
-          toStatus: 'paid',
-          payments: paymentRecords.map((pr) => ({
-            methodId: pr.methodId,
-            methodTitle: pr.methodTitle,
-            amountHalalas: pr.amountHalalas,
-            ...(pr.tenderedHalalas !== undefined
-              ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
-              : {}),
-          })),
-        },
-        now,
-      );
+      // Write paid event with payment breakdown (and standard invoice flag if applicable)
+      const paidPayload: Record<string, any> = {
+        fromStatus: 'open',
+        toStatus: 'paid',
+        payments: paymentRecords.map((pr) => ({
+          methodId: pr.methodId,
+          methodTitle: pr.methodTitle,
+          amountHalalas: pr.amountHalalas,
+          ...(pr.tenderedHalalas !== undefined
+            ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
+            : {}),
+        })),
+      };
+      if (isStandardInvoice) {
+        paidPayload.isStandardInvoice = true;
+        const buyer = validatedBuyer as Record<string, unknown>;
+        paidPayload.buyerVatNumber = buyer.vatNumber;
+        paidPayload.buyerName = buyer.name;
+      }
+
+      this.orderEvents.createEvent(tx, orderId, userId, 'paid', paidPayload, now);
 
       // Receipt print enqueued with conditional kickDrawer
       if (receiptPrinter) {
@@ -1179,22 +1221,50 @@ export class OrdersService {
       .where(eq(orderPayments.orderId, id))
       .orderBy(orderPayments.id)
       .all();
-    return {
-      ...order,
-      items: itemsList,
-      events: logs,
-      payments: payments.map((p) => ({
-        methodId: p.methodId,
-        methodTitle: p.methodTitle,
-        amountHalalas: p.amountHalalas,
-        tenderedHalalas: p.tenderedHalalas,
-        changeHalalas: p.changeHalalas,
-      })),
-    };
+    return mapBools(
+      {
+        ...order,
+        items: itemsList,
+        events: logs,
+        payments: payments.map((p) => ({
+          methodId: p.methodId,
+          methodTitle: p.methodTitle,
+          amountHalalas: p.amountHalalas,
+          tenderedHalalas: p.tenderedHalalas,
+          changeHalalas: p.changeHalalas,
+        })),
+        zatcaBuyerDetails: this.parseOrderBuyerDetails(order),
+      },
+      ['isStandardInvoice'],
+    );
   }
 
   getOrderEvents(orderId: number): any[] {
     return this.orderEvents.getEvents(this.db, orderId);
+  }
+
+  /**
+   * Parse zatca_buyer_details JSON string from a DB order row.
+   * Returns a parsed object on success, null for missing/corrupt data.
+   * Logs a warning on corrupt JSON (resilience — don't crash on bad data).
+   */
+  private parseOrderBuyerDetails(order: Record<string, any>): Record<string, unknown> | null {
+    const raw = order.zatcaBuyerDetails;
+    if (raw == null || raw === '') return null;
+    try {
+      const parsed = JSON.parse(raw);
+      // Validate shape but don't throw — return null on invalid data
+      const result = parseZatcaBuyerDetails(parsed);
+      if (result.success) {
+        return result.data as unknown as Record<string, unknown>;
+      }
+      this.logger.warn(
+        `Order ${order.id} has invalid zatca_buyer_details JSON shape, returning null. Errors: ${JSON.stringify(formatZatcaBuyerDetailsErrors(result.error))}`,
+      );
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   verifyOrderChain(orderId: number): any {

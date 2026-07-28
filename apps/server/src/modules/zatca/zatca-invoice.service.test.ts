@@ -425,4 +425,145 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(row.icv).toBeGreaterThan(nextIcv);
     });
   });
+
+  // ── Helper: create a standard invoice order with buyer fields ────────────
+
+  function createStandardInvoiceOrder(): number {
+    // Need a unique order_no + uuid
+    const orderNo = 900 + Math.floor(Math.random() * 1000);
+    const uuid = `order-std-${orderNo}-${Date.now()}`;
+    const businessDate = '2024-07-20';
+
+    sqlite.exec(`
+      INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+      VALUES ('${businessDate}', 'open', ${now}, 1, ${now}, ${now})
+    `);
+    const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+    const buyerJson = JSON.stringify({
+      name: 'Fatoora Samples LTD',
+      vatNumber: '399999999800003',
+      street: 'Salah Al-Din',
+      buildingNumber: '1111',
+      citySubdivision: 'Al-Murooj',
+      city: 'Riyadh',
+      postalCode: '12222',
+      country: 'SA',
+    });
+
+    sqlite.exec(`
+      INSERT INTO orders (
+        order_no, uuid, type, day_opening_id, status,
+        subtotal_halalas, vat_halalas, total_halalas,
+        is_standard_invoice,
+        zatca_buyer_details,
+        created_at, updated_at
+      ) VALUES (
+        ${orderNo}, '${uuid}', 'dine_in', ${doId}, 'paid',
+        10000, 1500, 11500,
+        1,
+        '${buyerJson.replace(/'/g, "''")}',
+        ${now}, ${now}
+      )
+    `);
+    const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+    sqlite.exec(`
+      INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+      VALUES (${orderId}, 'Standard Item', 11500, 1500, 1, 11500, ${now}, ${now})
+    `);
+
+    return orderId;
+  }
+
+  // ── Phase 6: standard invoice routing guards ─────────────────────────────
+
+  describe('Phase 6 — standard invoice guards', () => {
+    it('onOrderPaid skips standard invoice orders (leaves to ZatcaStandardInvoiceService)', async () => {
+      const orderId = createStandardInvoiceOrder();
+
+      // Spy on the logger
+      const loggerWarnSpy = jest.spyOn((service as any).logger, 'warn');
+
+      await expect(service.onOrderPaid({ orderId, userId: 1 })).resolves.toBeUndefined();
+
+      // No invoice row created
+      const row = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(row).toBeUndefined();
+
+      loggerWarnSpy.mockRestore();
+    });
+
+    it('createInvoice throws for standard invoice orders (programmer error guard)', async () => {
+      const orderId = createStandardInvoiceOrder();
+
+      // Direct call to createInvoice on a standard order must throw
+      await expect(service.createInvoice(orderId)).rejects.toThrow(
+        /Use createStandardInvoice for clearance/,
+      );
+    });
+
+    it('onOrderPaid still creates simplified invoice for non-standard orders', async () => {
+      // Create a simplified order
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-07-21', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (999, 'uuid-phase6-simple', 'dine_in', ${doId}, 'paid', 5000, 750, 5750, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES (${orderId}, 'Burger', 5750, 1500, 1, 5750, ${now}, ${now})
+      `);
+
+      // onOrderPaid should still work for simplified
+      await expect(service.onOrderPaid({ orderId, userId: 1 })).resolves.toBeUndefined();
+
+      const row = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(row).not.toBeUndefined();
+      expect(row.status).toBe('signed');
+    });
+
+    it('onOrderRefundIssued skips standard invoice orders', async () => {
+      const orderId = createStandardInvoiceOrder();
+
+      // Create a zatca_invoices row (simulating prior standard invoice creation)
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId}, 100, 'std-uuid-001', 'hash-std-001', '', '<Invoice/>', 'tlv', 'cleared', ${now}, ${now})
+      `);
+
+      // Create a refund
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Reason', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_refund_items (refund_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at)
+        VALUES (${refundId}, 'Standard Item', 11500, 1500, 1, 11500, ${now})
+      `);
+
+      await expect(
+        service.onOrderRefundIssued({ orderId, refundId, userId: 1 }),
+      ).resolves.toBeUndefined();
+
+      // No simplified credit note created
+      const cn = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
+        .get(refundId) as any;
+      expect(cn).toBeUndefined();
+    });
+  });
 });

@@ -19,7 +19,7 @@
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import {
   orders,
   orderItems,
@@ -58,9 +58,11 @@ import {
   zatcaKey,
   ZATCA_INITIAL_PIH,
   ZATCAInvoiceDocumentType,
+  standardComplianceToBaseType,
   ZATCAEnvironment,
 } from '@spicyhome/shared';
 import { encodeZatcaTLV, TLVInput } from './tlv';
+import type { BuyerInfo } from './zatca-xml-builder.service';
 
 export interface CreateInvoiceResult {
   id: number;
@@ -85,6 +87,15 @@ export class ZatcaInvoiceService {
 
   @OnEvent('order.paid')
   async onOrderPaid(payload: { orderId: number; userId: number }): Promise<void> {
+    // Phase 6: standard invoices go through clearance via ZatcaStandardInvoiceService.
+    // Skip simplified path for orders flagged with is_standard_invoice=1.
+    const order = this.db
+      .select({ isStandardInvoice: orders.isStandardInvoice })
+      .from(orders)
+      .where(eq(orders.id, payload.orderId))
+      .get();
+    if (order?.isStandardInvoice === 1) return;
+
     try {
       await this.createInvoice(payload.orderId);
     } catch (err: any) {
@@ -100,6 +111,14 @@ export class ZatcaInvoiceService {
     refundId: number;
     userId: number;
   }): Promise<void> {
+    // Phase 6: standard refunds route to ZatcaStandardInvoiceService for clearance.
+    const order = this.db
+      .select({ isStandardInvoice: orders.isStandardInvoice })
+      .from(orders)
+      .where(eq(orders.id, payload.orderId))
+      .get();
+    if (order?.isStandardInvoice === 1) return;
+
     try {
       await this.createCreditNote(payload.orderId, payload.refundId);
     } catch (err: any) {
@@ -141,6 +160,17 @@ export class ZatcaInvoiceService {
 
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
+
+    // Phase 6 guard: standard invoices must go through ZatcaStandardInvoiceService
+    // (clearance path). Calling createInvoice on a standard order is a programmer error.
+    if (order.isStandardInvoice === 1) {
+      this.logger.warn(
+        `Order ${orderId} is a standard invoice — createInvoice skipped (use createStandardInvoice)`,
+      );
+      throw new Error(
+        `Order ${orderId} is a standard invoice. Use createStandardInvoice for clearance.`,
+      );
+    }
 
     const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
 
@@ -205,7 +235,7 @@ export class ZatcaInvoiceService {
 
     // Allocate ICV and get PIH atomically
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateICV(tx, env, orgUnit);
+      return this.allocateNextIcv(tx, env, orgUnit);
     });
 
     // Generate UUID
@@ -345,14 +375,12 @@ export class ZatcaInvoiceService {
       .all();
 
     // 4. Compute refund totals from refund items
-    let subtotalHalalas = 0;
     let vatHalalas = 0;
     let totalHalalas = 0;
     for (const ri of refundItems) {
       const lineTotal = ri.unitPriceHalalas * ri.qty;
       totalHalalas += lineTotal;
       const decomposed = decomposeVat(lineTotal, ri.vatRateBp);
-      subtotalHalalas += decomposed.priceExclHalalas;
       vatHalalas += decomposed.vatHalalas;
     }
 
@@ -406,7 +434,7 @@ export class ZatcaInvoiceService {
 
     // 9. Allocate ICV and get PIH atomically (checks both zatca_invoices and zatca_credit_notes)
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateICV(tx, env, orgUnit);
+      return this.allocateNextIcv(tx, env, orgUnit);
     });
 
     // 10. Generate UUID
@@ -672,6 +700,135 @@ export class ZatcaInvoiceService {
     return { signedXml: finalSignedXml, invoiceHash, uuid: invUuid };
   }
 
+  /**
+   * Build a dynamically-generated signed **standard** invoice XML for ZATCA
+   * compliance checks (subtype 0100000, full dummy buyer).
+   *
+   * Same pipeline as `buildComplianceInvoice` but produces standard profile XML
+   * with a dummy buyer party — required for standard compliance validation.
+   */
+  async buildComplianceStandardInvoice(
+    type: 'standard_invoice' | 'standard_credit_note' | 'standard_debit_note',
+  ): Promise<{ signedXml: string; invoiceHash: string; uuid: string }> {
+    const { randomUUID } = require('crypto');
+
+    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
+    const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
+    const crNumber = this.printersService.getSetting('cr_number', '');
+    const sellerStreet = this.printersService.getSetting('seller_street', '');
+    const sellerBuilding = this.printersService.getSetting('seller_building', '');
+    const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
+    const sellerPostal = this.printersService.getSetting('seller_postal', '');
+    const sellerCountry = this.printersService.getSetting('seller_country', 'SA');
+
+    const seller: SellerInfo = {
+      name: sellerName,
+      vatNumber,
+      crNumber: crNumber || undefined,
+      street: sellerStreet || undefined,
+      buildingNumber: sellerBuilding || undefined,
+      city: sellerCity,
+      postalCode: sellerPostal || undefined,
+      country: sellerCountry,
+    };
+
+    const env = this.getEnv();
+    const orgUnit = this.getOrgUnit();
+
+    const privateKeyHex = this.getPrivateKey(env, orgUnit);
+    if (!privateKeyHex) {
+      throw new Error('ZATCA private key not configured. Run onboarding first.');
+    }
+
+    const complianceCert = this.printersService.getSetting(
+      zatcaKey(env, orgUnit, 'compliance_cert'),
+      '',
+    );
+    if (!complianceCert) {
+      throw new Error('ZATCA compliance certificate not found. Run compliance onboarding first.');
+    }
+
+    // Dummy buyer for standard compliance check (ZATCA sample-like values)
+    const buyer: BuyerInfo = {
+      name: 'Compliance Buyer LTD',
+      vatNumber: '399999999800003',
+      street: 'King Fahd Road',
+      buildingNumber: '9999',
+      citySubdivision: 'Al Olaya',
+      city: 'Riyadh',
+      postalCode: '12345',
+      country: 'SA',
+    };
+
+    // Dummy line item for compliance check
+    const items: InvoiceItemInput[] = [
+      { name: 'Compliance Test Item', unitPriceHalalas: 11500, vatRateBp: 1500, qty: 1 },
+    ];
+
+    const now = Math.floor(Date.now() / 1000);
+    const nowDate = new Date(now * 1000);
+    const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+      timeZone: 'Asia/Riyadh',
+      hour12: false,
+    });
+
+    // Read current ICV without incrementing — compliance invoices don't consume ICV
+    const lastIcvKey = zatcaKey(env, orgUnit, 'last_icv');
+    const lastIcvRow = this.db.select().from(settings).where(eq(settings.key, lastIcvKey)).get();
+    const icv = lastIcvRow ? parseInt(lastIcvRow.value, 10) : 0;
+
+    const invUuid = randomUUID();
+    const baseType = standardComplianceToBaseType(type);
+    const isCorrection = baseType === 'credit_note' || baseType === 'debit_note';
+
+    const xmlInput: InvoiceXMLInput = {
+      type: baseType,
+      icv,
+      uuid: invUuid,
+      issueDate,
+      issueTime,
+      seller,
+      items,
+      prevInvoiceHash: ZATCA_INITIAL_PIH,
+      invoiceProfile: 'standard',
+      buyer,
+      billingReferenceId: isCorrection ? 'SME00001' : undefined,
+    };
+
+    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+
+    const digestHashB64 = computeInvoiceHash(unsignedXml);
+    const digestHashHex = computeInvoiceHashHex(unsignedXml);
+
+    const signatureB64 = signHashBase64(digestHashHex, privateKeyHex);
+    const certForXml = Buffer.from(complianceCert, 'base64').toString('utf-8');
+    const signedXml = embedSignatureIntoXML(unsignedXml, digestHashB64, signatureB64, certForXml);
+
+    const totalHalalas = 11500;
+    const vatHalalas = 1500;
+    const timestampIso = `${issueDate}T${issueTime}`;
+    const certSigB64 = extractCertSignature(certForXml);
+
+    const tlvInput: TLVInput = {
+      sellerName,
+      vatNumber,
+      timestamp: timestampIso,
+      totalHalalas,
+      vatHalalas,
+      invoiceHashBase64: digestHashB64,
+      signatureBase64: signatureB64,
+      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
+      certificateSignatureBase64: certSigB64,
+    };
+    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+
+    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+    const invoiceHash = digestHashB64;
+
+    return { signedXml: finalSignedXml, invoiceHash, uuid: invUuid };
+  }
+
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   /**
@@ -691,8 +848,10 @@ export class ZatcaInvoiceService {
   /**
    * Atomically allocate the next ICV and get PIH.
    * Must be called within a transaction.
+   *
+   * Public so that ZatcaStandardInvoiceService can share the same ICV/PIH chain.
    */
-  private allocateICV(
+  allocateNextIcv(
     tx: any,
     env: ZATCAEnvironment,
     orgUnit: string,

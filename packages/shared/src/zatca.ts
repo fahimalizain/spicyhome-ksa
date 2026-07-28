@@ -6,12 +6,60 @@ export const ZATCA_INVOICE_TYPE_CODES = {
 
 export type ZATCAInvoiceDocumentType = 'invoice' | 'credit_note' | 'debit_note';
 
+/**
+ * Compliance check document type keys — widened to include standard variants.
+ * These are used as identifiers for compliance checks only.
+ */
+export type ZATCAComplianceDocumentType =
+  ZATCAInvoiceDocumentType | 'standard_invoice' | 'standard_credit_note' | 'standard_debit_note';
+
+export const ZATCA_STANDARD_COMPLIANCE_TYPES = [
+  'standard_invoice',
+  'standard_credit_note',
+  'standard_debit_note',
+] as const;
+
+/** All valid compliance check document type keys. */
+export const ZATCA_ALL_COMPLIANCE_DOC_TYPES: readonly ZATCAComplianceDocumentType[] = [
+  'invoice',
+  'credit_note',
+  'debit_note',
+  'standard_invoice',
+  'standard_credit_note',
+  'standard_debit_note',
+] as const;
+
+export function isStandardComplianceType(
+  type: string,
+): type is 'standard_invoice' | 'standard_credit_note' | 'standard_debit_note' {
+  return (ZATCA_STANDARD_COMPLIANCE_TYPES as readonly string[]).includes(type);
+}
+
+export function standardComplianceToBaseType(
+  type: 'standard_invoice' | 'standard_credit_note' | 'standard_debit_note',
+): ZATCAInvoiceDocumentType {
+  switch (type) {
+    case 'standard_invoice':
+      return 'invoice';
+    case 'standard_credit_note':
+      return 'credit_note';
+    case 'standard_debit_note':
+      return 'debit_note';
+  }
+}
+
 export type ZATCAEnvironment = 'sandbox' | 'simulation' | 'production';
 
 export const ZATCA_SIMPLIFIED_SUBTYPES: Record<ZATCAInvoiceDocumentType, string> = {
   invoice: '0200000',
   credit_note: '0200000',
   debit_note: '0211000',
+};
+
+export const ZATCA_STANDARD_SUBTYPES: Record<ZATCAInvoiceDocumentType, string> = {
+  invoice: '0100000',
+  credit_note: '0100000',
+  debit_note: '0100000',
 };
 
 /**

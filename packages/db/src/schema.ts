@@ -141,6 +141,8 @@ export const orders = sqliteTable(
     vatHalalas: integer('vat_halalas').notNull().default(0),
     totalHalalas: integer('total_halalas').notNull().default(0),
     discountHalalas: integer('discount_halalas').notNull().default(0),
+    isStandardInvoice: integer('is_standard_invoice').notNull().default(0),
+    zatcaBuyerDetails: text('zatca_buyer_details'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     createdBy: integer('created_by').references(() => users.id),

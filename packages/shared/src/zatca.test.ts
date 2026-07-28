@@ -6,6 +6,7 @@ import {
   ZATCA_INITIAL_PIH,
   ZATCA_INVOICE_TYPE_CODES,
   ZATCA_SIMPLIFIED_SUBTYPES,
+  ZATCA_STANDARD_SUBTYPES,
 } from './zatca';
 
 describe('ZATCA_INVOICE_TYPE_CODES', () => {
@@ -21,6 +22,14 @@ describe('ZATCA_SIMPLIFIED_SUBTYPES', () => {
     expect(ZATCA_SIMPLIFIED_SUBTYPES.invoice).toBe('0200000');
     expect(ZATCA_SIMPLIFIED_SUBTYPES.credit_note).toBe('0200000');
     expect(ZATCA_SIMPLIFIED_SUBTYPES.debit_note).toBe('0211000');
+  });
+});
+
+describe('ZATCA_STANDARD_SUBTYPES', () => {
+  it('returns correct subtypes', () => {
+    expect(ZATCA_STANDARD_SUBTYPES.invoice).toBe('0100000');
+    expect(ZATCA_STANDARD_SUBTYPES.credit_note).toBe('0100000');
+    expect(ZATCA_STANDARD_SUBTYPES.debit_note).toBe('0100000');
   });
 });
 
