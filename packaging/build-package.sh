@@ -308,56 +308,75 @@ $env:NODE_PATH = Join-Path $scriptDir "server\node_modules"
 $nodeExe = Join-Path $scriptDir "node\node.exe"
 $mainJs = Join-Path $scriptDir "server\main.js"
 
-# Run via .NET Process API to capture stdout/stderr to both
-# log files AND the console in real time.
+# Pure CLR tee — PowerShell scriptblocks on OutputDataReceived crash on Win7
+# (PSInvalidOperation / ScriptBlock.GetContextFromTLS) because callbacks run on
+# a thread-pool thread with no PowerShell runspace. Prefer start-server.bat over ISE.
 Set-Location $scriptDir
 
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = $nodeExe
-$psi.Arguments = '"' + $mainJs + '"'
-$psi.UseShellExecute = $false
-$psi.RedirectStandardOutput = $true
-$psi.RedirectStandardError = $true
-$psi.WorkingDirectory = $scriptDir
+if (-not ([System.Management.Automation.PSTypeName] "SpicyHomeLoggedProcess").Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
 
-$process = New-Object System.Diagnostics.Process
-$process.StartInfo = $psi
+public class SpicyHomeLoggedProcess {
+  private static string outLogPath;
+  private static string errLogPath;
 
-# Handler scriptblocks: write each line to its log file AND the console.
-# File writes are wrapped in try/catch so a full disk does not crash
-# the server.  GetNewClosure() ensures the log-path variables are
-# captured so the handlers work reliably on PS 2.0 background threads.
-$outHandler = {
-    param($sender, $e)
-    $line = $e.Data
-    if ($line -ne $null) {
-        try { [System.IO.File]::AppendAllText($outLog, $line + "`r`n") } catch {}
-        [Console]::Out.WriteLine($line)
+  private static void OnOutput(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(outLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Out.WriteLine(e.Data); } catch {}
     }
-}.GetNewClosure()
+  }
 
-$errHandler = {
-    param($sender, $e)
-    $line = $e.Data
-    if ($line -ne $null) {
-        try { [System.IO.File]::AppendAllText($errLog, $line + "`r`n") } catch {}
-        [Console]::Error.WriteLine($line)
+  private static void OnError(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(errLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Error.WriteLine(e.Data); } catch {}
     }
-}.GetNewClosure()
+  }
 
-$process.add_OutputDataReceived($outHandler)
-$process.add_ErrorDataReceived($errHandler)
+  public static int Run(string fileName, string args, string workDir, string outPath, string errPath) {
+    outLogPath = outPath;
+    errLogPath = errPath;
 
-$process.Start() | Out-Null
-$process.BeginOutputReadLine()
-$process.BeginErrorReadLine()
-$process.WaitForExit()
+    ProcessStartInfo psi = new ProcessStartInfo();
+    psi.FileName = fileName;
+    psi.Arguments = args;
+    psi.WorkingDirectory = workDir;
+    psi.UseShellExecute = false;
+    psi.RedirectStandardOutput = true;
+    psi.RedirectStandardError = true;
+    psi.CreateNoWindow = true;
 
-# Brief sleep to let any in-flight async read events land
-Start-Sleep -Milliseconds 500
+    Process p = new Process();
+    p.StartInfo = psi;
+    p.OutputDataReceived += new DataReceivedEventHandler(OnOutput);
+    p.ErrorDataReceived += new DataReceivedEventHandler(OnError);
 
-$exitCode = $process.ExitCode
-$process.Close()
+    p.Start();
+    p.BeginOutputReadLine();
+    p.BeginErrorReadLine();
+    p.WaitForExit();
+    Thread.Sleep(200);
+
+    int code = p.ExitCode;
+    p.Close();
+    return code;
+  }
+}
+"@
+}
+
+$exitCode = [SpicyHomeLoggedProcess]::Run(
+    $nodeExe,
+    ('"' + $mainJs + '"'),
+    $scriptDir,
+    $outLog,
+    $errLog
+)
 
 if ($exitCode -ne 0) {
     Write-Host ""
