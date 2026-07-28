@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
 
@@ -299,21 +299,27 @@ export const paymentMethods = sqliteTable('payment_methods', {
 
 // ── order_payments ─────────────────────────────────────────────────────────────
 
-export const orderPayments = sqliteTable('order_payments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id')
-    .references(() => orders.id)
-    .notNull(),
-  methodId: text('method_id')
-    .references(() => paymentMethods.id)
-    .notNull(),
-  methodTitle: text('method_title').notNull(),
-  amountHalalas: integer('amount_halalas').notNull(),
-  tenderedHalalas: integer('tendered_halalas'),
-  changeHalalas: integer('change_halalas'),
-  createdAt: integer('created_at').notNull(),
-  createdBy: integer('created_by').references((): any => users.id),
-});
+export const orderPayments = sqliteTable(
+  'order_payments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .references(() => orders.id)
+      .notNull(),
+    methodId: text('method_id')
+      .references(() => paymentMethods.id)
+      .notNull(),
+    methodTitle: text('method_title').notNull(),
+    amountHalalas: integer('amount_halalas').notNull(),
+    tenderedHalalas: integer('tendered_halalas'),
+    changeHalalas: integer('change_halalas'),
+    createdAt: integer('created_at').notNull(),
+    createdBy: integer('created_by').references((): any => users.id),
+  },
+  (t) => ({
+    uniqueOrderMethod: uniqueIndex('idx_order_payments_order_method').on(t.orderId, t.methodId),
+  }),
+);
 
 // ── settings ───────────────────────────────────────────────────────────────────
 

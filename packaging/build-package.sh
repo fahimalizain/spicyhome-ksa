@@ -128,10 +128,10 @@ find "$ROOT_DIR/bazel-bin/packages/db/src" -name "*.js" -print0 2>/dev/null | wh
   chmod 644 "$PACKAGE_DIR/packages/db/$rel"
 done
 
-# Drizzle migration SQL files — server looks for these in packages/db/drizzle/
+# Drizzle migrations — entire drizzle/ tree (SQL + meta/ journal + snapshots)
 if [ -d "$ROOT_DIR/packages/db/drizzle" ]; then
   mkdir -p "$PACKAGE_DIR/packages/db/drizzle"
-  cp -f "$ROOT_DIR/packages/db/drizzle/"*.sql "$PACKAGE_DIR/packages/db/drizzle/" 2>/dev/null || true
+  cp -r "$ROOT_DIR/packages/db/drizzle/"* "$PACKAGE_DIR/packages/db/drizzle/" 2>/dev/null || true
 fi
 
 # Create package.json files from source, then fix them up:

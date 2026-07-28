@@ -97,6 +97,15 @@ describe('ZatcaInvoiceService — credit notes', () => {
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
       INSERT INTO settings (key, value) VALUES ('zatca_org_unit', '${TEST_ORG_UNIT}');
     `);
+    // Payment methods required by order_refunds FK
+    sqlite.exec(`
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+    `);
 
     // ── Now create the drizzle instance and the NestJS module ──────────────
     db = drizzle(sqlite, { schema });

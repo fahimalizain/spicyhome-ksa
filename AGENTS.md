@@ -48,6 +48,12 @@ Codebase conventions and constraints for all contributors and AI agents.
   single append-only ledger for all order events: item mutations, kitchen prints,
   status transitions, and reprints.
 - Order items **snapshot** item name, price, and VAT rate at order time.
+- **Schema & migrations**: load **`db-migrate`** skill for any schema work.
+  Key commands:
+  ```sh
+  pnpm --filter @spicyhome/db -- db:generate --name <snake_case>
+  pnpm --filter @spicyhome/db -- db:migrate
+  ```
 
 ## Device Responsibilities
 
