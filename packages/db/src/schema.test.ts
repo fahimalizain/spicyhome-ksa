@@ -27,7 +27,7 @@ describe('schema — migrations', () => {
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(2);
+      expect(rows.cnt).toBe(3);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(2);
+      expect(after).toBe(3);
 
       sqlite.close();
     });
@@ -290,8 +290,8 @@ describe('schema — invariants', () => {
 
       // Create a refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -322,8 +322,8 @@ describe('schema — invariants', () => {
         `);
         const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
         sqlite.exec(`
-          INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-          VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+          INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+          VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
         `);
         const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -341,8 +341,8 @@ describe('schema — invariants', () => {
       `);
       const orderId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId3}, ${userId}, 1000, 150, 1150, 'test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId3}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
       `);
       const refundId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -365,8 +365,8 @@ describe('schema — invariants', () => {
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, ${userId}, 1000, 150, 1150, 'test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -382,8 +382,8 @@ describe('schema — invariants', () => {
       `);
       const orderId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId2}, ${userId}, 1000, 150, 1150, 'test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId2}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
       `);
       const refundId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -422,6 +422,48 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
+    it('zatca_credit_notes.reported_at column is nullable, zatca_invoices.reported_at column exists', () => {
+      // Verify both tables have reported_at column
+      const cnInfo = sqlite.prepare('PRAGMA table_info(zatca_credit_notes)').all() as any[];
+      const cnReportedAt = cnInfo.find((c: any) => c.name === 'reported_at');
+      expect(cnReportedAt).toBeDefined();
+      expect(cnReportedAt.notnull).toBe(0); // nullable
+
+      const invInfo = sqlite.prepare('PRAGMA table_info(zatca_invoices)').all() as any[];
+      const invReportedAt = invInfo.find((c: any) => c.name === 'reported_at');
+      expect(invReportedAt).toBeDefined();
+    });
+
+    it('order_payments (order_id, method_id) is unique', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // Ensure payment methods exist (seeded by beforeAll)
+      const pmCash = sqlite
+        .prepare("SELECT id FROM payment_methods WHERE id = 'cash'")
+        .get() as any;
+      expect(pmCash).toBeDefined();
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
+        VALUES (500, 'uuid-op-unique', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (${orderId}, 'cash', 'Cash', 500, ${now})
+      `);
+
+      // Second payment for same order + method should fail (unique index)
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+          VALUES (${orderId}, 'cash', 'Cash', 500, ${now})
+        `),
+      ).toThrow();
+    });
+
     it('order_payments FK to payment_methods is enforced', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
@@ -434,7 +476,7 @@ describe('schema — invariants', () => {
 
       sqlite.exec(`
         INSERT INTO orders (order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
-        VALUES (500, 'uuid-op-fk', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
+        VALUES (501, 'uuid-op-fk', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -442,7 +484,7 @@ describe('schema — invariants', () => {
       expect(() =>
         sqlite.exec(`
           INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-          VALUES (${orderId}, 'cash', 'Cash', 500, ${now})
+          VALUES (${orderId}, 'card', 'Card', 500, ${now})
         `),
       ).not.toThrow();
 

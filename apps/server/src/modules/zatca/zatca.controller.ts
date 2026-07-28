@@ -105,6 +105,27 @@ export class ZatcaController {
     return inv;
   }
 
+  // ── Credit Notes ────────────────────────────────────────────────────────────
+
+  @Get('credit-notes')
+  @ApiOperation({ summary: 'List ZATCA credit notes' })
+  @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', format: 'int32' } })
+  @ApiQuery({ name: 'offset', required: false, schema: { type: 'integer', format: 'int32' } })
+  async listCreditNotes(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+  ) {
+    return this.invoiceService.listCreditNotes(limit ?? 50, offset ?? 0);
+  }
+
+  @Get('credit-notes/:id')
+  @ApiOperation({ summary: 'Get credit note detail including XML' })
+  async getCreditNote(@Param('id') id: string) {
+    const cn = this.invoiceService.getCreditNoteById(Number(id));
+    if (!cn) throw new NotFoundException('Credit note not found');
+    return cn;
+  }
+
   // ── Config ──────────────────────────────────────────────────────────────────
 
   @Get('config')
@@ -161,8 +182,14 @@ export class ZatcaController {
 
   @Post('reporting/retry')
   @RequiresPermission('manage_settings')
-  @ApiOperation({ summary: 'Retry reporting for all pending or a specific invoice' })
-  async retryReporting(@Body('invoiceId') invoiceId?: number) {
-    return this.reportingService.retryInvoice(invoiceId);
+  @ApiOperation({
+    summary:
+      'Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note',
+  })
+  async retryReporting(
+    @Body('invoiceId') invoiceId?: number,
+    @Body('creditNoteId') creditNoteId?: number,
+  ) {
+    return this.reportingService.retryReporting({ invoiceId, creditNoteId });
   }
 }

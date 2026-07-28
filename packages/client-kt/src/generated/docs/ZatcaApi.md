@@ -6,12 +6,14 @@ All URIs are relative to *http://localhost*
 | ------------- | ------------- | ------------- |
 | [**zatcaControllerGenerateCSR**](ZatcaApi.md#zatcaControllerGenerateCSR) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
 | [**zatcaControllerGetConfig**](ZatcaApi.md#zatcaControllerGetConfig) | **GET** zatca/config | Get ZATCA seller configuration |
+| [**zatcaControllerGetCreditNote**](ZatcaApi.md#zatcaControllerGetCreditNote) | **GET** zatca/credit-notes/{id} | Get credit note detail including XML |
 | [**zatcaControllerGetInvoice**](ZatcaApi.md#zatcaControllerGetInvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | [**zatcaControllerGetStatus**](ZatcaApi.md#zatcaControllerGetStatus) | **GET** zatca/status | Get ZATCA onboarding and status |
+| [**zatcaControllerListCreditNotes**](ZatcaApi.md#zatcaControllerListCreditNotes) | **GET** zatca/credit-notes | List ZATCA credit notes |
 | [**zatcaControllerListInvoices**](ZatcaApi.md#zatcaControllerListInvoices) | **GET** zatca/invoices | List ZATCA invoices |
 | [**zatcaControllerOnboardCompliance**](ZatcaApi.md#zatcaControllerOnboardCompliance) | **POST** zatca/onboard/compliance | Submit CSR with OTP to ZATCA compliance CSID endpoint |
 | [**zatcaControllerOnboardProduction**](ZatcaApi.md#zatcaControllerOnboardProduction) | **POST** zatca/onboard/production | Exchange compliance CSID for production CSID |
-| [**zatcaControllerRetryReporting**](ZatcaApi.md#zatcaControllerRetryReporting) | **POST** zatca/reporting/retry | Retry reporting for all pending or a specific invoice |
+| [**zatcaControllerRetryReporting**](ZatcaApi.md#zatcaControllerRetryReporting) | **POST** zatca/reporting/retry | Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note |
 | [**zatcaControllerRunComplianceCheck**](ZatcaApi.md#zatcaControllerRunComplianceCheck) | **POST** zatca/onboard/compliance-check | Run compliance check by submitting a signed invoice to ZATCA |
 | [**zatcaControllerUpdateConfig**](ZatcaApi.md#zatcaControllerUpdateConfig) | **PUT** zatca/config | Update ZATCA seller configuration |
 
@@ -87,6 +89,44 @@ Configure bearer:
  - **Accept**: application/json
 
 
+Get credit note detail including XML
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+val id : kotlin.String = id_example // kotlin.String | 
+
+webService.zatcaControllerGetCreditNote(id)
+```
+
+### Parameters
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **id** | **kotlin.String**|  | |
+
+### Return type
+
+null (empty response body)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+
 Get invoice detail including XML
 
 ### Example
@@ -143,6 +183,46 @@ webService.zatcaControllerGetStatus()
 
 ### Parameters
 This endpoint does not need any parameter.
+
+### Return type
+
+null (empty response body)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+
+List ZATCA credit notes
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+val limit : kotlin.Int = 56 // kotlin.Int | 
+val offset : kotlin.Int = 56 // kotlin.Int | 
+
+webService.zatcaControllerListCreditNotes(limit, offset)
+```
+
+### Parameters
+| **limit** | **kotlin.Int**|  | [optional] |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **offset** | **kotlin.Int**|  | [optional] |
 
 ### Return type
 
@@ -270,7 +350,7 @@ Configure bearer:
  - **Accept**: Not defined
 
 
-Retry reporting for all pending or a specific invoice
+Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note
 
 ### Example
 ```kotlin

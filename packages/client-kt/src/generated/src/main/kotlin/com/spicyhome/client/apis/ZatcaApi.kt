@@ -34,6 +34,19 @@ interface ZatcaApi {
     fun zatcaControllerGetConfig(): Call<ZatcaConfigDto>
 
     /**
+     * GET zatca/credit-notes/{id}
+     * Get credit note detail including XML
+     * 
+     * Responses:
+     *  - 200: 
+     *
+     * @param id 
+     * @return [Call]<[Unit]>
+     */
+    @GET("zatca/credit-notes/{id}")
+    fun zatcaControllerGetCreditNote(@Path("id") id: kotlin.String): Call<Unit>
+
+    /**
      * GET zatca/invoices/{id}
      * Get invoice detail including XML
      * 
@@ -57,6 +70,20 @@ interface ZatcaApi {
      */
     @GET("zatca/status")
     fun zatcaControllerGetStatus(): Call<Unit>
+
+    /**
+     * GET zatca/credit-notes
+     * List ZATCA credit notes
+     * 
+     * Responses:
+     *  - 200: 
+     *
+     * @param limit  (optional)
+     * @param offset  (optional)
+     * @return [Call]<[Unit]>
+     */
+    @GET("zatca/credit-notes")
+    fun zatcaControllerListCreditNotes(@Query("limit") limit: kotlin.Int? = null, @Query("offset") offset: kotlin.Int? = null): Call<Unit>
 
     /**
      * GET zatca/invoices
@@ -98,7 +125,7 @@ interface ZatcaApi {
 
     /**
      * POST zatca/reporting/retry
-     * Retry reporting for all pending or a specific invoice
+     * Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note
      * 
      * Responses:
      *  - 201: 

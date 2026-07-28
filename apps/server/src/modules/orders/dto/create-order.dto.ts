@@ -77,4 +77,12 @@ export class CreateRefundDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiProperty({
+    type: String,
+    example: 'cash',
+    description: 'Payment method slug for this refund',
+  })
+  @IsString()
+  methodId!: string;
 }

@@ -97,6 +97,15 @@ describe('ZatcaInvoiceService — credit notes', () => {
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
       INSERT INTO settings (key, value) VALUES ('zatca_org_unit', '${TEST_ORG_UNIT}');
     `);
+    // Payment methods required by order_refunds FK
+    sqlite.exec(`
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+    `);
 
     // ── Now create the drizzle instance and the NestJS module ──────────────
     db = drizzle(sqlite, { schema });
@@ -181,8 +190,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
   function createRefundForOrder(orderId: number): number {
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-      VALUES (${orderId}, 1, 10000, 1500, 11500, 'Item was cold', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Item was cold', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -214,8 +223,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 5000, 750, 5750, 'Wrong item', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'Wrong item', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -339,8 +348,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund with NULL reason
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 5000, 750, 5750, NULL, ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, NULL, ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -393,8 +402,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 2000, 300, 2300, 'Test sequence', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 2000, 300, 2300, 'Test sequence', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 

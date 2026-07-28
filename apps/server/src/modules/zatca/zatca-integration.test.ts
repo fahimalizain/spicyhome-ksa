@@ -540,6 +540,60 @@ describe('ZATCA Integration', () => {
       expect(res.body.processed).toBeGreaterThanOrEqual(0);
     });
 
+    it('retry reports pending credit notes', async () => {
+      const now = Math.floor(Date.now() / 1000);
+
+      // Create a paid order and invoice first (as parent for the credit note)
+      const doRow = sqlite
+        .prepare('SELECT id FROM day_openings ORDER BY id DESC LIMIT 1')
+        .get() as any;
+      const doId = doRow.id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (999, 'cn-report-uuid', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId}, 100, 'inv-cn-report', 'hash-cn-report', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test report', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-cn-report', 101, 'cn-uuid-report', 'hash-cn-report', 'hash-cn-report', '<CreditNote/>', 'tlv', 'signed', NULL, 11500, 1500, 'Test report', ${now}, ${now})
+      `);
+      const creditNoteId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/zatca/reporting/retry')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(201);
+
+      expect(res.body.processed).toBeGreaterThanOrEqual(1);
+
+      // Verify credit note was marked reported
+      const cn = sqlite
+        .prepare('SELECT status, reported_at FROM zatca_credit_notes WHERE id = ?')
+        .get(creditNoteId) as any;
+      expect(cn.status).toBe('reported');
+      expect(cn.reported_at).toBeGreaterThan(0);
+    });
+
     it('GET /zatca/invoices returns invoice list', async () => {
       const res = await request(app.getHttpServer())
         .get('/zatca/invoices')
@@ -564,6 +618,142 @@ describe('ZATCA Integration', () => {
         expect(res.body.xml).toBeTruthy();
         expect(res.body.qrTlv).toBeTruthy();
       }
+    });
+
+    it('GET /zatca/credit-notes returns array', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/zatca/credit-notes')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('GET /zatca/credit-notes/:id returns credit note detail with XML', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doRow = sqlite
+        .prepare('SELECT id FROM day_openings ORDER BY id DESC LIMIT 1')
+        .get() as any;
+      const doId = doRow.id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (800, 'cn-detail-uuid', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId}, 200, 'inv-cn-detail', 'hash-cn-detail', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'CN detail test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-cn-detail', 201, 'cn-detail-uuid', 'hash-cn-detail', 'hash-cn-detail', '<CreditNote/>', 'tlv', 'signed', NULL, 11500, 1500, 'CN detail test', ${now}, ${now})
+      `);
+      const creditNoteId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const res = await request(app.getHttpServer())
+        .get(`/zatca/credit-notes/${creditNoteId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(res.body.xml).toBeTruthy();
+      expect(res.body.relatedInvoiceUuid).toBe('inv-cn-detail');
+      expect(res.body.reason).toBe('CN detail test');
+      expect(res.body.totalHalalas).toBe(11500);
+    });
+
+    it('GET /zatca/credit-notes/:id returns 404 for missing id', async () => {
+      await request(app.getHttpServer())
+        .get('/zatca/credit-notes/99999')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(404);
+    });
+
+    it('POST /zatca/reporting/retry with creditNoteId reports only that CN', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doRow = sqlite
+        .prepare('SELECT id FROM day_openings ORDER BY id DESC LIMIT 1')
+        .get() as any;
+      const doId = doRow.id;
+
+      // Create order + invoice + two credit notes
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (900, 'cn-retry-uuid', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId}, 300, 'inv-cn-retry', 'hash-cn-retry', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+
+      // Refund 1 + credit note 1
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'CN retry 1', ${now})
+      `);
+      const refundId1 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId1}, 'inv-cn-retry', 301, 'cn-retry-1', 'hash-cn-retry-1', 'hash-cn-retry', '<CreditNote1/>', 'tlv', 'signed', NULL, 5750, 750, 'CN retry 1', ${now}, ${now})
+      `);
+      const cnId1 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Refund 2 + credit note 2
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'CN retry 2', ${now})
+      `);
+      const refundId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId2}, 'inv-cn-retry', 302, 'cn-retry-2', 'hash-cn-retry-2', 'hash-cn-retry-1', '<CreditNote2/>', 'tlv', 'signed', NULL, 5750, 750, 'CN retry 2', ${now}, ${now})
+      `);
+      const cnId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      // Retry only credit note 1
+      const res = await request(app.getHttpServer())
+        .post('/zatca/reporting/retry')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ creditNoteId: cnId1 })
+        .expect(201);
+
+      expect(res.body.processed).toBe(1);
+      expect(res.body.succeeded).toBe(1);
+
+      // CN1 should be reported
+      const cn1 = sqlite
+        .prepare('SELECT status, reported_at FROM zatca_credit_notes WHERE id = ?')
+        .get(cnId1) as any;
+      expect(cn1.status).toBe('reported');
+      expect(cn1.reported_at).toBeGreaterThan(0);
+
+      // CN2 should still be signed (not touched)
+      const cn2 = sqlite
+        .prepare('SELECT status FROM zatca_credit_notes WHERE id = ?')
+        .get(cnId2) as any;
+      expect(cn2.status).toBe('signed');
+
+      // Invoice should still be signed (not touched)
+      const inv = sqlite
+        .prepare('SELECT status FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(inv.status).toBe('signed');
     });
   });
 

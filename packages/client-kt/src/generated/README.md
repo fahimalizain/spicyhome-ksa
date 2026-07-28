@@ -103,12 +103,14 @@ All URIs are relative to *http://localhost*
 | *TablesApi* | [**tablesControllerUpdate**](docs/TablesApi.md#tablescontrollerupdate) | **PUT** tables/{id} | Update a table |
 | *ZatcaApi* | [**zatcaControllerGenerateCSR**](docs/ZatcaApi.md#zatcacontrollergeneratecsr) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
 | *ZatcaApi* | [**zatcaControllerGetConfig**](docs/ZatcaApi.md#zatcacontrollergetconfig) | **GET** zatca/config | Get ZATCA seller configuration |
+| *ZatcaApi* | [**zatcaControllerGetCreditNote**](docs/ZatcaApi.md#zatcacontrollergetcreditnote) | **GET** zatca/credit-notes/{id} | Get credit note detail including XML |
 | *ZatcaApi* | [**zatcaControllerGetInvoice**](docs/ZatcaApi.md#zatcacontrollergetinvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | *ZatcaApi* | [**zatcaControllerGetStatus**](docs/ZatcaApi.md#zatcacontrollergetstatus) | **GET** zatca/status | Get ZATCA onboarding and status |
+| *ZatcaApi* | [**zatcaControllerListCreditNotes**](docs/ZatcaApi.md#zatcacontrollerlistcreditnotes) | **GET** zatca/credit-notes | List ZATCA credit notes |
 | *ZatcaApi* | [**zatcaControllerListInvoices**](docs/ZatcaApi.md#zatcacontrollerlistinvoices) | **GET** zatca/invoices | List ZATCA invoices |
 | *ZatcaApi* | [**zatcaControllerOnboardCompliance**](docs/ZatcaApi.md#zatcacontrolleronboardcompliance) | **POST** zatca/onboard/compliance | Submit CSR with OTP to ZATCA compliance CSID endpoint |
 | *ZatcaApi* | [**zatcaControllerOnboardProduction**](docs/ZatcaApi.md#zatcacontrolleronboardproduction) | **POST** zatca/onboard/production | Exchange compliance CSID for production CSID |
-| *ZatcaApi* | [**zatcaControllerRetryReporting**](docs/ZatcaApi.md#zatcacontrollerretryreporting) | **POST** zatca/reporting/retry | Retry reporting for all pending or a specific invoice |
+| *ZatcaApi* | [**zatcaControllerRetryReporting**](docs/ZatcaApi.md#zatcacontrollerretryreporting) | **POST** zatca/reporting/retry | Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note |
 | *ZatcaApi* | [**zatcaControllerRunComplianceCheck**](docs/ZatcaApi.md#zatcacontrollerruncompliancecheck) | **POST** zatca/onboard/compliance-check | Run compliance check by submitting a signed invoice to ZATCA |
 | *ZatcaApi* | [**zatcaControllerUpdateConfig**](docs/ZatcaApi.md#zatcacontrollerupdateconfig) | **PUT** zatca/config | Update ZATCA seller configuration |
 

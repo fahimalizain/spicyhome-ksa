@@ -15,6 +15,13 @@
       "when": 1785217326230,
       "tag": "0001_order_events_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785220773448,
+      "tag": "0002_credit_note_reported_at_and_refund_tender",
+      "breakpoints": true
     }
   ]
 }

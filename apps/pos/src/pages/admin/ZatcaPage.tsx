@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
-import type { ZatcaConfigDto, ZatcaOnboardingState, ZatcaInvoice } from '@spicyhome/client-ts';
+import type {
+  ZatcaConfigDto,
+  ZatcaOnboardingState,
+  ZatcaInvoice,
+  ZatcaCreditNote,
+} from '@spicyhome/client-ts';
 import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
 
 const ZATCA_SANDBOX_URL = 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal';
@@ -49,13 +54,19 @@ export function ZatcaPage() {
   const [submittingOtp, setSubmittingOtp] = useState(false);
   const [promotingProduction, setPromotingProduction] = useState(false);
 
-  // ── Invoices state ──
+  // ── Documents (Invoices + Credit Notes) state ──
   const [invoices, setInvoices] = useState<ZatcaInvoice[]>([]);
-  const [invoicesLoading, setInvoicesLoading] = useState(true);
-  const [invoicesError, setInvoicesError] = useState('');
-  const [selectedInvoice, setSelectedInvoice] = useState<ZatcaInvoice | null>(null);
-  const [invoiceDetailLoading, setInvoiceDetailLoading] = useState(false);
-  const [retryTargetId, setRetryTargetId] = useState<number | null>(null);
+  const [creditNotes, setCreditNotes] = useState<ZatcaCreditNote[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState('');
+
+  type SelectedDoc =
+    { kind: 'invoice'; data: ZatcaInvoice } | { kind: 'credit_note'; data: ZatcaCreditNote } | null;
+  const [selectedDoc, setSelectedDoc] = useState<SelectedDoc>(null);
+  const [docDetailLoading, setDocDetailLoading] = useState(false);
+
+  type RetryTarget = { kind: 'invoice'; id: number } | { kind: 'credit_note'; id: number } | null;
+  const [retryTarget, setRetryTarget] = useState<RetryTarget>(null);
   const [retryingAll, setRetryingAll] = useState(false);
 
   // ── Compliance check state ──
@@ -72,7 +83,7 @@ export function ZatcaPage() {
   useEffect(() => {
     loadConfig();
     loadOnboarding();
-    loadInvoices();
+    loadDocuments();
   }, []);
 
   // ── Config ──────────────────────────────────────────────────────────────────
@@ -258,48 +269,61 @@ export function ZatcaPage() {
     }
   }
 
-  // ── Invoices ─────────────────────────────────────────────────────────────────
+  // ── Documents ────────────────────────────────────────────────────────────────
 
-  async function loadInvoices() {
-    setInvoicesLoading(true);
-    setInvoicesError('');
+  async function loadDocuments() {
+    setDocumentsLoading(true);
+    setDocumentsError('');
     try {
-      const data = await client.zatca.listInvoices(50, 0);
-      setInvoices(data);
+      const [invData, cnData] = await Promise.all([
+        client.zatca.listInvoices(50, 0),
+        client.zatca.listCreditNotes(50, 0),
+      ]);
+      setInvoices(invData);
+      setCreditNotes(cnData);
     } catch (e: any) {
-      setInvoicesError(e.message || 'Failed to load invoices');
+      setDocumentsError(e.message || 'Failed to load documents');
     } finally {
-      setInvoicesLoading(false);
+      setDocumentsLoading(false);
     }
   }
 
-  async function viewInvoiceDetail(id: number) {
-    setInvoiceDetailLoading(true);
-    setSelectedInvoice(null);
+  async function viewDocumentDetail(kind: 'invoice' | 'credit_note', id: number) {
+    setDocDetailLoading(true);
+    setSelectedDoc(null);
     try {
-      const data = await client.zatca.getInvoice(id);
-      setSelectedInvoice(data);
+      if (kind === 'invoice') {
+        const data = await client.zatca.getInvoice(id);
+        setSelectedDoc({ kind: 'invoice', data });
+      } else {
+        const data = await client.zatca.getCreditNote(id);
+        setSelectedDoc({ kind: 'credit_note', data });
+      }
     } catch (e: any) {
-      setInvoicesError(e.message || 'Failed to load invoice detail');
+      setDocumentsError(e.message || 'Failed to load document detail');
     } finally {
-      setInvoiceDetailLoading(false);
+      setDocDetailLoading(false);
     }
   }
 
-  async function handleRetryInvoice(invoiceId?: number) {
-    if (invoiceId !== undefined) {
-      setRetryTargetId(invoiceId);
+  async function handleRetry(kind?: 'invoice' | 'credit_note', id?: number) {
+    if (kind && id !== undefined) {
+      setRetryTarget({ kind, id });
     } else {
       setRetryingAll(true);
     }
-    setInvoicesError('');
+    setDocumentsError('');
     try {
-      await client.zatca.retryReporting(invoiceId);
-      await loadInvoices();
+      if (kind === 'credit_note' && id !== undefined) {
+        await client.zatca.retryReporting(undefined, id);
+      } else {
+        await client.zatca.retryReporting(kind === 'invoice' && id !== undefined ? id : undefined);
+      }
+      await loadDocuments();
     } catch (e: any) {
-      setInvoicesError(e.message || 'Failed to retry reporting');
+      setDocumentsError(e.message || 'Failed to retry reporting');
     } finally {
-      setRetryTargetId(null);
+      setRetryTarget(null);
       setRetryingAll(false);
     }
   }
@@ -317,6 +341,47 @@ export function ZatcaPage() {
     const color = colors[status] || 'bg-gray-600 text-gray-300';
     return <span className={'px-1.5 py-0.5 rounded text-xs ' + color}>{status}</span>;
   }
+
+  function docTypeBadge(kind: 'invoice' | 'credit_note') {
+    if (kind === 'invoice') {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-xs bg-blue-700 text-blue-100">Invoice</span>
+      );
+    }
+    return (
+      <span className="px-1.5 py-0.5 rounded text-xs bg-purple-700 text-purple-100">
+        Credit Note
+      </span>
+    );
+  }
+
+  function formatSar(halalas: number): string {
+    return (halalas / 100).toFixed(2) + ' SAR';
+  }
+
+  // Build merged document list sorted by ICV descending
+  const docRows: {
+    kind: 'invoice' | 'credit_note';
+    id: number;
+    icv: number;
+    status: string;
+    createdAt: number;
+  }[] = [
+    ...invoices.map((inv) => ({
+      kind: 'invoice' as const,
+      id: inv.id,
+      icv: inv.icv,
+      status: inv.status,
+      createdAt: inv.createdAt,
+    })),
+    ...creditNotes.map((cn) => ({
+      kind: 'credit_note' as const,
+      id: cn.id,
+      icv: cn.icv,
+      status: cn.status,
+      createdAt: cn.createdAt,
+    })),
+  ].sort((a, b) => b.icv - a.icv);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -775,50 +840,59 @@ export function ZatcaPage() {
         ) : null}
       </section>
 
-      {/* ── Invoices ── */}
+      {/* ── Documents (Invoices & Credit Notes) ── */}
       <section className="bg-gray-800 rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-300">Invoices</h2>
+          <h2 className="text-sm font-semibold text-gray-300">Invoices &amp; Credit Notes</h2>
           <button
-            onClick={() => handleRetryInvoice()}
+            onClick={() => handleRetry()}
             disabled={retryingAll}
             className="touch-target bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 rounded px-3 py-1.5 text-xs text-white"
           >
             {retryingAll ? 'Retrying...' : 'Retry All Pending'}
           </button>
         </div>
-        {invoicesError && (
+        {documentsError && (
           <div className="text-red-400 text-xs bg-red-900/30 border border-red-700 rounded px-3 py-2">
-            {invoicesError}
+            {documentsError}
           </div>
         )}
-        {invoicesLoading ? (
+        {documentsLoading ? (
           <div className="text-gray-400 text-sm">Loading...</div>
-        ) : invoices.length === 0 ? (
-          <div className="text-gray-500 text-xs">No invoices yet</div>
+        ) : docRows.length === 0 ? (
+          <div className="text-gray-500 text-xs">No documents yet</div>
         ) : (
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {invoices.map((inv) => (
+            {docRows.map((doc) => (
               <div
-                key={inv.id}
+                key={`${doc.kind}-${doc.id}`}
                 className="flex items-center justify-between bg-gray-700/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700"
-                onClick={() => viewInvoiceDetail(inv.id)}
+                onClick={() => viewDocumentDetail(doc.kind, doc.id)}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-white font-mono">#{inv.icv}</span>
-                  {statusBadge(inv.status)}
+                  <span className="text-xs text-white font-mono">#{doc.icv}</span>
+                  {docTypeBadge(doc.kind)}
+                  {statusBadge(doc.status)}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">{formatDate(inv.createdAt)}</span>
+                  <span className="text-xs text-gray-400">{formatDate(doc.createdAt)}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleRetryInvoice(inv.id);
+                      handleRetry(doc.kind, doc.id);
                     }}
-                    disabled={retryTargetId === inv.id}
+                    disabled={
+                      retryTarget !== null &&
+                      retryTarget.kind === doc.kind &&
+                      retryTarget.id === doc.id
+                    }
                     className="touch-target text-xs text-yellow-400 hover:text-yellow-300 px-1 py-0.5"
                   >
-                    {retryTargetId === inv.id ? '...' : 'Retry'}
+                    {retryTarget !== null &&
+                    retryTarget.kind === doc.kind &&
+                    retryTarget.id === doc.id
+                      ? '...'
+                      : 'Retry'}
                   </button>
                 </div>
               </div>
@@ -826,63 +900,99 @@ export function ZatcaPage() {
           </div>
         )}
 
-        {/* Invoice Detail Modal */}
-        {(selectedInvoice || invoiceDetailLoading) && (
+        {/* Document Detail Modal */}
+        {(selectedDoc || docDetailLoading) && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 rounded-xl p-4 w-full max-w-2xl max-h-[80vh] overflow-y-auto space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">
-                  Invoice #{selectedInvoice?.icv || '...'}
+                  {selectedDoc?.kind === 'credit_note'
+                    ? `Credit Note #${selectedDoc.data.icv}`
+                    : `Invoice #${selectedDoc?.kind === 'invoice' ? selectedDoc.data.icv : '...'}`}
                 </h3>
                 <button
-                  onClick={() => setSelectedInvoice(null)}
+                  onClick={() => setSelectedDoc(null)}
                   className="touch-target text-gray-400 hover:text-white text-lg leading-none px-2"
                 >
                   &times;
                 </button>
               </div>
-              {invoiceDetailLoading ? (
+              {docDetailLoading ? (
                 <div className="text-gray-400 text-sm">Loading...</div>
-              ) : selectedInvoice ? (
+              ) : selectedDoc ? (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="text-gray-500">Status: </span>
-                      {statusBadge(selectedInvoice.status)}
+                      {statusBadge(selectedDoc.data.status)}
                     </div>
                     <div>
                       <span className="text-gray-500">Order: </span>
-                      <span className="text-gray-300">#{selectedInvoice.orderId}</span>
+                      <span className="text-gray-300">#{selectedDoc.data.orderId}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">UUID: </span>
-                      <span className="text-gray-300 font-mono">{selectedInvoice.uuid}</span>
+                      <span className="text-gray-300 font-mono">{selectedDoc.data.uuid}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">Hash: </span>
                       <span className="text-gray-300 font-mono text-[10px]">
-                        {selectedInvoice.invoiceHash
-                          ? selectedInvoice.invoiceHash.slice(0, 32) + '...'
+                        {selectedDoc.data.invoiceHash
+                          ? selectedDoc.data.invoiceHash.slice(0, 32) + '...'
                           : '-'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-500">Created: </span>
-                      <span className="text-gray-300">{formatDate(selectedInvoice.createdAt)}</span>
+                      <span className="text-gray-300">
+                        {formatDate(selectedDoc.data.createdAt)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-500">Reported: </span>
                       <span className="text-gray-300">
-                        {selectedInvoice.reportedAt
-                          ? formatDate(selectedInvoice.reportedAt)
+                        {selectedDoc.data.reportedAt
+                          ? formatDate(selectedDoc.data.reportedAt)
                           : 'Not yet'}
                       </span>
                     </div>
+                    {selectedDoc.kind === 'credit_note' && (
+                      <>
+                        <div>
+                          <span className="text-gray-500">Refund: </span>
+                          <span className="text-gray-300">#{selectedDoc.data.refundId}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Related Invoice: </span>
+                          <span className="text-gray-300 font-mono">
+                            {selectedDoc.data.relatedInvoiceUuid}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Total: </span>
+                          <span className="text-gray-300">
+                            {formatSar(selectedDoc.data.totalHalalas)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">VAT: </span>
+                          <span className="text-gray-300">
+                            {formatSar(selectedDoc.data.vatHalalas)}
+                          </span>
+                        </div>
+                        {selectedDoc.data.reason && (
+                          <div>
+                            <span className="text-gray-500">Reason: </span>
+                            <span className="text-gray-300">{selectedDoc.data.reason}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">XML</label>
                     <pre className="bg-gray-900 border border-gray-600 rounded px-3 py-2 text-[10px] text-green-400 overflow-x-auto max-h-48">
-                      {selectedInvoice.xml || 'No XML'}
+                      {selectedDoc.data.xml || 'No XML'}
                     </pre>
                   </div>
                 </div>

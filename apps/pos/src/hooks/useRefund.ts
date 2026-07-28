@@ -24,6 +24,7 @@ export function useRefund() {
     async (
       orderId: number,
       items: { orderItemId: number; qty: number }[],
+      methodId: string,
       reason?: string,
     ): Promise<boolean> => {
       setLoading(true);
@@ -31,6 +32,7 @@ export function useRefund() {
       try {
         await client.orders.refund(orderId, {
           items,
+          methodId,
           ...(reason ? { reason } : {}),
         });
         return true;

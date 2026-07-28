@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
 
@@ -203,6 +203,10 @@ export const orderRefunds = sqliteTable('order_refunds', {
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
+  methodId: text('method_id')
+    .references(() => paymentMethods.id)
+    .notNull(),
+  methodTitle: text('method_title').notNull(),
   subtotalHalalas: integer('subtotal_halalas').notNull(),
   vatHalalas: integer('vat_halalas').notNull(),
   totalHalalas: integer('total_halalas').notNull(),
@@ -269,7 +273,8 @@ export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
   prevInvoiceHash: text('prev_invoice_hash').notNull(),
   xml: text('xml').notNull(),
   qrTlv: text('qr_tlv').notNull(),
-  status: text('status').notNull(),
+  status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
+  reportedAt: integer('reported_at'),
   totalHalalas: integer('total_halalas').notNull(),
   vatHalalas: integer('vat_halalas').notNull(),
   reason: text('reason'),
@@ -294,21 +299,27 @@ export const paymentMethods = sqliteTable('payment_methods', {
 
 // ── order_payments ─────────────────────────────────────────────────────────────
 
-export const orderPayments = sqliteTable('order_payments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id')
-    .references(() => orders.id)
-    .notNull(),
-  methodId: text('method_id')
-    .references(() => paymentMethods.id)
-    .notNull(),
-  methodTitle: text('method_title').notNull(),
-  amountHalalas: integer('amount_halalas').notNull(),
-  tenderedHalalas: integer('tendered_halalas'),
-  changeHalalas: integer('change_halalas'),
-  createdAt: integer('created_at').notNull(),
-  createdBy: integer('created_by').references((): any => users.id),
-});
+export const orderPayments = sqliteTable(
+  'order_payments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .references(() => orders.id)
+      .notNull(),
+    methodId: text('method_id')
+      .references(() => paymentMethods.id)
+      .notNull(),
+    methodTitle: text('method_title').notNull(),
+    amountHalalas: integer('amount_halalas').notNull(),
+    tenderedHalalas: integer('tendered_halalas'),
+    changeHalalas: integer('change_halalas'),
+    createdAt: integer('created_at').notNull(),
+    createdBy: integer('created_by').references((): any => users.id),
+  },
+  (t) => ({
+    uniqueOrderMethod: uniqueIndex('idx_order_payments_order_method').on(t.orderId, t.methodId),
+  }),
+);
 
 // ── settings ───────────────────────────────────────────────────────────────────
 

@@ -6,8 +6,13 @@ import { realtime } from '../realtime';
 import { usePermissions } from '../hooks/usePermissions';
 import { OrderEventTimeline } from '../components/OrderEventTimeline';
 import { RefundPanel } from '../components/RefundPanel';
+import { RefundDetailModal } from '../components/RefundDetailModal';
 import { OrderActionBar } from '../components/OrderActionBar';
-import type { OrderResponse, OrderSummaryResponse } from '@spicyhome/client-ts';
+import type {
+  OrderResponse,
+  OrderSummaryResponse,
+  OrderRefundResponse,
+} from '@spicyhome/client-ts';
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'Open',
@@ -23,6 +28,8 @@ export function OrdersPage() {
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
   const [showRefund, setShowRefund] = useState(false);
+  const [refunds, setRefunds] = useState<OrderRefundResponse[]>([]);
+  const [selectedRefund, setSelectedRefund] = useState<OrderRefundResponse | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -50,6 +57,29 @@ export function OrdersPage() {
     };
   }, []);
 
+  // WS: refresh order detail and refunds when a refund event fires for this order
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const unsubs: (() => void)[] = [];
+    const refresh = async () => {
+      try {
+        const [orderResult, refundsResult] = await Promise.all([
+          client.orders.get(selectedOrder.id),
+          client.orders.getRefunds(selectedOrder.id),
+        ]);
+        setSelectedOrder(orderResult);
+        setRefunds(refundsResult);
+      } catch {
+        // ignore — keep current state
+      }
+    };
+    unsubs.push(realtime.subscribe('order.refund.issued', refresh));
+    unsubs.push(realtime.subscribe('order.refunded', refresh));
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [selectedOrder?.id]);
+
   async function loadOrders() {
     setLoading(true);
     try {
@@ -64,9 +94,14 @@ export function OrdersPage() {
 
   async function viewOrder(id: number) {
     try {
-      const order = await client.orders.get(id);
+      const [order, refundsResult] = await Promise.all([
+        client.orders.get(id),
+        client.orders.getRefunds(id),
+      ]);
       setSelectedOrder(order);
+      setRefunds(refundsResult);
       setShowRefund(false);
+      setSelectedRefund(null);
     } catch {
       setError('Failed to load order details');
     }
@@ -228,8 +263,12 @@ export function OrdersPage() {
                 onRefunded={async () => {
                   setShowRefund(false);
                   try {
-                    const updated = await client.orders.get(selectedOrder.id);
+                    const [updated, refundsResult] = await Promise.all([
+                      client.orders.get(selectedOrder.id),
+                      client.orders.getRefunds(selectedOrder.id),
+                    ]);
                     setSelectedOrder(updated);
+                    setRefunds(refundsResult);
                     loadOrders();
                   } catch {
                     // Refetch failed, keep current state
@@ -237,6 +276,47 @@ export function OrdersPage() {
                 }}
               />
             </div>
+          )}
+
+          {/* Refunds list */}
+          {refunds.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-sm font-semibold text-gray-300 mb-1">Refunds</h3>
+              <div className="space-y-1">
+                {refunds.map((refund) => (
+                  <button
+                    key={refund.id}
+                    onClick={() => setSelectedRefund(refund)}
+                    className="touch-target w-full bg-gray-800 hover:bg-gray-750 rounded-lg p-3 flex justify-between items-start text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-white">
+                        {new Date(refund.createdAt * 1000).toLocaleTimeString()}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {refund.methodTitle}
+                        {refund.reason && (
+                          <span className="text-gray-500 ml-1 truncate">
+                            —{' '}
+                            {refund.reason.length > 30
+                              ? refund.reason.slice(0, 30) + '...'
+                              : refund.reason}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm text-brand-400 ml-2 whitespace-nowrap">
+                      {halalasToSar(refund.totalHalalas)} SAR
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Refund detail modal */}
+          {selectedRefund && (
+            <RefundDetailModal refund={selectedRefund} onClose={() => setSelectedRefund(null)} />
           )}
 
           {/* Event timeline (replaces legacy audit trail) */}

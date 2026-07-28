@@ -24,6 +24,7 @@ import com.squareup.moshi.JsonClass
  * 
  *
  * @param items Items and quantities to refund
+ * @param methodId Payment method slug for this refund
  * @param reason 
  */
 
@@ -33,6 +34,10 @@ data class CreateRefundDto (
     /* Items and quantities to refund */
     @Json(name = "items")
     val items: kotlin.collections.List<RefundItemDto>,
+
+    /* Payment method slug for this refund */
+    @Json(name = "methodId")
+    val methodId: kotlin.String,
 
     @Json(name = "reason")
     val reason: kotlin.String? = null

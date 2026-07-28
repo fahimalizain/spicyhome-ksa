@@ -5,6 +5,7 @@ import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 
 const mockRefund = vi.fn();
 const mockGetRefunds = vi.fn();
+const mockListEnabled = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
@@ -12,8 +13,16 @@ vi.mock('../api', () => ({
       refund: (...args: any[]) => mockRefund(...args),
       getRefunds: (...args: any[]) => mockGetRefunds(...args),
     },
+    paymentMethods: {
+      listEnabled: (...args: any[]) => mockListEnabled(...args),
+    },
   },
 }));
+
+const defaultMethods = [
+  { id: 'cash', title: 'Cash', enabled: true, sortOrder: 0 },
+  { id: 'card', title: 'Card', enabled: true, sortOrder: 1 },
+];
 
 const mockOrder: OrderResponse = {
   id: 1,
@@ -73,6 +82,7 @@ describe('RefundPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(defaultMethods);
   });
 
   it('renders order items with refund steppers', async () => {
@@ -143,6 +153,7 @@ describe('RefundPanel', () => {
 
   it('processes refund and calls onRefunded on success', async () => {
     mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(defaultMethods);
     mockRefund.mockResolvedValue({ success: true, refundId: 1, status: 'paid' });
 
     const onRefunded = vi.fn();
@@ -155,19 +166,29 @@ describe('RefundPanel', () => {
     // Select 1 Burger
     fireEvent.click(screen.getAllByText('+')[0]);
 
+    // Select Cash method
+    await waitFor(() => {
+      expect(screen.getByText('Cash')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Cash'));
+
     // Click Process Refund
     fireEvent.click(screen.getByText('Process Refund'));
     // Click Confirm Refund
     fireEvent.click(screen.getByText('Confirm Refund'));
 
     await waitFor(() => {
-      expect(mockRefund).toHaveBeenCalledWith(1, { items: [{ orderItemId: 101, qty: 1 }] });
+      expect(mockRefund).toHaveBeenCalledWith(1, {
+        items: [{ orderItemId: 101, qty: 1 }],
+        methodId: 'cash',
+      });
       expect(onRefunded).toHaveBeenCalled();
     });
   });
 
   it('shows error on refund failure', async () => {
     mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(defaultMethods);
     mockRefund.mockRejectedValue(new Error('Only paid orders can be refunded'));
 
     const onRefunded = vi.fn();
@@ -179,6 +200,13 @@ describe('RefundPanel', () => {
 
     // Select 1 item
     fireEvent.click(screen.getAllByText('+')[0]);
+
+    // Select Cash method
+    await waitFor(() => {
+      expect(screen.getByText('Cash')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Cash'));
+
     fireEvent.click(screen.getByText('Process Refund'));
     fireEvent.click(screen.getByText('Confirm Refund'));
 
@@ -217,6 +245,8 @@ describe('getRemainingQty', () => {
         id: 1,
         orderId: 1,
         userId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -245,6 +275,8 @@ describe('getRemainingQty', () => {
         id: 1,
         orderId: 1,
         userId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
         subtotalHalalas: 4600,
         vatHalalas: 600,
         totalHalalas: 4600,
@@ -273,6 +305,8 @@ describe('getRemainingQty', () => {
         id: 1,
         orderId: 1,
         userId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -294,6 +328,8 @@ describe('getRemainingQty', () => {
         id: 2,
         orderId: 1,
         userId: 1,
+        methodId: 'card',
+        methodTitle: 'Card',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,

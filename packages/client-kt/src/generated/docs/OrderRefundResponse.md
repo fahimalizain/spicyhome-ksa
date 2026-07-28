@@ -7,6 +7,8 @@
 | **id** | **kotlin.Long** |  |  |
 | **orderId** | **kotlin.Long** |  |  |
 | **userId** | **kotlin.Long** |  |  |
+| **methodId** | **kotlin.String** | Payment method slug used for this refund |  |
+| **methodTitle** | **kotlin.String** | Payment method title snapshot at refund time |  |
 | **subtotalHalalas** | **kotlin.Long** |  |  |
 | **vatHalalas** | **kotlin.Long** |  |  |
 | **totalHalalas** | **kotlin.Long** |  |  |

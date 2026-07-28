@@ -16,8 +16,8 @@ The XML builder (`zatca-xml-builder.service.ts`) already supports `type: 'credit
 
 ## Non-Goals
 
-- Automatic submission/reporting of credit notes to ZATCA. Credit notes are persisted with status `signed`, same as invoices today. A future reporting layer can pick them up.
-- Modifying `apps/pos`, Android, or generated client code. The credit note table is a server-internal concern.
+- ~~Automatic submission/reporting of credit notes to ZATCA. Credit notes are persisted with status `signed`, same as invoices today. A future reporting layer can pick them up.~~ **Done: `ZatcaReportingService` now handles both `zatca_invoices` and `zatca_credit_notes` tables.**
+- ~~Modifying `apps/pos`, Android, or generated client code. The credit note table is a server-internal concern.~~ **Done: POS ZatcaPage now lists credit notes alongside invoices in a unified Documents list with detail, XML, and retry support.**
 - Refunding without a prior invoice. If the original invoice was never created (e.g., ZATCA not configured), the credit note listener will log an error and give up; the refund itself still succeeds.
 
 ## Recommended Option: A — Separate `zatca_credit_notes` Table

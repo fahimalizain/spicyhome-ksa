@@ -730,7 +730,7 @@ export class OrdersService {
 
   async refundOrder(
     orderId: number,
-    dto: { items: { orderItemId: number; qty: number }[]; reason?: string },
+    dto: { items: { orderItemId: number; qty: number }[]; reason?: string; methodId: string },
     userId: number,
   ) {
     const now = Math.floor(Date.now() / 1000);
@@ -744,6 +744,19 @@ export class OrdersService {
       throw new BadRequestException(
         `Cannot refund order in '${order.status}' status. Only paid orders can be refunded.`,
       );
+    }
+
+    // Validate payment method exists and is enabled
+    const pm = this.db
+      .select()
+      .from(paymentMethods)
+      .where(eq(paymentMethods.id, dto.methodId))
+      .get();
+    if (!pm) {
+      throw new BadRequestException(`Unknown payment method "${dto.methodId}"`);
+    }
+    if (!pm.enabled) {
+      throw new BadRequestException(`Payment method "${dto.methodId}" is disabled`);
     }
 
     // Load all order items and validate each requested item belongs to the order
@@ -770,6 +783,7 @@ export class OrdersService {
       }
     }
 
+    const isCashRefund = dto.methodId === 'cash';
     const receiptPrinter = this.printJobService.getReceiptPrinter();
 
     // ── Transaction ─────────────────────────────────────────────────────────────
@@ -840,6 +854,8 @@ export class OrdersService {
         .values({
           orderId,
           userId,
+          methodId: dto.methodId,
+          methodTitle: pm.title,
           subtotalHalalas,
           vatHalalas,
           totalHalalas,
@@ -875,6 +891,8 @@ export class OrdersService {
         'refund_issued',
         {
           refundId,
+          methodId: dto.methodId,
+          methodTitle: pm.title,
           items: refundItems,
           totalHalalas,
           ...(dto.reason ? { reason: dto.reason } : {}),
@@ -933,7 +951,7 @@ export class OrdersService {
             printer: receiptPrinter.name,
             printerId: receiptPrinter.id,
             totalHalalas: refundTotalHalalas,
-            kickDrawer: false,
+            kickDrawer: isCashRefund,
           },
           now,
         );
@@ -942,7 +960,7 @@ export class OrdersService {
 
     // ── After transaction: non-blocking refund receipt print ───────────────────
     if (receiptPrinter) {
-      this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId);
+      this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId, isCashRefund);
     }
 
     // ── Emit WebSocket events ───────────────────────────────────────────────────
@@ -973,6 +991,8 @@ export class OrdersService {
         id: refund.id,
         orderId: refund.orderId,
         userId: refund.userId,
+        methodId: refund.methodId,
+        methodTitle: refund.methodTitle,
         subtotalHalalas: refund.subtotalHalalas,
         vatHalalas: refund.vatHalalas,
         totalHalalas: refund.totalHalalas,
@@ -1055,9 +1075,10 @@ export class OrdersService {
     refundId: number,
     printer: PrinterRecord,
     userId: number,
+    kickDrawer = false,
   ): Promise<void> {
     try {
-      await this.printJobService.printRefundReceipt(refundId);
+      await this.printJobService.printRefundReceipt(refundId, { kickDrawer });
 
       const now = Math.floor(Date.now() / 1000);
       this.orderEvents.createEvent(
