@@ -471,26 +471,38 @@ function Download-Nssm {
 }
 
 function Invoke-Nssm {
+  # NOTE: Do NOT name a parameter $Args - it collides with PowerShell's
+  # automatic $args variable and silently drops caller arguments (NSSM then
+  # opens an empty GUI / prints usage). Prefer the call operator over
+  # Start-Process -ArgumentList (array binding is unreliable on PS 2.0).
   param(
     [string]$NssmExe,
     [string]$Action,
-    [array]$Args
+    [array]$NssmArguments = @()
   )
-  $allArgs = @($Action) + $Args
-  $proc = Start-Process -FilePath $NssmExe -ArgumentList $allArgs -Wait -NoNewWindow -PassThru
-  return $proc.ExitCode
+  if (-not (Test-Path $NssmExe)) {
+    Write-Log "ERROR: nssm.exe not found at $NssmExe"
+    return 1
+  }
+  $allArgs = @($Action) + @($NssmArguments)
+  Write-Log ("nssm " + ($allArgs -join " "))
+  # Call operator: each array element is one argv; paths may contain spaces.
+  & $NssmExe @allArgs | Out-Host
+  $code = $LASTEXITCODE
+  if ($null -eq $code) { $code = 0 }
+  return $code
 }
 
 function Stop-ServiceIfNeeded {
   param([string]$NssmExe, [string]$SvcName)
   Write-Log "Stopping service '$SvcName'..."
-  Invoke-Nssm $NssmExe "stop" @($SvcName) 2>$null
+  Invoke-Nssm $NssmExe "stop" @($SvcName) | Out-Null
   # Give it a moment to stop
   Start-Sleep -Seconds 3
   Write-Log "Service stop requested."
 }
 
-function Start-Service {
+function Start-NssmService {
   param([string]$NssmExe, [string]$SvcName)
   Write-Log "Starting service '$SvcName'..."
   $code = Invoke-Nssm $NssmExe "start" @($SvcName)
@@ -703,7 +715,7 @@ function Invoke-Install {
   Install-NssmService $nssmExe $root $version
 
   # Start service
-  Start-Service $nssmExe $ServiceName
+  Start-NssmService $nssmExe $ServiceName
 
   # Health check
   if (-not (Wait-ForHealth $Port $HealthTimeoutSec)) {
@@ -812,7 +824,7 @@ function Invoke-Update {
 
   # Start service
   if (Test-Path $nssmExe) {
-    Start-Service $nssmExe $ServiceName
+    Start-NssmService $nssmExe $ServiceName
   } else {
     Write-Log "INFO: NSSM not found. Skipping service start."
     Write-Log "Run install.bat -InstallService to set up the service."
@@ -915,7 +927,7 @@ function Invoke-Rollback {
 
   # Start service
   if (Test-Path $nssmExe) {
-    Start-Service $nssmExe $ServiceName
+    Start-NssmService $nssmExe $ServiceName
   }
 
   # Health check
@@ -935,9 +947,9 @@ function Invoke-Rollback {
 function Install-NssmService {
   param([string]$NssmExe, [string]$Root, [string]$Version)
 
-  # Remove existing if present
-  $removeCode = Invoke-Nssm $NssmExe "stop" @($ServiceName) 2>$null
-  Invoke-Nssm $NssmExe "remove" @($ServiceName, "confirm") 2>$null
+  # Remove existing if present (ignore failures - service may not exist yet)
+  Invoke-Nssm $NssmExe "stop" @($ServiceName) | Out-Null
+  Invoke-Nssm $NssmExe "remove" @($ServiceName, "confirm") | Out-Null
 
   $nodeExe = Join-Path $Root "current\node\node.exe"
   $mainJs  = Join-Path $Root "current\server\main.js"
@@ -945,6 +957,10 @@ function Install-NssmService {
 
   if (-not (Test-Path $nodeExe)) {
     Write-Log "ERROR: node.exe not found at $nodeExe"
+    exit 1
+  }
+  if (-not (Test-Path $mainJs)) {
+    Write-Log "ERROR: main.js not found at $mainJs"
     exit 1
   }
 
@@ -958,15 +974,56 @@ function Install-NssmService {
   $spicyDb = Join-Path $Root "data\spicyhome.db"
   $migrations = Join-Path $Root "current\packages\db\drizzle"
   $nodePath = Join-Path $Root "current\server\node_modules"
+  $stdoutLog = Join-Path $Root "logs\server\server.out.log"
+  $stderrLog = Join-Path $Root "logs\server\server.err.log"
 
   Write-Log "Installing NSSM service '$ServiceName'..."
+  Write-Log "  App: $nodeExe"
+  Write-Log "  Params: $mainJs"
+  Write-Log "  Directory: $appDir"
 
-  Invoke-Nssm $NssmExe "install" @($ServiceName, "`"$nodeExe`"") | Out-Null
-  Invoke-Nssm $NssmExe "set" @($ServiceName, "AppParameters", "`"$mainJs`"") | Out-Null
-  Invoke-Nssm $NssmExe "set" @($ServiceName, "AppDirectory", $appDir) | Out-Null
-  Invoke-Nssm $NssmExe "set" @($ServiceName, "AppStdout", (Join-Path $Root "logs\server\server.out.log")) | Out-Null
-  Invoke-Nssm $NssmExe "set" @($ServiceName, "AppStderr", (Join-Path $Root "logs\server\server.err.log")) | Out-Null
-  Invoke-Nssm $NssmExe "set" @($ServiceName, "AppEnvironmentExtra", "TZ=Asia/Riyadh SPA_DIST=$spaDist SPICYHOME_DB=$spicyDb PORT=$Port NODE_SKIP_PLATFORM_CHECK=1 MIGRATIONS_DIR=$migrations NODE_PATH=$nodePath APP_VERSION=$Version") | Out-Null
+  # Do NOT wrap paths in extra quotes - call operator passes each element as one argv.
+  $code = Invoke-Nssm $NssmExe "install" @($ServiceName, $nodeExe)
+  if ($code -ne 0) {
+    Write-Log "ERROR: nssm install failed with exit code $code"
+    exit 1
+  }
+
+  $sets = @(
+    @("AppParameters", $mainJs),
+    @("AppDirectory", $appDir),
+    @("AppStdout", $stdoutLog),
+    @("AppStderr", $stderrLog),
+    @("AppRotateFiles", "1"),
+    @("AppRotateBytes", "10485760"),
+    @("DisplayName", "SpicyHome POS"),
+    @("Description", "SpicyHome POS server"),
+    @("Start", "SERVICE_AUTO_START")
+  )
+  foreach ($pair in $sets) {
+    $code = Invoke-Nssm $NssmExe "set" @($ServiceName, $pair[0], $pair[1])
+    if ($code -ne 0) {
+      Write-Log ("ERROR: nssm set " + $pair[0] + " failed with exit code " + $code)
+      exit 1
+    }
+  }
+
+  # AppEnvironmentExtra: one KEY=VALUE per argument (NSSM joins them).
+  $envExtra = @(
+    "TZ=Asia/Riyadh",
+    "SPA_DIST=$spaDist",
+    "SPICYHOME_DB=$spicyDb",
+    "PORT=$Port",
+    "NODE_SKIP_PLATFORM_CHECK=1",
+    "MIGRATIONS_DIR=$migrations",
+    "NODE_PATH=$nodePath",
+    "APP_VERSION=$Version"
+  )
+  $code = Invoke-Nssm $NssmExe "set" (@($ServiceName, "AppEnvironmentExtra") + $envExtra)
+  if ($code -ne 0) {
+    Write-Log "ERROR: nssm set AppEnvironmentExtra failed with exit code $code"
+    exit 1
+  }
 
   Write-Log "NSSM service '$ServiceName' installed."
 }
@@ -1000,7 +1057,7 @@ function Invoke-InstallServiceCmd {
   Install-NssmService $nssmExe $root $currentVer
 
   Write-Log "Starting service..."
-  Start-Service $nssmExe $ServiceName
+  Start-NssmService $nssmExe $ServiceName
 
   if (-not (Wait-ForHealth $Port $HealthTimeoutSec)) {
     Write-Log "ERROR: Health check failed after service start."
@@ -1029,11 +1086,11 @@ function Invoke-UninstallServiceCmd {
   }
 
   Write-Log "Stopping service '$ServiceName'..."
-  Invoke-Nssm $nssmExe "stop" @($ServiceName) 2>$null
+  Invoke-Nssm $nssmExe "stop" @($ServiceName) | Out-Null
   Start-Sleep -Seconds 3
 
   Write-Log "Removing service '$ServiceName'..."
-  Invoke-Nssm $nssmExe "remove" @($ServiceName, "confirm") 2>$null
+  Invoke-Nssm $nssmExe "remove" @($ServiceName, "confirm") | Out-Null
 
   Write-Log "Service '$ServiceName' removed."
 }
