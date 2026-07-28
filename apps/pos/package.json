@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/pos",
-  "version": "202607.24.4",
+  "version": "202607.28.0",
   "private": true,
   "type": "module",
   "scripts": {
