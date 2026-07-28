@@ -223,6 +223,8 @@ jobs:
             mkdir -p "$DEST"
             echo "  Copying $dir to $DEST ..."
             cp -R "$dir"/* "$DEST"/
+            # Bazel outputs are often read-only; cp preserves mode.
+            chmod -R u+w "$DEST"
             echo "  Injecting debug IDs into $DEST ..."
             sentry-cli sourcemaps inject "$DEST"
             echo "  Uploading source maps from $DEST ..."
