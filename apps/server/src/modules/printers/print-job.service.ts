@@ -15,6 +15,7 @@ import { PrintersService, PrinterRecord } from './printers.service';
 import { PrinterUnreachableError } from './printer-transport';
 import { ReceiptBuilder, ReceiptItem } from './receipt-builder';
 import { KitchenTicketBuilder, KitchenTicketItem } from './kitchen-ticket-builder';
+import { TestTicketBuilder } from './test-ticket-builder';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -347,16 +348,12 @@ export class PrintJobService {
 
   async printTestTicket(printerId: number): Promise<void> {
     const p = this.printersService.get(printerId);
-    const { EscPosBuilder } = await import('./esc-pos-builder');
-    const eb = new EscPosBuilder();
-    eb.init();
-    eb.align(1);
-    eb.text('TEST TICKET');
-    eb.text(`Printer: ${p.name}`);
-    eb.text(`IP: ${p.ip}:${p.port}`);
-    eb.text(new Date().toISOString());
-    eb.feed(3);
-    eb.cut(1);
-    await this.printersService.sendBuffer(p, eb.getBuffer());
+    const builder = new TestTicketBuilder();
+    const buf = builder.build({
+      printerName: p.name,
+      ip: p.ip,
+      port: p.port,
+    });
+    await this.printersService.sendBuffer(p, buf);
   }
 }

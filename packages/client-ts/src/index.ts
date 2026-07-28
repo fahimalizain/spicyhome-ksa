@@ -24,6 +24,7 @@ export type {
   CreatePrinterDto,
   UpdatePrinterDto,
   PrinterResponse,
+  PrinterStatusResponse,
   CreateOrderDto,
   CreateOrderResponse,
   OrderResponse,

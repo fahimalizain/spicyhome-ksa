@@ -153,6 +153,35 @@ export class EscPosBuilder {
     return this;
   }
 
+  /**
+   * Select character code table.
+   * ESC t n — select code page n (0 = PC437). Used for Arabic encoding probes.
+   */
+  codePage(n: number): this {
+    this.cmd([ESC, 0x74, n & 0xff]);
+    return this;
+  }
+
+  /**
+   * Append raw bytes without sanitization or trailing LF.
+   * For encoding probes (Arabic, binary) — use with extreme care.
+   * Production `text()` / `columns()` paths must NOT use this.
+   */
+  raw(bytes: Buffer | Uint8Array | number[]): this {
+    this.buf.push(...bytes);
+    return this;
+  }
+
+  /**
+   * Append raw bytes followed by LF — no sanitization.
+   * Convenience wrapper around raw() for single-line encoding probes.
+   */
+  rawLine(bytes: Buffer | Uint8Array | number[]): this {
+    this.buf.push(...bytes);
+    this.buf.push(LF);
+    return this;
+  }
+
   /** Cash drawer kick — ESC p m t1 t2 (m=0 for pin 2, m=1 for pin 5). */
   cashDrawerKick(pin = 0, onTime = 60, offTime = 240): this {
     this.cmd([ESC, 0x70, pin, onTime, offTime]);

@@ -7,6 +7,8 @@ export function PrintersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [testStatus, setTestStatus] = useState<Record<number, string>>({});
   const [form, setForm] = useState({
     name: '',
     ip: '',
@@ -60,6 +62,19 @@ export function PrintersPage() {
       await loadData();
     } catch (e: any) {
       setError(e.message || 'Failed to save');
+    }
+  }
+
+  async function handleTestPrint(p: PrinterResponse) {
+    setTestingId(p.id);
+    setTestStatus((prev) => ({ ...prev, [p.id]: 'Printing...' }));
+    try {
+      await client.printers.test(p.id);
+      setTestStatus((prev) => ({ ...prev, [p.id]: 'Sent!' }));
+    } catch (e: any) {
+      setTestStatus((prev) => ({ ...prev, [p.id]: e.message || 'Failed' }));
+    } finally {
+      setTestingId(null);
     }
   }
 
@@ -142,7 +157,7 @@ export function PrintersPage() {
             key={p.id}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
           >
-            <div>
+            <div className="flex-1 min-w-0">
               <span className="text-sm text-white">{p.name}</span>
               <span className="text-xs text-gray-500 ml-2">
                 {p.ip}:{p.port}
@@ -152,13 +167,36 @@ export function PrintersPage() {
               >
                 {p.role}
               </span>
+              {testStatus[p.id] && (
+                <span
+                  className={
+                    'ml-2 text-xs ' +
+                    (testStatus[p.id] === 'Sent!'
+                      ? 'text-green-400'
+                      : testStatus[p.id] === 'Printing...'
+                        ? 'text-gray-400'
+                        : 'text-red-400')
+                  }
+                >
+                  {testStatus[p.id]}
+                </span>
+              )}
             </div>
-            <button
-              onClick={() => editPrinter(p)}
-              className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
-            >
-              Edit
-            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={() => editPrinter(p)}
+                className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleTestPrint(p)}
+                disabled={testingId === p.id}
+                className="touch-target text-xs text-green-400 hover:text-green-300 px-2 py-1 disabled:opacity-40"
+              >
+                {testingId === p.id ? 'Printing...' : 'Test'}
+              </button>
+            </div>
           </div>
         ))}
       </div>

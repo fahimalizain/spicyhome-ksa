@@ -46,6 +46,7 @@ export type StatusResponse = Schemas['StatusResponse'];
 export type AuditVerifyResponse = Schemas['AuditVerifyResponse'];
 export type TableResponse = Schemas['TableResponse'];
 export type PrinterResponse = Schemas['PrinterResponse'];
+export type PrinterStatusResponse = Schemas['PrinterStatusResponse'];
 
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
@@ -325,6 +326,11 @@ export class SpicyHomeClient {
 
     update: (id: number, dto: UpdatePrinterDto) =>
       request<PrinterResponse>(this.config, 'PUT', `/printers/${id}`, dto),
+
+    test: (id: number) => request<SuccessResponse>(this.config, 'POST', `/printers/${id}/test`),
+
+    status: (id: number) =>
+      request<PrinterStatusResponse>(this.config, 'GET', `/printers/${id}/status`),
   };
 
   day = {
