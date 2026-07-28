@@ -146,9 +146,7 @@ jobs:
           git commit -m "$TITLE"
           git push -u origin "$BRANCH" --force-with-lease
 
-          # gh pr create --json is not supported on all runner images.
-          # Capture the URL and parse the trailing number instead.
-          if ! PR_URL=$(gh pr create \
+          PR_NUMBER=$(gh pr create \
             --base master \
             --head "$BRANCH" \
             --title "$TITLE" \
@@ -156,13 +154,11 @@ jobs:
 
           This PR is squash-merged by the same workflow so the version bump
           respects the master branch ruleset (PR required). The release tag
-          and GitHub Release are created after merge." 2>/dev/null); then
-            # A PR may already exist for this branch (re-run after partial failure).
-            PR_URL=$(gh pr view "$BRANCH" --json url --jq .url)
-          fi
-          PR_NUMBER="${PR_URL##*/}"
+          and GitHub Release are created after merge." \
+            --json number \
+            --jq .number)
 
-          echo "Created PR #${PR_NUMBER} (${PR_URL})"
+          echo "Created PR #${PR_NUMBER}"
 
           # Ruleset allows squash only, 0 required reviews.
           gh pr merge "$PR_NUMBER" \
