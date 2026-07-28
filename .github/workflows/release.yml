@@ -146,11 +146,13 @@ jobs:
             release/spicyhome-pos-android-v${{ steps.bump.outputs.next_version }}.apk
           generate_release_notes: true
 
+  # Reusable-workflow caller jobs cannot use continue-on-error (GitHub schema).
+  # Sentry failures mark the workflow red after the product release job has
+  # already committed, tagged, and published assets — release is still done.
   sentry-release:
     name: Sentry releases + source maps
     needs: release
     if: ${{ !inputs.dry_run }}
-    continue-on-error: true
     uses: ./.github/workflows/sentry-release.yml
     with:
       version: ${{ needs.release.outputs.next_version }}
