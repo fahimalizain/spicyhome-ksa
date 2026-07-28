@@ -26,7 +26,8 @@ File Structure
   server/             NestJS server code
   server/main.js      Server entry point
   pos/                POS SPA (served by the server)
-  data/               SQLite database (created automatically)
+  data/               SQLite database + server logs (created automatically)
+  data/logs/          Server stdout/stderr logs (for troubleshooting)
   start-server.bat    Launch script
 
 Default Port
@@ -55,6 +56,12 @@ Problem: Server fails to start
   → Make sure port 3000 is not in use by another program.
     Try a different port in start-server.bat.
 
+Problem: Server crashes or behaves unexpectedly
+  → Check the log files in data/logs/server.out.log
+    and data/logs/server.err.log for error messages.
+  → For support, zip data/logs/ and data/spicyhome.db
+    and attach them to your support request.
+
 Problem: npm install fails
   → Check internet connection. Try running manually:
       cd server
@@ -80,6 +87,11 @@ To run the server automatically on boot, use NSSM
 7. Start the service: nssm start SpicyHomePOS
 
 The server will now start automatically on system boot.
+
+When running via NSSM, set AppStdout and AppStderr on the
+Process tab to capture logs:
+  AppStdout:  C:\SpicyHome\data\logs\server.out.log
+  AppStderr:  C:\SpicyHome\data\logs\server.err.log
 
 Error Monitoring (Sentry)
 -------------------------

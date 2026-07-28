@@ -242,6 +242,38 @@ if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
 }
 
+# Create logs directory for server stdout/stderr capture
+$logsDir = Join-Path $dataDir "logs"
+if (-not (Test-Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir | Out-Null
+}
+
+$outLog = Join-Path $logsDir "server.out.log"
+$errLog = Join-Path $logsDir "server.err.log"
+
+Write-Host "Logs:     $logsDir"
+Write-Host ""
+
+# Size-based log rotation at startup (10 MB threshold).
+# Rotates server.out.log -> server.out.log.1 (and same for err).
+function Rotate-LogFile([string]$path, [long]$maxBytes) {
+    if (Test-Path $path) {
+        $item = Get-Item $path
+        if ($item.Length -gt $maxBytes) {
+            $bak = $path + ".1"
+            if (Test-Path $bak) { Remove-Item -Force $bak -ErrorAction SilentlyContinue }
+            Move-Item -Force $path $bak -ErrorAction SilentlyContinue
+        }
+    }
+}
+$maxLogBytes = 10 * 1024 * 1024
+Rotate-LogFile $outLog $maxLogBytes
+Rotate-LogFile $errLog $maxLogBytes
+
+# Write a startup banner line to server.out.log so every run is bookended
+$startBanner = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  SpicyHome v$($env:APP_VERSION)  PORT=$($env:PORT)  DB=$($env:SPICYHOME_DB)  out=$outLog  err=$errLog"
+try { [System.IO.File]::AppendAllText($outLog, $startBanner + "`r`n") } catch {}
+
 # Ensure migrations directory exists (required by server startup).
 # SQL files are pre-copied during packaging.
 $migrationsDir = Join-Path $scriptDir "packages\db\drizzle"
@@ -263,8 +295,8 @@ if (-not (Test-Path $nodeModules)) {
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
     $installArgs = @("install", "--production", "--ignore-scripts")
-    $logOut = Join-Path $env:TEMP "spicyhome-npm-out.log"
-    $logErr = Join-Path $env:TEMP "spicyhome-npm-err.log"
+    $logOut = Join-Path $logsDir "npm-out.log"
+    $logErr = Join-Path $logsDir "npm-err.log"
     $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
@@ -273,7 +305,6 @@ if (-not (Test-Path $nodeModules)) {
         if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
         Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
-        Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -302,15 +333,82 @@ $env:NODE_PATH = Join-Path $scriptDir "server\node_modules"
 $nodeExe = Join-Path $scriptDir "node\node.exe"
 $mainJs = Join-Path $scriptDir "server\main.js"
 
-# Run directly so stderr/stdout is visible in the console.
-# Set location so the server sees the right cwd (for .env, data/ etc.).
+# Pure CLR tee — PowerShell scriptblocks on OutputDataReceived crash on Win7
+# (PSInvalidOperation / ScriptBlock.GetContextFromTLS) because callbacks run on
+# a thread-pool thread with no PowerShell runspace. Prefer start-server.bat over ISE.
 Set-Location $scriptDir
-& $nodeExe $mainJs
-$exitCode = $LASTEXITCODE
+
+if (-not ([System.Management.Automation.PSTypeName] "SpicyHomeLoggedProcess").Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+
+public class SpicyHomeLoggedProcess {
+  private static string outLogPath;
+  private static string errLogPath;
+
+  private static void OnOutput(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(outLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Out.WriteLine(e.Data); } catch {}
+    }
+  }
+
+  private static void OnError(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(errLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Error.WriteLine(e.Data); } catch {}
+    }
+  }
+
+  public static int Run(string fileName, string args, string workDir, string outPath, string errPath) {
+    outLogPath = outPath;
+    errLogPath = errPath;
+
+    ProcessStartInfo psi = new ProcessStartInfo();
+    psi.FileName = fileName;
+    psi.Arguments = args;
+    psi.WorkingDirectory = workDir;
+    psi.UseShellExecute = false;
+    psi.RedirectStandardOutput = true;
+    psi.RedirectStandardError = true;
+    psi.CreateNoWindow = true;
+
+    Process p = new Process();
+    p.StartInfo = psi;
+    p.OutputDataReceived += new DataReceivedEventHandler(OnOutput);
+    p.ErrorDataReceived += new DataReceivedEventHandler(OnError);
+
+    p.Start();
+    p.BeginOutputReadLine();
+    p.BeginErrorReadLine();
+    p.WaitForExit();
+    Thread.Sleep(200);
+
+    int code = p.ExitCode;
+    p.Close();
+    return code;
+  }
+}
+"@
+}
+
+$exitCode = [SpicyHomeLoggedProcess]::Run(
+    $nodeExe,
+    ('"' + $mainJs + '"'),
+    $scriptDir,
+    $outLog,
+    $errLog
+)
 
 if ($exitCode -ne 0) {
     Write-Host ""
     Write-Host "Server exited with error code $exitCode"
+    Write-Host "Check logs:"
+    Write-Host "  $outLog"
+    Write-Host "  $errLog"
     Read-Host "Press Enter to exit"
 }
 PSEOF
