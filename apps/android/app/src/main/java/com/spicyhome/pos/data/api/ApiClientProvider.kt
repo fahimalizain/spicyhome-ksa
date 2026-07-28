@@ -1,6 +1,7 @@
 package com.spicyhome.pos.data.api
 
 import com.spicyhome.client.apis.AuthApi
+import com.spicyhome.client.apis.DayApi
 import com.spicyhome.client.apis.MenuApi
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
@@ -81,6 +82,10 @@ class ApiClientProvider(
 
     fun createSettingsApi(baseUrl: String, bearerToken: String): SettingsApi {
         return getClient(baseUrl, bearerToken).createService(SettingsApi::class.java)
+    }
+
+    fun createDayApi(baseUrl: String, bearerToken: String): DayApi {
+        return getClient(baseUrl, bearerToken).createService(DayApi::class.java)
     }
 
     fun testConnectivity(baseUrl: String): Boolean {

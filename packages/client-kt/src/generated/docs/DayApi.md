@@ -63,7 +63,7 @@ val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(DayApi::class.java)
 
-webService.businessDayControllerGetCurrent()
+val result : CurrentDayResponse = webService.businessDayControllerGetCurrent()
 ```
 
 ### Parameters
@@ -71,7 +71,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-null (empty response body)
+[**CurrentDayResponse**](CurrentDayResponse.md)
 
 ### Authorization
 
@@ -82,7 +82,7 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 
 Get a business day by ID

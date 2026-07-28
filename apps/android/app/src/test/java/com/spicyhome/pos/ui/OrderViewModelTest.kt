@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import com.google.common.truth.Truth.assertThat
 import com.spicyhome.client.apis.AuthApi
+import com.spicyhome.client.apis.DayApi
 import com.spicyhome.client.apis.MenuApi
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.models.CategoryResponse
+import com.spicyhome.client.models.CurrentDayResponse
 import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderItemResponse
@@ -48,6 +50,7 @@ class OrderViewModelTest {
     private lateinit var menuApi: MenuApi
     private lateinit var ordersApi: OrdersApi
     private lateinit var authApi: AuthApi
+    private lateinit var dayApi: DayApi
 
     private val eventsFlow = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 64)
 
@@ -64,6 +67,7 @@ class OrderViewModelTest {
         menuApi = mockk(relaxed = true)
         ordersApi = mockk(relaxed = true)
         authApi = mockk(relaxed = true)
+        dayApi = mockk(relaxed = true)
         val tablesApi = mockk<TablesApi>(relaxed = true)
 
         every { preferencesManager.serverUrl } returns serverUrlFlow
@@ -74,6 +78,12 @@ class OrderViewModelTest {
         every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
         every { apiClientProvider.createTablesApi(any(), any()) } returns tablesApi
         every { apiClientProvider.createAuthApi(any(), any()) } returns authApi
+        every { apiClientProvider.createDayApi(any(), any()) } returns dayApi
+
+        // Default stub for day API — return open day so existing tests work
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } returns Response.success(CurrentDayResponse(open = true))
 
         // Stub API calls so loadMenu/loadTables succeed without IO races
         val catCall = mockk<Call<List<CategoryResponse>>>(relaxed = true)
@@ -995,6 +1005,67 @@ class OrderViewModelTest {
         val state = vm.uiState.value
         assertThat(state.currentOrderId).isNull()
         assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+    }
+
+    // --- checkDayOpen (DAY_NOT_OPEN refresh) tests ---
+
+    @Test
+    fun `checkDayOpen when day now open returns to SELECTING_TYPE`() = runTest(testDispatcher) {
+        // Override day API to return open
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } returns Response.success(CurrentDayResponse(open = true))
+
+        val vm = createViewModel()
+        // Manually set DAY_NOT_OPEN state
+        vm.checkDayOpen()
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+        assertThat(state.isLoading).isFalse()
+        assertThat(state.error).isNull()
+    }
+
+    @Test
+    fun `checkDayOpen when day still closed stays DAY_NOT_OPEN`() = runTest(testDispatcher) {
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } returns Response.success(CurrentDayResponse(open = false))
+
+        val vm = createViewModel()
+        vm.checkDayOpen()
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
+        assertThat(state.error).contains("No open business day")
+    }
+
+    @Test
+    fun `checkDayOpen on network error shows error`() = runTest(testDispatcher) {
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } throws java.net.ConnectException("timeout")
+
+        val vm = createViewModel()
+        vm.checkDayOpen()
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
+        assertThat(state.error).contains("Network error checking day status")
+    }
+
+    @Test
+    fun `checkDayOpen on HTTP error shows error`() = runTest(testDispatcher) {
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } returns Response.error(500, okhttp3.ResponseBody.create(null, ""))
+
+        val vm = createViewModel()
+        vm.checkDayOpen()
+
+        val state = vm.uiState.value
+        assertThat(state.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
+        assertThat(state.error).contains("500")
     }
 
     // --- Helpers ---

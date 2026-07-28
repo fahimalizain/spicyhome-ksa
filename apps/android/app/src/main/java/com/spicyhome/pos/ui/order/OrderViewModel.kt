@@ -13,6 +13,7 @@ import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.data.repository.AuthRepository
+import com.spicyhome.pos.data.repository.DayRepository
 import com.spicyhome.pos.data.repository.MenuRepository
 import com.spicyhome.pos.data.repository.OrderRepository
 import com.spicyhome.pos.data.repository.TableRepository
@@ -188,6 +189,7 @@ class OrderViewModel(
     private var orderRepo: OrderRepository? = null
     private var tableRepo: TableRepository? = null
     private var authRepo: AuthRepository? = null
+    private var dayRepo: DayRepository? = null
 
     init {
         viewModelScope.launch {
@@ -233,6 +235,7 @@ class OrderViewModel(
         orderRepo = OrderRepository(apiClientProvider.createOrdersApi(baseUrl, bearerToken))
         tableRepo = TableRepository(apiClientProvider.createTablesApi(baseUrl, bearerToken))
         authRepo = AuthRepository(apiClientProvider.createAuthApi(baseUrl, bearerToken))
+        dayRepo = DayRepository(apiClientProvider.createDayApi(baseUrl, bearerToken))
     }
 
     private fun loadPermissions() {
@@ -702,6 +705,49 @@ class OrderViewModel(
             categoriesLoaded = _uiState.value.categoriesLoaded,
             permissions = _uiState.value.permissions,
         )
+    }
+
+    fun checkDayOpen() {
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+        viewModelScope.launch {
+            try {
+                val response = withContext(ioDispatcher) {
+                    dayRepo!!.getCurrent().execute()
+                }
+
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body != null && body.open == true) {
+                        // Day is now open — return to SELECTING_TYPE
+                        _uiState.value = _uiState.value.copy(
+                            screenState = OrderScreenState.SELECTING_TYPE,
+                            isLoading = false,
+                            error = null,
+                        )
+                    } else {
+                        // Still not open
+                        _uiState.value = _uiState.value.copy(
+                            screenState = OrderScreenState.DAY_NOT_OPEN,
+                            isLoading = false,
+                            error = "No open business day. Please open a day first.",
+                        )
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        screenState = OrderScreenState.DAY_NOT_OPEN,
+                        isLoading = false,
+                        error = "Unable to check day status (${response.code()})",
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    screenState = OrderScreenState.DAY_NOT_OPEN,
+                    isLoading = false,
+                    error = "Network error checking day status" + (e.message?.let { ": $it" } ?: ""),
+                )
+            }
+        }
     }
 
     fun logout() {

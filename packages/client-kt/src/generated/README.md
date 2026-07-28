@@ -130,6 +130,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
  - [com.spicyhome.client.models.CreateTableDto](docs/CreateTableDto.md)
  - [com.spicyhome.client.models.CreateUserDto](docs/CreateUserDto.md)
+ - [com.spicyhome.client.models.CurrentDayResponse](docs/CurrentDayResponse.md)
  - [com.spicyhome.client.models.DayOpeningResponse](docs/DayOpeningResponse.md)
  - [com.spicyhome.client.models.ItemResponse](docs/ItemResponse.md)
  - [com.spicyhome.client.models.LoginDto](docs/LoginDto.md)
