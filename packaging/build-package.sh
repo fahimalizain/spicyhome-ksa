@@ -328,15 +328,14 @@ if [ -n "$SERVER_DSN" ]; then
   SENTRY_PROFILES="${SENTRY_PROFILES_SAMPLE_RATE:-1.0}"
   # Escape single quotes in the DSN for PowerShell single-quoted strings:
   # PowerShell uses '' to represent a literal single quote inside a
-  # single-quoted string. Implement this in bash with parameter expansion.
-  DSN_SAFE="${SERVER_DSN//\'/\'\'}"
+  # single-quoted string. Use sed for reliable escaping across bash versions.
+  DSN_SAFE=$(echo "$SERVER_DSN" | sed "s/'/''/g")
   cat > "$TEMP_DIR/sentry-block.txt" << SENTRYEOF
-# Sentry error monitoring (baked at package time):
-\$env:SENTRY_DSN = '${DSN_SAFE}'
-\$env:SENTRY_ENVIRONMENT = '${SENTRY_ENV}'
-\$env:SENTRY_TRACES_SAMPLE_RATE = '${SENTRY_TRACES}'
-\$env:SENTRY_PROFILES_SAMPLE_RATE = '${SENTRY_PROFILES}'
-# To disable Sentry, comment out the lines above.
+# Sentry error monitoring (baked at package time; override by setting env before start):
+if ([string]::IsNullOrEmpty(\$env:SENTRY_DSN)) { \$env:SENTRY_DSN = '${DSN_SAFE}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_ENVIRONMENT)) { \$env:SENTRY_ENVIRONMENT = '${SENTRY_ENV}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_TRACES_SAMPLE_RATE)) { \$env:SENTRY_TRACES_SAMPLE_RATE = '${SENTRY_TRACES}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_PROFILES_SAMPLE_RATE)) { \$env:SENTRY_PROFILES_SAMPLE_RATE = '${SENTRY_PROFILES}' }
 SENTRYEOF
   echo "Sentry server DSN: baked"
 else
@@ -408,8 +407,9 @@ fi
 
 # c) Server DSN must be active (uncommented) in start-server.ps1 if baked.
 if [ -n "$SERVER_DSN" ]; then
-  # Check that an uncommented $env:SENTRY_DSN = '...' assignment exists.
-  if grep -q "^[^#]*\$env:SENTRY_DSN = '" "$PACKAGE_DIR/start-server.ps1"; then
+  # The baked block uses IsNullOrEmpty guard; the literal DSN_SAFE string
+  # only appears inside that block, never in comments.
+  if grep -qF "SENTRY_DSN = '${DSN_SAFE}'" "$PACKAGE_DIR/start-server.ps1"; then
     echo "  Server Sentry DSN: present in start-server.ps1"
   else
     echo "ERROR: Server Sentry DSN not found or commented out in start-server.ps1"

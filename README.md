@@ -117,11 +117,11 @@ build-time environment variables above:
 | `secrets.SENTRY_AUTH_TOKEN`  | `SENTRY_AUTH_TOKEN` | Source map upload auth token                     |
 | `vars.SENTRY_ORG`            | `SENTRY_ORG`        | Sentry org slug for source maps                  |
 
-The server DSN (`SENTRY_DSN`) can still be set at runtime on the deployment machine.
-During a release build, `SENTRY_SERVER_DSN` is baked into `start-server.ps1` so the
-server starts with Sentry active out of the box. To override the baked DSN, set
-`SENTRY_DSN` before running `start-server.bat`. It can optionally be baked into
-the server package by setting the environment before running `pnpm package:win7`.
+Release builds bake `SENTRY_SERVER_DSN` into `start-server.ps1` as a **default**.
+If `SENTRY_DSN` (or any other Sentry env var) is already set at runtime — via NSSM
+service environment, user-set variables, or a shell script — the existing value
+wins. Running `pnpm package:win7` locally with `SENTRY_DSN` or `SENTRY_SERVER_DSN`
+set also bakes those values into the generated script.
 
 ### Free Tier
 
