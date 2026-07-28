@@ -56,7 +56,10 @@ ts_project(
 
 js_library(
     name = "migrations",
-    srcs = glob(["drizzle/*.sql"]),
+    srcs = glob([
+        "drizzle/*.sql",
+        "drizzle/meta/**/*.json",
+    ]),
     visibility = ["//visibility:public"],
 )
 

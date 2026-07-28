@@ -65,16 +65,15 @@ export class DatabaseModule implements OnModuleInit {
     let rawDb: Database.Database;
     try {
       rawDb = extractSqlite(this.db);
-    } catch {
-      return;
+    } catch (err: any) {
+      Logger.error('Cannot extract sqlite instance from drizzle', err.stack, DatabaseModule.name);
+      throw err;
     }
 
-    try {
-      const migrationsDir = findMigrationsDir();
-      applyMigrations(rawDb, migrationsDir);
-    } catch (err: any) {
-      console.warn('Could not apply migrations, skipping:', err.message);
-    }
+    // Migration failure must crash the process — no silent skip.
+    const migrationsDir = findMigrationsDir();
+    applyMigrations(rawDb, migrationsDir);
+    Logger.log('Migrations applied successfully.', DatabaseModule.name);
 
     const userCount = rawDb.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
 
