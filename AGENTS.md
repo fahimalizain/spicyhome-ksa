@@ -37,6 +37,21 @@ Codebase conventions and constraints for all contributors and AI agents.
 - Server runs with `TZ=Asia/Riyadh`.
 - Business dates computed in +03:00, stored as `YYYY-MM-DD` in `day_openings`.
 
+### Service day (JWT expiry)
+
+- **Service day** window: `[D 05:00, (D+1) 05:00)` Asia/Riyadh (half-open).
+  The label `D` (`YYYY-MM-DD`) is the **start** date of the window.
+  Times before 05:00 belong to the **previous** service day.
+- **JWT `exp`**: access tokens expire at the **next** 05:00 Asia/Riyadh
+  service-day boundary. On login, `exp` is set to the Unix seconds of the
+  upcoming 05:00. At exactly 05:00:00 the boundary is tomorrow 05:00.
+- **`businessDate`** (day open/close) is still **calendar-day** in
+  Asia/Riyadh (`todayInRiyadh`) — do **not** conflate service day with
+  business date yet.
+- Helpers in `packages/shared/src/service-day.ts`:
+  `getServiceDayString(nowMs)`, `getNextServiceDayBoundaryUnix(nowMs)`.
+  These use an explicit UTC+3 offset and do **not** depend on `process.env.TZ`.
+
 ## Database
 
 - **SQLite** via `better-sqlite3` + Drizzle ORM.
