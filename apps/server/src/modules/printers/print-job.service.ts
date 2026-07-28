@@ -117,7 +117,10 @@ export class PrintJobService {
    * Print a refund receipt for a specific refund record.
    * Throws if no active receipt printer is configured.
    */
-  async printRefundReceipt(refundId: number): Promise<{ printer: PrinterRecord }> {
+  async printRefundReceipt(
+    refundId: number,
+    opts?: { kickDrawer?: boolean },
+  ): Promise<{ printer: PrinterRecord }> {
     const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
     if (!refund) throw new Error(`Refund ${refundId} not found`);
 
@@ -163,6 +166,7 @@ export class PrintJobService {
       vatHalalas: refund.vatHalalas,
       totalHalalas: refund.totalHalalas,
       footer: `Refund processed — Original order #: ${order.orderNo}`,
+      kickDrawer: opts?.kickDrawer ?? false,
     });
 
     await this.printersService.sendBuffer(receiptPrinter, receipt);

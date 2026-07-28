@@ -203,6 +203,10 @@ export const orderRefunds = sqliteTable('order_refunds', {
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
+  methodId: text('method_id')
+    .references(() => paymentMethods.id)
+    .notNull(),
+  methodTitle: text('method_title').notNull(),
   subtotalHalalas: integer('subtotal_halalas').notNull(),
   vatHalalas: integer('vat_halalas').notNull(),
   totalHalalas: integer('total_halalas').notNull(),

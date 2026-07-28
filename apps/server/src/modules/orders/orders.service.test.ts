@@ -182,6 +182,7 @@ describe('Order Refunds', () => {
         .send({
           items: [{ orderItemId: zingerItem.id, qty: 1 }],
           reason: 'Customer changed mind',
+          methodId: 'cash',
         })
         .expect(201);
 
@@ -236,7 +237,7 @@ describe('Order Refunds', () => {
       const refundRes = await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: refundItems })
+        .send({ items: refundItems, methodId: 'cash' })
         .expect(201);
 
       expect(refundRes.body.success).toBe(true);
@@ -274,14 +275,14 @@ describe('Order Refunds', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }] })
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
 
       // Try to refund 2 more — should fail (only 1 remaining)
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: [{ orderItemId: zingerItem.id, qty: 2 }] })
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 2 }], methodId: 'cash' })
         .expect(400);
     });
 
@@ -319,7 +320,7 @@ describe('Order Refunds', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }] })
+        .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }], methodId: 'cash' })
         .expect(400);
     });
 
@@ -361,7 +362,52 @@ describe('Order Refunds', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }] })
+        .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }], methodId: 'cash' })
+        .expect(400);
+    });
+
+    it('rejects unknown methodId on refund', async () => {
+      const { orderId, items } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'bitcoin' })
+        .expect(400);
+    });
+
+    it('rejects disabled method on refund', async () => {
+      const { orderId, items } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      // Disable mada
+      db.update(schema.paymentMethods)
+        .set({ enabled: 0 })
+        .where(eq(schema.paymentMethods.id, 'mada'))
+        .run();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'mada' })
+        .expect(400);
+
+      // Re-enable for other tests
+      db.update(schema.paymentMethods)
+        .set({ enabled: 1 })
+        .where(eq(schema.paymentMethods.id, 'mada'))
+        .run();
+    });
+
+    it('rejects missing methodId on refund', async () => {
+      const { orderId, items } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }] })
         .expect(400);
     });
   });
@@ -379,6 +425,7 @@ describe('Order Refunds', () => {
         .send({
           items: [{ orderItemId: zingerItem.id, qty: 1 }],
           reason: 'Test refund',
+          methodId: 'cash',
         })
         .expect(201);
 
@@ -394,6 +441,8 @@ describe('Order Refunds', () => {
       const refund = getRes.body[0];
       expect(refund.id).toBe(refundRes.body.refundId);
       expect(refund.orderId).toBe(orderId);
+      expect(refund.methodId).toBe('cash');
+      expect(refund.methodTitle).toBe('Cash');
       expect(refund.reason).toBe('Test refund');
       expect(refund.totalHalalas).toBeGreaterThan(0);
       expect(refund.subtotalHalalas).toBeGreaterThan(0);
@@ -417,7 +466,7 @@ describe('Order Refunds', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }] })
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
 
       // Wait for async print
@@ -433,9 +482,47 @@ describe('Order Refunds', () => {
       expect(types).toContain('receipt_print_enqueued');
       expect(types).toContain('receipt_print_succeeded');
 
-      // The refund-related receipt_print_enqueued should have kickDrawer: false
-      const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
-      expect(enqueuedEvent).toBeDefined();
+      // The refund-related receipt_print_enqueued is the last one (after pay); kickDrawer: true for cash refund
+      const enqueuedEvents = eventsRes.body.filter((e: any) => e.type === 'receipt_print_enqueued');
+      expect(enqueuedEvents.length).toBeGreaterThanOrEqual(2); // pay enqueued + refund enqueued
+      const refundEnqueuedEvent = enqueuedEvents[enqueuedEvents.length - 1];
+      expect(refundEnqueuedEvent).toBeDefined();
+      const refundEnqueuedPayload =
+        typeof refundEnqueuedEvent.payload === 'string'
+          ? JSON.parse(refundEnqueuedEvent.payload)
+          : refundEnqueuedEvent.payload;
+      expect(refundEnqueuedPayload.kickDrawer).toBe(true);
+    });
+
+    it('card refund receipt print has kickDrawer: false', async () => {
+      const { orderId, items } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'card' })
+        .expect(201);
+
+      // Wait for async print
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Verify events
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // The refund-related receipt_print_enqueued is the last one; kickDrawer: false for card refund
+      const enqueuedEvents = eventsRes.body.filter((e: any) => e.type === 'receipt_print_enqueued');
+      expect(enqueuedEvents.length).toBeGreaterThanOrEqual(2);
+      const refundEnqueuedEvent = enqueuedEvents[enqueuedEvents.length - 1];
+      expect(refundEnqueuedEvent).toBeDefined();
+      const refundEnqueuedPayload =
+        typeof refundEnqueuedEvent.payload === 'string'
+          ? JSON.parse(refundEnqueuedEvent.payload)
+          : refundEnqueuedEvent.payload;
+      expect(refundEnqueuedPayload.kickDrawer).toBe(false);
     });
   });
 
@@ -906,7 +993,7 @@ describe('Pay with payment methods', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ items: refundItems })
+        .send({ items: refundItems, methodId: 'cash' })
         .expect(201);
 
       await new Promise((r) => setTimeout(r, 200));

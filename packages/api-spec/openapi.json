@@ -3921,10 +3921,16 @@
           "reason": {
             "type": "string",
             "example": "Customer changed mind"
+          },
+          "methodId": {
+            "type": "string",
+            "example": "cash",
+            "description": "Payment method slug for this refund"
           }
         },
         "required": [
-          "items"
+          "items",
+          "methodId"
         ]
       },
       "RefundResponse": {
@@ -4016,6 +4022,16 @@
             "format": "int64",
             "example": 3
           },
+          "methodId": {
+            "type": "string",
+            "example": "cash",
+            "description": "Payment method slug used for this refund"
+          },
+          "methodTitle": {
+            "type": "string",
+            "example": "Cash",
+            "description": "Payment method title snapshot at refund time"
+          },
           "subtotalHalalas": {
             "type": "integer",
             "format": "int64",
@@ -4052,6 +4068,8 @@
           "id",
           "orderId",
           "userId",
+          "methodId",
+          "methodTitle",
           "subtotalHalalas",
           "vatHalalas",
           "totalHalalas",

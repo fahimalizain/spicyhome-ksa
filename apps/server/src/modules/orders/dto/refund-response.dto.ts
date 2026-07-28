@@ -34,6 +34,20 @@ export class OrderRefundResponse {
   @ApiProperty({ ...ApiInt64, example: 3 })
   userId!: number;
 
+  @ApiProperty({
+    type: String,
+    example: 'cash',
+    description: 'Payment method slug used for this refund',
+  })
+  methodId!: string;
+
+  @ApiProperty({
+    type: String,
+    example: 'Cash',
+    description: 'Payment method title snapshot at refund time',
+  })
+  methodTitle!: string;
+
   @ApiProperty({ ...ApiInt64, example: 4348 })
   subtotalHalalas!: number;
 

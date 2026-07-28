@@ -1783,6 +1783,11 @@ export interface components {
       items: components['schemas']['RefundItemDto'][];
       /** @example Customer changed mind */
       reason?: string;
+      /**
+       * @description Payment method slug for this refund
+       * @example cash
+       */
+      methodId: string;
     };
     RefundResponse: {
       /** @example true */
@@ -1845,6 +1850,16 @@ export interface components {
        * @example 3
        */
       userId: number;
+      /**
+       * @description Payment method slug used for this refund
+       * @example cash
+       */
+      methodId: string;
+      /**
+       * @description Payment method title snapshot at refund time
+       * @example Cash
+       */
+      methodTitle: string;
       /**
        * Format: int64
        * @example 4348

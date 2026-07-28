@@ -123,7 +123,9 @@ describe('ReportsService', () => {
         role TEXT NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id)
       );
       CREATE TABLE IF NOT EXISTS payment_methods (
         id TEXT PRIMARY KEY NOT NULL,
@@ -145,6 +147,21 @@ describe('ReportsService', () => {
         change_halalas INTEGER,
         created_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id)
+      );
+      CREATE TABLE IF NOT EXISTS order_refunds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        method_id TEXT NOT NULL REFERENCES payment_methods(id),
+        method_title TEXT NOT NULL,
+        subtotal_halalas INTEGER NOT NULL,
+        vat_halalas INTEGER NOT NULL,
+        total_halalas INTEGER NOT NULL,
+        reason TEXT,
+        created_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_at INTEGER,
+        updated_by INTEGER REFERENCES users(id)
       );
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -306,6 +323,67 @@ describe('ReportsService', () => {
       const uncat = report.salesByCategory.find((c: any) => c.categoryName === 'Uncategorized');
       expect(uncat).toBeDefined();
       expect(uncat.totalHalalas).toBe(2300);
+    });
+
+    it('paymentTotals include payments from refunded orders', async () => {
+      dayService.openDay({ openingCashHalalas: 50000 }, 1);
+      const day = dayService.getOpenDay()!;
+
+      // Two paid orders: one stays paid, one gets fully refunded
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
+        VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'paid', 2000, 300, 2300, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (1, 'cash', 'Cash', 2300, ${now});
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
+        VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'refunded', 1000, 150, 1150, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (2, 'card', 'Card', 1150, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, created_at)
+        VALUES (2, 1, 'card', 'Card', 1000, 150, 1150, ${now});
+      `);
+
+      const report: any = await service.getXReport();
+
+      // Both payments should be in totals (refunded order payments still count)
+      const cashTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'cash');
+      const cardTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'card');
+      expect(cashTotal.totalHalalas).toBe(2300);
+      expect(cardTotal.totalHalalas).toBe(1150);
+    });
+
+    it('expected cash subtracts cash refunds for the day', async () => {
+      dayService.openDay({ openingCashHalalas: 50000 }, 1);
+      const day = dayService.getOpenDay()!;
+
+      // Order paid with cash, then fully refunded with cash
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
+        VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'refunded', 2000, 300, 2300, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
+        VALUES (1, 'cash', 'Cash', 2300, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, created_at)
+        VALUES (1, 1, 'cash', 'Cash', 2000, 300, 2300, ${now});
+      `);
+
+      // Install a receipt printer so printXReport works
+      sqlite.exec(`
+        INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
+        VALUES (1, 'Counter', '192.168.1.50', 9100, 'receipt', 1, ${now}, ${now});
+      `);
+
+      const transport = new FakePrinterTransport();
+      printersService.setTransport(transport);
+
+      const result = await service.printXReport();
+      expect(result.success).toBe(true);
+
+      // Capture printed output
+      const sent = transport.sent;
+      expect(sent.length).toBeGreaterThanOrEqual(1);
+      const printData = sent[sent.length - 1].data.toString('ascii');
+      // Expected cash = opening(50000) + cashPayments(2300) - cashRefunds(2300) = 50000 = 500.00 SAR
+      expect(printData).toContain('500.00');
     });
   });
 

@@ -4,6 +4,13 @@ import { client } from '../api';
 import { useRefund, getRemainingQty } from '../hooks/useRefund';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 
+interface PaymentMethod {
+  id: string;
+  title: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 interface RefundPanelProps {
   order: OrderResponse;
   onClose: () => void;
@@ -20,11 +27,33 @@ interface ItemRow {
 
 export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   const { loading, error, refund } = useRefund();
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [loadingMethods, setLoadingMethods] = useState(true);
   const [refunds, setRefunds] = useState<OrderRefundResponse[]>([]);
   const [loadingRefunds, setLoadingRefunds] = useState(true);
   const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
   const [reason, setReason] = useState('');
   const [confirmStep, setConfirmStep] = useState(false);
+  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+
+  // Load payment methods on mount
+  useEffect(() => {
+    let cancelled = false;
+    client.paymentMethods
+      .listEnabled()
+      .then((res: PaymentMethod[]) => {
+        if (!cancelled) setMethods(res);
+      })
+      .catch(() => {
+        // If methods fail to load, proceed but user won't be able to refund
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMethods(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load refund history on mount
   useEffect(() => {
@@ -69,20 +98,20 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   const hasSelection = selectedItems.length > 0;
 
   async function handleProcessRefund() {
-    if (!hasSelection) return;
+    if (!hasSelection || !selectedMethodId) return;
 
     const items = selectedItems.map((r) => ({
       orderItemId: r.orderItemId,
       qty: r.refundQty,
     }));
 
-    const success = await refund(order.id, items, reason || undefined);
+    const success = await refund(order.id, items, selectedMethodId, reason || undefined);
     if (success) {
       onRefunded();
     }
   }
 
-  if (loadingRefunds) {
+  if (loadingRefunds || loadingMethods) {
     return (
       <div className="bg-gray-800 rounded-lg p-4">
         <p className="text-xs text-gray-400">Loading refund data...</p>
@@ -167,6 +196,39 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
         </div>
       )}
 
+      {/* Payment method selection */}
+      {hasSelection && (
+        <div className="mb-3">
+          <label className="text-xs text-gray-400 block mb-2">Refund method</label>
+          <div className="grid grid-cols-3 gap-2">
+            {methods.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedMethodId(m.id)}
+                className={`touch-target py-3 px-2 rounded-lg text-sm font-medium border-2 ${
+                  selectedMethodId === m.id
+                    ? 'border-brand-500 bg-brand-600/20 text-white'
+                    : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600'
+                }`}
+              >
+                {m.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confirm step: show selected method */}
+      {confirmStep && selectedMethodId && (
+        <div className="mb-3 text-xs text-gray-400">
+          Refunding via{' '}
+          <span className="text-white">
+            {methods.find((m) => m.id === selectedMethodId)?.title ?? selectedMethodId}
+          </span>
+        </div>
+      )}
+
       {/* Error */}
       {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
 
@@ -175,7 +237,7 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
         {!confirmStep ? (
           <button
             onClick={() => setConfirmStep(true)}
-            disabled={!hasSelection || loading}
+            disabled={!hasSelection || !selectedMethodId || loading}
             className="flex-1 touch-target bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-2"
           >
             Process Refund

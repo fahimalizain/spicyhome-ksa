@@ -4,6 +4,7 @@ import {
   orders,
   orderItems,
   orderPayments,
+  orderRefunds,
   paymentMethods,
   dayOpenings,
   itemCategories,
@@ -148,10 +149,15 @@ export class ReportsService {
       totalHalalas: agg.totalHalalas,
     }));
 
-    // Per-method payment totals
+    // Per-method payment totals — include payments from both paid and refunded orders
+    // (original money in still happened even if items were later refunded)
+    const paidAndRefundedOrderIds = allOrders
+      .filter((o) => o.status === 'paid' || o.status === 'refunded')
+      .map((o) => o.id);
+
     const paymentTotals: Array<{ methodId: string; methodTitle: string; totalHalalas: number }> =
       [];
-    if (paidOrderIds.length > 0) {
+    if (paidAndRefundedOrderIds.length > 0) {
       const paymentRows = this.db
         .select({
           methodId: orderPayments.methodId,
@@ -159,7 +165,7 @@ export class ReportsService {
         })
         .from(orderPayments)
         .innerJoin(orders, eq(orderPayments.orderId, orders.id))
-        .where(and(eq(orders.dayOpeningId, dayId), eq(orders.status, 'paid')))
+        .where(and(eq(orders.dayOpeningId, dayId), inArray(orders.id, paidAndRefundedOrderIds)))
         .all();
 
       // Aggregate by method_id
@@ -259,11 +265,16 @@ export class ReportsService {
 
     const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
     const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
+    const expectedCashHalalas = this.computeExpectedCash(
+      dayId,
+      report.openingCashHalalas,
+      cashTotal,
+    );
     const builder = new ZReportBuilder();
     const buffer = builder.build({
       ...report,
       restaurantName,
-      expectedCashHalalas: report.openingCashHalalas + cashTotal,
+      expectedCashHalalas,
     });
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'Z-report printed' };
@@ -282,14 +293,40 @@ export class ReportsService {
 
     const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
     const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
+    const expectedCashHalalas = this.computeExpectedCash(
+      report.dayId,
+      report.openingCashHalalas,
+      cashTotal,
+    );
     const builder = new ZReportBuilder();
     const buffer = builder.build({
       ...report,
       closingCashHalalas: 0,
       restaurantName,
-      expectedCashHalalas: report.openingCashHalalas + cashTotal,
+      expectedCashHalalas,
     });
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'X-report printed' };
+  }
+
+  /**
+   * Compute expected cash: opening + cash payments − cash refunds for the day.
+   * Integer halalas only.
+   */
+  private computeExpectedCash(
+    dayId: number,
+    openingCashHalalas: number,
+    cashPayments: number,
+  ): number {
+    const refundRows = this.db
+      .select({
+        totalHalalas: orderRefunds.totalHalalas,
+      })
+      .from(orderRefunds)
+      .innerJoin(orders, eq(orderRefunds.orderId, orders.id))
+      .where(and(eq(orders.dayOpeningId, dayId), eq(orderRefunds.methodId, 'cash')))
+      .all();
+    const cashRefunds = refundRows.reduce((sum, r) => sum + r.totalHalalas, 0);
+    return openingCashHalalas + cashPayments - cashRefunds;
   }
 }
