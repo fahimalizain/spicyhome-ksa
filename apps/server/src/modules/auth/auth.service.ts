@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { compareSync, hashSync } from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { users, userRoles } from '@spicyhome/db';
+import { getNextServiceDayBoundaryUnix } from '@spicyhome/shared';
 import { MeResponse } from './dto/me-response.dto';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
@@ -63,7 +64,13 @@ export class AuthService {
     // (apps/server/src/common/interceptors/sentry-user.interceptor.ts).
     // This avoids cross-contamination when multiple cashiers use the same server.
 
-    const payload = { sub: user.id, username: user.username, roleId: user.roleId };
+    const nowMs = Date.now();
+    const payload = {
+      sub: user.id,
+      username: user.username,
+      roleId: user.roleId,
+      exp: getNextServiceDayBoundaryUnix(nowMs),
+    };
     const accessToken = this.jwtService.sign(payload);
     return { accessToken };
   }
