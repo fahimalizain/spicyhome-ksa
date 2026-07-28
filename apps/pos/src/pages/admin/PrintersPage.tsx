@@ -1,6 +1,24 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { PrinterResponse } from '@spicyhome/client-ts';
+import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
+import type { PrinterConfig } from '@spicyhome/shared';
+import type { ArabicEncoding } from '@spicyhome/shared';
+
+const CODE_PAGE_SUGGESTIONS: Record<ArabicEncoding, number> = {
+  none: 0,
+  utf8: 0,
+  pc864: 22,
+  w1256: 50,
+};
+
+function configSummary(config: PrinterConfig): string {
+  const { encoding, codePage, visualRtl } = config.arabic;
+  if (encoding === 'none') return 'AR: none';
+  let summary = `AR: ${encoding}/${codePage}`;
+  if (visualRtl) summary += ' RTL';
+  return summary;
+}
 
 export function PrintersPage() {
   const [printers, setPrinters] = useState<PrinterResponse[]>([]);
@@ -15,6 +33,7 @@ export function PrintersPage() {
     port: 9100,
     role: 'kitchen' as 'kitchen' | 'receipt',
     isActive: true,
+    config: DEFAULT_PRINTER_CONFIG,
   });
 
   useEffect(() => {
@@ -34,7 +53,14 @@ export function PrintersPage() {
   }
 
   function resetForm() {
-    setForm({ name: '', ip: '', port: 9100, role: 'kitchen', isActive: true });
+    setForm({
+      name: '',
+      ip: '',
+      port: 9100,
+      role: 'kitchen',
+      isActive: true,
+      config: DEFAULT_PRINTER_CONFIG,
+    });
     setEditId(null);
   }
 
@@ -45,6 +71,7 @@ export function PrintersPage() {
       port: p.port,
       role: p.role as 'kitchen' | 'receipt',
       isActive: p.isActive,
+      config: p.config || DEFAULT_PRINTER_CONFIG,
     });
     setEditId(p.id);
   }
@@ -132,6 +159,78 @@ export function PrintersPage() {
             />
           </div>
         </div>
+
+        <div className="pt-3 border-t border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-300 mb-1">Arabic encoding</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            From the Test print probes — pick the encoding/code page that looked correct.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Encoding</label>
+              <select
+                data-testid="encoding-select"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                value={form.config.arabic.encoding}
+                onChange={(e) => {
+                  const encoding = e.target.value as ArabicEncoding;
+                  setForm((f) => ({
+                    ...f,
+                    config: {
+                      arabic: {
+                        ...f.config.arabic,
+                        encoding,
+                        codePage: CODE_PAGE_SUGGESTIONS[encoding],
+                      },
+                    },
+                  }));
+                }}
+              >
+                <option value="none">none — ASCII only</option>
+                <option value="utf8">utf8 — UTF-8</option>
+                <option value="pc864">pc864 — PC864 (often code page 22)</option>
+                <option value="w1256">w1256 — Windows-1256 (often code page 50)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Code page</label>
+              <input
+                type="number"
+                min="0"
+                max="255"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                value={form.config.arabic.codePage}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    config: {
+                      arabic: { ...f.config.arabic, codePage: Number(e.target.value) },
+                    },
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-600 bg-gray-700 accent-brand-500"
+                  checked={form.config.arabic.visualRtl}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      config: {
+                        arabic: { ...f.config.arabic, visualRtl: e.target.checked },
+                      },
+                    }))
+                  }
+                />
+                Reverse glyph order (visual RTL)
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div className="flex gap-2">
           <button
             type="submit"
@@ -166,6 +265,11 @@ export function PrintersPage() {
                 className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}
               >
                 {p.role}
+              </span>
+              <span
+                className={`ml-1 px-1 py-0.5 rounded text-xs ${p.config?.arabic?.encoding === 'none' ? 'bg-gray-700 text-gray-300' : 'bg-purple-800 text-purple-100'}`}
+              >
+                {configSummary(p.config || DEFAULT_PRINTER_CONFIG)}
               </span>
               {testStatus[p.id] && (
                 <span
