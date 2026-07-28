@@ -15,6 +15,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
@@ -117,9 +118,20 @@ jobs:
           cp dist/spicyhome-pos-win7.zip "release/spicyhome-pos-win7-v${{ steps.bump.outputs.next_version }}.zip"
           cp bazel-bin/apps/android/spicyhome-pos-debug.apk "release/spicyhome-pos-android-v${{ steps.bump.outputs.next_version }}.apk"
 
-      - name: Commit and tag version bump
+      # Master ruleset requires PRs; GitHub Actions cannot bypass on personal repos.
+      # Open a release branch PR, squash-merge, then tag the merge commit.
+      - name: Commit version bump via PR, tag, and push tag
         if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          VERSION="${{ steps.bump.outputs.next_version }}"
+          BRANCH="release/v${VERSION}"
+          TITLE="chore(release): bump version to ${VERSION}"
+
+          git checkout -B "$BRANCH"
+
           git add \
             VERSION \
             MODULE.bazel \
@@ -130,10 +142,41 @@ jobs:
             packages/api-spec/package.json \
             packages/client-ts/package.json \
             packages/client-kt/package.json
-          git commit -m "chore(release): bump version to ${{ steps.bump.outputs.next_version }}"
-          git tag -a "v${{ steps.bump.outputs.next_version }}" -m "Release v${{ steps.bump.outputs.next_version }}"
-          git push origin HEAD
-          git push origin "v${{ steps.bump.outputs.next_version }}"
+
+          git commit -m "$TITLE"
+          git push -u origin "$BRANCH" --force-with-lease
+
+          PR_NUMBER=$(gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body "Automated version bump from the Release SpicyHome POS workflow.
+
+          This PR is squash-merged by the same workflow so the version bump
+          respects the master branch ruleset (PR required). The release tag
+          and GitHub Release are created after merge." \
+            --json number \
+            --jq .number)
+
+          echo "Created PR #${PR_NUMBER}"
+
+          # Ruleset allows squash only, 0 required reviews.
+          gh pr merge "$PR_NUMBER" \
+            --squash \
+            --delete-branch \
+            --subject "$TITLE" \
+            --body ""
+
+          MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq .mergeCommit.oid)
+          if [ -z "$MERGE_SHA" ] || [ "$MERGE_SHA" = "null" ]; then
+            echo "::error::PR #${PR_NUMBER} merged but mergeCommit SHA is empty"
+            exit 1
+          fi
+          echo "Merge commit: ${MERGE_SHA}"
+
+          git fetch origin master
+          git tag -a "v${VERSION}" "$MERGE_SHA" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
 
       - name: Create GitHub release
         if: ${{ !inputs.dry_run }}
