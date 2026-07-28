@@ -359,13 +359,16 @@ export class TestTicketBuilder {
     eb.blankLine();
 
     // ── 7. ARABIC CONFIGURED SETTINGS ──────────────────────────────────────
-    if (config.arabic.encoding !== 'none') {
+    const arabicConfigured = config.arabic.encoding !== 'none';
+
+    if (arabicConfigured) {
       this.buildSection7ArabicConfigured(eb, config.arabic);
     }
 
-    // ── 8. QR CODE ──────────────────────────────────────────────────────────
+    // ── QR CODE ─────────────────────────────────────────────────────────────
+    const qrSectionNum = arabicConfigured ? 8 : 7;
     eb.bold(true);
-    eb.text('8. QR CODE');
+    eb.text(`${qrSectionNum}. QR CODE`);
     eb.bold(false);
     eb.separator('-');
 

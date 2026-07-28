@@ -66,9 +66,11 @@ describe('TestTicketBuilder', () => {
     expect(s).toContain('4. COLUMNS');
     expect(s).toContain('5. ENGLISH');
     expect(s).toContain('6. ARABIC');
-    expect(s).toContain('8. QR CODE');
+    // QR is section 7 when Arabic configured section is omitted
+    expect(s).toContain('7. QR CODE');
+    expect(s).not.toContain('8. QR CODE');
     expect(s).toContain('END DIAGNOSTIC');
-    // Section 7 is omitted when encoding=none (default)
+    // Section 7 Arabic configured title is omitted when encoding=none (default)
     expect(s).not.toContain('7. ARABIC');
   });
 
@@ -173,8 +175,8 @@ describe('TestTicketBuilder', () => {
 
     it('preserves English text after Arabic probe section', () => {
       const s = str(build());
-      // After Arabic probe section, section 8 QR follows (section 7 omitted when encoding=none)
-      const qrLabelIdx = s.indexOf('8. QR CODE');
+      // After Arabic probe section, QR follows (section 7 when encoding=none)
+      const qrLabelIdx = s.indexOf('7. QR CODE');
       expect(qrLabelIdx).toBeGreaterThan(s.indexOf('End of Arabic probes.'));
     });
   });
@@ -190,8 +192,9 @@ describe('TestTicketBuilder', () => {
       expect(s).not.toContain('Configure in Admin');
       expect(s).not.toContain('End of configured Arabic.');
       expect(s).not.toContain('Restore CP0.');
-      // Section 8 and section 6 should still be present
-      expect(s).toContain('8. QR CODE');
+      // QR is section 7 when Arabic configured section is omitted
+      expect(s).toContain('7. QR CODE');
+      expect(s).not.toContain('8. QR CODE');
       expect(s).toContain('6. ARABIC ENCODING PROBES');
       expect(s).toContain('End of Arabic probes.');
     });
@@ -282,8 +285,30 @@ describe('TestTicketBuilder', () => {
   });
 
   describe('section renumbering', () => {
-    it('uses 8. QR CODE not 7. QR CODE', () => {
+    it('default / encoding=none: QR is section 7, no section 8 label', () => {
       const s = str(build());
+      expect(s).toContain('7. QR CODE');
+      expect(s).not.toContain('8. QR CODE');
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+    });
+
+    it('with encoding=utf8: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'utf8' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).toContain('8. QR CODE');
+      expect(s).not.toContain('7. QR CODE');
+    });
+
+    it('with encoding=w1256: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'w1256' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).toContain('8. QR CODE');
+      expect(s).not.toContain('7. QR CODE');
+    });
+
+    it('with encoding=pc864: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'pc864' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
       expect(s).toContain('8. QR CODE');
       expect(s).not.toContain('7. QR CODE');
     });
