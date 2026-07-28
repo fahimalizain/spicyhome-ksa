@@ -34,11 +34,13 @@ Three conceptual projects, each with its own DSN:
 - **GitHub Secrets** used in the release workflow (`.github/workflows/release.yml`):
   - `secrets.SENTRY_POS_DSN` — injected as `VITE_SENTRY_DSN` at SPA build time
   - `secrets.SENTRY_ANDROID_DSN` — injected as `SENTRY_DSN` for Android BuildConfig
+  - `secrets.SENTRY_SERVER_DSN` — baked into Win7 `start-server.ps1` at package time;
+    still overridable at runtime by setting `SENTRY_DSN` before starting the server
   - `secrets.SENTRY_AUTH_TOKEN` — CI-only for source map uploads; never shipped to
     end-user machines
   - `vars.SENTRY_ORG` — Sentry organization slug for source map uploads
-- The server DSN (`SENTRY_DSN`) is set at runtime on the deployed machine and
-  is not a GitHub secret.
+- The server DSN (`SENTRY_DSN`) is set at runtime on the deployed machine or baked
+  into the release package via the `SENTRY_SERVER_DSN` GitHub secret.
 - All DSNs are gitignored — never committed.
 
 ### Telemetry

@@ -47,8 +47,37 @@ mkdir -p "$PACKAGE_DIR" "$TEMP_DIR"
 # 1. Build everything with Bazel
 # ──────────────────────────────────────────────────
 echo "Building all targets with Bazel..."
+
+# Set version to the package version so Vite picks it up even when the VERSION
+# file is not available in the Bazel sandbox.
+export VITE_APP_VERSION="${VITE_APP_VERSION:-$PACKAGE_VERSION}"
+
+# Default release name and environment so --action_env always has values.
+export VITE_SENTRY_RELEASE="${VITE_SENTRY_RELEASE:-spicyhome-pos@$PACKAGE_VERSION}"
+export VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-production}"
+
+# Forward all VITE_SENTRY_* and Sentry auth vars into the Bazel action
+# environment. Using --action_env=NAME (without =value) inherits from the
+# process environment — the same pattern used for ANDROID_HOME in CI.
+BAZEL_ACTION_ENV_ARGS=()
+for key in \
+  VITE_SENTRY_DSN \
+  VITE_SENTRY_ENVIRONMENT \
+  VITE_SENTRY_RELEASE \
+  VITE_SENTRY_TRACES_SAMPLE_RATE \
+  VITE_APP_VERSION \
+  SENTRY_AUTH_TOKEN \
+  SENTRY_ORG \
+  SENTRY_PROJECT
+do
+  # Always forward these so the action env fingerprint is stable when unset
+  # vs set to empty.
+  BAZEL_ACTION_ENV_ARGS+=(--action_env="$key")
+done
+
 cd "$ROOT_DIR"
 bazel build \
+  "${BAZEL_ACTION_ENV_ARGS[@]}" \
   //apps/server:lib \
   //packages/shared:lib \
   //packages/db:lib \
@@ -195,11 +224,7 @@ $env:PORT = "3742"
 $env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
 $env:APP_VERSION = "__PACKAGE_VERSION__"
 
-# Optional Sentry error monitoring:
-# $env:SENTRY_DSN = "https://..."
-# $env:SENTRY_ENVIRONMENT = "production"
-# $env:SENTRY_TRACES_SAMPLE_RATE = "1.0"
-# $env:SENTRY_PROFILES_SAMPLE_RATE = "1.0"
+__SENTRY_ENV_BLOCK__
 
 Write-Host "=========================================="
 Write-Host "  SpicyHome POS Server"
@@ -294,6 +319,41 @@ PSEOF
 sed -i.bak "s/__PACKAGE_VERSION__/$PACKAGE_VERSION/g" "$PACKAGE_DIR/start-server.ps1"
 rm -f "$PACKAGE_DIR/start-server.ps1.bak"
 
+# ── Bake server Sentry DSN into the PowerShell script ──
+# Prefer SENTRY_DSN, fall back to SENTRY_SERVER_DSN.
+SERVER_DSN="${SENTRY_DSN:-${SENTRY_SERVER_DSN:-}}"
+if [ -n "$SERVER_DSN" ]; then
+  SENTRY_ENV="${SENTRY_ENVIRONMENT:-production}"
+  SENTRY_TRACES="${SENTRY_TRACES_SAMPLE_RATE:-1.0}"
+  SENTRY_PROFILES="${SENTRY_PROFILES_SAMPLE_RATE:-1.0}"
+  # Escape single quotes in the DSN for PowerShell single-quoted strings:
+  # PowerShell uses '' to represent a literal single quote inside a
+  # single-quoted string. Use sed for reliable escaping across bash versions.
+  DSN_SAFE=$(echo "$SERVER_DSN" | sed "s/'/''/g")
+  cat > "$TEMP_DIR/sentry-block.txt" << SENTRYEOF
+# Sentry error monitoring (baked at package time; override by setting env before start):
+if ([string]::IsNullOrEmpty(\$env:SENTRY_DSN)) { \$env:SENTRY_DSN = '${DSN_SAFE}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_ENVIRONMENT)) { \$env:SENTRY_ENVIRONMENT = '${SENTRY_ENV}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_TRACES_SAMPLE_RATE)) { \$env:SENTRY_TRACES_SAMPLE_RATE = '${SENTRY_TRACES}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_PROFILES_SAMPLE_RATE)) { \$env:SENTRY_PROFILES_SAMPLE_RATE = '${SENTRY_PROFILES}' }
+SENTRYEOF
+  echo "Sentry server DSN: baked"
+else
+  cat > "$TEMP_DIR/sentry-block.txt" << 'SENTRYEOF'
+# Optional Sentry error monitoring (set before starting the server):
+# $env:SENTRY_DSN = "https://..."
+# $env:SENTRY_ENVIRONMENT = "production"
+# $env:SENTRY_TRACES_SAMPLE_RATE = "1.0"
+# $env:SENTRY_PROFILES_SAMPLE_RATE = "1.0"
+SENTRYEOF
+  echo "Sentry server DSN: not set"
+fi
+
+# Replace the __SENTRY_ENV_BLOCK__ placeholder with the generated block.
+sed -i.bak "/__SENTRY_ENV_BLOCK__/r $TEMP_DIR/sentry-block.txt" "$PACKAGE_DIR/start-server.ps1"
+sed -i.bak "/__SENTRY_ENV_BLOCK__/d" "$PACKAGE_DIR/start-server.ps1"
+rm -f "$PACKAGE_DIR/start-server.ps1.bak"
+
 cat > "$PACKAGE_DIR/start-server.bat" << 'BATEOF'
 @echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-server.ps1" %*
@@ -313,7 +373,61 @@ echo "start-server.bat and start-server.ps1 created."
 cp "$SCRIPT_DIR/README.txt" "$PACKAGE_DIR/README.txt"
 
 # ──────────────────────────────────────────────────
-# 8. Zip
+# 8. Verification guardrails
+# ──────────────────────────────────────────────────
+echo ""
+echo "=== Post-package verification ==="
+VERIFY_FAILED=0
+
+# a) Package version must appear in the POS bundle.
+if [ -n "$PACKAGE_VERSION" ]; then
+  if grep -qF "$PACKAGE_VERSION" "$PACKAGE_DIR/pos/assets/"*.js 2>/dev/null; then
+    echo "  POS version check: $PACKAGE_VERSION found in bundle"
+  else
+    echo "ERROR: Version $PACKAGE_VERSION not found in POS bundle."
+    echo "  VITE_APP_VERSION may not have been forwarded via --action_env."
+    VERIFY_FAILED=1
+  fi
+fi
+
+# b) POS Sentry DSN public key must appear in the bundle when DSN is set.
+if [ -n "${VITE_SENTRY_DSN:-}" ]; then
+  # Extract the public key from the DSN: everything between https:// and @
+  DSN_PUBLIC_KEY=$(echo "$VITE_SENTRY_DSN" | sed -n 's|https://\([^@]*\)@.*|\1|p')
+  if [ -n "$DSN_PUBLIC_KEY" ]; then
+    if grep -qF "$DSN_PUBLIC_KEY" "$PACKAGE_DIR/pos/assets/"*.js 2>/dev/null; then
+      echo "  POS Sentry DSN: public key found in bundle"
+    else
+      echo "ERROR: Sentry DSN public key not found in POS bundle."
+      echo "  VITE_SENTRY_DSN may not have been forwarded via --action_env."
+      VERIFY_FAILED=1
+    fi
+  fi
+fi
+
+# c) Server DSN must be active (uncommented) in start-server.ps1 if baked.
+if [ -n "$SERVER_DSN" ]; then
+  # The baked block uses IsNullOrEmpty guard; the literal DSN_SAFE string
+  # only appears inside that block, never in comments.
+  if grep -qF "SENTRY_DSN = '${DSN_SAFE}'" "$PACKAGE_DIR/start-server.ps1"; then
+    echo "  Server Sentry DSN: present in start-server.ps1"
+  else
+    echo "ERROR: Server Sentry DSN not found or commented out in start-server.ps1"
+    VERIFY_FAILED=1
+  fi
+fi
+
+if [ "$VERIFY_FAILED" -ne 0 ]; then
+  echo ""
+  echo "=== Verification FAILED ==="
+  echo "See errors above. The package will not be zipped."
+  exit 1
+fi
+echo "=== Verification passed ==="
+echo ""
+
+# ──────────────────────────────────────────────────
+# 9. Zip
 # ──────────────────────────────────────────────────
 echo "Creating zip..."
 # Fix permissions before zipping (Bazel outputs are read-only)
