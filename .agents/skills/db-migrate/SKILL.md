@@ -34,15 +34,18 @@ Migrations use [Drizzle journaled migrations](https://orm.drizzle.team/docs/migr
 ## Important rules
 
 ### Source of truth
+
 - **schema.ts only.** Never hand-edit DDL in a kit-generated `*.sql`.
 - Exception: `--custom` migration body is filled by hand (triggers, backfills, data fixes).
 - Always pass `--name snake_case` on `db:generate`.
 
 ### Git artifacts
+
 - **Commit SQL + `meta/`** (`_journal.json` + snapshots). Never gitignore `meta/`.
 - Schema change + generated migration + meta must be in the **same commit**.
 
 ### Migration application
+
 - Single apply path: `applyMigrations()` in `packages/db/src/migrate.ts` using
   `migrate()` from `drizzle-orm/better-sqlite3/migrator`.
 - Called from:
@@ -51,12 +54,14 @@ Migrations use [Drizzle journaled migrations](https://orm.drizzle.team/docs/migr
 - Second run is a no-op (journaled).
 
 ### Incompatible old DB
+
 - Do **NOT** auto-delete DB files. If migrate fails with an old/incompatible DB:
   - Human deletes `data/spicyhome*.db` manually
   - Restart server or re-run `db:migrate`
 - Agents must never `rm` a production DB file.
 
 ### Seed after migrate
+
 - `seed()` runs after migrate when users table is empty (dev/demo baseline).
 - Payment methods, roles, admin user, tables, categories, items — all in `seed()`.
 - **No** data INSERTs in migration SQL.
