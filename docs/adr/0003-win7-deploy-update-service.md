@@ -66,14 +66,14 @@ install directory — e.g. `D:\SpicyHomePOS` on a dedicated data partition.
 
 `{installDir}\spicyhome.config.json` stores:
 
-| Field         | Type   | Description                       | Default                  |
-| ------------- | ------ | --------------------------------- | ------------------------ |
-| installDir    | string | Install root path                 | (from -InstallDir param) |
-| port          | int    | Server port                       | 3742                     |
-| serviceName   | string | NSSM service name                 | SpicyHomePOS             |
-| repo          | string | GitHub owner/repo                 | fahimalizain/spicyhome-ksa |
-| assetPrefix   | string | Release asset name prefix         | spicyhome-pos-win7-v     |
-| keepReleases  | int    | Number of old releases to retain  | 2                        |
+| Field        | Type   | Description                      | Default                    |
+| ------------ | ------ | -------------------------------- | -------------------------- |
+| installDir   | string | Install root path                | (from -InstallDir param)   |
+| port         | int    | Server port                      | 3742                       |
+| serviceName  | string | NSSM service name                | SpicyHomePOS               |
+| repo         | string | GitHub owner/repo                | fahimalizain/spicyhome-ksa |
+| assetPrefix  | string | Release asset name prefix        | spicyhome-pos-win7-v       |
+| keepReleases | int    | Number of old releases to retain | 2                          |
 
 All values except `installDir` can be overridden via script parameters.
 
@@ -159,13 +159,13 @@ serialization/deserialization. No external schema validation library is needed.
 
 ### 15. Defaults
 
-| Parameter     | Default                    |
-| ------------- | -------------------------- |
-| Port          | 3742                       |
-| ServiceName   | SpicyHomePOS              |
-| Repo          | fahimalizain/spicyhome-ksa |
-| AssetPrefix   | spicyhome-pos-win7-v       |
-| KeepReleases  | 2                          |
+| Parameter    | Default                    |
+| ------------ | -------------------------- |
+| Port         | 3742                       |
+| ServiceName  | SpicyHomePOS               |
+| Repo         | fahimalizain/spicyhome-ksa |
+| AssetPrefix  | spicyhome-pos-win7-v       |
+| KeepReleases | 2                          |
 
 ### PowerShell 2.0 compatibility
 
@@ -208,23 +208,23 @@ APP_VERSION={version}
 
 ### Modes
 
-| Mode              | Flag               | Behavior                                  |
-| ----------------- | ------------------ | ----------------------------------------- |
-| Install           | `-Install`         | Full install from GitHub or local zip     |
-| Update            | `-Update`          | Fetch latest, extract, flip, restart      |
-| Check             | `-Check`           | Print installed vs latest; exit 0/10/2    |
-| Rollback          | `-Rollback`        | Flip to previous release, restart         |
-| InstallService    | `-InstallService`  | Configure NSSM Windows service            |
-| UninstallService  | `-UninstallService`| Remove NSSM Windows service               |
+| Mode             | Flag                | Behavior                               |
+| ---------------- | ------------------- | -------------------------------------- |
+| Install          | `-Install`          | Full install from GitHub or local zip  |
+| Update           | `-Update`           | Fetch latest, extract, flip, restart   |
+| Check            | `-Check`            | Print installed vs latest; exit 0/10/2 |
+| Rollback         | `-Rollback`         | Flip to previous release, restart      |
+| InstallService   | `-InstallService`   | Configure NSSM Windows service         |
+| UninstallService | `-UninstallService` | Remove NSSM Windows service            |
 
 ### Exit codes
 
-| Code | Meaning                          |
-| ---- | -------------------------------- |
-| 0    | Success / up-to-date (Check)     |
-| 1    | Apply or health check failure    |
-| 2    | Config, network, or I/O error    |
-| 10   | Update available (Check only)    |
+| Code | Meaning                       |
+| ---- | ----------------------------- |
+| 0    | Success / up-to-date (Check)  |
+| 1    | Apply or health check failure |
+| 2    | Config, network, or I/O error |
+| 10   | Update available (Check only) |
 
 ## Consequences
 
