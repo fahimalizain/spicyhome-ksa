@@ -60,6 +60,11 @@ try {
   Write-Warning "Could not set TLS 1.2. HTTPS downloads may fail."
 }
 
+# Capture engine script path at top level (before any function calls)
+# Inside functions $MyInvocation refers to the function call, not the script.
+$script:EngineScriptPath = $MyInvocation.MyCommand.Path
+$script:EngineScriptDir = Split-Path -Parent $script:EngineScriptPath
+
 # ============================================================================
 # PS2-compatible helpers
 # ============================================================================
@@ -331,7 +336,7 @@ function Prune-Releases {
   param([string]$InstallRoot, [int]$Keep, [string]$CurrentVersion)
   $releasesDir = Join-Path $InstallRoot "releases"
   if (-not (Test-Path $releasesDir)) { return }
-  $dirs = @(Get-ChildItem $releasesDir | Where-Object { $_.PSIsContainer -and $_.Name -ne $CurrentVersion } | Sort-Object Name)
+  $dirs = @(Get-ChildItem $releasesDir | Where-Object { $_.PSIsContainer -and $_.Name -ne $CurrentVersion } | Sort-Object { $v = Parse-Version $_.Name; if ($v) { [long]$v[0] * 1000000 + [long]$v[1] * 1000 + [long]$v[2] } else { 0 } })
   $excess = $dirs.Count - ($Keep - 1)
   if ($excess -le 0) { return }
   for ($i = 0; $i -lt $excess; $i++) {
@@ -479,7 +484,7 @@ function Start-Service {
 function Copy-StickyScripts {
   param([string]$ReleaseDir, [string]$InstallRoot, [string]$EngineScriptDir)
   # Try to copy from release package first (if the package includes them)
-  $releaseScripts = @("spicyhome.ps1", "install.bat", "update.bat", "rollback.bat")
+  $releaseScripts = @("spicyhome.ps1", "install.bat", "update.bat", "rollback.bat", "check.bat")
   $copied = $false
   foreach ($s in $releaseScripts) {
     $src = Join-Path $ReleaseDir $s
@@ -508,7 +513,7 @@ function Resolve-InstallDir {
   # 1. If -InstallDir param is passed, use it
   if ($InstallDir) { return $InstallDir }
   # 2. Look for config next to this script (sticky scripts at install root)
-  $scriptDir = Split-Path $MyInvocation.MyCommand.Path -Parent
+  $scriptDir = $script:EngineScriptDir
   $configHere = Join-Path $scriptDir "spicyhome.config.json"
   if (Test-Path $configHere) {
     $cfg = Read-Config $configHere
@@ -545,6 +550,7 @@ function Invoke-Install {
   }
 
   $root = $InstallDir
+  $script:LogPath = Join-Path $root "logs\updater\updater.log"
   Write-Log "INFO: Installing SpicyHome POS to $root"
 
   # Ensure directory structure
@@ -600,21 +606,48 @@ function Invoke-Install {
     }
   }
 
-  if (-not $version) {
-    Write-Log "ERROR: Could not determine version."
-    exit 2
+  # Determine extraction strategy based on whether version is known
+  $releaseDir = $null
+  if ($version) {
+    # Version known: extract directly to releases\{version}
+    $releaseDir = Join-Path $root "releases\$version"
+    Write-Log "Extracting to $releaseDir ..."
+    if (-not (Unzip-Archive $zipPath $releaseDir)) {
+      Write-Log "ERROR: Extraction failed."
+      exit 2
+    }
+    Strip-ZipTopFolder $releaseDir
+  } else {
+    # Version unknown (e.g. LocalZip with odd name): extract to staging,
+    # read VERSION file, then move to proper directory
+    $stagingDir = Join-Path $root "releases\_staging"
+    if (Test-Path $stagingDir) {
+      Remove-Item -Recurse -Force $stagingDir -ErrorAction SilentlyContinue
+    }
+    Write-Log "Extracting to staging to determine version..."
+    if (-not (Unzip-Archive $zipPath $stagingDir)) {
+      Write-Log "ERROR: Extraction failed."
+      exit 2
+    }
+    Strip-ZipTopFolder $stagingDir
+    $versionFile = Join-Path $stagingDir "VERSION"
+    if (Test-Path $versionFile) {
+      $version = Read-FileText $versionFile
+    }
+    if (-not $version) {
+      Write-Log "ERROR: Could not determine version from zip filename or VERSION file."
+      Remove-Item -Recurse -Force $stagingDir -ErrorAction SilentlyContinue
+      exit 2
+    }
+    Write-Log "Detected version from VERSION file: $version"
+    $releaseDir = Join-Path $root "releases\$version"
+    if (Test-Path $releaseDir) {
+      Write-Log "Removing existing release directory: $releaseDir"
+      Remove-Item -Recurse -Force $releaseDir -ErrorAction SilentlyContinue
+    }
+    Move-Item $stagingDir $releaseDir
+    Write-Log "Moved staging to $releaseDir"
   }
-
-  # Extract to releases\{version}
-  $releaseDir = Join-Path $root "releases\$version"
-  Write-Log "Extracting to $releaseDir ..."
-  if (-not (Unzip-Archive $zipPath $releaseDir)) {
-    Write-Log "ERROR: Extraction failed."
-    exit 2
-  }
-
-  # Strip top-level folder if present
-  Strip-ZipTopFolder $releaseDir
 
   # Ensure VERSION file
   $versionFile = Join-Path $releaseDir "VERSION"
@@ -639,7 +672,7 @@ function Invoke-Install {
   }
 
   # Copy sticky scripts
-  $engineScriptDir = Split-Path $MyInvocation.MyCommand.Path -Parent
+  $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $releaseDir $root $engineScriptDir
 
   # Install service
@@ -756,7 +789,7 @@ function Invoke-Update {
   Prune-Releases $root $KeepReleases $latestVer
 
   # Refresh sticky scripts from new release
-  $engineScriptDir = Split-Path $MyInvocation.MyCommand.Path -Parent
+  $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $newReleaseDir $root $engineScriptDir
 
   # Start service
@@ -839,7 +872,7 @@ function Invoke-Rollback {
   $releasesDir = Join-Path $root "releases"
   $previousDir = Get-ChildItem $releasesDir |
     Where-Object { $_.PSIsContainer -and $_.Name -ne $currentVer } |
-    Sort-Object Name -Descending |
+    Sort-Object { $v = Parse-Version $_.Name; if ($v) { [long]$v[0] * 1000000 + [long]$v[1] * 1000 + [long]$v[2] } else { 0 } } -Descending |
     Select-Object -First 1
 
   if (-not $previousDir) {

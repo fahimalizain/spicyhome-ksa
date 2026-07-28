@@ -506,17 +506,11 @@ echo "Copying install/update engine and wrappers..."
 cp "$SCRIPT_DIR/spicyhome.ps1" "$PACKAGE_DIR/spicyhome.ps1"
 
 # Bat wrappers (install, update, rollback, check)
-for bat in install.bat update.bat rollback.bat; do
+for bat in install.bat update.bat rollback.bat check.bat; do
   if [ -f "$SCRIPT_DIR/$bat" ]; then
     cp "$SCRIPT_DIR/$bat" "$PACKAGE_DIR/$bat"
   fi
 done
-
-# check.bat: same pattern as other wrappers
-cat > "$PACKAGE_DIR/check.bat" << 'BATEOF'
-@echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0spicyhome.ps1" -Check %*
-BATEOF
 
 # Config example
 cp "$SCRIPT_DIR/spicyhome.config.example.json" "$PACKAGE_DIR/spicyhome.config.example.json"
