@@ -239,6 +239,97 @@ describe('EscPosBuilder', () => {
     });
   });
 
+  describe('codePage', () => {
+    it('emits ESC t n for code page selection', () => {
+      const eb = new EscPosBuilder();
+      eb.codePage(50);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0x1b);
+      expect(buf[1]).toBe(0x74);
+      expect(buf[2]).toBe(50);
+    });
+
+    it('masks code page to 8 bits', () => {
+      const eb = new EscPosBuilder();
+      eb.codePage(0x150); // 336 → 0x50 = 80
+      const buf = eb.getBuffer();
+      expect(buf[2]).toBe(0x50);
+    });
+
+    it('restores code page 0 (PC437)', () => {
+      const eb = new EscPosBuilder();
+      eb.codePage(0);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0x1b);
+      expect(buf[1]).toBe(0x74);
+      expect(buf[2]).toBe(0x00);
+    });
+  });
+
+  describe('raw', () => {
+    it('appends raw bytes without LF', () => {
+      const eb = new EscPosBuilder();
+      eb.raw([0xc7, 0xe1, 0xee]); // some W1256 bytes
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xc7);
+      expect(buf[1]).toBe(0xe1);
+      expect(buf[2]).toBe(0xee);
+      expect(buf.length).toBe(3);
+      // No trailing LF
+      expect(buf[buf.length - 1]).not.toBe(0x0a);
+    });
+
+    it('appends Buffer input', () => {
+      const eb = new EscPosBuilder();
+      eb.raw(Buffer.from([0xc7, 0xc8]));
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xc7);
+      expect(buf[1]).toBe(0xc8);
+    });
+
+    it('appends Uint8Array input', () => {
+      const eb = new EscPosBuilder();
+      eb.raw(new Uint8Array([0xc7, 0xc8]));
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xc7);
+      expect(buf[1]).toBe(0xc8);
+    });
+
+    it('does not sanitize raw bytes (non-ASCII allowed)', () => {
+      const eb = new EscPosBuilder();
+      // 0x80-0xff range — should pass through unchanged
+      eb.raw([0xe5, 0xd1, 0xcd, 0xc8, 0xc7]);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xe5);
+      expect(buf[1]).toBe(0xd1);
+      expect(buf[2]).toBe(0xcd);
+      expect(buf[3]).toBe(0xc8);
+      expect(buf[4]).toBe(0xc7);
+      expect(buf.length).toBe(5);
+    });
+  });
+
+  describe('rawLine', () => {
+    it('appends raw bytes with trailing LF', () => {
+      const eb = new EscPosBuilder();
+      eb.rawLine([0xc7, 0xc8]);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xc7);
+      expect(buf[1]).toBe(0xc8);
+      expect(buf[2]).toBe(0x0a); // LF
+      expect(buf.length).toBe(3);
+    });
+
+    it('does not sanitize bytes', () => {
+      const eb = new EscPosBuilder();
+      eb.rawLine([0xe5, 0xd1]);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0xe5);
+      expect(buf[1]).toBe(0xd1);
+      expect(buf[2]).toBe(0x0a);
+    });
+  });
+
   describe('UTF-8 safety', () => {
     it('strips non-ASCII characters from text', () => {
       const eb = new EscPosBuilder();

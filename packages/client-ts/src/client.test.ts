@@ -97,6 +97,8 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.printers.get).toBe('function');
     expect(typeof client.printers.create).toBe('function');
     expect(typeof client.printers.update).toBe('function');
+    expect(typeof client.printers.test).toBe('function');
+    expect(typeof client.printers.status).toBe('function');
   });
 
   it('exposes payment methods methods', () => {

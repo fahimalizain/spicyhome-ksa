@@ -673,7 +673,7 @@ describe('Print Integration', () => {
       expect(res2.body.reachable).toBe(true);
     });
 
-    it('POST /printers/:id/test prints test ticket', async () => {
+    it('POST /printers/:id/test prints diagnostic test ticket', async () => {
       transport.sent = [];
       const res = await request(app.getHttpServer())
         .post(`/printers/${receiptPrinterId}/test`)
@@ -685,8 +685,12 @@ describe('Print Integration', () => {
       await new Promise((r) => setTimeout(r, 100));
       expect(transport.sent.length).toBeGreaterThanOrEqual(1);
       const str = transport.sent[0].data.toString('ascii');
-      expect(str).toContain('TEST TICKET');
+      expect(str).toContain('PRINT DIAGNOSTIC');
       expect(str).toContain('Counter');
+      expect(str).toContain('192.168.1.50:9100');
+      expect(str).toContain('END DIAGNOSTIC');
+      // New diagnostic should be much larger than old 4-line ticket
+      expect(transport.sent[0].data.length).toBeGreaterThan(400);
     });
   });
 });
