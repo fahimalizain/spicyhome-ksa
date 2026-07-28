@@ -1358,6 +1358,28 @@ export interface components {
       sortOrder?: number;
       isActive?: boolean;
     };
+    PrinterArabicConfigDto: {
+      /**
+       * @description How to encode Arabic Unicode -> bytes before send
+       * @example none
+       * @enum {string}
+       */
+      encoding: 'none' | 'utf8' | 'pc864' | 'w1256';
+      /**
+       * Format: int32
+       * @description ESC t n code-page index (0-255). Vendor-specific.
+       * @example 0
+       */
+      codePage: number;
+      /**
+       * @description Reverse glyph order for LTR thermal heads (visual RTL)
+       * @example false
+       */
+      visualRtl: boolean;
+    };
+    PrinterConfigDto: {
+      arabic: components['schemas']['PrinterArabicConfigDto'];
+    };
     PrinterResponse: {
       /**
        * Format: int64
@@ -1375,6 +1397,7 @@ export interface components {
       port: number;
       /** @example kitchen */
       role: string;
+      config: components['schemas']['PrinterConfigDto'];
       /** @example true */
       isActive: boolean;
       /**
@@ -1413,6 +1436,8 @@ export interface components {
        * @enum {string}
        */
       role: 'receipt' | 'kitchen';
+      /** @description Per-printer configuration (Arabic encoding etc.). */
+      config?: components['schemas']['PrinterConfigDto'];
       /** @default true */
       isActive: boolean;
     };
@@ -1423,6 +1448,8 @@ export interface components {
       port?: number;
       /** @enum {string} */
       role?: 'receipt' | 'kitchen';
+      /** @description Per-printer configuration (Arabic encoding etc.). */
+      config?: components['schemas']['PrinterConfigDto'];
       isActive?: boolean;
     };
     PrinterStatusResponse: {

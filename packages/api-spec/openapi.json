@@ -3213,6 +3213,51 @@
           }
         }
       },
+      "PrinterArabicConfigDto": {
+        "type": "object",
+        "properties": {
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "none",
+              "utf8",
+              "pc864",
+              "w1256"
+            ],
+            "example": "none",
+            "description": "How to encode Arabic Unicode -> bytes before send"
+          },
+          "codePage": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0,
+            "minimum": 0,
+            "maximum": 255,
+            "description": "ESC t n code-page index (0-255). Vendor-specific."
+          },
+          "visualRtl": {
+            "type": "boolean",
+            "example": false,
+            "description": "Reverse glyph order for LTR thermal heads (visual RTL)"
+          }
+        },
+        "required": [
+          "encoding",
+          "codePage",
+          "visualRtl"
+        ]
+      },
+      "PrinterConfigDto": {
+        "type": "object",
+        "properties": {
+          "arabic": {
+            "$ref": "#/components/schemas/PrinterArabicConfigDto"
+          }
+        },
+        "required": [
+          "arabic"
+        ]
+      },
       "PrinterResponse": {
         "type": "object",
         "properties": {
@@ -3237,6 +3282,9 @@
           "role": {
             "type": "string",
             "example": "kitchen"
+          },
+          "config": {
+            "$ref": "#/components/schemas/PrinterConfigDto"
           },
           "isActive": {
             "type": "boolean",
@@ -3271,6 +3319,7 @@
           "ip",
           "port",
           "role",
+          "config",
           "isActive",
           "createdAt",
           "updatedAt",
@@ -3302,6 +3351,14 @@
             ],
             "example": "kitchen"
           },
+          "config": {
+            "description": "Per-printer configuration (Arabic encoding etc.).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrinterConfigDto"
+              }
+            ]
+          },
           "isActive": {
             "type": "boolean",
             "default": true
@@ -3331,6 +3388,14 @@
             "enum": [
               "receipt",
               "kitchen"
+            ]
+          },
+          "config": {
+            "description": "Per-printer configuration (Arabic encoding etc.).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrinterConfigDto"
+              }
             ]
           },
           "isActive": {

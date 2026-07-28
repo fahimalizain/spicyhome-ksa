@@ -149,6 +149,8 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.PaymentLineDto](docs/PaymentLineDto.md)
  - [com.spicyhome.client.models.PaymentMethodResponse](docs/PaymentMethodResponse.md)
  - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
+ - [com.spicyhome.client.models.PrinterArabicConfigDto](docs/PrinterArabicConfigDto.md)
+ - [com.spicyhome.client.models.PrinterConfigDto](docs/PrinterConfigDto.md)
  - [com.spicyhome.client.models.PrinterResponse](docs/PrinterResponse.md)
  - [com.spicyhome.client.models.PrinterStatusResponse](docs/PrinterStatusResponse.md)
  - [com.spicyhome.client.models.RefundItemDto](docs/RefundItemDto.md)

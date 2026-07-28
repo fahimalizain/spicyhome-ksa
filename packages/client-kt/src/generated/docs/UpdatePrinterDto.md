@@ -8,6 +8,7 @@
 | **ip** | **kotlin.String** |  |  [optional] |
 | **port** | **kotlin.Int** |  |  [optional] |
 | **role** | [**inline**](#Role) |  |  [optional] |
+| **config** | [**PrinterConfigDto**](PrinterConfigDto.md) | Per-printer configuration (Arabic encoding etc.). |  [optional] |
 | **isActive** | **kotlin.Boolean** |  |  [optional] |
 
 

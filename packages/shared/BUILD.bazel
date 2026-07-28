@@ -17,6 +17,7 @@ ts_project(
     deps = [
         "//:node_modules/@types/node",
         ":node_modules/@types/jest",
+        ":node_modules/zod",
     ],
     visibility = ["//visibility:public"],
 )

@@ -60,6 +60,7 @@ export const printers = sqliteTable('printers', {
   ip: text('ip').notNull(),
   port: integer('port').notNull().default(9100),
   role: text('role').notNull(), // 'receipt' | 'kitchen'
+  config: text('config').notNull().default('{}'),
   isActive: integer('is_active').notNull().default(1),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

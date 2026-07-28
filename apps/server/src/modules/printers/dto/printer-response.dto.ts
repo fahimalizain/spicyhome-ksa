@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
+import { PrinterConfigDto } from './create-printer.dto';
 
 export class PrinterResponse {
   @ApiProperty({ ...ApiInt64, example: 1 })
@@ -16,6 +19,11 @@ export class PrinterResponse {
 
   @ApiProperty({ example: 'kitchen' })
   role!: string;
+
+  @ApiProperty({ type: PrinterConfigDto })
+  @ValidateNested()
+  @Type(() => PrinterConfigDto)
+  config!: PrinterConfigDto;
 
   @ApiProperty({ example: true })
   isActive!: boolean;

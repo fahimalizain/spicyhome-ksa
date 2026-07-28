@@ -121,6 +121,7 @@ describe('ReportsService', () => {
         ip TEXT NOT NULL,
         port INTEGER NOT NULL DEFAULT 9100,
         role TEXT NOT NULL,
+        config TEXT NOT NULL DEFAULT '{}',
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,

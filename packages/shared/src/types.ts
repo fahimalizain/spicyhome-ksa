@@ -6,6 +6,7 @@ import {
   InvoiceStatus,
   DayOpeningStatus,
 } from './enums';
+import type { PrinterConfig } from './printer-config';
 
 export interface UserRole {
   id: number;
@@ -57,6 +58,7 @@ export interface Printer {
   ip: string;
   port: number;
   role: PrinterRole;
+  config: PrinterConfig;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
