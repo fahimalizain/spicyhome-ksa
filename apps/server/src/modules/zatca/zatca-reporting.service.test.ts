@@ -410,6 +410,50 @@ describe('ZatcaReportingService', () => {
       );
     });
 
+    it('skips when org unit is empty without throwing', async () => {
+      // Clear the org unit — zatcaKey would throw if reached
+      printersService.setSetting('zatca_org_unit', '');
+
+      const s = nextSeq();
+      createOrderWithInvoice(s);
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      const result = await reportingService.retryInvoice();
+      expect(result.processed).toBe(0);
+      expect(result.succeeded).toBe(0);
+      expect(result.failed).toBe(0);
+
+      // Restore org unit for subsequent tests
+      printersService.setSetting('zatca_org_unit', TEST_ORG_UNIT);
+    });
+
+    it('skips when org unit is whitespace-only without throwing', async () => {
+      // Set org unit to whitespace that slugifies to empty
+      printersService.setSetting('zatca_org_unit', '   ');
+
+      const s = nextSeq();
+      createOrderWithInvoice(s);
+
+      fakeHttp.responses.set('reporting', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'SUCCESS' }),
+      });
+
+      const result = await reportingService.retryInvoice();
+      expect(result.processed).toBe(0);
+      expect(result.succeeded).toBe(0);
+      expect(result.failed).toBe(0);
+
+      // Restore org unit for subsequent tests
+      printersService.setSetting('zatca_org_unit', TEST_ORG_UNIT);
+    });
+
     it('handles missing credentials gracefully', async () => {
       // Remove credentials
       printersService.setSetting(zatcaKey('simulation', TEST_ORG_UNIT, 'compliance_cert'), '');
