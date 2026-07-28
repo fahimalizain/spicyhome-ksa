@@ -217,6 +217,38 @@ if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
 }
 
+# Create logs directory for server stdout/stderr capture
+$logsDir = Join-Path $dataDir "logs"
+if (-not (Test-Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir | Out-Null
+}
+
+$outLog = Join-Path $logsDir "server.out.log"
+$errLog = Join-Path $logsDir "server.err.log"
+
+Write-Host "Logs:     $logsDir"
+Write-Host ""
+
+# Size-based log rotation at startup (10 MB threshold).
+# Rotates server.out.log -> server.out.log.1 (and same for err).
+function Rotate-LogFile([string]$path, [long]$maxBytes) {
+    if (Test-Path $path) {
+        $item = Get-Item $path
+        if ($item.Length -gt $maxBytes) {
+            $bak = $path + ".1"
+            if (Test-Path $bak) { Remove-Item -Force $bak -ErrorAction SilentlyContinue }
+            Move-Item -Force $path $bak -ErrorAction SilentlyContinue
+        }
+    }
+}
+$maxLogBytes = 10 * 1024 * 1024
+Rotate-LogFile $outLog $maxLogBytes
+Rotate-LogFile $errLog $maxLogBytes
+
+# Write a startup banner line to server.out.log so every run is bookended
+$startBanner = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  SpicyHome v$($env:APP_VERSION)  PORT=$($env:PORT)  DB=$($env:SPICYHOME_DB)  out=$outLog  err=$errLog"
+try { [System.IO.File]::AppendAllText($outLog, $startBanner + "`r`n") } catch {}
+
 # Ensure migrations directory exists (required by server startup).
 # SQL files are pre-copied during packaging.
 $migrationsDir = Join-Path $scriptDir "packages\db\drizzle"
@@ -238,8 +270,8 @@ if (-not (Test-Path $nodeModules)) {
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
     $installArgs = @("install", "--production", "--ignore-scripts")
-    $logOut = Join-Path $env:TEMP "spicyhome-npm-out.log"
-    $logErr = Join-Path $env:TEMP "spicyhome-npm-err.log"
+    $logOut = Join-Path $logsDir "npm-out.log"
+    $logErr = Join-Path $logsDir "npm-err.log"
     $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
@@ -277,15 +309,61 @@ $env:NODE_PATH = Join-Path $scriptDir "server\node_modules"
 $nodeExe = Join-Path $scriptDir "node\node.exe"
 $mainJs = Join-Path $scriptDir "server\main.js"
 
-# Run directly so stderr/stdout is visible in the console.
-# Set location so the server sees the right cwd (for .env, data/ etc.).
+# Run via .NET Process API to capture stdout/stderr to both
+# log files AND the console in real time.
 Set-Location $scriptDir
-& $nodeExe $mainJs
-$exitCode = $LASTEXITCODE
+
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $nodeExe
+$psi.Arguments = $mainJs
+$psi.UseShellExecute = $false
+$psi.RedirectStandardOutput = $true
+$psi.RedirectStandardError = $true
+$psi.WorkingDirectory = $scriptDir
+
+$process = New-Object System.Diagnostics.Process
+$process.StartInfo = $psi
+
+# Handler scriptblocks: write each line to its log file AND the console.
+# File writes are wrapped in try/catch so a full disk does not crash
+# the server.  GetNewClosure() ensures the log-path variables are
+# captured so the handlers work reliably on PS 2.0 background threads.
+$outHandler = {
+    $line = $EventArgs.Data
+    if ($line -ne $null) {
+        try { [System.IO.File]::AppendAllText($outLog, $line + "`r`n") } catch {}
+        [Console]::Out.WriteLine($line)
+    }
+}.GetNewClosure()
+
+$errHandler = {
+    $line = $EventArgs.Data
+    if ($line -ne $null) {
+        try { [System.IO.File]::AppendAllText($errLog, $line + "`r`n") } catch {}
+        [Console]::Error.WriteLine($line)
+    }
+}.GetNewClosure()
+
+$process.add_OutputDataReceived($outHandler)
+$process.add_ErrorDataReceived($errHandler)
+
+$process.Start() | Out-Null
+$process.BeginOutputReadLine()
+$process.BeginErrorReadLine()
+$process.WaitForExit()
+
+# Brief sleep to let any in-flight async read events land
+Start-Sleep -Milliseconds 500
+
+$exitCode = $process.ExitCode
+$process.Close()
 
 if ($exitCode -ne 0) {
     Write-Host ""
     Write-Host "Server exited with error code $exitCode"
+    Write-Host "Check logs:"
+    Write-Host "  $outLog"
+    Write-Host "  $errLog"
     Read-Host "Press Enter to exit"
 }
 PSEOF
