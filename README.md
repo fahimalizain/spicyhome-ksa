@@ -95,7 +95,7 @@ Set these environment variables (or uncomment in `.env.worktree`):
 ```sh
 # Server
 export SENTRY_DSN="https://..."
-export SENTRY_ENVIRONMENT="production"  # or development, or worktree slug
+export SENTRY_ENVIRONMENT="production"  # or development
 export SENTRY_TRACES_SAMPLE_RATE="1.0"
 export SENTRY_PROFILES_SAMPLE_RATE="1.0"
 

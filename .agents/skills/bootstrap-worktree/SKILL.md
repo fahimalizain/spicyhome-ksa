@@ -42,8 +42,8 @@ automatically. The bootstrap also syncs `apps/android/local.properties` from
 
 Linked worktrees automatically inherit Sentry DSN keys from the main worktree's
 `.env.worktree`. Environment tags (`SENTRY_ENVIRONMENT`, `VITE_SENTRY_ENVIRONMENT`)
-are set to the **worktree slug** so each branch reports as a separate environment
-in Sentry.
+default to `development` for all local worktrees (not the worktree slug).
+All local/dev traffic reports under a single `development` environment in Sentry.
 
 ### Android
 
