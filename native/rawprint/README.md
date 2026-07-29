@@ -23,14 +23,14 @@ rawprint.exe --help
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0    | Success |
-| 1    | Bad usage / missing arguments |
-| 2    | OpenPrinterW failed (printer not found, offline, or access denied) |
+| Code | Meaning                                                                    |
+| ---- | -------------------------------------------------------------------------- |
+| 0    | Success                                                                    |
+| 1    | Bad usage / missing arguments                                              |
+| 2    | OpenPrinterW failed (printer not found, offline, or access denied)         |
 | 3    | StartDocPrinterW / StartPagePrinter / WritePrinter / EndPagePrinter failed |
-| 4    | File I/O error (cannot read input file) |
-| 5    | Unsupported platform (not Windows) |
+| 4    | File I/O error (cannot read input file)                                    |
+| 5    | Unsupported platform (not Windows)                                         |
 
 ### `--list`
 
