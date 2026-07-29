@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
@@ -10,6 +10,12 @@ export class PrinterResponse {
 
   @ApiProperty({ example: 'Kitchen' })
   name!: string;
+
+  @ApiProperty({ enum: ['tcp', 'windows'], example: 'tcp' })
+  connectionType!: string;
+
+  @ApiPropertyOptional({ type: String, example: 'XP-80C', nullable: true })
+  windowsPrinterName!: string | null;
 
   @ApiProperty({ example: '192.168.1.100' })
   ip!: string;

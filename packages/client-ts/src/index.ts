@@ -25,6 +25,7 @@ export type {
   UpdatePrinterDto,
   PrinterResponse,
   PrinterStatusResponse,
+  WindowsPrinterQueuesResponse,
   CreateOrderDto,
   CreateOrderResponse,
   OrderResponse,

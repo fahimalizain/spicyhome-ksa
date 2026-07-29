@@ -8,6 +8,7 @@ import {
   Min,
   Max,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -56,10 +57,34 @@ export class CreatePrinterDto {
   @MinLength(1)
   name!: string;
 
-  @ApiProperty({ example: '192.168.1.100' })
+  @ApiPropertyOptional({
+    enum: ['tcp', 'windows'],
+    default: 'tcp',
+    description: 'How to connect to the printer: TCP/IP network or Windows spooler queue.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['tcp', 'windows'])
+  connectionType?: string;
+
+  @ApiPropertyOptional({
+    example: 'XP-80C',
+    description: 'Windows printer queue name. Required when connectionType is "windows".',
+  })
+  @ValidateIf((o: any) => o.connectionType === 'windows')
   @IsString()
   @MinLength(1)
-  ip!: string;
+  windowsPrinterName?: string;
+
+  @ApiPropertyOptional({
+    example: '192.168.1.100',
+    description:
+      'IP address or hostname. Required when connectionType is "tcp" (default). Can be empty string for windows.',
+  })
+  @ValidateIf((o: any) => (o.connectionType ?? 'tcp') === 'tcp')
+  @IsString()
+  @MinLength(1)
+  ip?: string;
 
   @ApiPropertyOptional({ ...ApiInt32, default: 9100 })
   @IsOptional()
@@ -92,6 +117,24 @@ export class UpdatePrinterDto {
   @IsString()
   @MinLength(1)
   name?: string;
+
+  @ApiPropertyOptional({
+    enum: ['tcp', 'windows'],
+    description: 'How to connect to the printer: TCP/IP network or Windows spooler queue.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['tcp', 'windows'])
+  connectionType?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Windows printer queue name. Required when connectionType is "windows".',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  windowsPrinterName?: string;
 
   @ApiPropertyOptional({ type: String })
   @IsOptional()

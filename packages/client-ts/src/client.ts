@@ -47,6 +47,7 @@ export type AuditVerifyResponse = Schemas['AuditVerifyResponse'];
 export type TableResponse = Schemas['TableResponse'];
 export type PrinterResponse = Schemas['PrinterResponse'];
 export type PrinterStatusResponse = Schemas['PrinterStatusResponse'];
+export type WindowsPrinterQueuesResponse = Schemas['WindowsPrinterQueuesResponse'];
 
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
@@ -331,6 +332,9 @@ export class SpicyHomeClient {
 
     status: (id: number) =>
       request<PrinterStatusResponse>(this.config, 'GET', `/printers/${id}/status`),
+
+    listWindowsQueues: () =>
+      request<WindowsPrinterQueuesResponse>(this.config, 'GET', '/printers/windows-queues'),
   };
 
   day = {

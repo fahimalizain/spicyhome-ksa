@@ -40,6 +40,8 @@ describe('PrintersService — config CRUD', () => {
       CREATE TABLE IF NOT EXISTS printers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
+        connection_type TEXT NOT NULL DEFAULT 'tcp',
+        windows_printer_name TEXT,
         ip TEXT NOT NULL,
         port INTEGER NOT NULL DEFAULT 9100,
         role TEXT NOT NULL,
