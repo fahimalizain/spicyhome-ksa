@@ -2,6 +2,7 @@ import {
   OrderStatus,
   OrderType,
   PrinterRole,
+  PrinterConnectionType,
   AuditAction,
   InvoiceStatus,
   DayOpeningStatus,
@@ -55,6 +56,8 @@ export interface Table {
 export interface Printer {
   id: number;
   name: string;
+  connectionType: PrinterConnectionType;
+  windowsPrinterName: string | null;
   ip: string;
   port: number;
   role: PrinterRole;
