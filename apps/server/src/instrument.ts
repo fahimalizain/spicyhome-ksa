@@ -1,4 +1,3 @@
-import * as os from 'os';
 import { readAppVersion } from './common/app-version';
 
 // Node 18 on Windows 7: libuv's uv_os_gethostname uses GetHostNameW
@@ -8,19 +7,43 @@ import { readAppVersion } from './common/app-version';
 // (COMPUTERNAME is always set on Windows) before Sentry is loaded.
 // This module is imported first in main.ts, so the patch applies
 // process-wide before any other caller of os.hostname().
+//
+// We use require('os') instead of import * as os because the TS
+// __importStar wrapper creates a getter-only non-configurable proxy;
+// Object.defineProperty on it throws. require('os') returns the real
+// module singleton, whose hostname is a configurable data property.
+// This also fixes Sentry's NodeClient, which calls require('os')
+// directly — not the import wrapper.
+const os = require('os') as typeof import('os');
+
 let hostnameWorks = true;
 try {
   os.hostname();
 } catch {
   hostnameWorks = false;
 }
-if (!hostnameWorks) {
-  const fallbackHostname = process.env.COMPUTERNAME || process.env.HOSTNAME || 'spicyhome-server';
-  (os as { hostname: () => string }).hostname = () => fallbackHostname;
-}
-
 export function resolveFallbackHostname(): string {
   return process.env.COMPUTERNAME || process.env.HOSTNAME || 'spicyhome-server';
+}
+
+if (!hostnameWorks) {
+  const fallbackHostname = resolveFallbackHostname();
+  try {
+    // On the real os module (require('os')), hostname is a configurable
+    // data property on Node 18. Object.defineProperty can override it.
+    // This also fixes Sentry's NodeClient, which calls require('os')
+    // directly.
+    Object.defineProperty(os, 'hostname', {
+      value: () => fallbackHostname,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+  } catch {
+    // Property is non-configurable — cannot override. Sentry.init
+    // (below) is wrapped in try/catch and will catch the ENOSYS
+    // error, so the server boots without error monitoring.
+  }
 }
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
