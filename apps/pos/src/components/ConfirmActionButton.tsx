@@ -165,11 +165,15 @@ export function ConfirmActionButton({
   })();
 
   const appliedClassName = isArmed ? confirmClassName || className : className;
+  const buttonClassName =
+    appliedClassName && appliedClassName.length > 0
+      ? `${appliedClassName} relative overflow-hidden`
+      : 'relative overflow-hidden';
 
   return (
     <button
       type="button"
-      className={appliedClassName}
+      className={buttonClassName}
       disabled={isActive}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -179,16 +183,15 @@ export function ConfirmActionButton({
       aria-label={label}
       aria-pressed={isArmed ? true : undefined}
     >
-      <span className="relative block overflow-hidden">
-        {/* Progress bar — only visible when holding */}
-        {isHolding && (
-          <span
-            className="absolute inset-y-0 left-0 bg-red-500/50 pointer-events-none"
-            style={{ width: `${progress * 100}%` }}
-          />
-        )}
-        <span className="relative z-10">{label}</span>
-      </span>
+      {/* Progress bar on the button itself — fills full button area */}
+      {isHolding && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 z-0 bg-red-500/50 pointer-events-none"
+          style={{ width: `${progress * 100}%` }}
+        />
+      )}
+      <span className="relative z-10">{label}</span>
     </button>
   );
 }
