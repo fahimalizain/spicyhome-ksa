@@ -17,10 +17,59 @@ Quick Start (flat — unzip and run)
 3. On first run, npm will download server dependencies (~50 MB).
    This requires an active internet connection.
 4. Open http://localhost:3742 in Chrome.
+   For a fullscreen POS terminal shortcut, see
+   POS Desktop Shortcut (Chrome kiosk) below.
 5. Log in with:
      Username: admin
      PIN: 1234
 6. Change your PIN immediately (Admin > Users).
+
+POS Desktop Shortcut (Chrome kiosk)
+-----------------------------------
+A Chrome kiosk shortcut locks the browser into fullscreen mode with
+no address bar, toolbars, or window decorations -- ideal for a
+dedicated POS terminal.
+
+Requirement: Google Chrome 109 (the last version for Windows 7).
+The server must already be running (Windows service or
+start-server.bat).
+
+Recommended Target (exact line, verified working):
+  "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --kiosk --profile-directory=Default --no-first-run --disable-session-crashed-bubble --disable-infobars http://127.0.0.1:3742
+
+Note: On some installs Chrome may be at
+      "C:\Program Files\Google\Chrome\Application\chrome.exe"
+      Verify the actual path on your machine.
+
+How to create:
+  1. Right-click Desktop -> New -> Shortcut
+  2. Paste the Target line above in the "Type the location" field
+  3. Click Next, name it e.g. "SpicyHome POS"
+  4. Click Finish
+  5. Optional: Right-click the shortcut -> Properties -> Change Icon
+     to use a custom icon.
+
+Why chrome.exe, not the Chrome "app" / PWA shortcut:
+  Do NOT use chrome_proxy.exe with --app-id=... for kiosk mode.
+  App-id shortcuts show a white title bar (origin + app name) even
+  with --kiosk, breaking the true fullscreen experience.
+  True kiosk requires chrome.exe --kiosk <url> with no --app-id.
+
+Exit kiosk:
+  Alt+F4 closes Chrome. If that fails: Ctrl+Shift+Esc to open Task
+  Manager, find chrome.exe, and End Task. Esc and F11 usually do
+  not exit true kiosk mode.
+
+Custom port:
+  If the server port was changed from 3742, update the URL in the
+  shortcut Target to match (see Default Port section).
+
+Profile isolation:
+  --profile-directory=Default uses the standard Chrome profile.
+  To keep POS isolated from personal browsing, use a dedicated
+  profile name instead of Default:
+    --profile-directory="POS Kiosk"
+  Chrome will create a fresh profile directory on first launch.
 
 Production Install (side-by-side + service)
 -------------------------------------------
