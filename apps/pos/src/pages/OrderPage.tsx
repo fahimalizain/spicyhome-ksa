@@ -671,7 +671,7 @@ export function OrderPage() {
         </div>
 
         {/* Item grid */}
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
           {filteredItems.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-sm text-gray-500">No items match</div>
@@ -697,9 +697,10 @@ export function OrderPage() {
       </div>
 
       {/* Right: Cart */}
-      <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0">
-        <div className="flex-1 overflow-y-auto p-3">
-          <h2 className="text-sm font-semibold text-gray-300 mb-3">
+      <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0 min-h-0">
+        {/* Header — pinned */}
+        <div className="shrink-0 px-3 pt-3 pb-2 border-b border-gray-700/80">
+          <h2 className="text-sm font-semibold text-gray-300">
             {currentOrder ? `Order #${currentOrder.orderNo}` : 'New Order'}
             {currentOrder && (
               <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${currentOrder.status}`}>
@@ -708,7 +709,10 @@ export function OrderPage() {
             )}
             {cart.isDirty && <span className="ml-2 text-xs text-amber-400">Unsent changes</span>}
           </h2>
+        </div>
 
+        {/* Items — only this scrolls */}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
           {cart.items.length === 0 ? (
             <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
           ) : (
