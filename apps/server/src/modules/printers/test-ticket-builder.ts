@@ -1,4 +1,6 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
+import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
+import type { PrinterConfig, PrinterArabicConfig } from '@spicyhome/shared';
 
 export interface TestTicketOptions {
   printerName: string;
@@ -8,6 +10,8 @@ export interface TestTicketOptions {
   printedAt?: number;
   /** Paper width in characters. Default 42 (80mm). */
   paperWidth?: number;
+  /** Parsed printer config; defaults to DEFAULT_PRINTER_CONFIG */
+  config?: PrinterConfig;
 }
 
 // ── Tiny Windows-1256 encoder for Arabic letters U+0600–U+06FF ──────────────
@@ -93,14 +97,113 @@ function encodeUtf8(str: string): number[] {
   return Array.from(Buffer.from(str, 'utf-8'));
 }
 
+// ── PC864 encoder: diagnostic-grade IBM PC864 Arabic letter map ───────────
+// Covers basic Arabic alphabet (U+0600–U+06FF) used in the sample strings.
+// ASCII space, digits, and common punctuation pass through unchanged.
+// Unmapped codepoints → '?' (0x3F).
+// Reference: IBM code page 864 (DOS Arabic) common variant.
+// This is a diagnostic map — minor positional differences vs. a specific
+// printer's font ROM are expected. The goal is for the test ticket to
+// produce recognisable Arabic on PC864-compatible hardware.
+
+const ARABIC_TO_PC864: Record<number, number> = {
+  // Hamza group — scattered across 0x9F–0xA6
+  0x0621: 0x9f, // ء hamza
+  0x0623: 0xa2, // أ alef with hamza above
+  0x0625: 0xa5, // إ alef with hamza below
+  0x0626: 0xa6, // ئ yeh with hamza above
+  // Core Arabic block — contiguous-ish from 0xAC
+  0x0627: 0xac, // ا alef
+  0x0628: 0xae, // ب beh
+  0x0629: 0xaf, // ة teh marbuta
+  0x062a: 0xb0, // ت teh
+  0x062b: 0xb1, // ث theh
+  0x062c: 0xb2, // ج jeem
+  0x062d: 0xb3, // ح hah
+  0x062e: 0xb4, // خ khah
+  0x062f: 0xb5, // د dal
+  0x0630: 0xb6, // ذ thal
+  0x0631: 0xb7, // ر reh
+  0x0632: 0xb8, // ز zain
+  0x0633: 0xb9, // س seen
+  0x0634: 0xba, // ش sheen
+  0x0635: 0xbb, // ص sad
+  0x0636: 0xbc, // ض dad
+  0x0637: 0xbe, // ط tah
+  0x0638: 0xbf, // ظ zah
+  0x0639: 0xc0, // ع ain
+  0x063a: 0xc1, // غ ghain
+  0x0641: 0xc2, // ف feh
+  0x0642: 0xc3, // ق qaf
+  0x0643: 0xc4, // ك kaf
+  0x0644: 0xc5, // ل lam
+  0x0645: 0xc6, // م meem
+  0x0646: 0xc7, // ن noon
+  0x0647: 0xc8, // ه heh
+  0x0648: 0xc9, // و waw
+  0x0649: 0xca, // ى alef maksura
+  0x064a: 0xcb, // ي yeh
+};
+
+function encodePc864Char(codePoint: number): number {
+  if (codePoint === 0x0020) return 0x20;
+  if (codePoint >= 0x0030 && codePoint <= 0x0039) return codePoint;
+  // ASCII punctuation and common symbols used in samples: : . x
+  if (codePoint >= 0x0021 && codePoint <= 0x007e) return codePoint;
+  if (ARABIC_TO_PC864[codePoint] !== undefined) return ARABIC_TO_PC864[codePoint];
+  return 0x3f; // '?'
+}
+
+function encodePc864(str: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const cp = str.codePointAt(i);
+    if (cp === undefined) continue;
+    out.push(encodePc864Char(cp));
+    if (cp > 0xffff) i++;
+  }
+  return out;
+}
+
 /**
- * Reverse byte order of a W1256-encoded phrase to simulate visual-RTL
- * printing on printers that render right-to-left when bytes are reversed.
+ * Reverse byte array (generic visual-RTL helper).
  * Returns a new array — does not mutate input.
  */
-function reverseW1256Bytes(bytes: number[]): number[] {
+function reverseBytes(bytes: number[]): number[] {
   return [...bytes].reverse();
 }
+
+// ── Configured-Arabic sample phrase set ────────────────────────────────────
+// Chosen to cover common POS vocabulary: greetings, menu items, modifiers,
+// numbers, and a pangram-like letter run for visual spot-checks.
+// All strings are in Arabic source; file is UTF-8.
+// Keep phrases short to fit ~42-char paper width.
+
+const ARABIC_SAMPLES: string[] = [
+  '\u0645\u0631\u062D\u0628\u0627', // 1. مرحبا — hello
+  '\u0633\u0628\u0627\u064A\u0633\u064A \u0647\u0648\u0645', // 2. سبايسي هوم — Spicy Home
+  '\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0637\u0639\u0627\u0645', // 3. قائمة الطعام — menu
+  '\u0628\u0631\u062C\u0631 \u062F\u062C\u0627\u062C \u062D\u0627\u0631', // 4. برجر دجاج حار — hot chicken burger
+  '\u0645\u0634\u0631\u0648\u0628 \u063A\u0627\u0632\u064A', // 5. مشروب غازي — soft drink
+  '\u0628\u0637\u0627\u0637\u0633 \u0645\u0642\u0644\u064A\u0629', // 6. بطاطس مقلية — french fries
+  '\u0633\u0644\u0637\u0629 \u062E\u0636\u0631\u0627\u0621', // 7. سلطة خضراء — green salad
+  '\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628: 1234', // 8. رقم الطلب: 1234 — order number: 1234
+  '\u0637\u0627\u0648\u0644\u0629 5', // 9. طاولة 5 — table 5
+  '\u0627\u0633\u062A\u0644\u0627\u0645', // 10. استلام — receipt
+  '\u0635\u0627\u0644\u0629', // 11. صالة — hall
+  '\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A: 46.00', // 12. الإجمالي: 46.00 — total: 46.00
+  '\u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 ' +
+    '\u0627\u0644\u0645\u0636\u0627\u0641\u0629', // 13. ضريبة القيمة المضافة — VAT
+  '\u0634\u0643\u0631\u0627 \u0644\u0632\u064A\u0627\u0631\u062A\u0643\u0645', // 14. شكرا لزيارتكم — thanks for visiting
+  '\u0645\u062F\u0641\u0648\u0639', // 15. مدفوع — paid
+  '\u0645\u0644\u063A\u064A', // 16. ملغي — cancelled
+  '\u0645\u0644\u0627\u062D\u0638\u0627\u062A: \u0628\u062F\u0648\u0646 \u0628\u0635\u0644', // 17. ملاحظات: بدون بصل — notes: no onions
+  '\u0643\u0645\u064A\u0629 x2', // 18. كمية x2 — quantity x2
+  // 19. Pangram-like letter run: mix of common letters (no spaces for compact width)
+  '\u0627\u0628\u062A\u062B\u062C\u062D\u062E\u062F\u0630\u0631\u0632' +
+    '\u0633\u0634\u0635\u0636\u0637\u0638\u0639\u063A\u0641\u0642' +
+    '\u0643\u0644\u0645\u0646\u0647\u0648\u064A', // ابتثجحخدذرزسشصضطظعغفقكلمنهوي
+];
 
 // ── Builder ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +211,7 @@ export class TestTicketBuilder {
   build(opts: TestTicketOptions): Buffer {
     const printedAt = opts.printedAt ?? Math.floor(Date.now() / 1000);
     const width = opts.paperWidth ?? 42;
+    const config = opts.config ?? DEFAULT_PRINTER_CONFIG;
     const eb = new EscPosBuilder(width);
 
     // ── Header ─────────────────────────────────────────────────────────────
@@ -240,8 +344,8 @@ export class TestTicketBuilder {
     // Probe 4: W1256 visual-RTL hack + CP50
     eb.text('AR W1256 visual-RTL + CP50:');
     eb.codePage(50);
-    eb.rawLine(reverseW1256Bytes(encodeW1256(arPhrase1)));
-    eb.rawLine(reverseW1256Bytes(encodeW1256(arPhrase2)));
+    eb.rawLine(reverseBytes(encodeW1256(arPhrase1)));
+    eb.rawLine(reverseBytes(encodeW1256(arPhrase2)));
     eb.codePage(0); // restore PC437
     eb.blankLine();
 
@@ -254,9 +358,17 @@ export class TestTicketBuilder {
     eb.align(Align.Left);
     eb.blankLine();
 
-    // ── 7. QR CODE ──────────────────────────────────────────────────────────
+    // ── 7. ARABIC CONFIGURED SETTINGS ──────────────────────────────────────
+    const arabicConfigured = config.arabic.encoding !== 'none';
+
+    if (arabicConfigured) {
+      this.buildSection7ArabicConfigured(eb, config.arabic);
+    }
+
+    // ── QR CODE ─────────────────────────────────────────────────────────────
+    const qrSectionNum = arabicConfigured ? 8 : 7;
     eb.bold(true);
-    eb.text('7. QR CODE');
+    eb.text(`${qrSectionNum}. QR CODE`);
     eb.bold(false);
     eb.separator('-');
 
@@ -281,7 +393,7 @@ export class TestTicketBuilder {
     eb.align(Align.Left);
     eb.blankLine();
 
-    // ── 8. FOOTER ───────────────────────────────────────────────────────────
+    // ── Footer ───────────────────────────────────────────────────────────────
     eb.separator('=');
     eb.align(Align.Center);
     eb.text('END DIAGNOSTIC');
@@ -292,6 +404,79 @@ export class TestTicketBuilder {
 
     return eb.getBuffer();
   }
+
+  // ── Section 7: Arabic Configured Settings ──────────────────────────────────
+
+  private buildSection7ArabicConfigured(eb: EscPosBuilder, arabic: PrinterArabicConfig): void {
+    // Ensure CP0 for ASCII labels
+    eb.codePage(0);
+
+    eb.bold(true);
+    eb.text('7. ARABIC CONFIGURED SETTINGS');
+    eb.bold(false);
+    eb.text(
+      `encoding=${arabic.encoding} codePage=${arabic.codePage} visualRtl=${arabic.visualRtl}`,
+    );
+    eb.separator('-');
+
+    if (arabic.encoding === 'none') {
+      eb.text('Arabic disabled (encoding=none).');
+      eb.text('Configure in Admin > Printers after');
+      eb.text('reviewing section 6 probes.');
+    } else {
+      // Switch code page for the Arabic body when needed.
+      // PC864 / W1256 always need a code page. UTF-8 only if codePage != 0.
+      const needCP = arabic.encoding !== 'utf8' || arabic.codePage !== 0;
+      if (needCP) {
+        eb.codePage(arabic.codePage);
+      }
+
+      for (const s of ARABIC_SAMPLES) {
+        const bytes = this.encodeArabic(arabic, s);
+        if (bytes.length > 0) {
+          eb.rawLine(bytes);
+        }
+      }
+
+      // Restore CP0
+      if (needCP) {
+        eb.codePage(0);
+      }
+    }
+
+    eb.separator('-');
+    eb.text('End of configured Arabic.');
+    eb.text('Restore CP0.');
+    eb.codePage(0);
+    eb.blankLine();
+  }
+
+  /**
+   * Encode a UTF-8 Arabic string → byte array using the configured encoding
+   * pipeline (encoding → optional visual-RTL byte reversal).
+   */
+  private encodeArabic(config: PrinterArabicConfig, str: string): number[] {
+    let bytes: number[];
+    switch (config.encoding) {
+      case 'utf8':
+        bytes = encodeUtf8(str);
+        break;
+      case 'w1256':
+        bytes = encodeW1256(str);
+        break;
+      case 'pc864':
+        bytes = encodePc864(str);
+        break;
+      default:
+        return [];
+    }
+    if (config.visualRtl) {
+      bytes = reverseBytes(bytes);
+    }
+    return bytes;
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   private formatDateTime(unixSec: number): string {
     const d = new Date(unixSec * 1000);

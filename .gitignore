@@ -15,6 +15,13 @@ release/
 Thumbs.db
 MODULE.bazel.lock
 
+# Repo-local Rust toolchain (must not commit)
+/.cargo/
+/.rustup/
+
+# Rust build artifacts
+native/win_rawprint/target/
+
 # Android build artifacts
 apps/android/**/build/
 apps/android/.gradle/

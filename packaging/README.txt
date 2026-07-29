@@ -112,6 +112,7 @@ File Structure (flat unzip)
   server\                   NestJS server code
   packages\db\drizzle\      Drizzle SQL migrations
   pos\                      POS SPA (served by the server)
+  prebuilt\                 Native binaries (better-sqlite3, win_rawprint.exe)
   data\spicyhome.db         SQLite database (created automatically)
   logs\server\              Server logs (created at runtime)
   VERSION                   Release version file
@@ -235,6 +236,22 @@ To disable a baked DSN for the debug path, comment out or remove the
 $env:SENTRY_DSN assignment in start-server.ps1. For the production
 service, remove the SENTRY_DSN= line from server.env in the current\
 directory and re-run: spicyhome.ps1 -InstallService
+
+Windows USB Printers
+--------------------
+USB thermal printers attached to the POS PC are supported via the Windows
+print spooler using win_rawprint.exe (bundled under prebuilt\).
+
+In Admin > Printers, set connection type to "Windows (USB/spooler)" and
+enter the exact Windows printer queue name (use Refresh to list queues).
+
+The server uses WIN_RAWPRINT_PATH pointing at:
+  {release}\prebuilt\win_rawprint.exe
+
+For the Windows service this is set by install.bat -InstallService
+(NSSM AppEnvironmentExtra). For flat/debug start-server.ps1 sets it
+automatically. No extra operator setup is required when using the
+bundled binary.
 
 ZATCA E-Invoicing
 -----------------

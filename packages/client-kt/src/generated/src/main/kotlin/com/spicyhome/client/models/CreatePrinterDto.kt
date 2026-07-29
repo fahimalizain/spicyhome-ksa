@@ -15,6 +15,7 @@
 
 package com.spicyhome.client.models
 
+import com.spicyhome.client.models.PrinterConfigDto
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -26,6 +27,7 @@ import com.squareup.moshi.JsonClass
  * @param ip 
  * @param role 
  * @param port 
+ * @param config Per-printer configuration (Arabic encoding etc.).
  * @param isActive 
  */
 
@@ -43,6 +45,10 @@ data class CreatePrinterDto (
 
     @Json(name = "port")
     val port: kotlin.Int? = 9100,
+
+    /* Per-printer configuration (Arabic encoding etc.). */
+    @Json(name = "config")
+    val config: PrinterConfigDto? = null,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = true

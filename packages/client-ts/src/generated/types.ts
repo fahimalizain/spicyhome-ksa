@@ -252,6 +252,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/printers/windows-queues': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List available Windows printer queue names */
+    get: operations['PrintersController_listWindowsQueues'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/printers/{id}': {
     parameters: {
       query?: never;
@@ -277,7 +294,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Check printer TCP reachability */
+    /** Check printer reachability */
     get: operations['PrintersController_checkStatus'];
     put?: never;
     post?: never;
@@ -1358,6 +1375,28 @@ export interface components {
       sortOrder?: number;
       isActive?: boolean;
     };
+    PrinterArabicConfigDto: {
+      /**
+       * @description How to encode Arabic Unicode -> bytes before send
+       * @example none
+       * @enum {string}
+       */
+      encoding: 'none' | 'utf8' | 'pc864' | 'w1256';
+      /**
+       * Format: int32
+       * @description ESC t n code-page index (0-255). Vendor-specific.
+       * @example 0
+       */
+      codePage: number;
+      /**
+       * @description Reverse glyph order for LTR thermal heads (visual RTL)
+       * @example false
+       */
+      visualRtl: boolean;
+    };
+    PrinterConfigDto: {
+      arabic: components['schemas']['PrinterArabicConfigDto'];
+    };
     PrinterResponse: {
       /**
        * Format: int64
@@ -1366,6 +1405,13 @@ export interface components {
       id: number;
       /** @example Kitchen */
       name: string;
+      /**
+       * @example tcp
+       * @enum {string}
+       */
+      connectionType: 'tcp' | 'windows';
+      /** @example XP-80C */
+      windowsPrinterName?: string | null;
       /** @example 192.168.1.100 */
       ip: string;
       /**
@@ -1375,6 +1421,7 @@ export interface components {
       port: number;
       /** @example kitchen */
       role: string;
+      config: components['schemas']['PrinterConfigDto'];
       /** @example true */
       isActive: boolean;
       /**
@@ -1401,8 +1448,22 @@ export interface components {
     CreatePrinterDto: {
       /** @example Kitchen */
       name: string;
-      /** @example 192.168.1.100 */
-      ip: string;
+      /**
+       * @description How to connect to the printer: TCP/IP network or Windows spooler queue.
+       * @default tcp
+       * @enum {string}
+       */
+      connectionType: 'tcp' | 'windows';
+      /**
+       * @description Windows printer queue name. Required when connectionType is "windows".
+       * @example XP-80C
+       */
+      windowsPrinterName?: string;
+      /**
+       * @description IP address or hostname. Required when connectionType is "tcp" (default). Can be empty string for windows.
+       * @example 192.168.1.100
+       */
+      ip?: string;
       /**
        * Format: int32
        * @default 9100
@@ -1413,17 +1474,39 @@ export interface components {
        * @enum {string}
        */
       role: 'receipt' | 'kitchen';
+      /** @description Per-printer configuration (Arabic encoding etc.). */
+      config?: components['schemas']['PrinterConfigDto'];
       /** @default true */
       isActive: boolean;
     };
     UpdatePrinterDto: {
       name?: string;
+      /**
+       * @description How to connect to the printer: TCP/IP network or Windows spooler queue.
+       * @enum {string}
+       */
+      connectionType?: 'tcp' | 'windows';
+      /** @description Windows printer queue name. Required when connectionType is "windows". */
+      windowsPrinterName?: string;
       ip?: string;
       /** Format: int32 */
       port?: number;
       /** @enum {string} */
       role?: 'receipt' | 'kitchen';
+      /** @description Per-printer configuration (Arabic encoding etc.). */
+      config?: components['schemas']['PrinterConfigDto'];
       isActive?: boolean;
+    };
+    WindowsPrinterQueuesResponse: {
+      /**
+       * @description List of available Windows printer queue names.
+       * @example [
+       *       "XP-80C",
+       *       "Receipt Printer",
+       *       "Kitchen Printer"
+       *     ]
+       */
+      queues: string[];
     };
     PrinterStatusResponse: {
       /** @example true */
@@ -2753,6 +2836,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PrinterResponse'];
+        };
+      };
+    };
+  };
+  PrintersController_listWindowsQueues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Windows printer queue names */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WindowsPrinterQueuesResponse'];
         };
       };
     };

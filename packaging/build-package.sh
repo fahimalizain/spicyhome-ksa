@@ -196,6 +196,18 @@ mkdir -p "$PACKAGE_DIR/prebuilt"
 cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/prebuilt/better_sqlite3.node"
 echo "better-sqlite3 native binary bundled."
 
+# ── Bundle win_rawprint.exe for Windows USB/spooler printers ────────
+echo "Bundling win_rawprint.exe..."
+WIN_RAWPRINT_PREBUILT="$SCRIPT_DIR/prebuilt/win_rawprint.exe"
+if [ -f "$WIN_RAWPRINT_PREBUILT" ]; then
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/prebuilt/win_rawprint.exe"
+  # Also copy to root for easy discovery
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/win_rawprint.exe"
+  echo "win_rawprint.exe bundled."
+else
+  echo "WARNING: win_rawprint.exe not found at $WIN_RAWPRINT_PREBUILT. Build it first: cd native/win_rawprint && ./build.sh"
+fi
+
 # ──────────────────────────────────────────────────
 # 5. Copy SPA dist
 # ──────────────────────────────────────────────────
@@ -244,6 +256,7 @@ $env:SPICYHOME_DB = Join-Path $installRoot "data\spicyhome.db"
 $env:PORT = "3742"
 $env:MIGRATIONS_DIR = Join-Path $scriptDir "packages\db\drizzle"
 $env:APP_VERSION = "__PACKAGE_VERSION__"
+$env:WIN_RAWPRINT_PATH = Join-Path $scriptDir "prebuilt\win_rawprint.exe"
 
 __SENTRY_ENV_BLOCK__
 
@@ -526,6 +539,7 @@ NODE_SKIP_PLATFORM_CHECK=1
 MIGRATIONS_DIR={installDir}\current\packages\db\drizzle
 NODE_PATH={installDir}\current\server\node_modules
 APP_VERSION=$PACKAGE_VERSION
+WIN_RAWPRINT_PATH={installDir}\current\prebuilt\win_rawprint.exe
 ENVEOF
 
 if [ -n "${HAS_SENTRY:-}" ]; then
@@ -648,6 +662,12 @@ if [ -f "$PACKAGE_DIR/server.env" ]; then
     echo "  server.env: APP_VERSION=$PACKAGE_VERSION present"
   else
     echo "ERROR: APP_VERSION=$PACKAGE_VERSION missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "WIN_RAWPRINT_PATH=" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: WIN_RAWPRINT_PATH present"
+  else
+    echo "ERROR: WIN_RAWPRINT_PATH missing from server.env"
     VERIFY_FAILED=1
   fi
   # Sentry DSN check

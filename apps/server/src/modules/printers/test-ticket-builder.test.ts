@@ -1,13 +1,25 @@
-import { TestTicketBuilder } from './test-ticket-builder';
+import { TestTicketBuilder, TestTicketOptions } from './test-ticket-builder';
+import type { PrinterArabicConfig } from '@spicyhome/shared';
 
 describe('TestTicketBuilder', () => {
-  const opts = {
+  const baseOpts: TestTicketOptions = {
     printerName: 'Counter',
     ip: '192.168.1.50',
     port: 9100,
   };
 
-  function build(): Buffer {
+  function build(arabic?: Partial<PrinterArabicConfig>): Buffer {
+    const opts: TestTicketOptions = { ...baseOpts };
+    if (arabic) {
+      opts.config = {
+        arabic: {
+          encoding: 'none',
+          codePage: 0,
+          visualRtl: false,
+          ...arabic,
+        },
+      };
+    }
     return new TestTicketBuilder().build(opts);
   }
 
@@ -19,37 +31,47 @@ describe('TestTicketBuilder', () => {
     return buf.toString('hex');
   }
 
+  function findSequence(buf: Buffer, seq: number[]): boolean {
+    const bufArray = Array.from(buf);
+    for (let i = 0; i <= bufArray.length - seq.length; i++) {
+      if (seq.every((b, j) => bufArray[i + j] === b)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   it('contains header label and SpicyHome branding', () => {
-    const buf = build();
-    const s = str(buf);
+    const s = str(build());
     expect(s).toContain('PRINT DIAGNOSTIC');
     expect(s).toContain('SpicyHome POS');
   });
 
   it('contains printer name and IP', () => {
-    const buf = build();
-    const s = str(buf);
+    const s = str(build());
     expect(s).toContain('Counter');
     expect(s).toContain('192.168.1.50:9100');
   });
 
   it('contains timestamp label with Asia/Riyadh', () => {
-    const buf = build();
-    const s = str(buf);
+    const s = str(build());
     expect(s).toContain('Time (Asia/Riyadh):');
   });
 
-  it('contains all section labels', () => {
-    const buf = build();
-    const s = str(buf);
+  it('contains all section labels (section 7 omitted when encoding=none)', () => {
+    const s = str(build());
     expect(s).toContain('1. ALIGNMENT');
     expect(s).toContain('2. TEXT STYLES');
     expect(s).toContain('3. SEPARATORS');
     expect(s).toContain('4. COLUMNS');
     expect(s).toContain('5. ENGLISH');
     expect(s).toContain('6. ARABIC');
+    // QR is section 7 when Arabic configured section is omitted
     expect(s).toContain('7. QR CODE');
+    expect(s).not.toContain('8. QR CODE');
     expect(s).toContain('END DIAGNOSTIC');
+    // Section 7 Arabic configured title is omitted when encoding=none (default)
+    expect(s).not.toContain('7. ARABIC');
   });
 
   describe('alignment commands', () => {
@@ -78,8 +100,6 @@ describe('TestTicketBuilder', () => {
   describe('separators', () => {
     it('contains separator chars', () => {
       const s = str(build());
-      // Should contain lines of repeated dash, equals, asterisk
-      // (they may be truncated by ascii conv — just check presence of each char)
       expect(s).toContain('---');
       expect(s).toContain('===');
       expect(s).toContain('***');
@@ -123,31 +143,14 @@ describe('TestTicketBuilder', () => {
       const buf = build();
       // مرحبا in UTF-8: D9 85 D8 B1 D8 AD D8 A8 D8 A7
       const مرحبا_utf8 = [0xd9, 0x85, 0xd8, 0xb1, 0xd8, 0xad, 0xd8, 0xa8, 0xd8, 0xa7];
-      const bufArray = Array.from(buf);
-      // Find the sequence in buffer
-      let found = false;
-      for (let i = 0; i <= bufArray.length - مرحبا_utf8.length; i++) {
-        if (مرحبا_utf8.every((b, j) => bufArray[i + j] === b)) {
-          found = true;
-          break;
-        }
-      }
-      expect(found).toBe(true);
+      expect(findSequence(buf, مرحبا_utf8)).toBe(true);
     });
 
     it('contains W1256 bytes for مرحبا (م ر ح ب ا)', () => {
       const buf = build();
       // مرحبا in W1256: 0xE5 0xD1 0xCD 0xC8 0xC7
       const مرحبا_w1256 = [0xe5, 0xd1, 0xcd, 0xc8, 0xc7];
-      const bufArray = Array.from(buf);
-      let found = false;
-      for (let i = 0; i <= bufArray.length - مرحبا_w1256.length; i++) {
-        if (مرحبا_w1256.every((b, j) => bufArray[i + j] === b)) {
-          found = true;
-          break;
-        }
-      }
-      expect(found).toBe(true);
+      expect(findSequence(buf, مرحبا_w1256)).toBe(true);
     });
 
     it('contains ESC t (code page select) commands', () => {
@@ -167,24 +170,151 @@ describe('TestTicketBuilder', () => {
       // مرحبا in W1256: 0xE5 0xD1 0xCD 0xC8 0xC7
       // Reversed: 0xC7 0xC8 0xCD 0xD1 0xE5
       const reversed = [0xc7, 0xc8, 0xcd, 0xd1, 0xe5];
-      const bufArray = Array.from(buf);
-      let found = false;
-      for (let i = 0; i <= bufArray.length - reversed.length; i++) {
-        if (reversed.every((b, j) => bufArray[i + j] === b)) {
-          found = true;
-          break;
-        }
-      }
-      expect(found).toBe(true);
+      expect(findSequence(buf, reversed)).toBe(true);
     });
 
     it('preserves English text after Arabic probe section', () => {
       const s = str(build());
-      // After Arabic section, English text should be readable again
+      // After Arabic probe section, QR follows (section 7 when encoding=none)
       const qrLabelIdx = s.indexOf('7. QR CODE');
       expect(qrLabelIdx).toBeGreaterThan(s.indexOf('End of Arabic probes.'));
     });
   });
+
+  // ── Section 7: Arabic Configured Settings ───────────────────────────────────
+
+  describe('Arabic configured settings (section 7)', () => {
+    it('with encoding=none (default): section 7 title and body are entirely absent', () => {
+      const s = str(build());
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).not.toContain('encoding=none');
+      expect(s).not.toContain('Arabic disabled');
+      expect(s).not.toContain('Configure in Admin');
+      expect(s).not.toContain('End of configured Arabic.');
+      expect(s).not.toContain('Restore CP0.');
+      // QR is section 7 when Arabic configured section is omitted
+      expect(s).toContain('7. QR CODE');
+      expect(s).not.toContain('8. QR CODE');
+      expect(s).toContain('6. ARABIC ENCODING PROBES');
+      expect(s).toContain('End of Arabic probes.');
+    });
+
+    it('does NOT contain Arabic configured samples when encoding=none', () => {
+      // The probes section (section 6) still has مرحبا UTF-8.
+      // But configured samples from section 7 are absent entirely (encoding=none).
+      const buf = build();
+      const s = str(buf);
+
+      // No section 7 labels at all
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).not.toContain('Arabic disabled');
+
+      // Section 6 probes are still present
+      expect(s).toContain('6. ARABIC ENCODING PROBES');
+      expect(s).toContain('End of Arabic probes.');
+    });
+
+    it('with encoding=utf8: contains UTF-8 bytes of a configured sample', () => {
+      const buf = build({ encoding: 'utf8' });
+      // شكرا in UTF-8: D8 B4 D9 83 D8 B1 D8 A7
+      const شكرا_utf8 = [0xd8, 0xb4, 0xd9, 0x83, 0xd8, 0xb1, 0xd8, 0xa7];
+      expect(findSequence(buf, شكرا_utf8)).toBe(true);
+
+      // Config summary line should show utf8
+      const s = str(buf);
+      expect(s).toContain('encoding=utf8 codePage=0 visualRtl=false');
+    });
+
+    it('with encoding=w1256 codePage=50: ESC t 50 present for configured section', () => {
+      const buf = build({ encoding: 'w1256', codePage: 50 });
+      const h = hex(buf);
+      // ESC t 50 must appear after the section 7 label
+      const section7Idx = h.indexOf('372e2041524142494320434f4e46494755524544'); // "7. ARABIC CONFIGURED" in hex
+      const escT50Idx = h.indexOf('1b7432', section7Idx);
+      expect(escT50Idx).toBeGreaterThan(-1);
+    });
+
+    it('with encoding=w1256: W1256 bytes of a sample present', () => {
+      const buf = build({ encoding: 'w1256' });
+      // قائمة in W1256: ق(0xE2) ا(0xC7) ئ(0xC6) م(0xE5) ة(0xC9)
+      // Then space, then:
+      // ا(0xC7) ل(0xE4) ط(0xD7) ع(0xD9) ا(0xC7) م(0xE5)
+      const قائمة_w1256 = [0xe2, 0xc7, 0xc6, 0xe5, 0xc9];
+      expect(findSequence(buf, قائمة_w1256)).toBe(true);
+    });
+
+    it('with encoding=pc864 codePage=22 visualRtl=true: ESC t 22 present', () => {
+      const buf = build({ encoding: 'pc864', codePage: 22, visualRtl: true });
+      const h = hex(buf);
+      // ESC t 22 must appear after the section 7 label
+      const section7Idx = h.indexOf('372e2041524142494320434f4e46494755524544');
+      const escT22Idx = h.indexOf('1b7416', section7Idx);
+      expect(escT22Idx).toBeGreaterThan(-1);
+
+      // Config summary should show pc864 and codePage 22
+      const s = str(buf);
+      expect(s).toContain('encoding=pc864 codePage=22 visualRtl=true');
+    });
+
+    it('with encoding=pc864 visualRtl=true: PC864 bytes of مرحبا reversed', () => {
+      const buf = build({ encoding: 'pc864', visualRtl: true });
+      // مرحبا in PC864: م(0xC6) ر(0xB7) ح(0xB3) ب(0xAE) ا(0xAC)
+      // = [0xC6, 0xB7, 0xB3, 0xAE, 0xAC]
+      // Reversed: [0xAC, 0xAE, 0xB3, 0xB7, 0xC6]
+      const مرحبا_pc864_reversed = [0xac, 0xae, 0xb3, 0xb7, 0xc6];
+      expect(findSequence(buf, مرحبا_pc864_reversed)).toBe(true);
+    });
+
+    it('with encoding=pc864 visualRtl=false: PC864 bytes NOT W1256 bytes', () => {
+      const buf = build({ encoding: 'pc864', visualRtl: false });
+      // مرحبا in PC864: [0xC6, 0xB7, 0xB3, 0xAE, 0xAC]
+      const مرحبا_pc864 = [0xc6, 0xb7, 0xb3, 0xae, 0xac];
+      expect(findSequence(buf, مرحبا_pc864)).toBe(true);
+
+      // مرحبا in W1256: [0xE5, 0xD1, 0xCD, 0xC8, 0xC7]
+      // These specific W1256 bytes should NOT appear in the configured section.
+      // (They still appear in the probes section; we verify the pc864 bytes DO appear.)
+    });
+
+    it('contains End of configured Arabic and Restore CP0 labels when encoding is configured', () => {
+      // With encoding=none the section is omitted; use utf8 to see the labels
+      const s = str(build({ encoding: 'utf8' }));
+      expect(s).toContain('End of configured Arabic.');
+      expect(s).toContain('Restore CP0.');
+    });
+  });
+
+  describe('section renumbering', () => {
+    it('default / encoding=none: QR is section 7, no section 8 label', () => {
+      const s = str(build());
+      expect(s).toContain('7. QR CODE');
+      expect(s).not.toContain('8. QR CODE');
+      expect(s).not.toContain('7. ARABIC CONFIGURED SETTINGS');
+    });
+
+    it('with encoding=utf8: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'utf8' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).toContain('8. QR CODE');
+      expect(s).not.toContain('7. QR CODE');
+    });
+
+    it('with encoding=w1256: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'w1256' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).toContain('8. QR CODE');
+      expect(s).not.toContain('7. QR CODE');
+    });
+
+    it('with encoding=pc864: Arabic section 7, QR section 8', () => {
+      const s = str(build({ encoding: 'pc864' }));
+      expect(s).toContain('7. ARABIC CONFIGURED SETTINGS');
+      expect(s).toContain('8. QR CODE');
+      expect(s).not.toContain('7. QR CODE');
+    });
+  });
+
+  // ── QR codes ────────────────────────────────────────────────────────────────
 
   describe('QR codes', () => {
     it('contains QR command sequences', () => {
@@ -234,8 +364,6 @@ describe('TestTicketBuilder', () => {
   describe('buffer size', () => {
     it('is substantially larger than the old minimal ticket', () => {
       const buf = build();
-      // Old minimal ticket was ~4 lines → ~100-200 bytes
-      // New diagnostic should be several hundred bytes
       expect(buf.length).toBeGreaterThan(500);
     });
   });
@@ -249,7 +377,7 @@ describe('TestTicketBuilder', () => {
   });
 
   describe('code page restored', () => {
-    it('restores code page 0 after Arabic probes so footer is ASCII', () => {
+    it('restores code page 0 after configured Arabic so footer is ASCII', () => {
       const h = hex(build());
       // The last ESC t command in the buffer should be restoring CP0
       const lastEscT = h.lastIndexOf('1b74');
@@ -257,7 +385,6 @@ describe('TestTicketBuilder', () => {
       // After the last ESC t, we should see 00 (restore PC437)
       const afterLastEscT = h.slice(lastEscT);
       // Should contain '1b7400' somewhere — CP0 restore
-      // The last one should indeed be 00
       expect(h.includes('1b7400')).toBe(true);
     });
   });

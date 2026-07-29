@@ -129,6 +129,7 @@ function Read-ServerEnvLines {
     $allowed = @(
       "TZ", "SPA_DIST", "SPICYHOME_DB", "PORT",
       "NODE_SKIP_PLATFORM_CHECK", "MIGRATIONS_DIR", "NODE_PATH", "APP_VERSION",
+      "WIN_RAWPRINT_PATH",
       "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_TRACES_SAMPLE_RATE", "SENTRY_PROFILES_SAMPLE_RATE"
     )
     foreach ($line in $lines) {
@@ -453,6 +454,13 @@ function Install-NpmDeps {
     Write-Log "Copied better-sqlite3 prebuilt binary"
   } else {
     Write-Log "WARN: better-sqlite3 prebuilt binary not found at $prebuilt"
+  }
+  # Verify win_rawprint.exe is present (not copied into node_modules — path is env-only)
+  $wrp = Join-Path $ReleaseDir "prebuilt\win_rawprint.exe"
+  if (Test-Path $wrp) {
+    Write-Log "win_rawprint.exe present in release prebuilt\"
+  } else {
+    Write-Log "WARN: win_rawprint.exe not found at $wrp (Windows USB printers will not work)"
   }
   return $true
 }
@@ -1084,6 +1092,7 @@ function Install-NssmService {
     $spicyDb = Join-Path $Root "data\spicyhome.db"
     $migrations = Join-Path $Root "current\packages\db\drizzle"
     $nodePath = Join-Path $Root "current\server\node_modules"
+    $winRawprint = Join-Path $Root "current\prebuilt\win_rawprint.exe"
     $envExtra = @(
       "TZ=Asia/Riyadh",
       "SPA_DIST=$spaDist",
@@ -1092,7 +1101,8 @@ function Install-NssmService {
       "NODE_SKIP_PLATFORM_CHECK=1",
       "MIGRATIONS_DIR=$migrations",
       "NODE_PATH=$nodePath",
-      "APP_VERSION=$Version"
+      "APP_VERSION=$Version",
+      "WIN_RAWPRINT_PATH=$winRawprint"
     )
   }
 

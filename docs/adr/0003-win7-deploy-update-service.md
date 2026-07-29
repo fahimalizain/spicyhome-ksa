@@ -135,6 +135,10 @@ The engine also copies the pre-bundled `better-sqlite3.node` from
 `server\node_modules\better-sqlite3\build\Release\` after npm install (npm
 wipes `node_modules`).
 
+`win_rawprint.exe` also ships in `prebuilt\` but is **not** copied into
+`node_modules` — the path is set purely via the `WIN_RAWPRINT_PATH`
+environment variable.
+
 ### 12. One engine + thin bats
 
 A single `spicyhome.ps1` powershell script is the entire engine. Three thin
@@ -196,6 +200,7 @@ NODE_PATH={installDir}\current\server\node_modules
 PORT={port}
 NODE_SKIP_PLATFORM_CHECK=1
 APP_VERSION={version}
+WIN_RAWPRINT_PATH={installDir}\current\prebuilt\win_rawprint.exe
 SENTRY_DSN={from current\server.env, optional}
 SENTRY_ENVIRONMENT={from current\server.env, optional}
 SENTRY_TRACES_SAMPLE_RATE={from current\server.env, optional}

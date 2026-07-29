@@ -15,6 +15,7 @@
 
 package com.spicyhome.client.models
 
+import com.spicyhome.client.models.PrinterConfigDto
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -27,6 +28,7 @@ import com.squareup.moshi.JsonClass
  * @param ip 
  * @param port 
  * @param role 
+ * @param config 
  * @param isActive 
  * @param createdAt 
  * @param updatedAt 
@@ -51,6 +53,9 @@ data class PrinterResponse (
 
     @Json(name = "role")
     val role: kotlin.String,
+
+    @Json(name = "config")
+    val config: PrinterConfigDto,
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,

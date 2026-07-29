@@ -36,6 +36,8 @@ docs/PaymentLineDto.md
 docs/PaymentMethodResponse.md
 docs/PaymentMethodsApi.md
 docs/PrintResponse.md
+docs/PrinterArabicConfigDto.md
+docs/PrinterConfigDto.md
 docs/PrinterResponse.md
 docs/PrinterStatusResponse.md
 docs/PrintersApi.md
@@ -124,6 +126,8 @@ src/main/kotlin/com/spicyhome/client/models/PayOrderDto.kt
 src/main/kotlin/com/spicyhome/client/models/PaymentLineDto.kt
 src/main/kotlin/com/spicyhome/client/models/PaymentMethodResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrintResponse.kt
+src/main/kotlin/com/spicyhome/client/models/PrinterArabicConfigDto.kt
+src/main/kotlin/com/spicyhome/client/models/PrinterConfigDto.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterResponse.kt
 src/main/kotlin/com/spicyhome/client/models/PrinterStatusResponse.kt
 src/main/kotlin/com/spicyhome/client/models/RefundItemDto.kt
@@ -148,3 +152,5 @@ src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaConfigDto.kt
+src/test/kotlin/com/spicyhome/client/models/PrinterArabicConfigDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/PrinterConfigDtoTest.kt
