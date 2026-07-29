@@ -297,6 +297,7 @@ export function OrderPage() {
   }
 
   function handleNewOrder() {
+    setError('');
     cart.clear();
     setCurrentOrder(null);
     setShowTablePicker(false);
@@ -851,12 +852,16 @@ export function OrderPage() {
               </div>
             )}
 
-            {(currentOrder?.status === 'paid' ||
-              currentOrder?.status === 'voided' ||
-              currentOrder?.status === 'refunded') && (
+            {currentOrder && (
               <button
                 onClick={() => guardedNavigate(handleNewOrder)}
-                className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
+                className={
+                  currentOrder.status === 'paid' ||
+                  currentOrder.status === 'voided' ||
+                  currentOrder.status === 'refunded'
+                    ? 'w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3'
+                    : 'w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3'
+                }
               >
                 New Order
               </button>
