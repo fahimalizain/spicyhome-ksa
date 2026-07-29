@@ -1,4 +1,27 @@
+import * as os from 'os';
 import { readAppVersion } from './common/app-version';
+
+// Node 18 on Windows 7: libuv's uv_os_gethostname uses GetHostNameW
+// (a Windows 8+ API). On Windows 7 it returns ENOSYS, and Sentry's
+// NodeClient calls os.hostname() at init — which throws synchronously
+// and crashes the server. Polyfill os.hostname() with a safe fallback
+// (COMPUTERNAME is always set on Windows) before Sentry is loaded.
+// This module is imported first in main.ts, so the patch applies
+// process-wide before any other caller of os.hostname().
+let hostnameWorks = true;
+try {
+  os.hostname();
+} catch {
+  hostnameWorks = false;
+}
+if (!hostnameWorks) {
+  const fallbackHostname = process.env.COMPUTERNAME || process.env.HOSTNAME || 'spicyhome-server';
+  (os as { hostname: () => string }).hostname = () => fallbackHostname;
+}
+
+export function resolveFallbackHostname(): string {
+  return process.env.COMPUTERNAME || process.env.HOSTNAME || 'spicyhome-server';
+}
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
 const VERSION = readAppVersion();
@@ -63,8 +86,15 @@ if (SENTRY_DSN) {
     delete initOptions.profilesSampleRate;
   }
 
-  Sentry.init(initOptions);
-  sentryInitialized = true;
+  try {
+    Sentry.init(initOptions);
+    sentryInitialized = true;
+  } catch (err) {
+    // Never let Sentry init crash the server. The os.hostname() polyfill
+    // above handles the known Win7 ENOSYS case; this guard covers any
+    // other init-time failure so observability stays best-effort.
+    console.error('[Sentry] init failed — running without error monitoring:', err);
+  }
 }
 
 export function isSentryInitialized(): boolean {
