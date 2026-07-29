@@ -196,7 +196,23 @@ NODE_PATH={installDir}\current\server\node_modules
 PORT={port}
 NODE_SKIP_PLATFORM_CHECK=1
 APP_VERSION={version}
+SENTRY_DSN={from current\sentry.env, optional}
+SENTRY_ENVIRONMENT={from current\sentry.env, optional}
+SENTRY_TRACES_SAMPLE_RATE={from current\sentry.env, optional}
+SENTRY_PROFILES_SAMPLE_RATE={from current\sentry.env, optional}
 ```
+
+The base variables above are always set by `Install-NssmService`. The optional
+`SENTRY_*` variables are sourced from `current\sentry.env` when present — this
+file is baked into the release package at build time when `SENTRY_DSN` (or
+`SENTRY_SERVER_DSN`) is set (see `packaging/build-package.sh`). If `sentry.env`
+is absent or empty, no Sentry variables are added to the service environment
+and the server runs without monitoring.
+
+On update and rollback, `Install-NssmService` is re-invoked so the service
+environment is refreshed from the active release's `sentry.env`. This ensures
+Sentry configuration (and `APP_VERSION`) stays in sync with the running
+release without manual NSSM commands.
 
 ### Health check
 

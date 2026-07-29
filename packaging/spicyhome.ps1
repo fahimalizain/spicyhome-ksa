@@ -103,6 +103,39 @@ function Read-FileText {
   }
 }
 
+function Read-SentryEnvLines {
+  param([string]$Root)
+  <#
+  .SYNOPSIS
+    Reads current\sentry.env and returns an array of KEY=VALUE lines
+    suitable for appending to NSSM AppEnvironmentExtra. Only allowlisted
+    Sentry keys (SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_TRACES_SAMPLE_RATE,
+    SENTRY_PROFILES_SAMPLE_RATE) are accepted — other keys are silently
+    dropped. Blank lines and # comments are skipped.
+  #>
+  $sentryPath = Join-Path $Root "current\sentry.env"
+  if (-not (Test-Path $sentryPath)) { return @() }
+  try {
+    $lines = [System.IO.File]::ReadAllLines($sentryPath)
+    $result = @()
+    $allowed = @("SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_TRACES_SAMPLE_RATE", "SENTRY_PROFILES_SAMPLE_RATE")
+    foreach ($line in $lines) {
+      $trimmed = $line.Trim()
+      if ($trimmed -eq "" -or $trimmed.StartsWith("#")) { continue }
+      $eqIdx = $trimmed.IndexOf("=")
+      if ($eqIdx -le 0) { continue }
+      $key = $trimmed.Substring(0, $eqIdx)
+      if ($allowed -contains $key) {
+        $result += $trimmed
+      }
+    }
+    return $result
+  } catch {
+    Write-Log "WARN: Could not read sentry.env: $($_.Exception.Message)"
+    return @()
+  }
+}
+
 function Read-Config {
   param([string]$ConfigPath)
   if (-not (Test-Path $ConfigPath)) { return $null }
@@ -822,8 +855,13 @@ function Invoke-Update {
   $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $newReleaseDir $root $engineScriptDir
 
-  # Start service
+  # Refresh NSSM service config from new release (picks up sentry.env,
+  # APP_VERSION, and any other env changes in the release).
   if (Test-Path $nssmExe) {
+    Write-Log "Refreshing NSSM service configuration for v$latestVer..."
+    Install-NssmService $nssmExe $root $latestVer
+
+    # Start service
     Start-NssmService $nssmExe $ServiceName
   } else {
     Write-Log "INFO: NSSM not found. Skipping service start."
@@ -925,8 +963,13 @@ function Invoke-Rollback {
     exit 1
   }
 
-  # Start service
+  # Refresh NSSM service config from rolled-back release (picks up sentry.env,
+  # APP_VERSION, and any other env changes from the previous release).
   if (Test-Path $nssmExe) {
+    Write-Log "Refreshing NSSM service configuration for v$prevVer..."
+    Install-NssmService $nssmExe $root $prevVer
+
+    # Start service
     Start-NssmService $nssmExe $ServiceName
   }
 
@@ -1019,6 +1062,16 @@ function Install-NssmService {
     "NODE_PATH=$nodePath",
     "APP_VERSION=$Version"
   )
+
+  # Append optional Sentry env from current\sentry.env (baked at package time).
+  $sentryLines = Read-SentryEnvLines $Root
+  if ($sentryLines.Count -gt 0) {
+    $envExtra += $sentryLines
+    Write-Log "Sentry env: applied $($sentryLines.Count) vars from current\sentry.env"
+  } else {
+    Write-Log "Sentry env: not present (server monitoring off)"
+  }
+
   $code = Invoke-Nssm $NssmExe "set" (@($ServiceName, "AppEnvironmentExtra") + $envExtra)
   if ($code -ne 0) {
     Write-Log "ERROR: nssm set AppEnvironmentExtra failed with exit code $code"

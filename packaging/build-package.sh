@@ -468,6 +468,21 @@ if ([string]::IsNullOrEmpty(\$env:SENTRY_TRACES_SAMPLE_RATE)) { \$env:SENTRY_TRA
 if ([string]::IsNullOrEmpty(\$env:SENTRY_PROFILES_SAMPLE_RATE)) { \$env:SENTRY_PROFILES_SAMPLE_RATE = '${SENTRY_PROFILES}' }
 SENTRYEOF
   echo "Sentry server DSN: baked"
+
+  # Write sentry.env for NSSM production service path (sourced by spicyhome.ps1).
+  # The start-server.ps1 block above covers the debug path; this file is the
+  # production path consumed by Install-NssmService / Invoke-Update.
+  cat > "$PACKAGE_DIR/sentry.env" << SENTRYENVEOF
+SENTRY_DSN=${SERVER_DSN}
+SENTRY_ENVIRONMENT=${SENTRY_ENV}
+SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES}
+SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES}
+SENTRYENVEOF
+  # Ensure CRLF line endings for Windows text-file consistency
+  sed 's/$/\r/' "$PACKAGE_DIR/sentry.env" > "$PACKAGE_DIR/sentry.env.crlf"
+  mv "$PACKAGE_DIR/sentry.env.crlf" "$PACKAGE_DIR/sentry.env"
+  echo "sentry.env: written for NSSM service path"
+
 else
   cat > "$TEMP_DIR/sentry-block.txt" << 'SENTRYEOF'
 # Optional Sentry error monitoring (set before starting the server):
@@ -579,6 +594,33 @@ if [ -n "$SERVER_DSN" ]; then
   else
     echo "ERROR: Server Sentry DSN not found or commented out in start-server.ps1"
     VERIFY_FAILED=1
+  fi
+fi
+
+# c2) sentry.env must exist and contain the DSN when baked (NSSM production path).
+if [ -n "$SERVER_DSN" ]; then
+  if [ -f "$PACKAGE_DIR/sentry.env" ]; then
+    if grep -qF "SENTRY_DSN=$SERVER_DSN" "$PACKAGE_DIR/sentry.env"; then
+      echo "  Server Sentry DSN: present in sentry.env"
+    else
+      echo "ERROR: SENTRY_DSN line not found in sentry.env"
+      VERIFY_FAILED=1
+    fi
+    if grep -qF "SENTRY_ENVIRONMENT=" "$PACKAGE_DIR/sentry.env"; then
+      echo "  Server Sentry env: SENTRY_ENVIRONMENT present in sentry.env"
+    else
+      echo "ERROR: SENTRY_ENVIRONMENT line not found in sentry.env"
+      VERIFY_FAILED=1
+    fi
+  else
+    echo "ERROR: sentry.env missing when SENTRY_DSN is set (NSSM production path)"
+    VERIFY_FAILED=1
+  fi
+else
+  # When DSN is not set, sentry.env must not contain a live DSN line.
+  if [ -f "$PACKAGE_DIR/sentry.env" ]; then
+    echo "WARN: sentry.env exists but no DSN was baked; removing."
+    rm -f "$PACKAGE_DIR/sentry.env"
   fi
 fi
 

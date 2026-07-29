@@ -119,19 +119,22 @@ SENTRY_ENVIRONMENT=production
 The release workflow (`release.yml`) maps the following GitHub secrets to the
 build-time environment variables above:
 
-| GitHub Secret                | Maps To             | Purpose                                          |
-| ---------------------------- | ------------------- | ------------------------------------------------ |
-| `secrets.SENTRY_POS_DSN`     | `VITE_SENTRY_DSN`   | SPA Sentry DSN at build time                     |
-| `secrets.SENTRY_ANDROID_DSN` | `SENTRY_DSN`        | Android BuildConfig DSN                          |
-| `secrets.SENTRY_SERVER_DSN`  | `SENTRY_DSN`        | Baked into Win7 start-server.ps1 at package time |
-| `secrets.SENTRY_AUTH_TOKEN`  | `SENTRY_AUTH_TOKEN` | Source map upload auth token                     |
-| `vars.SENTRY_ORG`            | `SENTRY_ORG`        | Sentry org slug for source maps                  |
+| GitHub Secret                | Maps To             | Purpose                                                                                            |
+| ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
+| `secrets.SENTRY_POS_DSN`     | `VITE_SENTRY_DSN`   | SPA Sentry DSN at build time                                                                       |
+| `secrets.SENTRY_ANDROID_DSN` | `SENTRY_DSN`        | Android BuildConfig DSN                                                                            |
+| `secrets.SENTRY_SERVER_DSN`  | `SENTRY_DSN`        | Baked into `start-server.ps1` (debug path) and `sentry.env` (NSSM production path) at package time |
+| `secrets.SENTRY_AUTH_TOKEN`  | `SENTRY_AUTH_TOKEN` | Source map upload auth token                                                                       |
+| `vars.SENTRY_ORG`            | `SENTRY_ORG`        | Sentry org slug for source maps                                                                    |
 
-Release builds bake `SENTRY_SERVER_DSN` into `start-server.ps1` as a **default**.
-If `SENTRY_DSN` (or any other Sentry env var) is already set at runtime — via NSSM
-service environment, user-set variables, or a shell script — the existing value
-wins. Running `pnpm package:win7` locally with `SENTRY_DSN` or `SENTRY_SERVER_DSN`
-set also bakes those values into the generated script.
+Release builds bake `SENTRY_SERVER_DSN` into `start-server.ps1` (debug path) **and**
+`dist/spicyhome-pos-win7/sentry.env` (NSSM production path) as defaults.
+`spicyhome.ps1` reads `sentry.env` from the active release and appends its keys
+to the NSSM `AppEnvironmentExtra`. If `SENTRY_DSN` (or any other Sentry env var)
+is already set at runtime — via NSSM service environment, user-set variables, or
+a shell script — the existing value wins. Running `pnpm package:win7` locally
+with `SENTRY_DSN` or `SENTRY_SERVER_DSN` set also bakes those values into the
+generated script and sentry.env.
 
 ### Free Tier
 
