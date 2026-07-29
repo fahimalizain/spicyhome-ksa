@@ -163,7 +163,7 @@ export class PrintersService {
   async listWindowsQueues(): Promise<string[]> {
     try {
       return await this.windowsTransport.listQueues();
-    } catch (err: any) {
+    } catch (_err: unknown) {
       // Don't throw — the POS UI uses this list for convenience and
       // should not break on errors (e.g., non-windows dev machine).
       return [];

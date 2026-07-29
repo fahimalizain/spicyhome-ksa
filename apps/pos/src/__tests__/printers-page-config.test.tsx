@@ -114,7 +114,7 @@ function getByLabel(form: HTMLElement, labelText: string): HTMLElement {
   for (const label of labels) {
     if (label.textContent?.trim() === labelText) {
       // For labels followed by a div wrapper (flex layout), go into the wrapper
-      let sibling = label.nextElementSibling as HTMLElement;
+      const sibling = label.nextElementSibling as HTMLElement;
       if (sibling && sibling.tagName === 'DIV') {
         const input = sibling.querySelector('input');
         if (input) return input;
