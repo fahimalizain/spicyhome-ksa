@@ -196,23 +196,28 @@ NODE_PATH={installDir}\current\server\node_modules
 PORT={port}
 NODE_SKIP_PLATFORM_CHECK=1
 APP_VERSION={version}
-SENTRY_DSN={from current\sentry.env, optional}
-SENTRY_ENVIRONMENT={from current\sentry.env, optional}
-SENTRY_TRACES_SAMPLE_RATE={from current\sentry.env, optional}
-SENTRY_PROFILES_SAMPLE_RATE={from current\sentry.env, optional}
+SENTRY_DSN={from current\server.env, optional}
+SENTRY_ENVIRONMENT={from current\server.env, optional}
+SENTRY_TRACES_SAMPLE_RATE={from current\server.env, optional}
+SENTRY_PROFILES_SAMPLE_RATE={from current\server.env, optional}
 ```
 
-The base variables above are always set by `Install-NssmService`. The optional
-`SENTRY_*` variables are sourced from `current\sentry.env` when present — this
-file is baked into the release package at build time when `SENTRY_DSN` (or
-`SENTRY_SERVER_DSN`) is set (see `packaging/build-package.sh`). If `sentry.env`
-is absent or empty, no Sentry variables are added to the service environment
-and the server runs without monitoring.
+The variables above are sourced from `current\server.env` — a dotenv-style
+file baked into every release package at build time (see
+`packaging/build-package.sh`). `server.env` always contains the base
+variables (TZ, SPA_DIST, SPICYHOME_DB, etc.) with `{installDir}` and
+`{port}` placeholders. `spicyhome.ps1` expands these placeholders at
+install/update/rollback time via `Read-ServerEnvLines` and passes the
+resulting `KEY=VALUE` array to NSSM `AppEnvironmentExtra`. When
+`SENTRY_DSN` (or `SENTRY_SERVER_DSN`) is set at package time, Sentry keys
+are appended to `server.env`; otherwise they are omitted entirely. If
+`server.env` is absent or empty, `Install-NssmService` falls back to
+hardcoded defaults for the base variables.
 
 On update and rollback, `Install-NssmService` is re-invoked so the service
-environment is refreshed from the active release's `sentry.env`. This ensures
-Sentry configuration (and `APP_VERSION`) stays in sync with the running
-release without manual NSSM commands.
+environment is refreshed from the active release's `server.env`. This ensures
+all configuration (paths, port, version, and optional Sentry keys) stays in
+sync with the running release without manual NSSM commands.
 
 ### Health check
 

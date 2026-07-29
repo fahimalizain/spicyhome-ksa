@@ -103,22 +103,34 @@ function Read-FileText {
   }
 }
 
-function Read-SentryEnvLines {
-  param([string]$Root)
+function Read-ServerEnvLines {
+  param(
+    [string]$Root,
+    [string]$InstallDir,
+    [string]$Version,
+    [int]$Port
+  )
   <#
   .SYNOPSIS
-    Reads current\sentry.env and returns an array of KEY=VALUE lines
+    Reads current\server.env and returns an array of KEY=VALUE lines
     suitable for appending to NSSM AppEnvironmentExtra. Only allowlisted
-    Sentry keys (SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_TRACES_SAMPLE_RATE,
-    SENTRY_PROFILES_SAMPLE_RATE) are accepted — other keys are silently
-    dropped. Blank lines and # comments are skipped.
+    keys are accepted — other keys are silently dropped. Blank lines and
+    # comments are skipped. Placeholders {installDir}, {version}, {port}
+    are expanded with the provided values.
   #>
-  $sentryPath = Join-Path $Root "current\sentry.env"
-  if (-not (Test-Path $sentryPath)) { return @() }
+  $serverEnvPath = Join-Path $Root "current\server.env"
+  if (-not (Test-Path $serverEnvPath)) {
+    Write-Log "WARN: server.env not found at $serverEnvPath"
+    return @()
+  }
   try {
-    $lines = [System.IO.File]::ReadAllLines($sentryPath)
+    $lines = [System.IO.File]::ReadAllLines($serverEnvPath)
     $result = @()
-    $allowed = @("SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_TRACES_SAMPLE_RATE", "SENTRY_PROFILES_SAMPLE_RATE")
+    $allowed = @(
+      "TZ", "SPA_DIST", "SPICYHOME_DB", "PORT",
+      "NODE_SKIP_PLATFORM_CHECK", "MIGRATIONS_DIR", "NODE_PATH", "APP_VERSION",
+      "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_TRACES_SAMPLE_RATE", "SENTRY_PROFILES_SAMPLE_RATE"
+    )
     foreach ($line in $lines) {
       $trimmed = $line.Trim()
       if ($trimmed -eq "" -or $trimmed.StartsWith("#")) { continue }
@@ -126,12 +138,19 @@ function Read-SentryEnvLines {
       if ($eqIdx -le 0) { continue }
       $key = $trimmed.Substring(0, $eqIdx)
       if ($allowed -contains $key) {
-        $result += $trimmed
+        $value = $trimmed.Substring($eqIdx + 1)
+        # Expand placeholders
+        $value = $value.Replace("{installDir}", $InstallDir)
+        $value = $value.Replace("{version}", $Version)
+        $value = $value.Replace("{port}", "$Port")
+        $result += ($key + "=" + $value)
+      } else {
+        Write-Log "WARN: Skipping unknown server.env key: $key"
       }
     }
     return $result
   } catch {
-    Write-Log "WARN: Could not read sentry.env: $($_.Exception.Message)"
+    Write-Log "WARN: Could not read server.env: $($_.Exception.Message)"
     return @()
   }
 }
@@ -855,7 +874,7 @@ function Invoke-Update {
   $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $newReleaseDir $root $engineScriptDir
 
-  # Refresh NSSM service config from new release (picks up sentry.env,
+  # Refresh NSSM service config from new release (picks up server.env,
   # APP_VERSION, and any other env changes in the release).
   if (Test-Path $nssmExe) {
     Write-Log "Refreshing NSSM service configuration for v$latestVer..."
@@ -963,7 +982,7 @@ function Invoke-Rollback {
     exit 1
   }
 
-  # Refresh NSSM service config from rolled-back release (picks up sentry.env,
+  # Refresh NSSM service config from rolled-back release (picks up server.env,
   # APP_VERSION, and any other env changes from the previous release).
   if (Test-Path $nssmExe) {
     Write-Log "Refreshing NSSM service configuration for v$prevVer..."
@@ -1013,10 +1032,6 @@ function Install-NssmService {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
   }
 
-  $spaDist = Join-Path $Root "current\pos"
-  $spicyDb = Join-Path $Root "data\spicyhome.db"
-  $migrations = Join-Path $Root "current\packages\db\drizzle"
-  $nodePath = Join-Path $Root "current\server\node_modules"
   $stdoutLog = Join-Path $Root "logs\server\server.out.log"
   $stderrLog = Join-Path $Root "logs\server\server.err.log"
 
@@ -1051,25 +1066,34 @@ function Install-NssmService {
     }
   }
 
-  # AppEnvironmentExtra: one KEY=VALUE per argument (NSSM joins them).
-  $envExtra = @(
-    "TZ=Asia/Riyadh",
-    "SPA_DIST=$spaDist",
-    "SPICYHOME_DB=$spicyDb",
-    "PORT=$Port",
-    "NODE_SKIP_PLATFORM_CHECK=1",
-    "MIGRATIONS_DIR=$migrations",
-    "NODE_PATH=$nodePath",
-    "APP_VERSION=$Version"
-  )
-
-  # Append optional Sentry env from current\sentry.env (baked at package time).
-  $sentryLines = Read-SentryEnvLines $Root
-  if ($sentryLines.Count -gt 0) {
-    $envExtra += $sentryLines
-    Write-Log "Sentry env: applied $($sentryLines.Count) vars from current\sentry.env"
+  # AppEnvironmentExtra: built from current\server.env with placeholder expansion.
+  # Fall back to hardcoded defaults if the file is missing or empty.
+  $envExtra = Read-ServerEnvLines -Root $Root -InstallDir $Root -Version $Version -Port $Port
+  if ($envExtra.Count -gt 0) {
+    Write-Log "server.env: $($envExtra.Count) vars applied from current\server.env"
+    # Check for Sentry presence without printing DSN value
+    $hasSentry = $envExtra | Where-Object { $_ -match "^SENTRY_DSN=" }
+    if ($hasSentry) {
+      Write-Log "server.env: Sentry monitoring enabled"
+    } else {
+      Write-Log "server.env: Sentry monitoring OFF (no SENTRY_DSN line)"
+    }
   } else {
-    Write-Log "Sentry env: not present (server monitoring off)"
+    Write-Log "WARN: server.env missing or empty; using hardcoded defaults"
+    $spaDist = Join-Path $Root "current\pos"
+    $spicyDb = Join-Path $Root "data\spicyhome.db"
+    $migrations = Join-Path $Root "current\packages\db\drizzle"
+    $nodePath = Join-Path $Root "current\server\node_modules"
+    $envExtra = @(
+      "TZ=Asia/Riyadh",
+      "SPA_DIST=$spaDist",
+      "SPICYHOME_DB=$spicyDb",
+      "PORT=$Port",
+      "NODE_SKIP_PLATFORM_CHECK=1",
+      "MIGRATIONS_DIR=$migrations",
+      "NODE_PATH=$nodePath",
+      "APP_VERSION=$Version"
+    )
   }
 
   $code = Invoke-Nssm $NssmExe "set" (@($ServiceName, "AppEnvironmentExtra") + $envExtra)

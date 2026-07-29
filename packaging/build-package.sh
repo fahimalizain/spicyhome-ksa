@@ -469,19 +469,11 @@ if ([string]::IsNullOrEmpty(\$env:SENTRY_PROFILES_SAMPLE_RATE)) { \$env:SENTRY_P
 SENTRYEOF
   echo "Sentry server DSN: baked"
 
-  # Write sentry.env for NSSM production service path (sourced by spicyhome.ps1).
-  # The start-server.ps1 block above covers the debug path; this file is the
+  # Append Sentry keys to server.env for the NSSM production service path.
+  # server.env is always written below; this flag controls whether Sentry keys
+  # are appended. start-server.ps1 covers the debug path; server.env is the
   # production path consumed by Install-NssmService / Invoke-Update.
-  cat > "$PACKAGE_DIR/sentry.env" << SENTRYENVEOF
-SENTRY_DSN=${SERVER_DSN}
-SENTRY_ENVIRONMENT=${SENTRY_ENV}
-SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES}
-SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES}
-SENTRYENVEOF
-  # Ensure CRLF line endings for Windows text-file consistency
-  sed 's/$/\r/' "$PACKAGE_DIR/sentry.env" > "$PACKAGE_DIR/sentry.env.crlf"
-  mv "$PACKAGE_DIR/sentry.env.crlf" "$PACKAGE_DIR/sentry.env"
-  echo "sentry.env: written for NSSM service path"
+  HAS_SENTRY=1
 
 else
   cat > "$TEMP_DIR/sentry-block.txt" << 'SENTRYEOF'
@@ -511,6 +503,46 @@ for f in "$PACKAGE_DIR/start-server.bat" "$PACKAGE_DIR/start-server.ps1"; do
 done
 
 echo "start-server.bat and start-server.ps1 created."
+
+# ──────────────────────────────────────────────────
+# 6b. Write server.env for NSSM AppEnvironmentExtra
+# ──────────────────────────────────────────────────
+# Always written — every package gets this file. Paths use {installDir} and
+# {port} placeholders expanded by spicyhome.ps1 at install/update/rollback.
+# APP_VERSION is baked at package time (version is known here).
+# Sentry keys are appended only when DSN is baked.
+
+cat > "$PACKAGE_DIR/server.env" << ENVEOF
+# SpicyHome server environment for NSSM AppEnvironmentExtra.
+# Placeholders expanded by spicyhome.ps1 at install/update/rollback:
+#   {installDir}  — install root (parent of current\)
+#   {version}     — active release version
+#   {port}        — service port from config / -Port
+TZ=Asia/Riyadh
+SPA_DIST={installDir}\current\pos
+SPICYHOME_DB={installDir}\data\spicyhome.db
+PORT={port}
+NODE_SKIP_PLATFORM_CHECK=1
+MIGRATIONS_DIR={installDir}\current\packages\db\drizzle
+NODE_PATH={installDir}\current\server\node_modules
+APP_VERSION=$PACKAGE_VERSION
+ENVEOF
+
+if [ -n "${HAS_SENTRY:-}" ]; then
+  cat >> "$PACKAGE_DIR/server.env" << ENVEOF
+SENTRY_DSN=${SERVER_DSN}
+SENTRY_ENVIRONMENT=${SENTRY_ENV}
+SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES}
+SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES}
+ENVEOF
+  echo "server.env: written with Sentry keys"
+else
+  echo "server.env: written (no Sentry)"
+fi
+
+# Ensure CRLF line endings for Windows text-file consistency
+sed 's/$/\r/' "$PACKAGE_DIR/server.env" > "$PACKAGE_DIR/server.env.crlf"
+mv "$PACKAGE_DIR/server.env.crlf" "$PACKAGE_DIR/server.env"
 
 # ──────────────────────────────────────────────────
 # 7. Copy VERSION file
@@ -597,31 +629,45 @@ if [ -n "$SERVER_DSN" ]; then
   fi
 fi
 
-# c2) sentry.env must exist and contain the DSN when baked (NSSM production path).
-if [ -n "$SERVER_DSN" ]; then
-  if [ -f "$PACKAGE_DIR/sentry.env" ]; then
-    if grep -qF "SENTRY_DSN=$SERVER_DSN" "$PACKAGE_DIR/sentry.env"; then
-      echo "  Server Sentry DSN: present in sentry.env"
+# c2) server.env must always exist with base keys (NSSM production path).
+if [ -f "$PACKAGE_DIR/server.env" ]; then
+  echo "  server.env: present"
+  if grep -qF "TZ=Asia/Riyadh" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: TZ=Asia/Riyadh present"
+  else
+    echo "ERROR: TZ=Asia/Riyadh missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "SPA_DIST=" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: SPA_DIST present"
+  else
+    echo "ERROR: SPA_DIST missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "APP_VERSION=$PACKAGE_VERSION" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: APP_VERSION=$PACKAGE_VERSION present"
+  else
+    echo "ERROR: APP_VERSION=$PACKAGE_VERSION missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  # Sentry DSN check
+  if [ -n "$SERVER_DSN" ]; then
+    if grep -qF "SENTRY_DSN=$SERVER_DSN" "$PACKAGE_DIR/server.env"; then
+      echo "  server.env: SENTRY_DSN present"
     else
-      echo "ERROR: SENTRY_DSN line not found in sentry.env"
-      VERIFY_FAILED=1
-    fi
-    if grep -qF "SENTRY_ENVIRONMENT=" "$PACKAGE_DIR/sentry.env"; then
-      echo "  Server Sentry env: SENTRY_ENVIRONMENT present in sentry.env"
-    else
-      echo "ERROR: SENTRY_ENVIRONMENT line not found in sentry.env"
+      echo "ERROR: SENTRY_DSN line not found in server.env"
       VERIFY_FAILED=1
     fi
   else
-    echo "ERROR: sentry.env missing when SENTRY_DSN is set (NSSM production path)"
-    VERIFY_FAILED=1
+    if grep -qF "SENTRY_DSN=" "$PACKAGE_DIR/server.env"; then
+      echo "WARN: server.env has SENTRY_DSN= line but no DSN was baked"
+    else
+      echo "  server.env: no SENTRY_DSN (as expected — DSN not baked)"
+    fi
   fi
 else
-  # When DSN is not set, sentry.env must not contain a live DSN line.
-  if [ -f "$PACKAGE_DIR/sentry.env" ]; then
-    echo "WARN: sentry.env exists but no DSN was baked; removing."
-    rm -f "$PACKAGE_DIR/sentry.env"
-  fi
+  echo "ERROR: server.env missing from package"
+  VERIFY_FAILED=1
 fi
 
 # d) Engine scripts and VERSION must be present

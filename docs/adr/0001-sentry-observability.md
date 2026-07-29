@@ -35,9 +35,10 @@ Three conceptual projects, each with its own DSN:
   - `secrets.SENTRY_POS_DSN` — injected as `VITE_SENTRY_DSN` at SPA build time
   - `secrets.SENTRY_ANDROID_DSN` — injected as `SENTRY_DSN` for Android BuildConfig
   - `secrets.SENTRY_SERVER_DSN` — baked into Win7 `start-server.ps1` **and**
-    `sentry.env` at package time; still overridable at runtime by setting `SENTRY_DSN`
+    `server.env` at package time; still overridable at runtime by setting `SENTRY_DSN`
     before starting the server. `start-server.ps1` covers the debug path;
-    `sentry.env` is consumed by the NSSM production service via `spicyhome.ps1`.
+    `server.env` is the NSSM production service environment source consumed by
+    `spicyhome.ps1`.
   - `secrets.SENTRY_AUTH_TOKEN` — CI-only for source map uploads; never shipped to
     end-user machines
   - `vars.SENTRY_ORG` — Sentry organization slug for source map uploads

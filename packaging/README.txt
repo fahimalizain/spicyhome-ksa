@@ -222,13 +222,19 @@ In official release builds, the Sentry DSN may already be pre-configured
 in two places:
 
   1. start-server.ps1 — for the debug path (foreground server)
-  2. sentry.env — for the NSSM production service path (spicyhome.ps1
-     reads this file and appends its keys to the service environment)
+  2. server.env — for the NSSM production service path (spicyhome.ps1
+     reads this file and sets its keys as AppEnvironmentExtra)
+
+server.env is a dotenv-style file that also contains all other NSSM
+environment variables (TZ, SPA_DIST, SPICYHOME_DB, PORT, etc.) with
+{installDir} and {port} placeholders expanded by spicyhome.ps1 at
+install/update/rollback time. Sentry keys are optional entries in the
+same file.
 
 To disable a baked DSN for the debug path, comment out or remove the
 $env:SENTRY_DSN assignment in start-server.ps1. For the production
-service, remove or rename sentry.env in the current\ directory and
-re-run: spicyhome.ps1 -InstallService
+service, remove the SENTRY_DSN= line from server.env in the current\
+directory and re-run: spicyhome.ps1 -InstallService
 
 ZATCA E-Invoicing
 -----------------
