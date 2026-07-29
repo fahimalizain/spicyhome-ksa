@@ -103,6 +103,59 @@ function Read-FileText {
   }
 }
 
+function Read-ServerEnvLines {
+  param(
+    [string]$Root,
+    [string]$InstallDir,
+    [string]$Version,
+    [int]$Port
+  )
+  <#
+  .SYNOPSIS
+    Reads current\server.env and returns an array of KEY=VALUE lines
+    suitable for appending to NSSM AppEnvironmentExtra. Only allowlisted
+    keys are accepted — other keys are silently dropped. Blank lines and
+    # comments are skipped. Placeholders {installDir}, {version}, {port}
+    are expanded with the provided values.
+  #>
+  $serverEnvPath = Join-Path $Root "current\server.env"
+  if (-not (Test-Path $serverEnvPath)) {
+    Write-Log "WARN: server.env not found at $serverEnvPath"
+    return @()
+  }
+  try {
+    $lines = [System.IO.File]::ReadAllLines($serverEnvPath)
+    $result = @()
+    $allowed = @(
+      "TZ", "SPA_DIST", "SPICYHOME_DB", "PORT",
+      "NODE_SKIP_PLATFORM_CHECK", "MIGRATIONS_DIR", "NODE_PATH", "APP_VERSION",
+      "WIN_RAWPRINT_PATH",
+      "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_TRACES_SAMPLE_RATE", "SENTRY_PROFILES_SAMPLE_RATE"
+    )
+    foreach ($line in $lines) {
+      $trimmed = $line.Trim()
+      if ($trimmed -eq "" -or $trimmed.StartsWith("#")) { continue }
+      $eqIdx = $trimmed.IndexOf("=")
+      if ($eqIdx -le 0) { continue }
+      $key = $trimmed.Substring(0, $eqIdx)
+      if ($allowed -contains $key) {
+        $value = $trimmed.Substring($eqIdx + 1)
+        # Expand placeholders
+        $value = $value.Replace("{installDir}", $InstallDir)
+        $value = $value.Replace("{version}", $Version)
+        $value = $value.Replace("{port}", "$Port")
+        $result += ($key + "=" + $value)
+      } else {
+        Write-Log "WARN: Skipping unknown server.env key: $key"
+      }
+    }
+    return $result
+  } catch {
+    Write-Log "WARN: Could not read server.env: $($_.Exception.Message)"
+    return @()
+  }
+}
+
 function Read-Config {
   param([string]$ConfigPath)
   if (-not (Test-Path $ConfigPath)) { return $null }
@@ -829,8 +882,13 @@ function Invoke-Update {
   $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $newReleaseDir $root $engineScriptDir
 
-  # Start service
+  # Refresh NSSM service config from new release (picks up server.env,
+  # APP_VERSION, and any other env changes in the release).
   if (Test-Path $nssmExe) {
+    Write-Log "Refreshing NSSM service configuration for v$latestVer..."
+    Install-NssmService $nssmExe $root $latestVer
+
+    # Start service
     Start-NssmService $nssmExe $ServiceName
   } else {
     Write-Log "INFO: NSSM not found. Skipping service start."
@@ -932,8 +990,13 @@ function Invoke-Rollback {
     exit 1
   }
 
-  # Start service
+  # Refresh NSSM service config from rolled-back release (picks up server.env,
+  # APP_VERSION, and any other env changes from the previous release).
   if (Test-Path $nssmExe) {
+    Write-Log "Refreshing NSSM service configuration for v$prevVer..."
+    Install-NssmService $nssmExe $root $prevVer
+
+    # Start service
     Start-NssmService $nssmExe $ServiceName
   }
 
@@ -977,11 +1040,6 @@ function Install-NssmService {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
   }
 
-  $spaDist = Join-Path $Root "current\pos"
-  $spicyDb = Join-Path $Root "data\spicyhome.db"
-  $migrations = Join-Path $Root "current\packages\db\drizzle"
-  $nodePath = Join-Path $Root "current\server\node_modules"
-  $winRawprint = Join-Path $Root "current\prebuilt\win_rawprint.exe"
   $stdoutLog = Join-Path $Root "logs\server\server.out.log"
   $stderrLog = Join-Path $Root "logs\server\server.err.log"
 
@@ -1016,18 +1074,38 @@ function Install-NssmService {
     }
   }
 
-  # AppEnvironmentExtra: one KEY=VALUE per argument (NSSM joins them).
-  $envExtra = @(
-    "TZ=Asia/Riyadh",
-    "SPA_DIST=$spaDist",
-    "SPICYHOME_DB=$spicyDb",
-    "PORT=$Port",
-    "NODE_SKIP_PLATFORM_CHECK=1",
-    "MIGRATIONS_DIR=$migrations",
-    "NODE_PATH=$nodePath",
-    "APP_VERSION=$Version",
-    "WIN_RAWPRINT_PATH=$winRawprint"
-  )
+  # AppEnvironmentExtra: built from current\server.env with placeholder expansion.
+  # Fall back to hardcoded defaults if the file is missing or empty.
+  $envExtra = Read-ServerEnvLines -Root $Root -InstallDir $Root -Version $Version -Port $Port
+  if ($envExtra.Count -gt 0) {
+    Write-Log "server.env: $($envExtra.Count) vars applied from current\server.env"
+    # Check for Sentry presence without printing DSN value
+    $hasSentry = $envExtra | Where-Object { $_ -match "^SENTRY_DSN=" }
+    if ($hasSentry) {
+      Write-Log "server.env: Sentry monitoring enabled"
+    } else {
+      Write-Log "server.env: Sentry monitoring OFF (no SENTRY_DSN line)"
+    }
+  } else {
+    Write-Log "WARN: server.env missing or empty; using hardcoded defaults"
+    $spaDist = Join-Path $Root "current\pos"
+    $spicyDb = Join-Path $Root "data\spicyhome.db"
+    $migrations = Join-Path $Root "current\packages\db\drizzle"
+    $nodePath = Join-Path $Root "current\server\node_modules"
+    $winRawprint = Join-Path $Root "current\prebuilt\win_rawprint.exe"
+    $envExtra = @(
+      "TZ=Asia/Riyadh",
+      "SPA_DIST=$spaDist",
+      "SPICYHOME_DB=$spicyDb",
+      "PORT=$Port",
+      "NODE_SKIP_PLATFORM_CHECK=1",
+      "MIGRATIONS_DIR=$migrations",
+      "NODE_PATH=$nodePath",
+      "APP_VERSION=$Version",
+      "WIN_RAWPRINT_PATH=$winRawprint"
+    )
+  }
+
   $code = Invoke-Nssm $NssmExe "set" (@($ServiceName, "AppEnvironmentExtra") + $envExtra)
   if ($code -ne 0) {
     Write-Log "ERROR: nssm set AppEnvironmentExtra failed with exit code $code"
