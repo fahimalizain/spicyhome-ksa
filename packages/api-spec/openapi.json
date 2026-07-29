@@ -856,6 +856,33 @@
         ]
       }
     },
+    "/printers/windows-queues": {
+      "get": {
+        "operationId": "PrintersController_listWindowsQueues",
+        "summary": "List available Windows printer queue names",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Windows printer queue names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowsPrinterQueuesResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "printers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/printers/{id}": {
       "get": {
         "operationId": "PrintersController_get",
@@ -941,7 +968,7 @@
     "/printers/{id}/status": {
       "get": {
         "operationId": "PrintersController_checkStatus",
-        "summary": "Check printer TCP reachability",
+        "summary": "Check printer reachability",
         "parameters": [
           {
             "name": "id",
@@ -3213,6 +3240,51 @@
           }
         }
       },
+      "PrinterArabicConfigDto": {
+        "type": "object",
+        "properties": {
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "none",
+              "utf8",
+              "pc864",
+              "w1256"
+            ],
+            "example": "none",
+            "description": "How to encode Arabic Unicode -> bytes before send"
+          },
+          "codePage": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0,
+            "minimum": 0,
+            "maximum": 255,
+            "description": "ESC t n code-page index (0-255). Vendor-specific."
+          },
+          "visualRtl": {
+            "type": "boolean",
+            "example": false,
+            "description": "Reverse glyph order for LTR thermal heads (visual RTL)"
+          }
+        },
+        "required": [
+          "encoding",
+          "codePage",
+          "visualRtl"
+        ]
+      },
+      "PrinterConfigDto": {
+        "type": "object",
+        "properties": {
+          "arabic": {
+            "$ref": "#/components/schemas/PrinterArabicConfigDto"
+          }
+        },
+        "required": [
+          "arabic"
+        ]
+      },
       "PrinterResponse": {
         "type": "object",
         "properties": {
@@ -3224,6 +3296,16 @@
           "name": {
             "type": "string",
             "example": "Kitchen"
+          },
+          "connectionType": {
+            "type": "string",
+            "enum": ["tcp", "windows"],
+            "example": "tcp"
+          },
+          "windowsPrinterName": {
+            "type": "string",
+            "example": "XP-80C",
+            "nullable": true
           },
           "ip": {
             "type": "string",
@@ -3237,6 +3319,9 @@
           "role": {
             "type": "string",
             "example": "kitchen"
+          },
+          "config": {
+            "$ref": "#/components/schemas/PrinterConfigDto"
           },
           "isActive": {
             "type": "boolean",
@@ -3268,9 +3353,11 @@
         "required": [
           "id",
           "name",
+          "connectionType",
           "ip",
           "port",
           "role",
+          "config",
           "isActive",
           "createdAt",
           "updatedAt",
@@ -3285,9 +3372,21 @@
             "type": "string",
             "example": "Kitchen"
           },
+          "connectionType": {
+            "type": "string",
+            "enum": ["tcp", "windows"],
+            "default": "tcp",
+            "description": "How to connect to the printer: TCP/IP network or Windows spooler queue."
+          },
+          "windowsPrinterName": {
+            "type": "string",
+            "example": "XP-80C",
+            "description": "Windows printer queue name. Required when connectionType is \"windows\"."
+          },
           "ip": {
             "type": "string",
-            "example": "192.168.1.100"
+            "example": "192.168.1.100",
+            "description": "IP address or hostname. Required when connectionType is \"tcp\" (default). Can be empty string for windows."
           },
           "port": {
             "type": "integer",
@@ -3302,6 +3401,14 @@
             ],
             "example": "kitchen"
           },
+          "config": {
+            "description": "Per-printer configuration (Arabic encoding etc.).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrinterConfigDto"
+              }
+            ]
+          },
           "isActive": {
             "type": "boolean",
             "default": true
@@ -3309,7 +3416,6 @@
         },
         "required": [
           "name",
-          "ip",
           "role"
         ]
       },
@@ -3318,6 +3424,15 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "connectionType": {
+            "type": "string",
+            "enum": ["tcp", "windows"],
+            "description": "How to connect to the printer: TCP/IP network or Windows spooler queue."
+          },
+          "windowsPrinterName": {
+            "type": "string",
+            "description": "Windows printer queue name. Required when connectionType is \"windows\"."
           },
           "ip": {
             "type": "string"
@@ -3333,10 +3448,32 @@
               "kitchen"
             ]
           },
+          "config": {
+            "description": "Per-printer configuration (Arabic encoding etc.).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrinterConfigDto"
+              }
+            ]
+          },
           "isActive": {
             "type": "boolean"
           }
         }
+      },
+      "WindowsPrinterQueuesResponse": {
+        "type": "object",
+        "properties": {
+          "queues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["XP-80C", "Receipt Printer", "Kitchen Printer"],
+            "description": "List of available Windows printer queue names."
+          }
+        },
+        "required": ["queues"]
       },
       "PrinterStatusResponse": {
         "type": "object",

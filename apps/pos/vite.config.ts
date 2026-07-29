@@ -21,7 +21,7 @@ function readVersion(): string {
   return '0.0.0';
 }
 
-const APP_VERSION = readVersion();
+const APP_VERSION = process.env.VITE_APP_VERSION || readVersion();
 
 /** Load repo-root .env.worktree into process.env (does not override existing). */
 function loadWorktreeEnv(): void {
@@ -122,8 +122,19 @@ export default defineConfig(({ mode }) => {
       setupFiles: './src/setupTests.ts',
       css: true,
     },
-    // Bake Sentry release and version at build time
+    // Bake Sentry and version env vars at build time. Explicit define is
+    // required because Bazel action sandboxes do not forward host env to Vite
+    // processes. VITE_SENTRY_* values come from --action_env forwarded by the
+    // build packaging script (build-package.sh).
     define: {
+      'import.meta.env.VITE_SENTRY_DSN': JSON.stringify(process.env.VITE_SENTRY_DSN || ''),
+      'import.meta.env.VITE_SENTRY_ENVIRONMENT': JSON.stringify(
+        process.env.VITE_SENTRY_ENVIRONMENT ||
+          (mode === 'development' ? 'development' : 'production'),
+      ),
+      'import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE': JSON.stringify(
+        process.env.VITE_SENTRY_TRACES_SAMPLE_RATE || '1.0',
+      ),
       'import.meta.env.VITE_SENTRY_RELEASE': JSON.stringify(
         process.env.VITE_SENTRY_RELEASE || `spicyhome-pos@${APP_VERSION}`,
       ),

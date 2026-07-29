@@ -18,7 +18,7 @@ import { zatcaInvoices, zatcaCreditNotes } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { ZatcaHttpService } from './zatca-http.service';
-import { zatcaKey } from '@spicyhome/shared';
+import { slugifyOrgUnit, zatcaKey } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -61,7 +61,13 @@ export class ZatcaReportingService implements OnModuleInit {
    */
   schedulePolling(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => this.processQueue(), this.POLL_INTERVAL_MS);
+    this.timer = setInterval(() => {
+      void this.processQueue().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        const stack = err instanceof Error ? err.stack : undefined;
+        this.logger.error(`Reporting queue tick failed: ${message}`, stack);
+      });
+    }, this.POLL_INTERVAL_MS);
     this.logger.log(`Reporting worker started (interval: ${this.POLL_INTERVAL_MS}ms)`);
   }
 
@@ -123,84 +129,100 @@ export class ZatcaReportingService implements OnModuleInit {
     succeeded: number;
     failed: number;
   }> {
-    // Only run if onboarding is at compliance or production stage
-    const env = this.getEnv();
-    const orgUnit = this.getOrgUnit();
-    const state = this.printersService.getSetting(
-      zatcaKey(env, orgUnit, 'onboarding_state'),
-      'not_started',
-    );
-    if (state !== 'compliance' && state !== 'production') {
-      this.logger.debug('Reporting skipped: onboarding not complete');
-      return { processed: 0, succeeded: 0, failed: 0 };
-    }
+    try {
+      const env = this.getEnv();
+      const orgUnit = this.getOrgUnit();
 
-    // Collect pending documents from both tables, ordered by ICV ascending.
-    // IMPORTANT: only `signed` and `failed` are polled — `cleared` (standard
-    // clearance) and `reported` (simplified reporting) are ignored.  This
-    // prevents standard invoices/credit notes from being re-submitted to the
-    // reporting API after they've already gone through clearance.
-    const pendingDocs: ReportableDocument[] = [];
+      // Bail early if the org unit is empty or would slugify to empty
+      // (e.g. whitespace-only or Arabic-only). Prevents zatcaKey from
+      // throwing and crashing the background worker.
+      if (!slugifyOrgUnit(orgUnit)) {
+        this.logger.debug('Reporting skipped: ZATCA org unit not configured');
+        return { processed: 0, succeeded: 0, failed: 0 };
+      }
 
-    // Pending invoices — fetch all, no limit
-    const pendingInvoices = this.db
-      .select()
-      .from(zatcaInvoices)
-      .where(or(eq(zatcaInvoices.status, 'signed'), eq(zatcaInvoices.status, 'failed')))
-      .orderBy(asc(zatcaInvoices.icv))
-      .all();
+      // Only run if onboarding is at compliance or production stage
+      const state = this.printersService.getSetting(
+        zatcaKey(env, orgUnit, 'onboarding_state'),
+        'not_started',
+      );
+      if (state !== 'compliance' && state !== 'production') {
+        this.logger.debug('Reporting skipped: onboarding not complete');
+        return { processed: 0, succeeded: 0, failed: 0 };
+      }
 
-    for (const inv of pendingInvoices) {
-      pendingDocs.push({
-        id: inv.id,
-        icv: inv.icv,
-        uuid: inv.uuid,
-        invoiceHash: inv.invoiceHash,
-        xml: inv.xml,
-        kind: 'invoice',
-      });
-    }
+      // Collect pending documents from both tables, ordered by ICV ascending.
+      // IMPORTANT: only `signed` and `failed` are polled — `cleared` (standard
+      // clearance) and `reported` (simplified reporting) are ignored.  This
+      // prevents standard invoices/credit notes from being re-submitted to the
+      // reporting API after they've already gone through clearance.
+      const pendingDocs: ReportableDocument[] = [];
 
-    // Pending credit notes — fetch all, no limit
-    const pendingCreditNotes = this.db
-      .select()
-      .from(zatcaCreditNotes)
-      .where(or(eq(zatcaCreditNotes.status, 'signed'), eq(zatcaCreditNotes.status, 'failed')))
-      .orderBy(asc(zatcaCreditNotes.icv))
-      .all();
+      // Pending invoices — fetch all, no limit
+      const pendingInvoices = this.db
+        .select()
+        .from(zatcaInvoices)
+        .where(or(eq(zatcaInvoices.status, 'signed'), eq(zatcaInvoices.status, 'failed')))
+        .orderBy(asc(zatcaInvoices.icv))
+        .all();
 
-    for (const cn of pendingCreditNotes) {
-      pendingDocs.push({
-        id: cn.id,
-        icv: cn.icv,
-        uuid: cn.uuid,
-        invoiceHash: cn.invoiceHash,
-        xml: cn.xml,
-        kind: 'credit_note',
-      });
-    }
+      for (const inv of pendingInvoices) {
+        pendingDocs.push({
+          id: inv.id,
+          icv: inv.icv,
+          uuid: inv.uuid,
+          invoiceHash: inv.invoiceHash,
+          xml: inv.xml,
+          kind: 'invoice',
+        });
+      }
 
-    // Merge and sort by ICV ascending for deterministic reporting order
-    pendingDocs.sort((a, b) => a.icv - b.icv);
+      // Pending credit notes — fetch all, no limit
+      const pendingCreditNotes = this.db
+        .select()
+        .from(zatcaCreditNotes)
+        .where(or(eq(zatcaCreditNotes.status, 'signed'), eq(zatcaCreditNotes.status, 'failed')))
+        .orderBy(asc(zatcaCreditNotes.icv))
+        .all();
 
-    let succeeded = 0;
-    let failed = 0;
+      for (const cn of pendingCreditNotes) {
+        pendingDocs.push({
+          id: cn.id,
+          icv: cn.icv,
+          uuid: cn.uuid,
+          invoiceHash: cn.invoiceHash,
+          xml: cn.xml,
+          kind: 'credit_note',
+        });
+      }
 
-    for (const doc of pendingDocs) {
-      try {
-        const result = await this.reportDocument(doc);
-        if (result) {
-          succeeded++;
-        } else {
+      // Merge and sort by ICV ascending for deterministic reporting order
+      pendingDocs.sort((a, b) => a.icv - b.icv);
+
+      let succeeded = 0;
+      let failed = 0;
+
+      for (const doc of pendingDocs) {
+        try {
+          const result = await this.reportDocument(doc);
+          if (result) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } catch (err: any) {
+          this.logger.error(`Failed to report ${doc.kind} ICV=${doc.icv}: ${err.message}`);
           failed++;
         }
-      } catch (err: any) {
-        this.logger.error(`Failed to report ${doc.kind} ICV=${doc.icv}: ${err.message}`);
-        failed++;
       }
-    }
 
-    return { processed: pendingDocs.length, succeeded, failed };
+      return { processed: pendingDocs.length, succeeded, failed };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      this.logger.error(`Reporting queue failed: ${message}`, stack);
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
   }
 
   private async reportSingleInvoice(invoiceId: number): Promise<{

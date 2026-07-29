@@ -25,6 +25,13 @@ export const PrinterRole = {
 } as const;
 export type PrinterRole = (typeof PrinterRole)[keyof typeof PrinterRole];
 
+export const PrinterConnectionType = {
+  TCP: 'tcp',
+  WINDOWS: 'windows',
+} as const;
+export type PrinterConnectionType =
+  (typeof PrinterConnectionType)[keyof typeof PrinterConnectionType];
+
 export const AuditAction = {
   CREATED: 'created',
   ITEM_ADDED: 'item_added',

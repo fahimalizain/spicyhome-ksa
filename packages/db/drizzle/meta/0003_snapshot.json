@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2f401332-75d0-4a22-8e5e-f9d942c88246",
+  "id": "3203724a-f67e-4bd9-aebe-f5b679507313",
   "prevId": "f0e01a63-eb9c-49f0-95c1-933a22ffe034",
   "tables": {
     "day_openings": {
@@ -1044,21 +1044,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "is_standard_invoice": {
-          "name": "is_standard_invoice",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "zatca_buyer_details": {
-          "name": "zatca_buyer_details",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1254,6 +1239,21 @@
           "notNull": true,
           "autoincrement": false
         },
+        "connection_type": {
+          "name": "connection_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'tcp'"
+        },
+        "windows_printer_name": {
+          "name": "windows_printer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "ip": {
           "name": "ip",
           "type": "text",
@@ -1275,6 +1275,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "config": {
+          "name": "config",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
         },
         "is_active": {
           "name": "is_active",

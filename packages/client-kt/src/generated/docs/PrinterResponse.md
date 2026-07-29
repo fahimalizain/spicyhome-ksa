@@ -9,6 +9,7 @@
 | **ip** | **kotlin.String** |  |  |
 | **port** | **kotlin.Int** |  |  |
 | **role** | **kotlin.String** |  |  |
+| **config** | [**PrinterConfigDto**](PrinterConfigDto.md) |  |  |
 | **isActive** | **kotlin.Boolean** |  |  |
 | **createdAt** | **kotlin.Long** |  |  |
 | **updatedAt** | **kotlin.Long** |  |  |

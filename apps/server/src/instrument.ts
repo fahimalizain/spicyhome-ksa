@@ -1,5 +1,51 @@
 import { readAppVersion } from './common/app-version';
 
+// Node 18 on Windows 7: libuv's uv_os_gethostname uses GetHostNameW
+// (a Windows 8+ API). On Windows 7 it returns ENOSYS, and Sentry's
+// NodeClient calls os.hostname() at init — which throws synchronously
+// and crashes the server. Polyfill os.hostname() with a safe fallback
+// (COMPUTERNAME is always set on Windows) before Sentry is loaded.
+// This module is imported first in main.ts, so the patch applies
+// process-wide before any other caller of os.hostname().
+//
+// We use require('os') instead of import * as os because the TS
+// __importStar wrapper creates a getter-only non-configurable proxy;
+// Object.defineProperty on it throws. require('os') returns the real
+// module singleton, whose hostname is a configurable data property.
+// This also fixes Sentry's NodeClient, which calls require('os')
+// directly — not the import wrapper.
+const os = require('os') as typeof import('os');
+
+let hostnameWorks = true;
+try {
+  os.hostname();
+} catch {
+  hostnameWorks = false;
+}
+export function resolveFallbackHostname(): string {
+  return process.env.COMPUTERNAME || process.env.HOSTNAME || 'spicyhome-server';
+}
+
+if (!hostnameWorks) {
+  const fallbackHostname = resolveFallbackHostname();
+  try {
+    // On the real os module (require('os')), hostname is a configurable
+    // data property on Node 18. Object.defineProperty can override it.
+    // This also fixes Sentry's NodeClient, which calls require('os')
+    // directly.
+    Object.defineProperty(os, 'hostname', {
+      value: () => fallbackHostname,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+  } catch {
+    // Property is non-configurable — cannot override. Sentry.init
+    // (below) is wrapped in try/catch and will catch the ENOSYS
+    // error, so the server boots without error monitoring.
+  }
+}
+
 const SENTRY_DSN = process.env.SENTRY_DSN;
 const VERSION = readAppVersion();
 
@@ -63,8 +109,15 @@ if (SENTRY_DSN) {
     delete initOptions.profilesSampleRate;
   }
 
-  Sentry.init(initOptions);
-  sentryInitialized = true;
+  try {
+    Sentry.init(initOptions);
+    sentryInitialized = true;
+  } catch (err) {
+    // Never let Sentry init crash the server. The os.hostname() polyfill
+    // above handles the known Win7 ENOSYS case; this guard covers any
+    // other init-time failure so observability stays best-effort.
+    console.error('[Sentry] init failed — running without error monitoring:', err);
+  }
 }
 
 export function isSentryInitialized(): boolean {

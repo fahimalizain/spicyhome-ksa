@@ -61,6 +61,7 @@ cp packages/db/package.json "$TEST_DIR/packages/db/package.json"
 
 # Copy prebuilt native binary (won't load on macOS, needed for structure)
 cp packaging/prebuilt/better_sqlite3.node "$TEST_DIR/prebuilt/"
+cp packaging/prebuilt/win_rawprint.exe "$TEST_DIR/prebuilt/" 2>/dev/null || true
 
 # Run fixup
 node "$SCRIPT_DIR/fixup-packages.js" "$TEST_DIR"

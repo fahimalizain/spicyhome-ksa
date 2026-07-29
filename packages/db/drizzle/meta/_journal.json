@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "6",
-      "when": 1785234372748,
-      "tag": "0003_add_standard_invoice_buyer_fields",
+      "when": 1785298706920,
+      "tag": "0003_printers_config_and_connection",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785314339462,
+      "tag": "0004_add_standard_invoice_buyer_fields",
       "breakpoints": true
     }
   ]

@@ -12,6 +12,7 @@ import { PrintJobService } from './print-job.service';
 import { CreatePrinterDto, UpdatePrinterDto } from './dto/create-printer.dto';
 import { PrinterResponse } from './dto/printer-response.dto';
 import { PrinterStatusResponse } from './dto/printer-status-response.dto';
+import { WindowsPrinterQueuesResponse } from './dto/windows-printer-queues-response.dto';
 import { SuccessResponse } from '../orders/dto/success-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -30,6 +31,18 @@ export class PrintersController {
   @ApiOkResponse({ description: 'List of printers', type: [PrinterResponse] })
   list() {
     return this.printersService.list();
+  }
+
+  @Get('windows-queues')
+  @RequiresPermission('manage_printers')
+  @ApiOperation({ summary: 'List available Windows printer queue names' })
+  @ApiOkResponse({
+    description: 'Windows printer queue names',
+    type: WindowsPrinterQueuesResponse,
+  })
+  async listWindowsQueues(): Promise<{ queues: string[] }> {
+    const queues = await this.printersService.listWindowsQueues();
+    return { queues };
   }
 
   @Get(':id')
@@ -62,7 +75,7 @@ export class PrintersController {
   }
 
   @Get(':id/status')
-  @ApiOperation({ summary: 'Check printer TCP reachability' })
+  @ApiOperation({ summary: 'Check printer reachability' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiOkResponse({ description: 'Printer reachability status', type: PrinterStatusResponse })
   async checkStatus(@Param('id', ParseIntPipe) id: number) {

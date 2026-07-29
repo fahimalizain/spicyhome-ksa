@@ -353,6 +353,8 @@ export class PrintJobService {
       printerName: p.name,
       ip: p.ip,
       port: p.port,
+      // p.config is already parsed by mapPrinterRow via safeParsePrinterConfig
+      config: p.config,
     });
     await this.printersService.sendBuffer(p, buf);
   }

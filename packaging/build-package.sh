@@ -6,13 +6,22 @@ set -euo pipefail
 # Produces dist/spicyhome-pos-win7.zip containing:
 #   node/node.exe + node/npm.cmd  — Node.js v18.20.5 win-x64 (portable)
 #   server/                       — compiled NestJS server JS + package.json
-#   server/migrations/            — Drizzle SQL migration files
+#   packages/db/drizzle/          — Drizzle SQL migration files
 #   pos/                          — SPA static dist (from Vite)
-#   start-server.bat              — startup script
+#   VERSION                       — release version file
+#   start-server.bat / .ps1       — debug startup scripts
+#   spicyhome.ps1                 — install/update/service engine
+#   install.bat / update.bat      — engine wrappers
+#   rollback.bat / check.bat      — engine wrappers
+#   spicyhome.config.example.json — example config
 #   README.txt                    — setup instructions
-#   data/                         — created at runtime on target machine
+#   data/                         — created at runtime (flat layout: under package dir;
+#                                   side-by-side: under installDir, outside releases/)
+#   logs/server/                  — server stdout/stderr (side-by-side: under installDir;
+#                                   flat: under installDir/logs/server/)
 #
-# The start-server.bat runs 'npm install --production' on first launch
+# The start-server.ps1 auto-detects flat vs side-by-side layouts and adjusts
+# paths for data, logs, and SPA accordingly. npm install runs on first launch
 # to download server dependencies. The Windows-native better-sqlite3 binary
 # is pre-bundled so the target machine does not need a C++ toolchain.
 
@@ -47,8 +56,37 @@ mkdir -p "$PACKAGE_DIR" "$TEMP_DIR"
 # 1. Build everything with Bazel
 # ──────────────────────────────────────────────────
 echo "Building all targets with Bazel..."
+
+# Set version to the package version so Vite picks it up even when the VERSION
+# file is not available in the Bazel sandbox.
+export VITE_APP_VERSION="${VITE_APP_VERSION:-$PACKAGE_VERSION}"
+
+# Default release name and environment so --action_env always has values.
+export VITE_SENTRY_RELEASE="${VITE_SENTRY_RELEASE:-spicyhome-pos@$PACKAGE_VERSION}"
+export VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-production}"
+
+# Forward all VITE_SENTRY_* and Sentry auth vars into the Bazel action
+# environment. Using --action_env=NAME (without =value) inherits from the
+# process environment — the same pattern used for ANDROID_HOME in CI.
+BAZEL_ACTION_ENV_ARGS=()
+for key in \
+  VITE_SENTRY_DSN \
+  VITE_SENTRY_ENVIRONMENT \
+  VITE_SENTRY_RELEASE \
+  VITE_SENTRY_TRACES_SAMPLE_RATE \
+  VITE_APP_VERSION \
+  SENTRY_AUTH_TOKEN \
+  SENTRY_ORG \
+  SENTRY_PROJECT
+do
+  # Always forward these so the action env fingerprint is stable when unset
+  # vs set to empty.
+  BAZEL_ACTION_ENV_ARGS+=(--action_env="$key")
+done
+
 cd "$ROOT_DIR"
 bazel build \
+  "${BAZEL_ACTION_ENV_ARGS[@]}" \
   //apps/server:lib \
   //packages/shared:lib \
   //packages/db:lib \
@@ -158,6 +196,18 @@ mkdir -p "$PACKAGE_DIR/prebuilt"
 cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/prebuilt/better_sqlite3.node"
 echo "better-sqlite3 native binary bundled."
 
+# ── Bundle win_rawprint.exe for Windows USB/spooler printers ────────
+echo "Bundling win_rawprint.exe..."
+WIN_RAWPRINT_PREBUILT="$SCRIPT_DIR/prebuilt/win_rawprint.exe"
+if [ -f "$WIN_RAWPRINT_PREBUILT" ]; then
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/prebuilt/win_rawprint.exe"
+  # Also copy to root for easy discovery
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/win_rawprint.exe"
+  echo "win_rawprint.exe bundled."
+else
+  echo "WARNING: win_rawprint.exe not found at $WIN_RAWPRINT_PREBUILT. Build it first: cd native/win_rawprint && ./build.sh"
+fi
+
 # ──────────────────────────────────────────────────
 # 5. Copy SPA dist
 # ──────────────────────────────────────────────────
@@ -188,34 +238,79 @@ $ErrorActionPreference = "Stop"
 $env:NODE_SKIP_PLATFORM_CHECK = "1"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# ── Layout detection: side-by-side vs flat ──
+# Side-by-side: script lives in releases\{ver}\ or current\ under installDir.
+#   installDir has spicyhome.config.json and/or releases\ directory.
+# Flat: script lives at the root of an unzipped package (no parent config).
+$parentDir = Split-Path -Parent $scriptDir
+if ((Test-Path (Join-Path $parentDir 'spicyhome.config.json')) -or (Test-Path (Join-Path $parentDir 'releases'))) {
+    $installRoot = $parentDir
+} else {
+    $installRoot = $scriptDir
+}
+
 $env:TZ = "Asia/Riyadh"
 $env:SPA_DIST = Join-Path $scriptDir "pos"
-$env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
+$env:SPICYHOME_DB = Join-Path $installRoot "data\spicyhome.db"
 $env:PORT = "3742"
-$env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
+$env:MIGRATIONS_DIR = Join-Path $scriptDir "packages\db\drizzle"
 $env:APP_VERSION = "__PACKAGE_VERSION__"
+$env:WIN_RAWPRINT_PATH = Join-Path $scriptDir "prebuilt\win_rawprint.exe"
 
-# Optional Sentry error monitoring:
-# $env:SENTRY_DSN = "https://..."
-# $env:SENTRY_ENVIRONMENT = "production"
-# $env:SENTRY_TRACES_SAMPLE_RATE = "1.0"
-# $env:SENTRY_PROFILES_SAMPLE_RATE = "1.0"
+__SENTRY_ENV_BLOCK__
 
 Write-Host "=========================================="
 Write-Host "  SpicyHome POS Server"
 Write-Host "=========================================="
 Write-Host ""
+Write-Host "Layout:   $(if ($installRoot -eq $scriptDir) { 'flat' } else { 'side-by-side' })"
+Write-Host "Root:     $installRoot"
 Write-Host "Server:   $(Join-Path $scriptDir 'server\main.js')"
 Write-Host "SPA:      $($env:SPA_DIST)"
 Write-Host "Database: $($env:SPICYHOME_DB)"
 Write-Host "Port:     $($env:PORT)"
 Write-Host ""
 
-# Create data directory
-$dataDir = Join-Path $scriptDir "data"
+# Create data directory (persists outside releases in side-by-side layout)
+$dataDir = Join-Path $installRoot "data"
 if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
 }
+
+# Create logs directory for server stdout/stderr capture
+# In side-by-side: {installDir}\logs\server\ (outside data\)
+# In flat:        {installDir}\logs\server\ (installRoot=scriptDir, so alongside data\)
+$logsDir = Join-Path $installRoot "logs\server"
+if (-not (Test-Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir | Out-Null
+}
+
+$outLog = Join-Path $logsDir "server.out.log"
+$errLog = Join-Path $logsDir "server.err.log"
+
+Write-Host "Logs:     $logsDir"
+Write-Host ""
+
+# Size-based log rotation at startup (10 MB threshold).
+# Rotates server.out.log -> server.out.log.1 (and same for err).
+function Rotate-LogFile([string]$path, [long]$maxBytes) {
+    if (Test-Path $path) {
+        $item = Get-Item $path
+        if ($item.Length -gt $maxBytes) {
+            $bak = $path + ".1"
+            if (Test-Path $bak) { Remove-Item -Force $bak -ErrorAction SilentlyContinue }
+            Move-Item -Force $path $bak -ErrorAction SilentlyContinue
+        }
+    }
+}
+$maxLogBytes = 10 * 1024 * 1024
+Rotate-LogFile $outLog $maxLogBytes
+Rotate-LogFile $errLog $maxLogBytes
+
+# Write a startup banner line to server.out.log so every run is bookended
+$startBanner = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  SpicyHome v$($env:APP_VERSION)  PORT=$($env:PORT)  DB=$($env:SPICYHOME_DB)  out=$outLog  err=$errLog"
+try { [System.IO.File]::AppendAllText($outLog, $startBanner + "`r`n") } catch {}
 
 # Ensure migrations directory exists (required by server startup).
 # SQL files are pre-copied during packaging.
@@ -237,10 +332,16 @@ if (-not (Test-Path $nodeModules)) {
     $serverDir = Join-Path $scriptDir "server"
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
-    $installArgs = @("install", "--production", "--ignore-scripts")
-    $logOut = Join-Path $env:TEMP "spicyhome-npm-out.log"
-    $logErr = Join-Path $env:TEMP "spicyhome-npm-err.log"
-    $installProcess = Start-Process -FilePath $npmCmd -ArgumentList $installArgs -WorkingDirectory $serverDir -Wait -NoNewWindow -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr
+    $logOut = Join-Path $logsDir "npm-out.log"
+    $logErr = Join-Path $logsDir "npm-err.log"
+    # NODE_SKIP_PLATFORM_CHECK already set at script top for Win7.
+    # Call npm.cmd directly (cmd /c nested quotes break on Windows).
+    $installProcess = Start-Process -FilePath $npmCmd `
+        -ArgumentList @("install", "--production", "--ignore-scripts") `
+        -WorkingDirectory $serverDir `
+        -Wait -NoNewWindow -PassThru `
+        -RedirectStandardOutput $logOut `
+        -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
         Write-Host "ERROR: npm install failed." -ForegroundColor Red
         Write-Host ""
@@ -248,7 +349,7 @@ if (-not (Test-Path $nodeModules)) {
         if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
         Write-Host ""
         Write-Host "Try running: node\npm.cmd install --production --ignore-scripts"
-        Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
+        Write-Host "(Ensure NODE_SKIP_PLATFORM_CHECK=1 on Windows 7)"
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -277,21 +378,130 @@ $env:NODE_PATH = Join-Path $scriptDir "server\node_modules"
 $nodeExe = Join-Path $scriptDir "node\node.exe"
 $mainJs = Join-Path $scriptDir "server\main.js"
 
-# Run directly so stderr/stdout is visible in the console.
-# Set location so the server sees the right cwd (for .env, data/ etc.).
+# Pure CLR tee — PowerShell scriptblocks on OutputDataReceived crash on Win7
+# (PSInvalidOperation / ScriptBlock.GetContextFromTLS) because callbacks run on
+# a thread-pool thread with no PowerShell runspace. Prefer start-server.bat over ISE.
 Set-Location $scriptDir
-& $nodeExe $mainJs
-$exitCode = $LASTEXITCODE
+
+if (-not ([System.Management.Automation.PSTypeName] "SpicyHomeLoggedProcess").Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+
+public class SpicyHomeLoggedProcess {
+  private static string outLogPath;
+  private static string errLogPath;
+
+  private static void OnOutput(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(outLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Out.WriteLine(e.Data); } catch {}
+    }
+  }
+
+  private static void OnError(object sender, DataReceivedEventArgs e) {
+    if (e.Data != null) {
+      try { File.AppendAllText(errLogPath, e.Data + Environment.NewLine); } catch {}
+      try { Console.Error.WriteLine(e.Data); } catch {}
+    }
+  }
+
+  public static int Run(string fileName, string args, string workDir, string outPath, string errPath) {
+    outLogPath = outPath;
+    errLogPath = errPath;
+
+    ProcessStartInfo psi = new ProcessStartInfo();
+    psi.FileName = fileName;
+    psi.Arguments = args;
+    psi.WorkingDirectory = workDir;
+    psi.UseShellExecute = false;
+    psi.RedirectStandardOutput = true;
+    psi.RedirectStandardError = true;
+    psi.CreateNoWindow = true;
+
+    Process p = new Process();
+    p.StartInfo = psi;
+    p.OutputDataReceived += new DataReceivedEventHandler(OnOutput);
+    p.ErrorDataReceived += new DataReceivedEventHandler(OnError);
+
+    p.Start();
+    p.BeginOutputReadLine();
+    p.BeginErrorReadLine();
+    p.WaitForExit();
+    Thread.Sleep(200);
+
+    int code = p.ExitCode;
+    p.Close();
+    return code;
+  }
+}
+"@
+}
+
+$exitCode = [SpicyHomeLoggedProcess]::Run(
+    $nodeExe,
+    ('"' + $mainJs + '"'),
+    $scriptDir,
+    $outLog,
+    $errLog
+)
 
 if ($exitCode -ne 0) {
     Write-Host ""
     Write-Host "Server exited with error code $exitCode"
+    Write-Host "Check logs:"
+    Write-Host "  $outLog"
+    Write-Host "  $errLog"
     Read-Host "Press Enter to exit"
 }
 PSEOF
 
 # Inject the actual package version into the PowerShell script
 sed -i.bak "s/__PACKAGE_VERSION__/$PACKAGE_VERSION/g" "$PACKAGE_DIR/start-server.ps1"
+rm -f "$PACKAGE_DIR/start-server.ps1.bak"
+
+# ── Bake server Sentry DSN into the PowerShell script ──
+# Prefer SENTRY_DSN, fall back to SENTRY_SERVER_DSN.
+SERVER_DSN="${SENTRY_DSN:-${SENTRY_SERVER_DSN:-}}"
+if [ -n "$SERVER_DSN" ]; then
+  SENTRY_ENV="${SENTRY_ENVIRONMENT:-production}"
+  SENTRY_TRACES="${SENTRY_TRACES_SAMPLE_RATE:-1.0}"
+  SENTRY_PROFILES="${SENTRY_PROFILES_SAMPLE_RATE:-1.0}"
+  # Escape single quotes in the DSN for PowerShell single-quoted strings:
+  # PowerShell uses '' to represent a literal single quote inside a
+  # single-quoted string. Use sed for reliable escaping across bash versions.
+  DSN_SAFE=$(echo "$SERVER_DSN" | sed "s/'/''/g")
+  cat > "$TEMP_DIR/sentry-block.txt" << SENTRYEOF
+# Sentry error monitoring (baked at package time; override by setting env before start):
+if ([string]::IsNullOrEmpty(\$env:SENTRY_DSN)) { \$env:SENTRY_DSN = '${DSN_SAFE}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_ENVIRONMENT)) { \$env:SENTRY_ENVIRONMENT = '${SENTRY_ENV}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_TRACES_SAMPLE_RATE)) { \$env:SENTRY_TRACES_SAMPLE_RATE = '${SENTRY_TRACES}' }
+if ([string]::IsNullOrEmpty(\$env:SENTRY_PROFILES_SAMPLE_RATE)) { \$env:SENTRY_PROFILES_SAMPLE_RATE = '${SENTRY_PROFILES}' }
+SENTRYEOF
+  echo "Sentry server DSN: baked"
+
+  # Append Sentry keys to server.env for the NSSM production service path.
+  # server.env is always written below; this flag controls whether Sentry keys
+  # are appended. start-server.ps1 covers the debug path; server.env is the
+  # production path consumed by Install-NssmService / Invoke-Update.
+  HAS_SENTRY=1
+
+else
+  cat > "$TEMP_DIR/sentry-block.txt" << 'SENTRYEOF'
+# Optional Sentry error monitoring (set before starting the server):
+# $env:SENTRY_DSN = "https://..."
+# $env:SENTRY_ENVIRONMENT = "production"
+# $env:SENTRY_TRACES_SAMPLE_RATE = "1.0"
+# $env:SENTRY_PROFILES_SAMPLE_RATE = "1.0"
+SENTRYEOF
+  echo "Sentry server DSN: not set"
+fi
+
+# Replace the __SENTRY_ENV_BLOCK__ placeholder with the generated block.
+sed -i.bak "/__SENTRY_ENV_BLOCK__/r $TEMP_DIR/sentry-block.txt" "$PACKAGE_DIR/start-server.ps1"
+sed -i.bak "/__SENTRY_ENV_BLOCK__/d" "$PACKAGE_DIR/start-server.ps1"
 rm -f "$PACKAGE_DIR/start-server.ps1.bak"
 
 cat > "$PACKAGE_DIR/start-server.bat" << 'BATEOF'
@@ -308,12 +518,216 @@ done
 echo "start-server.bat and start-server.ps1 created."
 
 # ──────────────────────────────────────────────────
-# 7. Copy README.txt
+# 6b. Write server.env for NSSM AppEnvironmentExtra
+# ──────────────────────────────────────────────────
+# Always written — every package gets this file. Paths use {installDir} and
+# {port} placeholders expanded by spicyhome.ps1 at install/update/rollback.
+# APP_VERSION is baked at package time (version is known here).
+# Sentry keys are appended only when DSN is baked.
+
+cat > "$PACKAGE_DIR/server.env" << ENVEOF
+# SpicyHome server environment for NSSM AppEnvironmentExtra.
+# Placeholders expanded by spicyhome.ps1 at install/update/rollback:
+#   {installDir}  — install root (parent of current\)
+#   {version}     — active release version
+#   {port}        — service port from config / -Port
+TZ=Asia/Riyadh
+SPA_DIST={installDir}\current\pos
+SPICYHOME_DB={installDir}\data\spicyhome.db
+PORT={port}
+NODE_SKIP_PLATFORM_CHECK=1
+MIGRATIONS_DIR={installDir}\current\packages\db\drizzle
+NODE_PATH={installDir}\current\server\node_modules
+APP_VERSION=$PACKAGE_VERSION
+WIN_RAWPRINT_PATH={installDir}\current\prebuilt\win_rawprint.exe
+ENVEOF
+
+if [ -n "${HAS_SENTRY:-}" ]; then
+  cat >> "$PACKAGE_DIR/server.env" << ENVEOF
+SENTRY_DSN=${SERVER_DSN}
+SENTRY_ENVIRONMENT=${SENTRY_ENV}
+SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES}
+SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES}
+ENVEOF
+  echo "server.env: written with Sentry keys"
+else
+  echo "server.env: written (no Sentry)"
+fi
+
+# Ensure CRLF line endings for Windows text-file consistency
+sed 's/$/\r/' "$PACKAGE_DIR/server.env" > "$PACKAGE_DIR/server.env.crlf"
+mv "$PACKAGE_DIR/server.env.crlf" "$PACKAGE_DIR/server.env"
+
+# ──────────────────────────────────────────────────
+# 7. Copy VERSION file
+# ──────────────────────────────────────────────────
+echo "Copying VERSION file..."
+cp "$ROOT_DIR/VERSION" "$PACKAGE_DIR/VERSION"
+echo "VERSION: $PACKAGE_VERSION"
+
+# ──────────────────────────────────────────────────
+# 8. Copy install/update engine and wrappers
+# ──────────────────────────────────────────────────
+echo "Copying install/update engine and wrappers..."
+
+# Main engine script
+cp "$SCRIPT_DIR/spicyhome.ps1" "$PACKAGE_DIR/spicyhome.ps1"
+
+# Bat wrappers (install, update, rollback, check)
+for bat in install.bat update.bat rollback.bat check.bat; do
+  if [ -f "$SCRIPT_DIR/$bat" ]; then
+    cp "$SCRIPT_DIR/$bat" "$PACKAGE_DIR/$bat"
+  fi
+done
+
+# Config example
+cp "$SCRIPT_DIR/spicyhome.config.example.json" "$PACKAGE_DIR/spicyhome.config.example.json"
+
+# Ensure line endings are Windows CRLF for all bat/ps1 files
+for f in "$PACKAGE_DIR"/*.bat "$PACKAGE_DIR"/*.ps1; do
+  if [ -f "$f" ]; then
+    sed 's/$/\r/' "$f" > "$f.crlf"
+    mv "$f.crlf" "$f"
+  fi
+done
+
+echo "Engine and wrappers packaged."
+
+# ──────────────────────────────────────────────────
+# 9. Copy README.txt
 # ──────────────────────────────────────────────────
 cp "$SCRIPT_DIR/README.txt" "$PACKAGE_DIR/README.txt"
 
 # ──────────────────────────────────────────────────
-# 8. Zip
+# 10. Verification guardrails
+# ──────────────────────────────────────────────────
+echo ""
+echo "=== Post-package verification ==="
+VERIFY_FAILED=0
+
+# a) Package version must appear in the POS bundle.
+if [ -n "$PACKAGE_VERSION" ]; then
+  if grep -qF "$PACKAGE_VERSION" "$PACKAGE_DIR/pos/assets/"*.js 2>/dev/null; then
+    echo "  POS version check: $PACKAGE_VERSION found in bundle"
+  else
+    echo "ERROR: Version $PACKAGE_VERSION not found in POS bundle."
+    echo "  VITE_APP_VERSION may not have been forwarded via --action_env."
+    VERIFY_FAILED=1
+  fi
+fi
+
+# b) POS Sentry DSN public key must appear in the bundle when DSN is set.
+if [ -n "${VITE_SENTRY_DSN:-}" ]; then
+  # Extract the public key from the DSN: everything between https:// and @
+  DSN_PUBLIC_KEY=$(echo "$VITE_SENTRY_DSN" | sed -n 's|https://\([^@]*\)@.*|\1|p')
+  if [ -n "$DSN_PUBLIC_KEY" ]; then
+    if grep -qF "$DSN_PUBLIC_KEY" "$PACKAGE_DIR/pos/assets/"*.js 2>/dev/null; then
+      echo "  POS Sentry DSN: public key found in bundle"
+    else
+      echo "ERROR: Sentry DSN public key not found in POS bundle."
+      echo "  VITE_SENTRY_DSN may not have been forwarded via --action_env."
+      VERIFY_FAILED=1
+    fi
+  fi
+fi
+
+# c) Server DSN must be active (uncommented) in start-server.ps1 if baked.
+if [ -n "$SERVER_DSN" ]; then
+  # The baked block uses IsNullOrEmpty guard; the literal DSN_SAFE string
+  # only appears inside that block, never in comments.
+  if grep -qF "SENTRY_DSN = '${DSN_SAFE}'" "$PACKAGE_DIR/start-server.ps1"; then
+    echo "  Server Sentry DSN: present in start-server.ps1"
+  else
+    echo "ERROR: Server Sentry DSN not found or commented out in start-server.ps1"
+    VERIFY_FAILED=1
+  fi
+fi
+
+# c2) server.env must always exist with base keys (NSSM production path).
+if [ -f "$PACKAGE_DIR/server.env" ]; then
+  echo "  server.env: present"
+  if grep -qF "TZ=Asia/Riyadh" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: TZ=Asia/Riyadh present"
+  else
+    echo "ERROR: TZ=Asia/Riyadh missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "SPA_DIST=" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: SPA_DIST present"
+  else
+    echo "ERROR: SPA_DIST missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "APP_VERSION=$PACKAGE_VERSION" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: APP_VERSION=$PACKAGE_VERSION present"
+  else
+    echo "ERROR: APP_VERSION=$PACKAGE_VERSION missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  if grep -qF "WIN_RAWPRINT_PATH=" "$PACKAGE_DIR/server.env"; then
+    echo "  server.env: WIN_RAWPRINT_PATH present"
+  else
+    echo "ERROR: WIN_RAWPRINT_PATH missing from server.env"
+    VERIFY_FAILED=1
+  fi
+  # Sentry DSN check
+  if [ -n "$SERVER_DSN" ]; then
+    if grep -qF "SENTRY_DSN=$SERVER_DSN" "$PACKAGE_DIR/server.env"; then
+      echo "  server.env: SENTRY_DSN present"
+    else
+      echo "ERROR: SENTRY_DSN line not found in server.env"
+      VERIFY_FAILED=1
+    fi
+  else
+    if grep -qF "SENTRY_DSN=" "$PACKAGE_DIR/server.env"; then
+      echo "WARN: server.env has SENTRY_DSN= line but no DSN was baked"
+    else
+      echo "  server.env: no SENTRY_DSN (as expected — DSN not baked)"
+    fi
+  fi
+else
+  echo "ERROR: server.env missing from package"
+  VERIFY_FAILED=1
+fi
+
+# d) Engine scripts and VERSION must be present
+for f in \
+  VERSION \
+  spicyhome.ps1 \
+  install.bat \
+  update.bat \
+  rollback.bat \
+  check.bat \
+  spicyhome.config.example.json
+do
+  if [ -f "$PACKAGE_DIR/$f" ]; then
+    echo "  $f: present"
+  else
+    echo "ERROR: $f missing from package"
+    VERIFY_FAILED=1
+  fi
+done
+
+# e) VERSION file content must match package version
+PACKAGE_VERSION_FILE=$(cat "$PACKAGE_DIR/VERSION" | tr -d '[:space:]')
+if [ "$PACKAGE_VERSION_FILE" = "$PACKAGE_VERSION" ]; then
+  echo "  VERSION content matches: $PACKAGE_VERSION"
+else
+  echo "ERROR: VERSION file mismatch. Expected: $PACKAGE_VERSION, Got: $PACKAGE_VERSION_FILE"
+  VERIFY_FAILED=1
+fi
+
+if [ "$VERIFY_FAILED" -ne 0 ]; then
+  echo ""
+  echo "=== Verification FAILED ==="
+  echo "See errors above. The package will not be zipped."
+  exit 1
+fi
+echo "=== Verification passed ==="
+echo ""
+
+# ──────────────────────────────────────────────────
+# 11. Zip
 # ──────────────────────────────────────────────────
 echo "Creating zip..."
 # Fix permissions before zipping (Bazel outputs are read-only)

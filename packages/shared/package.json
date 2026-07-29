@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/shared",
-  "version": "202607.24.4",
+  "version": "202607.29.2",
   "private": true,
   "type": "commonjs",
   "main": "src/index.js",
@@ -11,7 +11,7 @@
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

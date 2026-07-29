@@ -51,8 +51,18 @@ pnpm package:win7
 # → dist/spicyhome-pos-win7.zip
 ```
 
-Unzip on target Windows PC, run `start-server.bat`, open http://localhost:3000.
-Default login: admin / 1234. Change PIN immediately.
+The package supports two deployment layouts:
+
+- **Flat** (unzip and run): extract anywhere, run `start-server.bat`, open
+  `http://localhost:3742`. Default login: admin / 1234. Change PIN immediately.
+- **Side-by-side** (production): run `install.bat -InstallDir D:\SpicyHomePOS`.
+  Creates `releases\{version}\`, a `current\` junction, an NSSM Windows service,
+  and `data\` outside the release tree for persistence across updates. Use
+  `update.bat` and `rollback.bat` to manage releases.
+
+See [packaging/README.txt](packaging/README.txt) for full setup instructions,
+including the Chrome kiosk desktop shortcut for a dedicated POS terminal.
+See [ADR 0003](docs/adr/0003-win7-deploy-update-service.md) for design rationale.
 
 ## Observability (Sentry)
 
@@ -109,16 +119,23 @@ SENTRY_ENVIRONMENT=production
 The release workflow (`release.yml`) maps the following GitHub secrets to the
 build-time environment variables above:
 
-| GitHub Secret                | Maps To             | Purpose                         |
-| ---------------------------- | ------------------- | ------------------------------- |
-| `secrets.SENTRY_POS_DSN`     | `VITE_SENTRY_DSN`   | SPA Sentry DSN at build time    |
-| `secrets.SENTRY_ANDROID_DSN` | `SENTRY_DSN`        | Android BuildConfig DSN         |
-| `secrets.SENTRY_AUTH_TOKEN`  | `SENTRY_AUTH_TOKEN` | Source map upload auth token    |
-| `vars.SENTRY_ORG`            | `SENTRY_ORG`        | Sentry org slug for source maps |
+| GitHub Secret                | Maps To             | Purpose                                                                                            |
+| ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
+| `secrets.SENTRY_POS_DSN`     | `VITE_SENTRY_DSN`   | SPA Sentry DSN at build time                                                                       |
+| `secrets.SENTRY_ANDROID_DSN` | `SENTRY_DSN`        | Android BuildConfig DSN                                                                            |
+| `secrets.SENTRY_SERVER_DSN`  | `SENTRY_DSN`        | Baked into `start-server.ps1` (debug path) and `server.env` (NSSM production path) at package time |
+| `secrets.SENTRY_AUTH_TOKEN`  | `SENTRY_AUTH_TOKEN` | Source map upload auth token                                                                       |
+| `vars.SENTRY_ORG`            | `SENTRY_ORG`        | Sentry org slug for source maps                                                                    |
 
-The server DSN (`SENTRY_DSN`) is set at runtime on the deployment machine and is
-not a GitHub secret. It can optionally be baked into the server package by
-setting the environment before running `pnpm package:win7`.
+Release builds bake `SENTRY_SERVER_DSN` into `start-server.ps1` (debug path) **and**
+`dist/spicyhome-pos-win7/server.env` (NSSM production path) as defaults.
+`spicyhome.ps1` reads `server.env` from the active release, expands `{installDir}`
+and `{port}` placeholders, and passes all keys as NSSM `AppEnvironmentExtra`.
+If `SENTRY_DSN` (or any other Sentry env var)
+is already set at runtime — via NSSM service environment, user-set variables, or
+a shell script — the existing value wins. Running `pnpm package:win7` locally
+with `SENTRY_DSN` or `SENTRY_SERVER_DSN` set also bakes those values into the
+generated script and server.env.
 
 ### Free Tier
 
