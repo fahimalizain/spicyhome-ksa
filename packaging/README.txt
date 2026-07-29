@@ -26,6 +26,8 @@ File Structure
   server/             NestJS server code
   server/main.js      Server entry point
   pos/                POS SPA (served by the server)
+  prebuilt/           Native binaries (better-sqlite3, rawprint.exe)
+  rawprint.exe        Windows USB printer spooler helper
   data/               SQLite database + server logs (created automatically)
   data/logs/          Server stdout/stderr logs (for troubleshooting)
   start-server.bat    Launch script
@@ -109,3 +111,15 @@ Sentry is never required — the system works offline without it.
 In official release builds, the Sentry DSN may already be pre-configured
 in start-server.ps1. Check the file for a $env:SENTRY_DSN assignment.
 To disable a baked DSN, comment out or remove that line.
+
+Windows USB Printers
+--------------------
+USB printers are supported via the Windows print spooler using the
+rawprint.exe helper. Configure printers with connection type "Windows
+(USB/spooler)" in Admin > Printers and provide the exact printer queue
+name (use "Refresh" to list available queues). The rawprint.exe binary
+is included in the package at prebuilt/rawprint.exe.
+
+The server environment variable RAWPRINT_PATH is automatically set by
+start-server.ps1 to point to the bundled binary. No extra setup is
+required for USB printer support.
