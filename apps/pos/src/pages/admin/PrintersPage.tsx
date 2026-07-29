@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
-import type { PrinterResponse } from '@spicyhome/client-ts';
+import type { CreatePrinterDto, UpdatePrinterDto, PrinterResponse } from '@spicyhome/client-ts';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterConfig, ArabicEncoding } from '@spicyhome/shared';
 
@@ -103,33 +103,25 @@ export function PrintersPage() {
     setEditId(p.id);
   }
 
-  function buildSavePayload(): Record<string, any> {
-    const payload: Record<string, any> = {
-      name: form.name,
-      connectionType: form.connectionType,
-      port: form.port,
-      role: form.role,
-      isActive: form.isActive,
-      config: form.config,
-    };
-
-    if (form.connectionType === 'windows') {
-      payload.windowsPrinterName = form.windowsPrinterName;
-      payload.ip = '';
-    } else {
-      payload.ip = form.ip;
-    }
-
-    return payload;
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    const payload: CreatePrinterDto = {
+      name: form.name,
+      connectionType: form.connectionType,
+      role: form.role,
+      isActive: form.isActive,
+      config: form.config,
+      port: form.connectionType === 'tcp' ? form.port : 9100,
+      ...(form.connectionType === 'tcp'
+        ? { ip: form.ip, windowsPrinterName: undefined }
+        : { ip: '', windowsPrinterName: form.windowsPrinterName }),
+    };
+
     try {
-      const payload = buildSavePayload();
       if (editId) {
-        await client.printers.update(editId, payload);
+        await client.printers.update(editId, payload as UpdatePrinterDto);
       } else {
         await client.printers.create(payload);
       }
