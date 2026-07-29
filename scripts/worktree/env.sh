@@ -60,7 +60,8 @@ read_env_key() {
 
 # Sentry keys eligible for inheritance from main → linked.
 # Explicitly excludes SENTRY_AUTH_TOKEN (CI-only), environment keys
-# (worktree-local), and runtime keys (PORT, VITE_PORT, etc.).
+# (always default to development for local worktrees), and runtime
+# keys (PORT, VITE_PORT, etc.).
 SENTRY_ALLOWLIST=(
   SENTRY_DSN
   SENTRY_ANDROID_DSN
@@ -156,13 +157,14 @@ emit_sentry_section() {
     fi
   done
 
-  # Environment: always active for linked (slug), commented template for main
+  # Environment: all local worktrees default to development.
+  # Still commented template for main (opt-in), active for linked (always on).
   if $IS_MAIN; then
     echo "# SENTRY_ENVIRONMENT=development"
     echo "# VITE_SENTRY_ENVIRONMENT=development"
   else
-    echo "SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-$SLUG}"
-    echo "VITE_SENTRY_ENVIRONMENT=${VITE_SENTRY_ENVIRONMENT:-$SLUG}"
+    echo "SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}"
+    echo "VITE_SENTRY_ENVIRONMENT=${VITE_SENTRY_ENVIRONMENT:-development}"
   fi
 }
 
@@ -173,7 +175,7 @@ emit_sentry_section() {
 sync_android_local_properties() {
   local props="$ROOT/apps/android/local.properties"
   local android_dsn="${SENTRY_ANDROID_DSN:-}"
-  local sentry_env="${SENTRY_ENVIRONMENT:-${WORKTREE_SLUG:-development}}"
+  local sentry_env="${SENTRY_ENVIRONMENT:-development}"
   # Unique temp name: compound VS Code launch can run env.sh twice in parallel
   # (server + POS preLaunchTasks). A fixed *.tmp races on mv.
   local tmp
@@ -358,8 +360,8 @@ if $PRINT_ONLY; then
     inherit_sentry_vars
   fi
   if ! $IS_MAIN; then
-    SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-$SLUG}"
-    VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-$SLUG}"
+    SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-development}"
+    VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-development}"
   fi
   render
   exit 0
@@ -398,10 +400,11 @@ if ! $IS_MAIN && [[ -n "$MAIN_ROOT" ]]; then
   inherit_sentry_vars
 fi
 
-# Set environment to slug for linked worktrees (not inherited from main)
+# All local worktrees default to development (not inherited from main).
+# User override via shell env takes precedence.
 if ! $IS_MAIN; then
-  SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-$SLUG}"
-  VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-$SLUG}"
+  SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-development}"
+  VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-development}"
 fi
 
 render > "$ENV_FILE"
