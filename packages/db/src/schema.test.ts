@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 5 rows after apply', () => {
+    it('__drizzle_migrations has exactly 7 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(5);
+      expect(rows.cnt).toBe(7);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(5);
+      expect(after).toBe(7);
 
       sqlite.close();
     });
@@ -252,7 +252,7 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
-    it('zatca_invoices.order_id is unique', () => {
+    it('zatca_invoices allows multiple attempts per order (no unique on order_id)', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
 
@@ -263,20 +263,48 @@ describe('schema — invariants', () => {
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
+      // First attempt — rejected
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-        VALUES (${orderId}, 1, 'inv-uuid-1', 'hash1', 'prevhash', '<xml/>', 'tlv', 'signed', ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, 1, 'inv-uuid-1', 'hash1', 'prevhash', '<xml/>', 'tlv', 'rejected', 1, ${now}, ${now})
       `);
 
+      // Second attempt (reissue with new ICV) should succeed — no unique conflict on order_id
       expect(() =>
         sqlite.exec(`
-          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-          VALUES (${orderId}, 2, 'inv-uuid-2', 'hash2', 'prevhash', '<xml/>', 'tlv', 'signed', ${now}, ${now})
+          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+          VALUES (${orderId}, 2, 'inv-uuid-2', 'hash2', 'prevhash2', '<xml/>', 'tlv', 'cleared', 2, ${now}, ${now})
+        `),
+      ).not.toThrow();
+    });
+
+    it('zatca_invoices only one cleared per order (partial unique index)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // Create order
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (102, 'uuid-inv-partial', 'dine_in', ${doId}, 'open', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // First cleared
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, 10, 'inv-uuid-p1', 'hash1', 'prev', '<xml/>', 'tlv', 'cleared', 1, ${now}, ${now})
+      `);
+
+      // Second cleared for same order must fail (partial unique index)
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+          VALUES (${orderId}, 11, 'inv-uuid-p2', 'hash2', 'prev', '<xml/>', 'tlv', 'cleared', 2, ${now}, ${now})
         `),
       ).toThrow();
     });
 
-    it('zatca_credit_notes.refund_id is unique', () => {
+    it('zatca_credit_notes allows multiple attempts per refund (no unique on refund_id)', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
       const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
@@ -295,16 +323,51 @@ describe('schema — invariants', () => {
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
+      // First attempt — rejected
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'inv-uuid-x', 1, 'cn-uuid-1', 'hash1', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-uuid-x', 1, 'cn-uuid-1', 'hash1', 'prev', '<xml/>', 'tlv', 'rejected', 1, 1150, 150, 'test', ${now}, ${now})
       `);
 
-      // Second credit_note for same refund_id should fail
+      // Second attempt (reissue with new ICV) should succeed
       expect(() =>
         sqlite.exec(`
-          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
-          VALUES (${orderId}, ${refundId}, 'inv-uuid-y', 2, 'cn-uuid-2', 'hash2', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId}, ${refundId}, 'inv-uuid-y', 2, 'cn-uuid-2', 'hash2', 'prev', '<xml/>', 'tlv', 'cleared', 2, 1150, 150, 'test', ${now}, ${now})
+        `),
+      ).not.toThrow();
+    });
+
+    it('zatca_credit_notes only one cleared per refund (partial unique index)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      // Create an order
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (201, 'uuid-cn-partial', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Create a refund
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // First cleared
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-uuid-cp', 20, 'cn-uuid-cp1', 'hash1', 'prev', '<xml/>', 'tlv', 'cleared', 1, 1150, 150, 'test', ${now}, ${now})
+      `);
+
+      // Second cleared for same refund must fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+          VALUES (${orderId}, ${refundId}, 'inv-uuid-cp2', 21, 'cn-uuid-cp2', 'hash2', 'prev', '<xml/>', 'tlv', 'cleared', 2, 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });
@@ -372,7 +435,7 @@ describe('schema — invariants', () => {
 
       sqlite.exec(`
         INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'inv-uuid-uu', 20, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+        VALUES (${orderId}, ${refundId}, 'inv-uuid-uu', 50, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
       `);
 
       // Same UUID with different order/refund should fail
@@ -390,7 +453,7 @@ describe('schema — invariants', () => {
       expect(() =>
         sqlite.exec(`
           INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
-          VALUES (${orderId2}, ${refundId2}, 'inv-uuid-uu-2', 21, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
+          VALUES (${orderId2}, ${refundId2}, 'inv-uuid-uu-2', 51, 'cn-uuid-uu-1', 'hash', 'prev', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
     });
@@ -422,14 +485,24 @@ describe('schema — invariants', () => {
       ).toThrow();
     });
 
-    it('zatca_credit_notes.reported_at column is nullable, zatca_invoices.reported_at column exists', () => {
-      // Verify both tables have reported_at column
+    it('zatca_credit_notes has new clearance columns, zatca_invoices has new clearance columns', () => {
+      // Verify both tables have the new clearance columns
       const cnInfo = sqlite.prepare('PRAGMA table_info(zatca_credit_notes)').all() as any[];
+      const cnColumns = cnInfo.map((c: any) => c.name);
+      expect(cnColumns).toContain('attempt_no');
+      expect(cnColumns).toContain('clearance_errors');
+      expect(cnColumns).toContain('clearance_warnings');
+      expect(cnColumns).toContain('http_status');
       const cnReportedAt = cnInfo.find((c: any) => c.name === 'reported_at');
       expect(cnReportedAt).toBeDefined();
       expect(cnReportedAt.notnull).toBe(0); // nullable
 
       const invInfo = sqlite.prepare('PRAGMA table_info(zatca_invoices)').all() as any[];
+      const invColumns = invInfo.map((c: any) => c.name);
+      expect(invColumns).toContain('attempt_no');
+      expect(invColumns).toContain('clearance_errors');
+      expect(invColumns).toContain('clearance_warnings');
+      expect(invColumns).toContain('http_status');
       const invReportedAt = invInfo.find((c: any) => c.name === 'reported_at');
       expect(invReportedAt).toBeDefined();
     });

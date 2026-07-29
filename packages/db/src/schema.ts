@@ -240,54 +240,91 @@ export const orderRefundItems = sqliteTable('order_refund_items', {
 
 // ── zatca_invoices ─────────────────────────────────────────────────────────────
 
-export const zatcaInvoices = sqliteTable('zatca_invoices', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id')
-    .references(() => orders.id)
-    .unique()
-    .notNull(),
-  icv: integer('icv').unique().notNull(),
-  uuid: text('uuid').unique().notNull(),
-  invoiceHash: text('invoice_hash').notNull(),
-  prevInvoiceHash: text('prev_invoice_hash').notNull(),
-  xml: text('xml').notNull(),
-  qrTlv: text('qr_tlv').notNull(),
-  status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
-  reportedAt: integer('reported_at'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-  createdBy: integer('created_by').references(() => users.id),
-  updatedBy: integer('updated_by').references(() => users.id),
-});
+export const zatcaInvoices = sqliteTable(
+  'zatca_invoices',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .references(() => orders.id)
+      .notNull(),
+    icv: integer('icv').unique().notNull(),
+    uuid: text('uuid').unique().notNull(),
+    invoiceHash: text('invoice_hash').notNull(),
+    prevInvoiceHash: text('prev_invoice_hash').notNull(),
+    xml: text('xml').notNull(),
+    qrTlv: text('qr_tlv').notNull(),
+    status: text('status').notNull(),
+    // simplified: 'signed' | 'reported' | 'failed'
+    // standard:   'pending' | 'cleared' | 'rejected' | 'error'
+    attemptNo: integer('attempt_no').notNull().default(1),
+    clearanceErrors: text('clearance_errors'),
+    clearanceWarnings: text('clearance_warnings'),
+    httpStatus: integer('http_status'),
+    reportedAt: integer('reported_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    updatedBy: integer('updated_by').references(() => users.id),
+  },
+  (t) => ({
+    idxZatcaInvoicesOrderId: index('idx_zatca_invoices_order_id').on(t.orderId),
+  }),
+);
+
+// At most one cleared invoice per order — enforced by partial unique index
+// in a custom migration (SQLite does not support partial unique indexes
+// via drizzle-orm):
+//
+//   CREATE UNIQUE INDEX IF NOT EXISTS zatca_invoices_one_cleared_per_order
+//     ON zatca_invoices (order_id) WHERE status = 'cleared';
 
 // ── zatca_credit_notes ────────────────────────────────────────────────────────
 
-export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  orderId: integer('order_id')
-    .references(() => orders.id)
-    .notNull(),
-  refundId: integer('refund_id')
-    .references(() => orderRefunds.id)
-    .notNull()
-    .unique(),
-  relatedInvoiceUuid: text('related_invoice_uuid').notNull(),
-  icv: integer('icv').notNull().unique(),
-  uuid: text('uuid').notNull().unique(),
-  invoiceHash: text('invoice_hash').notNull(),
-  prevInvoiceHash: text('prev_invoice_hash').notNull(),
-  xml: text('xml').notNull(),
-  qrTlv: text('qr_tlv').notNull(),
-  status: text('status').notNull(), // 'signed' | 'reported' | 'failed'
-  reportedAt: integer('reported_at'),
-  totalHalalas: integer('total_halalas').notNull(),
-  vatHalalas: integer('vat_halalas').notNull(),
-  reason: text('reason'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-  createdBy: integer('created_by').references(() => users.id),
-  updatedBy: integer('updated_by').references(() => users.id),
-});
+export const zatcaCreditNotes = sqliteTable(
+  'zatca_credit_notes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .references(() => orders.id)
+      .notNull(),
+    refundId: integer('refund_id')
+      .references(() => orderRefunds.id)
+      .notNull(),
+    relatedInvoiceUuid: text('related_invoice_uuid').notNull(),
+    icv: integer('icv').notNull().unique(),
+    uuid: text('uuid').notNull().unique(),
+    invoiceHash: text('invoice_hash').notNull(),
+    prevInvoiceHash: text('prev_invoice_hash').notNull(),
+    xml: text('xml').notNull(),
+    qrTlv: text('qr_tlv').notNull(),
+    status: text('status').notNull(),
+    // simplified: 'signed' | 'reported' | 'failed'
+    // standard:   'pending' | 'cleared' | 'rejected' | 'error'
+    attemptNo: integer('attempt_no').notNull().default(1),
+    clearanceErrors: text('clearance_errors'),
+    clearanceWarnings: text('clearance_warnings'),
+    httpStatus: integer('http_status'),
+    reportedAt: integer('reported_at'),
+    totalHalalas: integer('total_halalas').notNull(),
+    vatHalalas: integer('vat_halalas').notNull(),
+    reason: text('reason'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    updatedBy: integer('updated_by').references(() => users.id),
+  },
+  (t) => ({
+    idxZatcaCreditNotesRefundId: index('idx_zatca_credit_notes_refund_id').on(t.refundId),
+    idxZatcaCreditNotesOrderId: index('idx_zatca_credit_notes_order_id').on(t.orderId),
+  }),
+);
+
+// At most one cleared credit note per refund — enforced by partial unique index
+// in a custom migration (SQLite does not support partial unique indexes
+// via drizzle-orm):
+//
+//   CREATE UNIQUE INDEX IF NOT EXISTS zatca_credit_notes_one_cleared_per_refund
+//     ON zatca_credit_notes (refund_id) WHERE status = 'cleared';
 
 // ── payment_methods ────────────────────────────────────────────────────────────
 

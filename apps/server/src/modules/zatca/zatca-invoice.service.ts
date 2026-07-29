@@ -19,7 +19,7 @@
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import {
   orders,
   orderItems,
@@ -516,10 +516,80 @@ export class ZatcaInvoiceService {
   }
 
   /**
-   * Get invoice by order ID.
+   * Get the latest invoice by order ID (highest id/attempt_no).
+   */
+  getLatestInvoiceByOrderId(orderId: number): any {
+    return this.db
+      .select()
+      .from(zatcaInvoices)
+      .where(eq(zatcaInvoices.orderId, orderId))
+      .orderBy(desc(zatcaInvoices.id))
+      .limit(1)
+      .get();
+  }
+
+  /**
+   * Get the cleared invoice by order ID (or null if none cleared).
+   */
+  getClearedInvoiceByOrderId(orderId: number): any {
+    return this.db
+      .select()
+      .from(zatcaInvoices)
+      .where(and(eq(zatcaInvoices.orderId, orderId), eq(zatcaInvoices.status, 'cleared')))
+      .get();
+  }
+
+  /**
+   * Get the active invoice for an order: cleared if exists, otherwise latest.
+   */
+  getActiveInvoiceForOrder(orderId: number): any {
+    const cleared = this.getClearedInvoiceByOrderId(orderId);
+    if (cleared) return cleared;
+    return this.getLatestInvoiceByOrderId(orderId);
+  }
+
+  /**
+   * Legacy alias — returns active invoice.
+   * Prefer explicit names: getActiveInvoiceForOrder / getClearedInvoiceByOrderId.
    */
   getByOrderId(orderId: number): any {
-    return this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.orderId, orderId)).get();
+    return this.getActiveInvoiceForOrder(orderId);
+  }
+
+  /**
+   * Get the latest credit note by refund ID (highest id/attempt_no).
+   */
+  getLatestCreditNoteByRefundId(refundId: number): any {
+    return this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(eq(zatcaCreditNotes.refundId, refundId))
+      .orderBy(desc(zatcaCreditNotes.id))
+      .limit(1)
+      .get();
+  }
+
+  /**
+   * Get the cleared credit note by refund ID (or null if none cleared).
+   */
+  getClearedCreditNoteByRefundId(refundId: number): any {
+    return this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(and(eq(zatcaCreditNotes.refundId, refundId), eq(zatcaCreditNotes.status, 'cleared')))
+      .get();
+  }
+
+  /**
+   * List all credit note attempts for a refund ID.
+   */
+  listCreditNotesByRefundId(refundId: number): any[] {
+    return this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(eq(zatcaCreditNotes.refundId, refundId))
+      .orderBy(zatcaCreditNotes.id)
+      .all();
   }
 
   /**
@@ -564,10 +634,10 @@ export class ZatcaInvoiceService {
 
   /**
    * Get the QR TLV payload for a paid order's receipt.
-   * Returns null if no invoice exists yet (e.g., ZATCA down).
+   * Returns null if no active/cleared invoice exists yet.
    */
   getQrTlvPayload(orderId: number): string | null {
-    const inv = this.getByOrderId(orderId);
+    const inv = this.getActiveInvoiceForOrder(orderId);
     return inv?.qrTlv ?? null;
   }
 

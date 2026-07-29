@@ -1257,6 +1257,92 @@ describe('Pay with payment methods', () => {
       expect(orderRes.body.isStandardInvoice).toBe(false);
       expect(orderRes.body.zatcaBuyerDetails).toBeNull();
     });
+
+    it('standard pay does not enqueue receipt print immediately', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.invoiceType).toBe('standard');
+
+      // Check events: receipt_print_enqueued should NOT be present for standard
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const types = eventsRes.body.map((e: any) => e.type);
+      // Standard invoice pays defer the receipt print — only cash_drawer_kick_enqueued
+      // may be present (for cash payments), but NOT receipt_print_enqueued
+      expect(types).not.toContain('receipt_print_enqueued');
+      // paid event should still contain standard invoice flags
+      const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+      expect(paidEvent).toBeDefined();
+      const paidPayload =
+        typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+      expect(paidPayload.isStandardInvoice).toBe(true);
+    });
+
+    it('GET /orders/:id/zatca-invoice returns invoiceType standard after standard pay', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      expect(res.status).toBe(201);
+
+      const statusRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/zatca-invoice`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(statusRes.body.invoiceType).toBe('standard');
+    });
+
+    it('POST /orders/:id/zatca-invoice/reissue with no prior invoice returns 400', async () => {
+      const { orderId } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      // No invoice yet created (no clearance module in this test), so reissue should fail
+      const reissueRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/zatca-invoice/reissue`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ zatcaBuyerDetails: FULL_BUYER });
+
+      // Expect 400 because no prior invoice exists
+      expect(reissueRes.status).toBe(400);
+    });
+
+    it('POST /orders/:id/zatca-invoice/retry-clearance with no prior invoice returns 400', async () => {
+      const { orderId } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+
+      const retryRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/zatca-invoice/retry-clearance`)
+        .set('Authorization', `Bearer ${jwtToken}`);
+
+      // Expect 400 because no prior invoice exists
+      expect(retryRes.status).toBe(400);
+    });
+
+    it('simple (non-standard) order gets invoiceType simplified from zatca-invoice', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+
+      expect(res.status).toBe(201);
+
+      const statusRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/zatca-invoice`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      expect(statusRes.body.invoiceType).toBe('simplified');
+    });
   });
 });
 

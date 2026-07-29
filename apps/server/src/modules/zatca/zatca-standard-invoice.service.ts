@@ -2,20 +2,18 @@
  * ZATCA Standard Invoice Service — builds, signs, clears, and persists
  * standard tax invoices (B2B) for orders marked `is_standard_invoice=1`.
  *
- * Unlike simplified invoices (which are signed-and-later-reported), standard
- * invoices go through ZATCA's **clearance** endpoint synchronously. When
- * ZATCA clears the invoice, the service persists the cleared XML. On failure,
- * the signed XML is persisted with status `failed`.
+ * Multi-attempt clearance lifecycle:
+ *   pending → cleared | rejected | error
  *
- * This service shares the same ICV/PIH chain as simplified invoices via
- * {@link ZatcaInvoiceService.allocateNextIcv}.
- *
- * Phase 6 will wire this to `order.paid` via a listener; for now it is a
- * standalone service with a public `createStandardInvoice()` method.
+ * - `pending`: XML built, signed, ICV allocated — waiting for ZATCA
+ * - `cleared`: ZATCA accepted the invoice — receipt printed
+ * - `rejected`: ZATCA rejected with business errors — immutable, reissue needed
+ * - `error`: Network/credentials error — identical retry allowed (same UUID/ICV)
  */
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import {
   orders,
@@ -52,7 +50,12 @@ import {
 import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaClearanceService, ZatcaClearanceResult } from './zatca-clearance.service';
 import { encodeZatcaTLV, TLVInput } from './tlv';
-import { decomposeVat, zatcaKey, requireZatcaBuyerDetails } from '@spicyhome/shared';
+import {
+  decomposeVat,
+  zatcaKey,
+  requireZatcaBuyerDetails,
+  parseZatcaBuyerDetails,
+} from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 
 export interface CreateStandardInvoiceResult {
@@ -61,9 +64,39 @@ export interface CreateStandardInvoiceResult {
   uuid: string;
   invoiceHash: string;
   status: string;
+  attemptNo: number;
   qrTlvBase64: string;
   signedXml: string;
-  clearance: ZatcaClearanceResult;
+  clearance: {
+    status: string;
+    httpStatus: number;
+    clearedXml: string | null;
+    clearedInvoiceBase64: string | null;
+    warnings: string[];
+    errors: string[];
+    rawBody: string | null;
+  };
+}
+
+export interface ZatcaInvoiceAttempt {
+  id: number;
+  attemptNo: number;
+  status: string;
+  icv: number;
+  uuid: string;
+  errors: string[];
+  warnings: string[];
+  httpStatus: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ZatcaInvoiceStatusResponse {
+  invoiceType: 'simplified' | 'standard' | 'none';
+  current: ZatcaInvoiceAttempt | null;
+  attempts: ZatcaInvoiceAttempt[];
+  canRetryClearance: boolean;
+  canReissue: boolean;
 }
 
 @Injectable()
@@ -75,26 +108,19 @@ export class ZatcaStandardInvoiceService {
     private printersService: PrintersService,
     private invoiceService: ZatcaInvoiceService,
     private clearanceService: ZatcaClearanceService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
   /**
-   * Create, sign, clear, and persist a standard ZATCA invoice for an order
-   * that has `is_standard_invoice=1` with full buyer details.
+   * Create, sign, clear, and persist a standard ZATCA invoice for an order.
    *
-   * This is the main entry point. It:
-   *   1. Loads the order and validates it is a standard invoice with buyer data
-   *   2. Allocates ICV (shared chain with simplified invoices)
-   *   3. Builds unsigned standard UBL XML (subtype 0100000, full buyer party)
-   *   4. Signs the invoice with the seller's private key
-   *   5. Generates QR TLV and injects into signed XML
-   *   6. Calls ZATCA clearance API
-   *   7. Persists to `zatca_invoices` with status reflecting clearance result
-   *
-   * @param orderId - The order to generate a standard invoice for
-   * @param userId - User ID for audit fields (optional)
-   * @throws If the order is not a standard invoice or buyer fields are missing
+   * Multi-attempt behavior:
+   * - If cleared exists → return it (idempotent success)
+   * - If latest is pending → return it (in-flight)
+   * - If latest is error → do NOT auto-retry; return it (caller must call retryClearance)
+   * - If latest is rejected or none → new attempt (new ICV, new UUID)
    */
   async createStandardInvoice(
     orderId: number,
@@ -102,60 +128,343 @@ export class ZatcaStandardInvoiceService {
   ): Promise<CreateStandardInvoiceResult> {
     if (userId === undefined) userId = 1;
 
-    // Idempotency: one invoice per order. Return existing row if present.
-    const existing = this.db
+    // 1. Check for existing cleared invoice (idempotent success)
+    const cleared = this.invoiceService.getClearedInvoiceByOrderId(orderId);
+    if (cleared) {
+      this.logger.log(`Standard invoice already cleared for order ${orderId}`);
+      return this.buildResultFromRow(cleared, 'CLEARED');
+    }
+
+    // 2. Check for in-flight pending attempt
+    const latest = this.invoiceService.getLatestInvoiceByOrderId(orderId);
+    if (latest && latest.status === 'pending') {
+      this.logger.log(`Standard invoice pending for order ${orderId}`);
+      return this.buildResultFromRow(latest, 'PENDING');
+    }
+
+    // 3. If latest is error, do NOT auto-retry — caller must retry explicitly
+    if (latest && latest.status === 'error') {
+      this.logger.log(
+        `Standard invoice has error status for order ${orderId} — returning existing; call retryClearance() to retry`,
+      );
+      return this.buildResultFromRow(latest, 'ERROR');
+    }
+
+    // 4. New attempt (rejected or none)
+    return this.attemptClearance(orderId, userId);
+  }
+
+  /**
+   * Retry clearance for an invoice that is in `error` status (network/credentials).
+   * Resubmits the same payload (same UUID/ICV/Hash/XML).
+   */
+  async retryClearance(orderId: number, userId?: number): Promise<CreateStandardInvoiceResult> {
+    if (userId === undefined) userId = 1;
+
+    const latest = this.invoiceService.getLatestInvoiceByOrderId(orderId);
+    if (!latest) {
+      throw new Error(`No invoice found for order ${orderId}`);
+    }
+
+    if (latest.status !== 'error') {
+      throw new Error(
+        `Cannot retry clearance for order ${orderId}: latest status is '${latest.status}', not 'error'`,
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // Resubmit the same payload
+    const clearance = await this.clearanceService.clearDocument({
+      invoiceHash: latest.invoiceHash,
+      uuid: latest.uuid,
+      xml: latest.xml,
+    });
+
+    const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
+      this.evaluateClearanceResult(clearance, latest.xml);
+
+    // Update the existing row
+    this.db
+      .update(zatcaInvoices)
+      .set({
+        status: storeStatus,
+        xml: storedXml,
+        clearanceErrors: clearanceErrors ?? null,
+        clearanceWarnings: clearanceWarnings ?? null,
+        httpStatus: clearance.httpStatus,
+        reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
+        updatedAt: now,
+      } as any)
+      .where(eq(zatcaInvoices.id, latest.id))
+      .run();
+
+    this.logger.log(`Standard invoice retry for order ${orderId}: status=${storeStatus}`);
+
+    // Emit cleared event if cleared on retry
+    if (storeStatus === 'cleared') {
+      this.emitDomainEvent('zatca.invoice.cleared', orderId, userId, { invoiceId: latest.id });
+    }
+
+    const updated = this.db
       .select()
       .from(zatcaInvoices)
-      .where(eq(zatcaInvoices.orderId, orderId))
-      .get();
-    if (existing) {
-      this.logger.log(
-        `Standard invoice already exists for order ${orderId} (status=${existing.status})`,
+      .where(eq(zatcaInvoices.id, latest.id))
+      .get() as any;
+    return this.buildResultFromRow(updated, clearance.status);
+  }
+
+  /**
+   * Reissue a standard invoice after rejection — creates a new attempt with new ICV/UUID.
+   * Optionally updates buyer details on the order before reissuing.
+   */
+  async reissue(
+    orderId: number,
+    userId?: number,
+    buyerDetails?: Record<string, unknown>,
+  ): Promise<CreateStandardInvoiceResult> {
+    if (userId === undefined) userId = 1;
+
+    // Validate that we can reissue
+    const latest = this.invoiceService.getLatestInvoiceByOrderId(orderId);
+    const cleared = this.invoiceService.getClearedInvoiceByOrderId(orderId);
+
+    if (cleared) {
+      throw new Error(`Cannot reissue: order ${orderId} already has a cleared invoice`);
+    }
+
+    if (!latest) {
+      throw new Error(`No invoice found for order ${orderId}`);
+    }
+
+    if (latest.status !== 'rejected') {
+      throw new Error(
+        `Cannot reissue: latest attempt for order ${orderId} is '${latest.status}', not 'rejected'`,
       );
+    }
+
+    // Update buyer details if provided
+    if (buyerDetails) {
+      const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new Error(`Order ${orderId} not found`);
+
+      // Validate buyer details
+      const parsed = parseZatcaBuyerDetails(buyerDetails);
+      if (!parsed.success) {
+        throw new Error(`Invalid buyer details for reissue: ${JSON.stringify(parsed.error)}`);
+      }
+
+      this.db
+        .update(orders)
+        .set({
+          zatcaBuyerDetails: JSON.stringify(parsed.data),
+          updatedAt: Math.floor(Date.now() / 1000),
+        })
+        .where(eq(orders.id, orderId))
+        .run();
+    }
+
+    // Create a new attempt
+    return this.attemptClearance(orderId, userId);
+  }
+
+  /**
+   * Get the ZATCA invoice status for an order (used by polling API/POS).
+   */
+  getInvoiceStatus(orderId: number): ZatcaInvoiceStatusResponse {
+    const order = this.db
+      .select({ isStandardInvoice: orders.isStandardInvoice })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .get();
+
+    if (!order) {
       return {
-        id: existing.id,
-        icv: existing.icv,
-        uuid: existing.uuid,
-        invoiceHash: existing.invoiceHash,
-        status: existing.status,
-        qrTlvBase64: existing.qrTlv,
-        signedXml: existing.xml,
-        clearance: {
-          status: existing.status === 'cleared' ? ('CLEARED' as const) : ('REJECTED' as const),
-          httpStatus: 0,
-          clearedXml: existing.status === 'cleared' ? existing.xml : null,
-          clearedInvoiceBase64: null,
-          warnings: [],
-          errors: [],
-          rawBody: null,
-        },
+        invoiceType: 'none',
+        current: null,
+        attempts: [],
+        canRetryClearance: false,
+        canReissue: false,
       };
     }
 
-    // 1. Load the order; verify it exists and is a standard invoice
+    if (order.isStandardInvoice !== 1) {
+      // Simplified — check if there's a simplified invoice
+      const simplified = this.invoiceService.getLatestInvoiceByOrderId(orderId);
+      if (simplified && (simplified.status === 'signed' || simplified.status === 'reported')) {
+        return {
+          invoiceType: 'simplified',
+          current: this.attemptFromRow(simplified),
+          attempts: [this.attemptFromRow(simplified)],
+          canRetryClearance: false,
+          canReissue: false,
+        };
+      }
+      return {
+        invoiceType: 'simplified',
+        current: null,
+        attempts: [],
+        canRetryClearance: false,
+        canReissue: false,
+      };
+    }
+
+    // Standard
+    const cleared = this.invoiceService.getClearedInvoiceByOrderId(orderId);
+    const attempts = this.listInvoiceAttempts(orderId);
+    const current = cleared
+      ? this.attemptFromRow(cleared)
+      : attempts.length > 0
+        ? this.attemptFromRow(attempts[attempts.length - 1])
+        : null;
+
+    const latest = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+    const canRetryClearance = latest?.status === 'error' || false;
+    const canReissue = !cleared && latest?.status === 'rejected';
+
+    return {
+      invoiceType: 'standard',
+      current,
+      attempts: attempts.map((r) => this.attemptFromRow(r)),
+      canRetryClearance,
+      canReissue,
+    };
+  }
+
+  // ── Event listeners ─────────────────────────────────────────────────────
+
+  @OnEvent('order.paid')
+  async onOrderPaid(payload: { orderId: number; userId: number }): Promise<void> {
+    try {
+      const order = this.db
+        .select({ isStandardInvoice: orders.isStandardInvoice })
+        .from(orders)
+        .where(eq(orders.id, payload.orderId))
+        .get();
+      if (!order || order.isStandardInvoice !== 1) return;
+
+      const latest = this.invoiceService.getLatestInvoiceByOrderId(payload.orderId);
+      // Don't auto-create on error (stuck state) — POS/API must call retry/reissue
+      if (latest && (latest.status === 'error' || latest.status === 'pending')) {
+        return;
+      }
+
+      await this.createStandardInvoice(payload.orderId, payload.userId);
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to create standard invoice for order ${payload.orderId}: ${err.message}`,
+      );
+    }
+  }
+
+  @OnEvent('order.refund.issued')
+  async onOrderRefundIssued(payload: {
+    orderId: number;
+    refundId: number;
+    userId: number;
+  }): Promise<void> {
+    try {
+      const order = this.db
+        .select({ isStandardInvoice: orders.isStandardInvoice })
+        .from(orders)
+        .where(eq(orders.id, payload.orderId))
+        .get();
+      if (!order || order.isStandardInvoice !== 1) return;
+
+      const latest = this.invoiceService.getLatestCreditNoteByRefundId(payload.refundId);
+      if (latest && (latest.status === 'error' || latest.status === 'pending')) {
+        return;
+      }
+
+      await this.createStandardCreditNote(payload.orderId, payload.refundId, payload.userId);
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to create standard credit note for refund ${payload.refundId}: ${err.message}`,
+      );
+    }
+  }
+
+  // ── Credit note ─────────────────────────────────────────────────────────
+
+  async createStandardCreditNote(
+    orderId: number,
+    refundId: number,
+    userId?: number,
+  ): Promise<{ id: number; icv: number; uuid: string; status: string; attemptNo: number }> {
+    if (userId === undefined) userId = 1;
+
+    // Idempotency: check for cleared credit note
+    const cleared = this.invoiceService.getClearedCreditNoteByRefundId(refundId);
+    if (cleared) {
+      return {
+        id: cleared.id,
+        icv: cleared.icv,
+        uuid: cleared.uuid,
+        status: cleared.status,
+        attemptNo: cleared.attemptNo,
+      };
+    }
+
+    // Check for pending
+    const latest = this.invoiceService.getLatestCreditNoteByRefundId(refundId);
+    if (latest && latest.status === 'pending') {
+      return {
+        id: latest.id,
+        icv: latest.icv,
+        uuid: latest.uuid,
+        status: latest.status,
+        attemptNo: latest.attemptNo,
+      };
+    }
+
+    // Error → don't auto-retry
+    if (latest && latest.status === 'error') {
+      return {
+        id: latest.id,
+        icv: latest.icv,
+        uuid: latest.uuid,
+        status: latest.status,
+        attemptNo: latest.attemptNo,
+      };
+    }
+
+    return this.attemptCreditNoteClearance(orderId, refundId, userId);
+  }
+
+  // ── Private: clearance attempt ───────────────────────────────────────────
+
+  private async attemptClearance(
+    orderId: number,
+    userId: number,
+  ): Promise<CreateStandardInvoiceResult> {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Load the order
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
     if (order.isStandardInvoice !== 1) {
-      throw new Error(
-        `Order ${orderId} is not a standard invoice (is_standard_invoice=${order.isStandardInvoice})`,
-      );
+      throw new Error(`Order ${orderId} is not a standard invoice`);
     }
 
-    // 2. Validate buyer fields
+    // Validate buyer fields
     this.validateBuyerFields(order);
 
-    // 3. Load order items
+    // Load order items
     const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-
     if (oiRows.length === 0) {
       throw new Error(`Order ${orderId} has no items`);
     }
 
-    // 4. Load seller config
+    // Determine attempt number
+    const allAttempts = this.listInvoiceAttempts(orderId);
+    const attemptNo =
+      allAttempts.length > 0 ? Math.max(...allAttempts.map((a) => a.attemptNo || 1)) + 1 : 1;
+
+    // Build seller config
     const seller = this.buildSellerConfig();
 
-    // 5. Load keys and certificate
+    // Load keys
     const env = this.getEnv();
     const orgUnit = this.getOrgUnit();
     const privateKeyHex = this.getPrivateKey(env, orgUnit);
@@ -164,7 +473,7 @@ export class ZatcaStandardInvoiceService {
     }
     const certBase64 = this.getCertificate(env, orgUnit);
 
-    // 6. Build invoice items from order items
+    // Build items
     const invItems: InvoiceItemInput[] = oiRows.map((oi) => ({
       name: oi.itemName,
       unitPriceHalalas: oi.unitPriceHalalas,
@@ -172,26 +481,21 @@ export class ZatcaStandardInvoiceService {
       qty: oi.qty,
     }));
 
-    // 7. Timestamps in Asia/Riyadh
-    const now = Math.floor(Date.now() / 1000);
-    const nowDate = new Date(now * 1000);
-    const issueDate = nowDate.toLocaleDateString('sv-SE', {
-      timeZone: 'Asia/Riyadh',
-    });
-    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+    // Timestamps
+    const issueDate = new Date(now * 1000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = new Date(now * 1000).toLocaleTimeString('sv-SE', {
       timeZone: 'Asia/Riyadh',
       hour12: false,
     });
 
-    // 8. Allocate ICV atomically (shared chain with simplified invoices)
+    // Allocate ICV atomically
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
       return this.invoiceService.allocateNextIcv(tx, env, orgUnit);
     });
 
-    // 9. Generate UUID
     const invUuid = require('crypto').randomUUID();
 
-    // 10. Build unsigned standard XML with buyer party
+    // Build unsigned XML
     const xmlInput: InvoiceXMLInput = {
       icv,
       uuid: invUuid,
@@ -204,17 +508,16 @@ export class ZatcaStandardInvoiceService {
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
     };
-
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
-    // 11. Sign
+    // Sign
     const invoiceHashB64 = computeInvoiceHash(unsignedXml);
     const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
     const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
     const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
     const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
 
-    // 12. QR TLV
+    // QR TLV
     const timestampIso = `${issueDate}T${issueTime}`;
     const certSigB64 = extractCertSignature(certForXml);
     const tlvInput: TLVInput = {
@@ -230,38 +533,11 @@ export class ZatcaStandardInvoiceService {
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-    // 13. Inject QR into signed XML
     const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
     const finalInvoiceHash = invoiceHashB64;
 
-    // 14. Call clearance API
-    const clearance = await this.clearanceService.clearDocument({
-      invoiceHash: finalInvoiceHash,
-      uuid: invUuid,
-      xml: finalSignedXml,
-    });
-
-    // 15. Persist based on clearance result
-    let storedXml: string;
-    let storeStatus: string;
-
-    if (clearance.status === 'CLEARED') {
-      storedXml = clearance.clearedXml || finalSignedXml;
-      storeStatus = 'cleared';
-      this.logger.log(`Standard invoice CLEARED: order=${orderId}, ICV=${icv}, uuid=${invUuid}`);
-    } else {
-      storedXml = finalSignedXml;
-      storeStatus = 'failed';
-      const errMsgs = clearance.errors.length > 0 ? clearance.errors.join('; ') : 'no errors';
-      this.logger.error(
-        `Standard invoice ${clearance.status}: order=${orderId}, ICV=${icv}, errors=${errMsgs}`,
-      );
-    }
-
-    // 16. Insert zatca_invoices row (unique by orderId)
-    const reportedAt = clearance.status === 'CLEARED' ? now : null;
-
-    const result = this.db
+    // INSERT row with status=pending FIRST (ICV burned, XML stored)
+    const insertResult = this.db
       .insert(zatcaInvoices)
       .values({
         orderId,
@@ -269,139 +545,86 @@ export class ZatcaStandardInvoiceService {
         uuid: invUuid,
         invoiceHash: finalInvoiceHash,
         prevInvoiceHash,
-        xml: storedXml,
+        xml: finalSignedXml,
         qrTlv: qrTlvBase64,
-        status: storeStatus,
-        reportedAt,
+        status: 'pending',
+        attemptNo,
+        reportedAt: null,
         ...createAuditFields(userId, now),
       } as any)
       .run();
+    const invoiceId = Number(insertResult.lastInsertRowid);
 
-    const invoiceId = Number(result.lastInsertRowid);
-
-    // Throw on failure so callers (Phase 6 pay handler) can surface the error
-    if (storeStatus === 'failed') {
-      throw new Error(
-        `Standard invoice clearance failed for order ${orderId}: ${clearance.errors.join('; ') || clearance.status}`,
-      );
-    }
-
-    return {
-      id: invoiceId,
-      icv,
-      uuid: invUuid,
+    // Call clearance API
+    const clearance = await this.clearanceService.clearDocument({
       invoiceHash: finalInvoiceHash,
-      status: storeStatus,
-      qrTlvBase64,
-      signedXml: storedXml,
-      clearance,
-    };
-  }
+      uuid: invUuid,
+      xml: finalSignedXml,
+    });
 
-  // ── Event listeners (Phase 6) ────────────────────────────────────────────
+    // Evaluate result and update
+    const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
+      this.evaluateClearanceResult(clearance, finalSignedXml);
 
-  /**
-   * Handle `order.paid` for standard invoices — create, sign, and clear via
-   * ZATCA clearance.  Errors are caught and logged; payment must never roll
-   * back because ZATCA is unavailable.
-   */
-  @OnEvent('order.paid')
-  async onOrderPaid(payload: { orderId: number; userId: number }): Promise<void> {
-    try {
-      const order = this.db
-        .select({ isStandardInvoice: orders.isStandardInvoice })
-        .from(orders)
-        .where(eq(orders.id, payload.orderId))
-        .get();
-      if (!order || order.isStandardInvoice !== 1) return;
-      await this.createStandardInvoice(payload.orderId, payload.userId);
-    } catch (err: any) {
-      this.logger.error(
-        `Failed to create standard invoice for order ${payload.orderId}: ${err.message}`,
-      );
+    this.db
+      .update(zatcaInvoices)
+      .set({
+        status: storeStatus,
+        xml: storedXml,
+        clearanceErrors: clearanceErrors ?? null,
+        clearanceWarnings: clearanceWarnings ?? null,
+        httpStatus: clearance.httpStatus,
+        reportedAt: storeStatus === 'cleared' ? now : null,
+        updatedAt: now,
+      } as any)
+      .where(eq(zatcaInvoices.id, invoiceId))
+      .run();
+
+    this.logger.log(
+      `Standard invoice attempt ${attemptNo} for order ${orderId}: status=${storeStatus}, ICV=${icv}`,
+    );
+
+    // Emit cleared event
+    if (storeStatus === 'cleared') {
+      this.emitDomainEvent('zatca.invoice.cleared', orderId, userId, { invoiceId });
     }
-  }
 
-  /**
-   * Handle `order.refund.issued` for standard orders — create a standard
-   * credit note with clearance. Errors are caught and logged; refund must
-   * never roll back because ZATCA is unavailable.
-   */
-  @OnEvent('order.refund.issued')
-  async onOrderRefundIssued(payload: {
-    orderId: number;
-    refundId: number;
-    userId: number;
-  }): Promise<void> {
-    try {
-      const order = this.db
-        .select({ isStandardInvoice: orders.isStandardInvoice })
-        .from(orders)
-        .where(eq(orders.id, payload.orderId))
-        .get();
-      if (!order || order.isStandardInvoice !== 1) return;
-      await this.createStandardCreditNote(payload.orderId, payload.refundId, payload.userId);
-    } catch (err: any) {
-      this.logger.error(
-        `Failed to create standard credit note for refund ${payload.refundId}: ${err.message}`,
-      );
-    }
-  }
-
-  /**
-   * Create a standard credit note (B2B) for a refunded standard order.
-   *
-   * Mirrors the simplified {@link ZatcaInvoiceService.createCreditNote} but:
-   *   - Uses the standard invoice profile (subtype 0100000)
-   *   - Includes buyer info from the original order
-   *   - Submits via clearance (not reporting)
-   *   - Persists to `zatca_credit_notes` with status `cleared` or `failed`
-   *
-   * @param orderId  - The order being refunded (must have a zatca_invoices row)
-   * @param refundId - The refund row ID
-   * @param userId   - User ID for audit fields (defaults to 1)
-   * @throws If original invoice is missing, buyer fields are incomplete, or
-   *         clearance fails (failed row is still persisted before throwing).
-   */
-  async createStandardCreditNote(
-    orderId: number,
-    refundId: number,
-    userId?: number,
-  ): Promise<{ id: number; icv: number; uuid: string; status: string }> {
-    if (userId === undefined) userId = 1;
-
-    // 1. Require original invoice (status preferably cleared, but accept any)
-    const originalInvoice = this.db
+    const updatedRow = this.db
       .select()
       .from(zatcaInvoices)
-      .where(eq(zatcaInvoices.orderId, orderId))
-      .get();
+      .where(eq(zatcaInvoices.id, invoiceId))
+      .get() as any;
+    return this.buildResultFromRow(updatedRow, clearance.status);
+  }
+
+  private async attemptCreditNoteClearance(
+    orderId: number,
+    refundId: number,
+    userId: number,
+  ): Promise<{ id: number; icv: number; uuid: string; status: string; attemptNo: number }> {
+    // Load original cleared invoice
+    const originalInvoice = this.invoiceService.getClearedInvoiceByOrderId(orderId);
     if (!originalInvoice) {
-      throw new Error(`No original invoice found for order ${orderId}`);
+      throw new Error(`No cleared original invoice found for order ${orderId}`);
     }
 
-    // 2. Load order for buyer info snapshot
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
     if (order.isStandardInvoice !== 1) {
-      throw new Error(
-        `Order ${orderId} is not a standard invoice (is_standard_invoice=${order.isStandardInvoice})`,
-      );
+      throw new Error(`Order ${orderId} is not a standard invoice`);
     }
 
-    // 3. Load refund
     const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
     if (!refund) throw new Error(`Refund ${refundId} not found`);
 
-    // 4. Load refund items
     const refundItems = this.db
       .select()
       .from(orderRefundItems)
       .where(eq(orderRefundItems.refundId, refundId))
       .all();
 
-    // 5. Compute refund totals (mirrors simplified createCreditNote)
+    // Compute totals
     let vatHalalas = 0;
     let totalHalalas = 0;
     for (const ri of refundItems) {
@@ -411,22 +634,18 @@ export class ZatcaStandardInvoiceService {
       vatHalalas += decomposed.vatHalalas;
     }
 
-    // 6. Build seller config
-    const seller = this.buildSellerConfig();
+    // Determine attempt number
+    const allAttempts = this.invoiceService.listCreditNotesByRefundId(refundId);
+    const attemptNo =
+      allAttempts.length > 0 ? Math.max(...allAttempts.map((a) => a.attemptNo || 1)) + 1 : 1;
 
-    // 7. Load keys and certificate
+    const seller = this.buildSellerConfig();
     const env = this.getEnv();
     const orgUnit = this.getOrgUnit();
     const privateKeyHex = this.getPrivateKey(env, orgUnit);
-    if (!privateKeyHex) {
-      throw new Error('ZATCA private key not configured. Run onboarding first.');
-    }
+    if (!privateKeyHex) throw new Error('ZATCA private key not configured.');
     const certBase64 = this.getCertificate(env, orgUnit);
 
-    // 8. Validate buyer fields (from order snapshot)
-    this.validateBuyerFields(order);
-
-    // 9. Build invoice items from refund items
     const invItems: InvoiceItemInput[] = refundItems.map((ri) => ({
       name: ri.itemName,
       unitPriceHalalas: ri.unitPriceHalalas,
@@ -434,26 +653,19 @@ export class ZatcaStandardInvoiceService {
       qty: ri.qty,
     }));
 
-    // 10. Timestamps in Asia/Riyadh
     const now = Math.floor(Date.now() / 1000);
-    const nowDate = new Date(now * 1000);
-    const issueDate = nowDate.toLocaleDateString('sv-SE', {
-      timeZone: 'Asia/Riyadh',
-    });
-    const issueTime = nowDate.toLocaleTimeString('sv-SE', {
+    const issueDate = new Date(now * 1000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
+    const issueTime = new Date(now * 1000).toLocaleTimeString('sv-SE', {
       timeZone: 'Asia/Riyadh',
       hour12: false,
     });
 
-    // 11. Allocate ICV atomically (shared chain)
     const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
       return this.invoiceService.allocateNextIcv(tx, env, orgUnit);
     });
 
-    // 12. Generate UUID
     const invUuid = require('crypto').randomUUID();
 
-    // 13. Build unsigned standard credit note XML
     const xmlInput: InvoiceXMLInput = {
       type: 'credit_note',
       icv,
@@ -470,15 +682,12 @@ export class ZatcaStandardInvoiceService {
     };
 
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
-
-    // 14. Sign
     const invoiceHashB64 = computeInvoiceHash(unsignedXml);
     const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
     const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
     const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
     const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
 
-    // 15. QR TLV
     const timestampIso = `${issueDate}T${issueTime}`;
     const certSigB64 = extractCertSignature(certForXml);
     const tlvInput: TLVInput = {
@@ -493,41 +702,11 @@ export class ZatcaStandardInvoiceService {
       certificateSignatureBase64: certSigB64,
     };
     const qrTlvBase64 = encodeZatcaTLV(tlvInput);
-
-    // 16. Inject QR into signed XML
     const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
     const finalInvoiceHash = invoiceHashB64;
 
-    // 17. Call clearance API
-    const clearance = await this.clearanceService.clearDocument({
-      invoiceHash: finalInvoiceHash,
-      uuid: invUuid,
-      xml: finalSignedXml,
-    });
-
-    // 18. Persist based on clearance result
-    let storedXml: string;
-    let storeStatus: string;
-
-    if (clearance.status === 'CLEARED') {
-      storedXml = clearance.clearedXml || finalSignedXml;
-      storeStatus = 'cleared';
-      this.logger.log(
-        `Standard credit note CLEARED: order=${orderId}, refund=${refundId}, ICV=${icv}`,
-      );
-    } else {
-      storedXml = finalSignedXml;
-      storeStatus = 'failed';
-      const errMsgs = clearance.errors.length > 0 ? clearance.errors.join('; ') : 'no errors';
-      this.logger.error(
-        `Standard credit note ${clearance.status}: order=${orderId}, refund=${refundId}, errors=${errMsgs}`,
-      );
-    }
-
-    const reportedAt = clearance.status === 'CLEARED' ? now : null;
-
-    // 19. Insert zatca_credit_notes row
-    const result = this.db
+    // INSERT pending row
+    const insertResult = this.db
       .insert(zatcaCreditNotes)
       .values({
         orderId,
@@ -537,37 +716,182 @@ export class ZatcaStandardInvoiceService {
         uuid: invUuid,
         invoiceHash: finalInvoiceHash,
         prevInvoiceHash,
-        xml: storedXml,
+        xml: finalSignedXml,
         qrTlv: qrTlvBase64,
-        status: storeStatus,
-        reportedAt,
+        status: 'pending',
+        attemptNo,
+        reportedAt: null,
         totalHalalas,
         vatHalalas,
         reason: refund.reason || 'Refund',
         ...createAuditFields(userId, now),
       } as any)
       .run();
+    const cnId = Number(insertResult.lastInsertRowid);
 
-    const creditNoteId = Number(result.lastInsertRowid);
+    // Clearance
+    const clearance = await this.clearanceService.clearDocument({
+      invoiceHash: finalInvoiceHash,
+      uuid: invUuid,
+      xml: finalSignedXml,
+    });
 
-    // Throw on failure so callers can surface the error
-    if (storeStatus === 'failed') {
-      throw new Error(
-        `Standard credit note clearance failed for refund ${refundId}: ${
-          clearance.errors.join('; ') || clearance.status
-        }`,
-      );
+    const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
+      this.evaluateClearanceResult(clearance, finalSignedXml);
+
+    this.db
+      .update(zatcaCreditNotes)
+      .set({
+        status: storeStatus,
+        xml: storedXml,
+        clearanceErrors: clearanceErrors ?? null,
+        clearanceWarnings: clearanceWarnings ?? null,
+        httpStatus: clearance.httpStatus,
+        reportedAt: storeStatus === 'cleared' ? now : null,
+        updatedAt: now,
+      } as any)
+      .where(eq(zatcaCreditNotes.id, cnId))
+      .run();
+
+    if (storeStatus === 'cleared') {
+      this.emitDomainEvent('zatca.credit_note.cleared', orderId, userId, {
+        creditNoteId: cnId,
+        refundId,
+      });
     }
 
-    return { id: creditNoteId, icv, uuid: invUuid, status: storeStatus };
+    return { id: cnId, icv, uuid: invUuid, status: storeStatus, attemptNo };
   }
 
-  // ── Private helpers ────────────────────────────────────────────────────────
+  // ── Private helpers ─────────────────────────────────────────────────────
 
-  /**
-   * Validate that all required buyer fields are present on the order.
-   * Reads from the zatca_buyer_details JSON column.
-   */
+  private evaluateClearanceResult(
+    clearance: ZatcaClearanceResult,
+    signedXml: string,
+  ): {
+    storeStatus: string;
+    storedXml: string;
+    clearanceErrors: string | null;
+    clearanceWarnings: string | null;
+  } {
+    switch (clearance.status) {
+      case 'CLEARED':
+        return {
+          storeStatus: 'cleared',
+          storedXml: clearance.clearedXml || signedXml,
+          clearanceErrors: null,
+          clearanceWarnings:
+            clearance.warnings.length > 0 ? JSON.stringify(clearance.warnings) : null,
+        };
+      case 'REJECTED':
+        return {
+          storeStatus: 'rejected',
+          storedXml: signedXml,
+          clearanceErrors: JSON.stringify(clearance.errors),
+          clearanceWarnings: null,
+        };
+      case 'ERROR':
+      case 'NO_CREDENTIALS':
+        return {
+          storeStatus: 'error',
+          storedXml: signedXml,
+          clearanceErrors: JSON.stringify(clearance.errors),
+          clearanceWarnings: null,
+        };
+      default:
+        return {
+          storeStatus: 'error',
+          storedXml: signedXml,
+          clearanceErrors: JSON.stringify(['Unknown clearance status']),
+          clearanceWarnings: null,
+        };
+    }
+  }
+
+  private buildResultFromRow(row: any, _clearanceStatus: string): CreateStandardInvoiceResult {
+    let errors: string[] = [];
+    let warnings: string[] = [];
+    try {
+      errors = row.clearanceErrors ? JSON.parse(row.clearanceErrors) : [];
+    } catch {}
+    try {
+      warnings = row.clearanceWarnings ? JSON.parse(row.clearanceWarnings) : [];
+    } catch {}
+
+    return {
+      id: row.id,
+      icv: row.icv,
+      uuid: row.uuid,
+      invoiceHash: row.invoiceHash,
+      status: row.status,
+      attemptNo: row.attemptNo || 1,
+      qrTlvBase64: row.qrTlv,
+      signedXml: row.xml,
+      clearance: {
+        status:
+          row.status === 'cleared'
+            ? 'CLEARED'
+            : row.status === 'rejected'
+              ? 'REJECTED'
+              : row.status === 'error'
+                ? 'ERROR'
+                : 'PENDING',
+        httpStatus: row.httpStatus ?? 0,
+        clearedXml: row.status === 'cleared' ? row.xml : null,
+        clearedInvoiceBase64: null,
+        warnings,
+        errors,
+        rawBody: null,
+      },
+    };
+  }
+
+  private listInvoiceAttempts(orderId: number): any[] {
+    return this.db
+      .select()
+      .from(zatcaInvoices)
+      .where(eq(zatcaInvoices.orderId, orderId))
+      .orderBy(zatcaInvoices.id)
+      .all();
+  }
+
+  private attemptFromRow(row: any): ZatcaInvoiceAttempt {
+    let errors: string[] = [];
+    let warnings: string[] = [];
+    try {
+      errors = row.clearanceErrors ? JSON.parse(row.clearanceErrors) : [];
+    } catch {}
+    try {
+      warnings = row.clearanceWarnings ? JSON.parse(row.clearanceWarnings) : [];
+    } catch {}
+
+    return {
+      id: row.id,
+      attemptNo: row.attemptNo || 1,
+      status: row.status,
+      icv: row.icv,
+      uuid: row.uuid,
+      errors,
+      warnings,
+      httpStatus: row.httpStatus ?? null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private emitDomainEvent(
+    event: string,
+    orderId: number,
+    userId: number,
+    extra?: Record<string, unknown>,
+  ): void {
+    try {
+      this.eventEmitter.emit(event, { orderId, userId, ...extra });
+    } catch {
+      // Swallow
+    }
+  }
+
   private validateBuyerFields(order: Record<string, any>): void {
     try {
       requireZatcaBuyerDetails(order.zatcaBuyerDetails);
@@ -579,11 +903,6 @@ export class ZatcaStandardInvoiceService {
     }
   }
 
-  /**
-   * Parse buyer details from the order's zatca_buyer_details JSON column.
-   * Returns a plain buyer object for XML builder use.
-   * @throws If the JSON is missing or invalid
-   */
   private getBuyerFromOrder(order: Record<string, any>): {
     name: string;
     vatNumber: string;
@@ -594,13 +913,9 @@ export class ZatcaStandardInvoiceService {
     postalCode: string;
     country: string;
   } {
-    const details = requireZatcaBuyerDetails(order.zatcaBuyerDetails);
-    return details;
+    return requireZatcaBuyerDetails(order.zatcaBuyerDetails);
   }
 
-  /**
-   * Build seller configuration from settings.
-   */
   private buildSellerConfig(): SellerInfo {
     const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
     const vatNumber = this.printersService.getSetting('vat_number', '300000000000');

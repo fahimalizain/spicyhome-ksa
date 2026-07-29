@@ -114,6 +114,27 @@ export interface ZatcaReportingResult {
   failed: number;
 }
 
+export interface ZatcaInvoiceAttempt {
+  id: number;
+  attemptNo: number;
+  status: string;
+  icv: number;
+  uuid: string;
+  errors: string[];
+  warnings: string[];
+  httpStatus: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ZatcaInvoiceStatusResponse {
+  invoiceType: 'simplified' | 'standard' | 'none';
+  current: ZatcaInvoiceAttempt | null;
+  attempts: ZatcaInvoiceAttempt[];
+  canRetryClearance: boolean;
+  canReissue: boolean;
+}
+
 /** Info passed to onRequestComplete for observability (e.g. Sentry breadcrumbs). */
 export interface RequestCompleteInfo {
   method: string;
@@ -304,6 +325,17 @@ export class SpicyHomeClient {
 
     reprint: (orderId: number, dto: ReprintOrderDto) =>
       request<PrintResponse>(this.config, 'POST', `/orders/${orderId}/print`, dto),
+
+    getZatcaInvoice: (orderId: number) =>
+      request<ZatcaInvoiceStatusResponse>(this.config, 'GET', `/orders/${orderId}/zatca-invoice`),
+
+    retryZatcaClearance: (orderId: number) =>
+      request<any>(this.config, 'POST', `/orders/${orderId}/zatca-invoice/retry-clearance`),
+
+    reissueZatcaInvoice: (
+      orderId: number,
+      body?: { zatcaBuyerDetails?: Record<string, unknown> },
+    ) => request<any>(this.config, 'POST', `/orders/${orderId}/zatca-invoice/reissue`, body),
   };
 
   tables = {

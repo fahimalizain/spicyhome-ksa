@@ -325,7 +325,7 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(row.xml).toContain('399999999800003');
     });
 
-    it('persists with status failed and throws on clearance REJECTED', async () => {
+    it('persists with status rejected on clearance REJECTED (no throw, returns result)', async () => {
       const orderId = createStandardOrder();
 
       fakeHttp.responses.set('clearance', {
@@ -338,37 +338,38 @@ describe('ZatcaStandardInvoiceService', () => {
         }),
       });
 
-      // Should throw with error message about clearance failure
-      await expect(standardService.createStandardInvoice(orderId, 1)).rejects.toThrow(
-        /Standard invoice clearance failed/,
-      );
+      // New behavior: no throw — returns result with status 'rejected'
+      const result = await standardService.createStandardInvoice(orderId, 1);
+      expect(result.status).toBe('rejected');
+      expect(result.attemptNo).toBe(1);
 
-      // But the row should still exist with status=failed
+      // But the row should still exist with status=rejected
       const row = sqlite
         .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
         .get(orderId) as any;
       expect(row).not.toBeUndefined();
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('rejected');
       expect(row.reported_at).toBeNull();
       // Signed XML is stored, containing standard subtype
       expect(row.xml).toContain('<Invoice');
       expect(row.xml).toContain('name="0100000"');
     });
 
-    it('persists with status failed and throws on clearance ERROR', async () => {
+    it('persists with status error on clearance ERROR (no throw, returns result)', async () => {
       const orderId = createStandardOrder();
 
       // Simulate network error
       fakeHttp.nextError = new Error('Connection refused');
 
-      await expect(standardService.createStandardInvoice(orderId, 1)).rejects.toThrow(
-        /Standard invoice clearance failed/,
-      );
+      // New behavior: no throw — returns result with status 'error'
+      const result = await standardService.createStandardInvoice(orderId, 1);
+      expect(result.status).toBe('error');
+      expect(result.attemptNo).toBe(1);
 
       const row = sqlite
         .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
         .get(orderId) as any;
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('error');
       expect(row.xml).toContain('<Invoice');
     });
 
@@ -614,7 +615,7 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(submittedXml).toContain('Wrong size');
     });
 
-    it('persists with status failed and throws on clearance REJECTED', async () => {
+    it('persists with status rejected on clearance REJECTED (no throw)', async () => {
       const orderId = createStandardOrder();
 
       fakeHttp.responses.set('clearance', {
@@ -640,20 +641,20 @@ describe('ZatcaStandardInvoiceService', () => {
         }),
       });
 
-      await expect(standardService.createStandardCreditNote(orderId, refundId, 1)).rejects.toThrow(
-        /Standard credit note clearance failed/,
-      );
+      // New behavior: no throw — returns result with status 'rejected'
+      const result = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(result.status).toBe('rejected');
 
       const row = sqlite
         .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
       expect(row).not.toBeUndefined();
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('rejected');
       expect(row.reported_at).toBeNull();
       expect(row.xml).toContain('name="0100000"');
     });
 
-    it('persists with status failed and throws on clearance ERROR', async () => {
+    it('persists with status error on clearance ERROR (no throw)', async () => {
       const orderId = createStandardOrder();
 
       fakeHttp.responses.set('clearance', {
@@ -671,14 +672,14 @@ describe('ZatcaStandardInvoiceService', () => {
 
       fakeHttp.nextError = new Error('Connection refused');
 
-      await expect(standardService.createStandardCreditNote(orderId, refundId, 1)).rejects.toThrow(
-        /Standard credit note clearance failed/,
-      );
+      // New behavior: no throw — returns result
+      const result = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(result.status).toBe('error');
 
       const row = sqlite
         .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('error');
       expect(row.xml).toContain('<Invoice');
     });
 
@@ -741,7 +742,7 @@ describe('ZatcaStandardInvoiceService', () => {
       `);
 
       await expect(standardService.createStandardCreditNote(orderId, refundId, 1)).rejects.toThrow(
-        /is not a standard invoice/,
+        /No cleared original invoice found/,
       );
     });
   });
@@ -800,12 +801,12 @@ describe('ZatcaStandardInvoiceService', () => {
       // Must not throw
       await expect(standardService.onOrderPaid({ orderId, userId: 1 })).resolves.toBeUndefined();
 
-      // Failed row persisted
+      // Failed row persisted (now status='error' for network failures)
       const row = sqlite
         .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
         .get(orderId) as any;
       expect(row).not.toBeUndefined();
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('error');
     });
 
     it('onOrderRefundIssued creates standard credit note for standard order', async () => {
@@ -915,7 +916,242 @@ describe('ZatcaStandardInvoiceService', () => {
         .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
       expect(row).not.toBeUndefined();
-      expect(row.status).toBe('failed');
+      expect(row.status).toBe('error');
+    });
+  });
+
+  // ── Multi-attempt lifecycle tests ───────────────────────────────────────
+
+  describe('multi-attempt clearance lifecycle', () => {
+    it('reject → reissue burns new ICV and new UUID, first row stays rejected', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: REJECTED
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            errorMessages: ['Invalid invoice structure'],
+          },
+        }),
+      });
+
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('rejected');
+      expect(first.attemptNo).toBe(1);
+      const firstIcv = first.icv;
+      const firstUuid = first.uuid;
+
+      fakeHttp.requests = [];
+
+      // Now reissue — should create attemptNo=2 with new ICV
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice>reissued_cleared</Invoice>').toString('base64'),
+        }),
+      });
+
+      const reissued = await standardService.reissue(orderId, 1);
+      expect(reissued.status).toBe('cleared');
+      expect(reissued.attemptNo).toBe(2);
+      expect(reissued.icv).toBe(firstIcv + 1);
+      expect(reissued.uuid).not.toBe(firstUuid);
+
+      // First row is still rejected and immutable
+      const firstRow = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE id = ?')
+        .get(first.id) as any;
+      expect(firstRow.status).toBe('rejected');
+      expect(firstRow.icv).toBe(firstIcv);
+      expect(firstRow.uuid).toBe(firstUuid);
+
+      // Second row cleared
+      const secondRow = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE id = ?')
+        .get(reissued.id) as any;
+      expect(secondRow.status).toBe('cleared');
+      expect(secondRow.attempt_no).toBe(2);
+      expect(secondRow.icv).toBe(firstIcv + 1);
+      expect(secondRow.uuid).not.toBe(firstUuid);
+    });
+
+    it('retryClearance after error keeps same ICV and UUID', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: ERROR (network)
+      fakeHttp.nextError = new Error('Connection refused');
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('error');
+      const firstIcv = first.icv;
+      const firstUuid = first.uuid;
+
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+
+      // Retry with success
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice>retry_cleared</Invoice>').toString('base64'),
+        }),
+      });
+
+      const retried = await standardService.retryClearance(orderId, 1);
+      expect(retried.status).toBe('cleared');
+      // Same ICV and UUID — we resubmitted the same payload
+      expect(retried.icv).toBe(firstIcv);
+      expect(retried.uuid).toBe(firstUuid);
+
+      // Only one row for this order — updated in place
+      const row = sqlite.prepare('SELECT * FROM zatca_invoices WHERE id = ?').get(first.id) as any;
+      expect(row.status).toBe('cleared');
+      expect(row.icv).toBe(firstIcv);
+      expect(row.uuid).toBe(firstUuid);
+    });
+
+    it('getInvoiceStatus returns correct canReissue only for rejected', async () => {
+      const orderId = createStandardOrder();
+
+      // Before any attempt: no invoice
+      const status0 = standardService.getInvoiceStatus(orderId);
+      expect(status0.invoiceType).toBe('standard');
+      expect(status0.current).toBeNull();
+      expect(status0.canReissue).toBe(false);
+      expect(status0.canRetryClearance).toBe(false);
+
+      // Create with rejected
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid buyer'] },
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+
+      const status1 = standardService.getInvoiceStatus(orderId);
+      expect(status1.current?.status).toBe('rejected');
+      expect(status1.canReissue).toBe(true);
+      expect(status1.canRetryClearance).toBe(false);
+
+      // After reissue with error
+      fakeHttp.requests = [];
+      fakeHttp.responses.delete('clearance');
+      fakeHttp.nextError = new Error('Network error on reissue');
+
+      await standardService.reissue(orderId, 1);
+
+      const status2 = standardService.getInvoiceStatus(orderId);
+      // Latest is error — canRetry but not canReissue
+      expect(status2.current?.status).toBe('error');
+      expect(status2.canReissue).toBe(false);
+      expect(status2.canRetryClearance).toBe(true);
+    });
+
+    it('reissue throws when latest status is not rejected', async () => {
+      const orderId = createStandardOrder();
+
+      // Create with error
+      fakeHttp.nextError = new Error('Network error');
+      await standardService.createStandardInvoice(orderId, 1);
+
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+
+      // reissue on error should throw
+      await expect(standardService.reissue(orderId, 1)).rejects.toThrow(
+        /Cannot reissue.*not 'rejected'/,
+      );
+    });
+
+    it('reissue throws when already cleared', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+
+      await expect(standardService.reissue(orderId, 1)).rejects.toThrow(
+        /already has a cleared invoice/,
+      );
+    });
+
+    it('retryClearance throws when latest status is not error', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+
+      await expect(standardService.retryClearance(orderId, 1)).rejects.toThrow(
+        /Cannot retry.*not 'error'/,
+      );
+    });
+
+    it('reissue updates buyer details on the order and creates a new attempt', async () => {
+      const orderId = createStandardOrder();
+
+      // First rejection
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Wrong buyer'] },
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+
+      fakeHttp.requests = [];
+      fakeHttp.responses.delete('clearance');
+
+      // Reissue with updated buyer
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice>updated</Invoice>').toString('base64'),
+        }),
+      });
+
+      const updatedBuyer = {
+        name: 'Updated Company',
+        vatNumber: '399999999800004',
+        street: 'New Street',
+        buildingNumber: '2222',
+        citySubdivision: 'Al-Malaz',
+        city: 'Riyadh',
+        postalCode: '12223',
+        country: 'SA',
+      };
+
+      const result = await standardService.reissue(orderId, 1, updatedBuyer);
+      expect(result.status).toBe('cleared');
+      expect(result.attemptNo).toBe(2);
+
+      // Verify buyer was updated on the order
+      const order = sqlite.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+      const persistedBuyer = JSON.parse(order.zatca_buyer_details);
+      expect(persistedBuyer.name).toBe('Updated Company');
+      expect(persistedBuyer.vatNumber).toBe('399999999800004');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import {
   orders,
   orderItems,
@@ -8,6 +8,7 @@ import {
   items,
   itemCategories,
   tables,
+  zatcaInvoices,
 } from '@spicyhome/db';
 import { PrinterRole } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
@@ -69,7 +70,7 @@ export class PrintJobService {
    */
   async printReceipt(
     orderId: number,
-    opts?: { kickDrawer?: boolean },
+    opts?: { kickDrawer?: boolean; qrTlvPayload?: string },
   ): Promise<{ printer: PrinterRecord }> {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
@@ -96,6 +97,20 @@ export class PrintJobService {
       totalHalalas: oi.totalHalalas,
     }));
 
+    // Load QR from zatca_invoices if not provided by caller
+    let qrTlvPayload = opts?.qrTlvPayload ?? undefined;
+    if (!qrTlvPayload) {
+      const cleared = this.db
+        .select()
+        .from(zatcaInvoices)
+        .where(eq(zatcaInvoices.orderId, orderId))
+        .orderBy(desc(zatcaInvoices.id))
+        .get();
+      if (cleared?.qrTlv) {
+        qrTlvPayload = cleared.qrTlv;
+      }
+    }
+
     const receipt = this.receiptBuilder.build({
       restaurantName,
       vatNumber,
@@ -108,6 +123,7 @@ export class PrintJobService {
       vatHalalas: order.vatHalalas,
       totalHalalas: order.totalHalalas,
       kickDrawer: opts?.kickDrawer ?? false,
+      qrTlvPayload,
     });
 
     await this.printersService.sendBuffer(receiptPrinter, receipt);
@@ -357,5 +373,19 @@ export class PrintJobService {
       config: p.config,
     });
     await this.printersService.sendBuffer(p, buf);
+  }
+
+  /**
+   * Kick the cash drawer without printing a full receipt.
+   * Builds a minimal ESC/POS buffer containing only the drawer kick command.
+   */
+  async kickDrawer(printer?: PrinterRecord): Promise<void> {
+    const p = printer ?? this.printersService.getActiveByRole(PrinterRole.RECEIPT);
+    if (!p) return;
+
+    const { EscPosBuilder } = require('./esc-pos-builder');
+    const eb = new EscPosBuilder();
+    eb.cashDrawerKick();
+    await this.printersService.sendBuffer(p, eb.getBuffer());
   }
 }
