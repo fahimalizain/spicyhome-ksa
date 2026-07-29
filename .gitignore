@@ -16,8 +16,8 @@ Thumbs.db
 MODULE.bazel.lock
 
 # Repo-local Rust toolchain (must not commit)
-.cargo/
-.rustup/
+/.cargo/
+/.rustup/
 
 # Rust build artifacts
 native/rawprint/target/
