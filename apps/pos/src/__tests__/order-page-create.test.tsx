@@ -7,6 +7,7 @@ import { DayPage } from '../pages/DayPage';
 const mockListCategories = vi.fn();
 const mockListItems = vi.fn();
 const mockTablesList = vi.fn();
+const mockOrdersList = vi.fn().mockResolvedValue([]);
 const mockDayCurrent = vi.fn();
 const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
@@ -26,7 +27,7 @@ vi.mock('../api', () => ({
       list: (...args: any[]) => mockTablesList(...args),
     },
     orders: {
-      list: vi.fn().mockResolvedValue([]),
+      list: (...args: any[]) => mockOrdersList(...args),
       create: (...args: any[]) => mockOrdersCreate(...args),
       syncItems: (...args: any[]) => mockOrdersSyncItems(...args),
       get: (...args: any[]) => mockOrdersGet(...args),
@@ -427,5 +428,109 @@ describe('OrderPage — create order with sync', () => {
 
     fireEvent.click(screen.getByText('Takeaway'));
     expect(screen.queryByText('Select table…')).not.toBeInTheDocument();
+  });
+
+  describe('occupied tables in table picker', () => {
+    const openOrder = {
+      id: 99,
+      orderNo: 42,
+      uuid: 'occ-uuid',
+      type: 'dine_in',
+      tableId: 1,
+      dayOpeningId: 1,
+      status: 'open',
+      subtotalHalalas: 2300,
+      vatHalalas: 300,
+      totalHalalas: 2600,
+      discountHalalas: 0,
+      createdAt: 5000,
+      updatedAt: 5000,
+      createdBy: null,
+      updatedBy: null,
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      setupOpenDay();
+      mockOrdersList.mockResolvedValue([openOrder]);
+    });
+
+    it('occupied table is disabled and shows order number', async () => {
+      renderOrderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Burger')).toBeInTheDocument();
+      });
+
+      // Open the table picker
+      fireEvent.click(screen.getByText('Select table…'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Select Table')).toBeInTheDocument();
+      });
+
+      // T1 should be disabled (occupied)
+      const t1Btn = screen.getByText('T1').closest('button')!;
+      expect(t1Btn).toBeDisabled();
+
+      // T1 should show the order number
+      expect(screen.getByText('#42')).toBeInTheDocument();
+
+      // T2 should NOT be disabled
+      const t2Btn = screen.getByText('T2').closest('button')!;
+      expect(t2Btn).not.toBeDisabled();
+    });
+
+    it('clicking occupied table does not select it or close picker', async () => {
+      renderOrderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Burger')).toBeInTheDocument();
+      });
+
+      // Open the table picker
+      fireEvent.click(screen.getByText('Select table…'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Select Table')).toBeInTheDocument();
+      });
+
+      // Click T1 (occupied)
+      fireEvent.click(screen.getByText('T1'));
+
+      // Picker should still be open (occupied table click is a no-op)
+      await waitFor(() => {
+        expect(screen.getByText('Select Table')).toBeInTheDocument();
+      });
+
+      // Table selection should not have changed
+      expect(screen.getByText('Select table…')).toBeInTheDocument();
+    });
+
+    it('free table is still selectable', async () => {
+      renderOrderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Burger')).toBeInTheDocument();
+      });
+
+      // Open the table picker
+      fireEvent.click(screen.getByText('Select table…'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Select Table')).toBeInTheDocument();
+      });
+
+      // Click T2 (free)
+      fireEvent.click(screen.getByText('T2'));
+
+      // Picker should close
+      await waitFor(() => {
+        expect(screen.queryByText('Select Table')).not.toBeInTheDocument();
+      });
+
+      // Table should be selected
+      expect(screen.getByText('Table: T2')).toBeInTheDocument();
+    });
   });
 });

@@ -461,8 +461,8 @@ describe('OrderPage — staged cart', () => {
     });
   });
 
-  // ---- Test 9: D7 — Leave guard dialog on dirty (New Order button) ----
-  it('open order: dirty + New Order shows leave guard dialog', async () => {
+  // ---- Test 9: New Order hidden when dirty; visible when clean (D7/D15) ----
+  it('open order: New Order hidden when dirty, visible when clean', async () => {
     mockGetReturns(makeOrder());
 
     renderOrderPage();
@@ -471,6 +471,9 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order #42')).toBeInTheDocument();
     });
 
+    // Clean: New Order visible
+    expect(screen.getByText('New Order')).toBeInTheDocument();
+
     // Make a change to get dirty
     fireEvent.click(screen.getAllByText('Burger')[0]);
 
@@ -478,17 +481,43 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Unsent changes')).toBeInTheDocument();
     });
 
-    // Currently the POS uses guardedNavigate for New Order only when status
-    // is paid/voided/refunded. For open orders dirty, we need to check that
-    // the leave guard dialog appears when navigating away.
-    // The current implementation only guards for terminal states, not for
-    // open orders via a dedicated button. Let's verify dirty state is tracked.
+    // Dirty: New Order hidden, Send/Discard present
+    expect(screen.queryByText('New Order')).not.toBeInTheDocument();
     expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
     expect(screen.getByText('Discard')).toBeInTheDocument();
+  });
 
-    // Pay/Void not visible when dirty
-    expect(screen.queryByText('Pay')).not.toBeInTheDocument();
-    expect(screen.queryByText('Void Order')).not.toBeInTheDocument();
+  // ---- Test 9b: New Order on clean open order clears immediately ----
+  it('open order: clean + New Order clears session immediately', async () => {
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order #42')).toBeInTheDocument();
+    });
+
+    // No dirty state — Pay and Void visible
+    expect(screen.getByText('Pay')).toBeInTheDocument();
+    expect(screen.getByText('Void Order')).toBeInTheDocument();
+
+    // New Order visible for open orders
+    const newOrderBtn = screen.getByText('New Order');
+    expect(newOrderBtn).toBeInTheDocument();
+
+    // Click New Order — clean, so no guard; clears immediately
+    fireEvent.click(newOrderBtn);
+
+    await waitFor(() => {
+      // Back to pre-order state
+      expect(screen.getByText('New Order')).toBeInTheDocument();
+      expect(screen.getByText('Create Order')).toBeInTheDocument();
+      expect(screen.queryByText('Order #42')).not.toBeInTheDocument();
+    });
+
+    // No API pay/void calls — order remains open on server
+    expect(mockOrdersPay).not.toHaveBeenCalled();
+    expect(mockOrdersVoid).not.toHaveBeenCalled();
   });
 
   // ---- Test 10: D8 — Realtime conflict dialog triggered by remote change ----
@@ -519,32 +548,4 @@ describe('OrderPage — staged cart', () => {
       { timeout: 5000 },
     );
   }, 8000);
-
-  // ---- Test 11: D7 — Discard changes via leave guard navigates ----
-  it('open order: LeaveGuard has Keep Editing and Discard Changes buttons', async () => {
-    mockGetReturns(makeOrder());
-
-    renderOrderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
-    });
-
-    // Make a change
-    fireEvent.click(screen.getAllByText('Burger')[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
-    });
-
-    // Discard should work
-    fireEvent.click(screen.getByText('Discard'));
-
-    await waitFor(() => {
-      // After discard, dirty should be gone
-      expect(screen.queryByText('Unsent changes')).not.toBeInTheDocument();
-      // Pay/Void should reappear
-      expect(screen.getByText('Pay')).toBeInTheDocument();
-    });
-  });
 });
