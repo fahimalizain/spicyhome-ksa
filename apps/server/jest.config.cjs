@@ -4,4 +4,5 @@ module.exports = {
   testEnvironment: 'node',
   transform: {},
   moduleFileExtensions: ['js', 'json', 'node'],
+  maxWorkers: 1,
 };
