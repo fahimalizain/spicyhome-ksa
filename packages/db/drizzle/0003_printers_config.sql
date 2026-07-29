@@ -1,1 +1,0 @@
-ALTER TABLE `printers` ADD `config` text DEFAULT '{}' NOT NULL;

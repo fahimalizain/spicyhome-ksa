@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7bacb1f0-8ddf-4b6c-820e-f9fb9d8ad7f4",
+  "id": "3203724a-f67e-4bd9-aebe-f5b679507313",
   "prevId": "f0e01a63-eb9c-49f0-95c1-933a22ffe034",
   "tables": {
     "day_openings": {
@@ -1237,6 +1237,21 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "connection_type": {
+          "name": "connection_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'tcp'"
+        },
+        "windows_printer_name": {
+          "name": "windows_printer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "ip": {
