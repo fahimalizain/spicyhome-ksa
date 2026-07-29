@@ -10,6 +10,7 @@ import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
 import { PrintersService } from '../printers/printers.service';
+import { OrdersService } from './orders.service';
 
 let app: INestApplication;
 let sqlite: any;
@@ -1342,6 +1343,74 @@ describe('Pay with payment methods', () => {
         .expect(200);
 
       expect(statusRes.body.invoiceType).toBe('simplified');
+    });
+
+    it('standard invoice refund defers receipt print until credit note clearance', async () => {
+      // 1. Create a standard paid order
+      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: FULL_BUYER,
+      });
+      expect(res.status).toBe(201);
+
+      // 2. Refund via HTTP
+      // Get order items to know what to refund
+      const orderRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const zingerItem = orderRes.body.items[0];
+      expect(zingerItem).toBeDefined();
+
+      transport.sent = [];
+
+      const refundRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
+        .expect(201);
+
+      const refundId = refundRes.body.refundId;
+      expect(refundId).toBeGreaterThan(0);
+
+      // 3. Wait for any async work
+      await new Promise((r) => setTimeout(r, 200));
+
+      // 4. Immediately after refund: NO new receipt_print_enqueued for the refund
+      const eventsBefore = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const typesBefore = eventsBefore.body.map((e: any) => e.type);
+      expect(typesBefore).toContain('refund_issued');
+      // For standard orders, no receipt_print_enqueued should be generated during refund
+      // (the pay also skips receipt_print, so there should be 0 enqueued events overall)
+      expect(typesBefore).not.toContain('receipt_print_enqueued');
+
+      // 5. Simulate credit note clearance by calling the event handler directly
+      const ordersService = app.get(OrdersService);
+      // The userId from the login is always 1 (admin seed user)
+      await ordersService.onZatcaCreditNoteCleared({
+        orderId,
+        userId: 1,
+        creditNoteId: 999, // placeholder — not actually read by the handler
+        refundId,
+      });
+
+      // Wait for async print
+      await new Promise((r) => setTimeout(r, 200));
+
+      // 6. After clearance: receipt print events should appear
+      const eventsAfter = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const typesAfter = eventsAfter.body.map((e: any) => e.type);
+      expect(typesAfter).toContain('receipt_print_enqueued');
+      expect(typesAfter).toContain('receipt_print_succeeded');
     });
   });
 });

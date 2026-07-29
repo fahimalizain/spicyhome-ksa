@@ -2,19 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import type { ZatcaInvoiceStatusResponse } from '@spicyhome/client-ts';
-import {
-  StandardInvoiceBuyerForm,
-  validateStandardBuyer,
-  type ZatcaBuyerDetails,
-} from './StandardInvoiceBuyerForm';
 
 type ClearancePhase = 'clearance' | 'cleared' | 'rejected' | 'error';
 
 export type ZatcaClearanceModalProps = {
   orderId: number;
   orderTotalHalalas: number;
-  /** Buyer details used for reissue after rejection (seeded from pay form). */
-  initialBuyer: ZatcaBuyerDetails;
   /**
    * Called when user dismisses after payment is already committed,
    * or after auto-close on successful clearance.
@@ -29,16 +22,11 @@ const MAX_POLL_COUNT = 90; // ~90s
 export function ZatcaClearanceModal({
   orderId,
   orderTotalHalalas,
-  initialBuyer,
   onDone,
 }: ZatcaClearanceModalProps) {
   const [clearancePhase, setClearancePhase] = useState<ClearancePhase>('clearance');
   const [clearanceStatus, setClearanceStatus] = useState<ZatcaInvoiceStatusResponse | null>(null);
   const [clearanceError, setClearanceError] = useState('');
-  const [buyer, setBuyer] = useState<ZatcaBuyerDetails>(() => ({ ...initialBuyer }));
-  const [buyerErrors, setBuyerErrors] = useState<Partial<Record<keyof ZatcaBuyerDetails, string>>>(
-    {},
-  );
   const [actionLoading, setActionLoading] = useState(false);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -140,21 +128,10 @@ export function ZatcaClearanceModal({
 
   async function handleReissue() {
     stopPolling();
-
-    // Validate buyer before reissuing
-    const fieldErrors = validateStandardBuyer(buyer);
-    if (Object.keys(fieldErrors).length > 0) {
-      setBuyerErrors(fieldErrors);
-      return;
-    }
-
     setActionLoading(true);
     setClearanceError('');
-    setBuyerErrors({});
     try {
-      await client.orders.reissueZatcaInvoice(orderId, {
-        zatcaBuyerDetails: buyer,
-      });
+      await client.orders.reissueZatcaInvoice(orderId);
       setActionLoading(false);
       startClearancePolling();
     } catch (e: any) {
@@ -172,6 +149,15 @@ export function ZatcaClearanceModal({
     onDone();
   }
 
+  const rejectionErrors =
+    clearancePhase === 'rejected' && clearanceStatus?.current?.errors
+      ? clearanceStatus.current.errors
+      : [];
+  const networkErrors =
+    clearancePhase === 'error' && clearanceStatus?.current?.errors
+      ? clearanceStatus.current.errors
+      : [];
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto">
@@ -188,13 +174,6 @@ export function ZatcaClearanceModal({
           <div className="text-center py-6">
             <div className="animate-pulse text-brand-400 text-lg mb-2">Clearing with ZATCA...</div>
             <div className="text-sm text-gray-500">Please wait, this may take a few seconds</div>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              className="mt-4 text-xs text-gray-500 hover:text-gray-400 underline"
-            >
-              Continue without waiting
-            </button>
           </div>
         )}
 
@@ -212,28 +191,14 @@ export function ZatcaClearanceModal({
               {clearanceError && (
                 <div className="text-red-300 text-xs whitespace-pre-wrap">{clearanceError}</div>
               )}
-              {clearanceStatus?.current?.errors &&
-                clearanceStatus.current.errors.map((e: string, i: number) => (
-                  <div key={i} className="text-red-300 text-xs mt-1">
-                    {e}
-                  </div>
-                ))}
+              {rejectionErrors.map((e: string, i: number) => (
+                <div key={i} className="text-red-300 text-xs mt-1">
+                  {e}
+                </div>
+              ))}
             </div>
 
-            <div className="border-t border-gray-700 pt-3">
-              <div className="text-sm text-gray-300 mb-2">Correct buyer info and reissue:</div>
-              <StandardInvoiceBuyerForm
-                value={buyer}
-                onChange={(next) => {
-                  setBuyer(next);
-                  setBuyerErrors({});
-                }}
-                disabled={actionLoading}
-                errors={buyerErrors}
-              />
-            </div>
-
-            <div className="flex gap-2 mt-3">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleDismiss}
@@ -247,7 +212,7 @@ export function ZatcaClearanceModal({
                 disabled={actionLoading}
                 className="flex-1 touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
               >
-                {actionLoading ? 'Reissuing...' : 'Correct & Reissue'}
+                {actionLoading ? 'Reissuing...' : 'Reissue'}
               </button>
             </div>
           </div>
@@ -260,6 +225,11 @@ export function ZatcaClearanceModal({
               {clearanceError && (
                 <div className="text-amber-300 text-xs whitespace-pre-wrap">{clearanceError}</div>
               )}
+              {networkErrors.map((e: string, i: number) => (
+                <div key={i} className="text-amber-300 text-xs mt-1">
+                  {e}
+                </div>
+              ))}
             </div>
 
             <div className="flex gap-2">

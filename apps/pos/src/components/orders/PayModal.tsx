@@ -249,7 +249,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       <ZatcaClearanceModal
         orderId={orderId}
         orderTotalHalalas={orderTotalHalalas}
-        initialBuyer={buyer}
         onDone={() => {
           onPaid();
           onClose();
