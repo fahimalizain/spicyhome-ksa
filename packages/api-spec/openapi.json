@@ -1500,63 +1500,105 @@
         ]
       }
     },
-    "/settings": {
+    "/orders/{id}/zatca-invoice": {
       "get": {
-        "operationId": "SettingsController_getAll",
-        "summary": "Get all settings",
-        "parameters": [],
+        "operationId": "OrdersController_getZatcaInvoiceStatus",
+        "summary": "Get ZATCA invoice status for an order (clearance polling)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Key-value settings",
+            "description": "ZATCA invoice status with clearance attempts",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SettingResponse"
-                  }
+                  "$ref": "#/components/schemas/ZatcaInvoiceStatusResponse"
                 }
               }
             }
           }
         },
         "tags": [
-          "settings"
+          "orders"
         ],
         "security": [
           {
             "bearer": []
           }
         ]
-      },
-      "put": {
-        "operationId": "SettingsController_set",
-        "summary": "Set a setting value",
-        "parameters": [],
+      }
+    },
+    "/orders/{id}/zatca-invoice/retry-clearance": {
+      "post": {
+        "operationId": "OrdersController_retryZatcaClearance",
+        "summary": "Retry ZATCA clearance for an invoice in error status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Clearance result"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/zatca-invoice/reissue": {
+      "post": {
+        "operationId": "OrdersController_reissueZatcaInvoice",
+        "summary": "Reissue a standard invoice after rejection (new attempt)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetSettingDto"
+                "$ref": "#/components/schemas/ZatcaInvoiceReissueDto"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Setting updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SettingResponse"
-                }
-              }
-            }
+          "201": {
+            "description": "Reissue result"
           }
         },
         "tags": [
-          "settings"
+          "orders"
         ],
         "security": [
           {
@@ -1875,6 +1917,71 @@
         },
         "tags": [
           "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "SettingsController_getAll",
+        "summary": "Get all settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Key-value settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettingResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "SettingsController_set",
+        "summary": "Set a setting value",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSettingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Setting updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
         ],
         "security": [
           {
@@ -3299,7 +3406,10 @@
           },
           "connectionType": {
             "type": "string",
-            "enum": ["tcp", "windows"],
+            "enum": [
+              "tcp",
+              "windows"
+            ],
             "example": "tcp"
           },
           "windowsPrinterName": {
@@ -3365,6 +3475,26 @@
           "updatedBy"
         ]
       },
+      "WindowsPrinterQueuesResponse": {
+        "type": "object",
+        "properties": {
+          "queues": {
+            "example": [
+              "XP-80C",
+              "Receipt Printer",
+              "Kitchen Printer"
+            ],
+            "description": "List of available Windows printer queue names.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "queues"
+        ]
+      },
       "CreatePrinterDto": {
         "type": "object",
         "properties": {
@@ -3374,7 +3504,10 @@
           },
           "connectionType": {
             "type": "string",
-            "enum": ["tcp", "windows"],
+            "enum": [
+              "tcp",
+              "windows"
+            ],
             "default": "tcp",
             "description": "How to connect to the printer: TCP/IP network or Windows spooler queue."
           },
@@ -3427,7 +3560,10 @@
           },
           "connectionType": {
             "type": "string",
-            "enum": ["tcp", "windows"],
+            "enum": [
+              "tcp",
+              "windows"
+            ],
             "description": "How to connect to the printer: TCP/IP network or Windows spooler queue."
           },
           "windowsPrinterName": {
@@ -3460,20 +3596,6 @@
             "type": "boolean"
           }
         }
-      },
-      "WindowsPrinterQueuesResponse": {
-        "type": "object",
-        "properties": {
-          "queues": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "example": ["XP-80C", "Receipt Printer", "Kitchen Printer"],
-            "description": "List of available Windows printer queue names."
-          }
-        },
-        "required": ["queues"]
       },
       "PrinterStatusResponse": {
         "type": "object",
@@ -4369,39 +4491,107 @@
           "valid"
         ]
       },
-      "SettingResponse": {
+      "ZatcaInvoiceAttemptDto": {
         "type": "object",
         "properties": {
-          "key": {
-            "type": "string",
-            "example": "restaurant_name"
+          "id": {
+            "type": "number"
           },
-          "value": {
-            "type": "string",
-            "example": "SpicyHome"
+          "attemptNo": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "icv": {
+            "type": "number"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "httpStatus": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "number"
           }
         },
         "required": [
-          "key",
-          "value"
+          "id",
+          "attemptNo",
+          "status",
+          "icv",
+          "uuid",
+          "errors",
+          "warnings",
+          "httpStatus",
+          "createdAt",
+          "updatedAt"
         ]
       },
-      "SetSettingDto": {
+      "ZatcaInvoiceStatusResponse": {
         "type": "object",
         "properties": {
-          "key": {
+          "invoiceType": {
             "type": "string",
-            "example": "restaurant_name"
+            "enum": [
+              "simplified",
+              "standard",
+              "none"
+            ]
           },
-          "value": {
-            "type": "string",
-            "example": "SpicyHome"
+          "current": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaInvoiceAttemptDto"
+              }
+            ]
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZatcaInvoiceAttemptDto"
+            }
+          },
+          "canRetryClearance": {
+            "type": "boolean"
+          },
+          "canReissue": {
+            "type": "boolean"
           }
         },
         "required": [
-          "key",
-          "value"
+          "invoiceType",
+          "attempts",
+          "canRetryClearance",
+          "canReissue"
         ]
+      },
+      "ZatcaInvoiceReissueDto": {
+        "type": "object",
+        "properties": {
+          "zatcaBuyerDetails": {
+            "type": "object",
+            "description": "Updated ZATCA buyer details for the reissued invoice"
+          }
+        }
       },
       "ZatcaConfigDto": {
         "type": "object",
@@ -4477,6 +4667,40 @@
           "postalCode",
           "country",
           "orgUnit"
+        ]
+      },
+      "SettingResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "restaurant_name"
+          },
+          "value": {
+            "type": "string",
+            "example": "SpicyHome"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "SetSettingDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "restaurant_name"
+          },
+          "value": {
+            "type": "string",
+            "example": "SpicyHome"
+          }
+        },
+        "required": [
+          "key",
+          "value"
         ]
       },
       "OpenDayDto": {

@@ -492,18 +492,51 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/settings': {
+  '/orders/{id}/zatca-invoice': {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    /** Get all settings */
-    get: operations['SettingsController_getAll'];
-    /** Set a setting value */
-    put: operations['SettingsController_set'];
+    /** Get ZATCA invoice status for an order (clearance polling) */
+    get: operations['OrdersController_getZatcaInvoiceStatus'];
+    put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/zatca-invoice/retry-clearance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Retry ZATCA clearance for an invoice in error status */
+    post: operations['OrdersController_retryZatcaClearance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/zatca-invoice/reissue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reissue a standard invoice after rejection (new attempt) */
+    post: operations['OrdersController_reissueZatcaInvoice'];
     delete?: never;
     options?: never;
     head?: never;
@@ -692,6 +725,24 @@ export interface paths {
     put?: never;
     /** Retry reporting for all pending documents (invoices + credit notes), a specific invoice, or a specific credit note */
     post: operations['ZatcaController_retryReporting'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get all settings */
+    get: operations['SettingsController_getAll'];
+    /** Set a setting value */
+    put: operations['SettingsController_set'];
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -1445,6 +1496,17 @@ export interface components {
        */
       updatedBy: number | null;
     };
+    WindowsPrinterQueuesResponse: {
+      /**
+       * @description List of available Windows printer queue names.
+       * @example [
+       *       "XP-80C",
+       *       "Receipt Printer",
+       *       "Kitchen Printer"
+       *     ]
+       */
+      queues: string[];
+    };
     CreatePrinterDto: {
       /** @example Kitchen */
       name: string;
@@ -1496,17 +1558,6 @@ export interface components {
       /** @description Per-printer configuration (Arabic encoding etc.). */
       config?: components['schemas']['PrinterConfigDto'];
       isActive?: boolean;
-    };
-    WindowsPrinterQueuesResponse: {
-      /**
-       * @description List of available Windows printer queue names.
-       * @example [
-       *       "XP-80C",
-       *       "Receipt Printer",
-       *       "Kitchen Printer"
-       *     ]
-       */
-      queues: string[];
     };
     PrinterStatusResponse: {
       /** @example true */
@@ -2037,17 +2088,29 @@ export interface components {
       /** @example true */
       valid: boolean;
     };
-    SettingResponse: {
-      /** @example restaurant_name */
-      key: string;
-      /** @example SpicyHome */
-      value: string;
+    ZatcaInvoiceAttemptDto: {
+      id: number;
+      attemptNo: number;
+      status: string;
+      icv: number;
+      uuid: string;
+      errors: string[];
+      warnings: string[];
+      httpStatus: Record<string, never> | null;
+      createdAt: number;
+      updatedAt: number;
     };
-    SetSettingDto: {
-      /** @example restaurant_name */
-      key: string;
-      /** @example SpicyHome */
-      value: string;
+    ZatcaInvoiceStatusResponse: {
+      /** @enum {string} */
+      invoiceType: 'simplified' | 'standard' | 'none';
+      current?: components['schemas']['ZatcaInvoiceAttemptDto'] | null;
+      attempts: components['schemas']['ZatcaInvoiceAttemptDto'][];
+      canRetryClearance: boolean;
+      canReissue: boolean;
+    };
+    ZatcaInvoiceReissueDto: {
+      /** @description Updated ZATCA buyer details for the reissued invoice */
+      zatcaBuyerDetails?: Record<string, never>;
     };
     ZatcaConfigDto: {
       /**
@@ -2106,6 +2169,18 @@ export interface components {
        * @enum {string}
        */
       environment?: 'sandbox' | 'simulation' | 'production';
+    };
+    SettingResponse: {
+      /** @example restaurant_name */
+      key: string;
+      /** @example SpicyHome */
+      value: string;
+    };
+    SetSettingDto: {
+      /** @example restaurant_name */
+      key: string;
+      /** @example SpicyHome */
+      value: string;
     };
     OpenDayDto: {
       /**
@@ -3245,47 +3320,69 @@ export interface operations {
       };
     };
   };
-  SettingsController_getAll: {
+  OrdersController_getZatcaInvoiceStatus: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        id: number;
+      };
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description Key-value settings */
+      /** @description ZATCA invoice status with clearance attempts */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['SettingResponse'][];
+          'application/json': components['schemas']['ZatcaInvoiceStatusResponse'];
         };
       };
     };
   };
-  SettingsController_set: {
+  OrdersController_retryZatcaClearance: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Clearance result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  OrdersController_reissueZatcaInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
       cookie?: never;
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['SetSettingDto'];
+        'application/json': components['schemas']['ZatcaInvoiceReissueDto'];
       };
     };
     responses: {
-      /** @description Setting updated */
-      200: {
+      /** @description Reissue result */
+      201: {
         headers: {
           [name: string]: unknown;
         };
-        content: {
-          'application/json': components['schemas']['SettingResponse'];
-        };
+        content?: never;
       };
     };
   };
@@ -3510,6 +3607,50 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  SettingsController_getAll: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Key-value settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SettingResponse'][];
+        };
+      };
+    };
+  };
+  SettingsController_set: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetSettingDto'];
+      };
+    };
+    responses: {
+      /** @description Setting updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SettingResponse'];
+        };
       };
     };
   };
