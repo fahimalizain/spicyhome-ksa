@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
-import type { ZatcaInvoiceStatusResponse } from '@spicyhome/client-ts';
 import {
   calcOutstanding,
   canPay,
@@ -17,6 +16,7 @@ import {
   validateStandardBuyer,
   type ZatcaBuyerDetails,
 } from './StandardInvoiceBuyerForm';
+import { ZatcaClearanceModal } from './ZatcaClearanceModal';
 
 /**
  * Convert a SAR display string (e.g. "12.50") to integer halalas,
@@ -59,8 +59,6 @@ function Numpad({ onKey }: { onKey: (key: string) => void }) {
   );
 }
 
-type ClearancePhase = 'idle' | 'submitting' | 'clearance' | 'cleared' | 'rejected' | 'error';
-
 interface PayModalProps {
   orderId: number;
   orderTotalHalalas: number;
@@ -87,14 +85,8 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     {},
   );
 
-  // Clearance polling state
-  const [clearancePhase, setClearancePhase] = useState<ClearancePhase>('idle');
-  const [clearanceStatus, setClearanceStatus] = useState<ZatcaInvoiceStatusResponse | null>(null);
-  const [clearanceError, setClearanceError] = useState('');
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollCountRef = useRef(0);
-  const POLL_INTERVAL_MS = 1000;
-  const MAX_POLL_COUNT = 90; // ~90s
+  // Clearance flow — set when standard invoice pay succeeds; triggers rendering ZatcaClearanceModal
+  const [clearanceActive, setClearanceActive] = useState(false);
 
   // Force numpadTarget to 'method' when tendered section is not relevant
   const isCashSelected = selectedMethodId === 'cash';
@@ -104,15 +96,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       setNumpadTarget('method');
     }
   }, [isCashSelected, selectedAmount]);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     loadMethods();
@@ -202,7 +185,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const changeDue = isCashSelected ? calcCashChange(selectedAmount, tenderedHalalas) : 0;
   const canSubmit =
     !submitting &&
-    clearancePhase === 'idle' &&
     canPay({
       orderTotalHalalas,
       methods,
@@ -212,68 +194,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       numpadActive: false,
     }) &&
     (!isStandardInvoice || Object.keys(validateStandardBuyer(buyer)).length === 0);
-
-  function stopPolling() {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }
-
-  function startClearancePolling() {
-    stopPolling();
-    pollCountRef.current = 0;
-    setClearancePhase('clearance');
-
-    // Run one immediate fetch before starting the interval
-    pollOnce();
-
-    pollingRef.current = setInterval(pollOnce, POLL_INTERVAL_MS);
-  }
-
-  async function pollOnce() {
-    pollCountRef.current++;
-    if (pollCountRef.current > MAX_POLL_COUNT) {
-      stopPolling();
-      setClearanceError('Clearance timed out. Check the order details for result.');
-      setClearancePhase('error');
-      return;
-    }
-
-    try {
-      const status: ZatcaInvoiceStatusResponse = await client.orders.getZatcaInvoice(orderId);
-      setClearanceStatus(status);
-      const current = status.current;
-
-      if (current?.status === 'cleared') {
-        stopPolling();
-        setClearancePhase('cleared');
-        // Brief success, then close
-        setTimeout(() => {
-          onPaid();
-          onClose();
-        }, 1500);
-      } else if (current?.status === 'rejected') {
-        stopPolling();
-        setClearancePhase('rejected');
-        if (current.errors.length > 0) {
-          setClearanceError('');
-        } else {
-          setClearanceError('Invoice rejected by ZATCA');
-        }
-      } else if (current?.status === 'error') {
-        stopPolling();
-        setClearancePhase('error');
-        if (current.errors.length > 0) {
-          setClearanceError('');
-        } else {
-          setClearanceError('Network or clearance error');
-        }
-      }
-    } catch {
-      // Polling error — continue polling
-    }
-  }
 
   async function handlePay() {
     // Validate buyer if standard invoice is enabled
@@ -288,7 +208,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     setSubmitting(true);
     setError('');
     setBuyerErrors({});
-    setClearanceError('');
 
     try {
       const payments = stripZeroPayments(amounts, isCashSelected ? tenderedHalalas : undefined);
@@ -302,9 +221,9 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       await client.orders.pay(orderId, payload);
 
       if (isStandardInvoice) {
-        // Payment succeeded — start clearance polling
+        // Payment succeeded — delegate to clearance modal
         setSubmitting(false);
-        startClearancePolling();
+        setClearanceActive(true);
       } else {
         // Simplified — pay, print, close as before
         onPaid();
@@ -316,59 +235,6 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     }
   }
 
-  async function handleRetryClearance() {
-    stopPolling();
-    setSubmitting(true);
-    setClearanceError('');
-    try {
-      await client.orders.retryZatcaClearance(orderId);
-      setSubmitting(false);
-      setClearancePhase('clearance');
-      startClearancePolling();
-    } catch (e: any) {
-      setSubmitting(false);
-      setClearanceError(e.message || 'Retry failed');
-      setClearancePhase('error');
-    }
-  }
-
-  async function handleReissue() {
-    stopPolling();
-
-    // Validate buyer before reissuing
-    if (isStandardInvoice) {
-      const fieldErrors = validateStandardBuyer(buyer);
-      if (Object.keys(fieldErrors).length > 0) {
-        setBuyerErrors(fieldErrors);
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    setClearanceError('');
-    setBuyerErrors({});
-    try {
-      const body: any = {};
-      if (isStandardInvoice && buyer) {
-        body.zatcaBuyerDetails = buyer;
-      }
-      await client.orders.reissueZatcaInvoice(orderId, body);
-      setSubmitting(false);
-      setClearancePhase('clearance');
-      startClearancePolling();
-    } catch (e: any) {
-      setSubmitting(false);
-      setClearanceError(e.message || 'Reissue failed');
-    }
-  }
-
-  function handleDismissAfterPay() {
-    // Payment is done — always invoke onPaid() so parent refreshes
-    stopPolling();
-    onPaid();
-    onClose();
-  }
-
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -378,124 +244,21 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   }
 
   // ── Clearance phase UI (after pay for standard invoice) ──────────────
-  if (clearancePhase !== 'idle' && isStandardInvoice) {
+  if (clearanceActive) {
     return (
-      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto">
-          <h2 className="text-lg font-bold text-white mb-3">ZATCA Clearance</h2>
-
-          <div className="flex justify-between items-center bg-gray-800 rounded-lg p-3 mb-3">
-            <span className="text-sm text-gray-400">Total</span>
-            <span className="text-xl font-bold text-white">
-              {halalasToSar(orderTotalHalalas)} SAR
-            </span>
-          </div>
-
-          {clearancePhase === 'clearance' && (
-            <div className="text-center py-6">
-              <div className="animate-pulse text-brand-400 text-lg mb-2">
-                Clearing with ZATCA...
-              </div>
-              <div className="text-sm text-gray-500">Please wait, this may take a few seconds</div>
-              <button
-                type="button"
-                onClick={handleDismissAfterPay}
-                className="mt-4 text-xs text-gray-500 hover:text-gray-400 underline"
-              >
-                Continue without waiting
-              </button>
-            </div>
-          )}
-
-          {clearancePhase === 'cleared' && (
-            <div className="text-center py-6">
-              <div className="text-green-400 text-lg mb-2">Invoice Cleared</div>
-              <div className="text-sm text-gray-400">Printing tax receipt...</div>
-            </div>
-          )}
-
-          {clearancePhase === 'rejected' && (
-            <div className="space-y-3">
-              <div className="bg-red-900/40 border border-red-700 rounded-lg p-3">
-                <div className="text-red-400 font-medium text-sm mb-2">Clearance Rejected</div>
-                {clearanceError && (
-                  <div className="text-red-300 text-xs whitespace-pre-wrap">{clearanceError}</div>
-                )}
-                {clearanceStatus?.current?.errors &&
-                  clearanceStatus.current.errors.map((e: string, i: number) => (
-                    <div key={i} className="text-red-300 text-xs mt-1">
-                      {e}
-                    </div>
-                  ))}
-              </div>
-
-              <div className="border-t border-gray-700 pt-3">
-                <div className="text-sm text-gray-300 mb-2">Correct buyer info and reissue:</div>
-                <StandardInvoiceBuyerForm
-                  value={buyer}
-                  onChange={(next) => {
-                    setBuyer(next);
-                    setBuyerErrors({});
-                  }}
-                  disabled={submitting}
-                  errors={buyerErrors}
-                />
-              </div>
-
-              <div className="flex gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={handleDismissAfterPay}
-                  className="flex-1 touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                >
-                  Done (Paid)
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReissue}
-                  disabled={submitting}
-                  className="flex-1 touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  {submitting ? 'Reissuing...' : 'Correct & Reissue'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {clearancePhase === 'error' && (
-            <div className="space-y-3">
-              <div className="bg-amber-900/40 border border-amber-700 rounded-lg p-3">
-                <div className="text-amber-400 font-medium text-sm mb-2">Network Error</div>
-                {clearanceError && (
-                  <div className="text-amber-300 text-xs whitespace-pre-wrap">{clearanceError}</div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleDismissAfterPay}
-                  className="flex-1 touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                >
-                  Done (Paid)
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRetryClearance}
-                  disabled={submitting}
-                  className="flex-1 touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  {submitting ? 'Retrying...' : 'Retry Clearance'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <ZatcaClearanceModal
+        orderId={orderId}
+        orderTotalHalalas={orderTotalHalalas}
+        initialBuyer={buyer}
+        onDone={() => {
+          onPaid();
+          onClose();
+        }}
+      />
     );
   }
 
-  // ── Main payment form (idle phase) ────────────────────────────────────
+  // ── Main payment form ─────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div
