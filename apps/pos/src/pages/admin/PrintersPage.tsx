@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import type { PrinterResponse } from '@spicyhome/client-ts';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
-import type { PrinterConfig } from '@spicyhome/shared';
-import type { ArabicEncoding } from '@spicyhome/shared';
+import type { PrinterConfig, ArabicEncoding } from '@spicyhome/shared';
 
 const CODE_PAGE_SUGGESTIONS: Record<ArabicEncoding, number> = {
   none: 0,
@@ -20,6 +19,41 @@ function configSummary(config: PrinterConfig): string {
   return summary;
 }
 
+interface PrinterForm {
+  name: string;
+  connectionType: 'tcp' | 'windows';
+  windowsPrinterName: string;
+  ip: string;
+  port: number;
+  role: 'kitchen' | 'receipt';
+  isActive: boolean;
+  config: PrinterConfig;
+}
+
+const emptyForm: PrinterForm = {
+  name: '',
+  connectionType: 'tcp',
+  windowsPrinterName: '',
+  ip: '',
+  port: 9100,
+  role: 'kitchen',
+  isActive: true,
+  config: DEFAULT_PRINTER_CONFIG,
+};
+
+function printerToForm(p: PrinterResponse): PrinterForm {
+  return {
+    name: p.name,
+    connectionType: (p.connectionType as 'tcp' | 'windows') || 'tcp',
+    windowsPrinterName: p.windowsPrinterName || '',
+    ip: p.ip,
+    port: p.port,
+    role: p.role as 'kitchen' | 'receipt',
+    isActive: p.isActive,
+    config: p.config || DEFAULT_PRINTER_CONFIG,
+  };
+}
+
 export function PrintersPage() {
   const [printers, setPrinters] = useState<PrinterResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,14 +61,9 @@ export function PrintersPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [testStatus, setTestStatus] = useState<Record<number, string>>({});
-  const [form, setForm] = useState({
-    name: '',
-    ip: '',
-    port: 9100,
-    role: 'kitchen' as 'kitchen' | 'receipt',
-    isActive: true,
-    config: DEFAULT_PRINTER_CONFIG,
-  });
+  const [form, setForm] = useState<PrinterForm>(emptyForm);
+  const [windowsQueues, setWindowsQueues] = useState<string[]>([]);
+  const [loadingQueues, setLoadingQueues] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -52,38 +81,57 @@ export function PrintersPage() {
     }
   }
 
+  async function refreshQueues() {
+    setLoadingQueues(true);
+    try {
+      const res = await client.printers.listWindowsQueues();
+      setWindowsQueues(res.queues);
+    } catch {
+      setWindowsQueues([]);
+    } finally {
+      setLoadingQueues(false);
+    }
+  }
+
   function resetForm() {
-    setForm({
-      name: '',
-      ip: '',
-      port: 9100,
-      role: 'kitchen',
-      isActive: true,
-      config: DEFAULT_PRINTER_CONFIG,
-    });
+    setForm(emptyForm);
     setEditId(null);
   }
 
   function editPrinter(p: PrinterResponse) {
-    setForm({
-      name: p.name,
-      ip: p.ip,
-      port: p.port,
-      role: p.role as 'kitchen' | 'receipt',
-      isActive: p.isActive,
-      config: p.config || DEFAULT_PRINTER_CONFIG,
-    });
+    setForm(printerToForm(p));
     setEditId(p.id);
+  }
+
+  function buildSavePayload(): Record<string, any> {
+    const payload: Record<string, any> = {
+      name: form.name,
+      connectionType: form.connectionType,
+      port: form.port,
+      role: form.role,
+      isActive: form.isActive,
+      config: form.config,
+    };
+
+    if (form.connectionType === 'windows') {
+      payload.windowsPrinterName = form.windowsPrinterName;
+      payload.ip = '';
+    } else {
+      payload.ip = form.ip;
+    }
+
+    return payload;
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     try {
+      const payload = buildSavePayload();
       if (editId) {
-        await client.printers.update(editId, form);
+        await client.printers.update(editId, payload);
       } else {
-        await client.printers.create(form);
+        await client.printers.create(payload);
       }
       resetForm();
       await loadData();
@@ -103,6 +151,13 @@ export function PrintersPage() {
     } finally {
       setTestingId(null);
     }
+  }
+
+  function addressLabel(p: PrinterResponse): string {
+    if (p.connectionType === 'windows') {
+      return 'Win: ' + (p.windowsPrinterName || p.name);
+    }
+    return p.ip + ':' + p.port;
   }
 
   if (loading) return <div className="p-4 text-gray-400">Loading...</div>;
@@ -140,24 +195,74 @@ export function PrintersPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">IP Address</label>
-            <input
+            <label className="block text-xs text-gray-500 mb-1">Connection</label>
+            <select
+              data-testid="connection-type-select"
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
-              value={form.ip}
-              onChange={(e) => setForm((f) => ({ ...f, ip: e.target.value }))}
-              required
-            />
+              value={form.connectionType}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  connectionType: e.target.value as 'tcp' | 'windows',
+                }))
+              }
+            >
+              <option value="tcp">Network (TCP)</option>
+              <option value="windows">Windows (USB/spooler)</option>
+            </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Port</label>
-            <input
-              type="number"
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
-              value={form.port}
-              onChange={(e) => setForm((f) => ({ ...f, port: Number(e.target.value) }))}
-              required
-            />
-          </div>
+          {form.connectionType === 'tcp' ? (
+            <>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">IP Address</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={form.ip}
+                  onChange={(e) => setForm((f) => ({ ...f, ip: e.target.value }))}
+                  required={form.connectionType === 'tcp'}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Port</label>
+                <input
+                  type="number"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={form.port}
+                  onChange={(e) => setForm((f) => ({ ...f, port: Number(e.target.value) }))}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">Windows Printer Name</label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={form.windowsPrinterName}
+                  onChange={(e) => setForm((f) => ({ ...f, windowsPrinterName: e.target.value }))}
+                  placeholder="e.g. XP-80C"
+                  list="windows-queue-list"
+                  required={form.connectionType === 'windows'}
+                />
+                <button
+                  type="button"
+                  onClick={refreshQueues}
+                  disabled={loadingQueues}
+                  className="touch-target bg-gray-600 hover:bg-gray-500 rounded px-3 py-2 text-xs text-gray-200 disabled:opacity-40"
+                  title="Refresh queue list from Windows spooler"
+                >
+                  {loadingQueues ? '...' : 'Refresh'}
+                </button>
+              </div>
+              {windowsQueues.length > 0 && (
+                <datalist id="windows-queue-list">
+                  {windowsQueues.map((q) => (
+                    <option key={q} value={q} />
+                  ))}
+                </datalist>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="pt-3 border-t border-gray-700">
@@ -258,14 +363,17 @@ export function PrintersPage() {
           >
             <div className="flex-1 min-w-0">
               <span className="text-sm text-white">{p.name}</span>
-              <span className="text-xs text-gray-500 ml-2">
-                {p.ip}:{p.port}
-              </span>
+              <span className="text-xs text-gray-500 ml-2">{addressLabel(p)}</span>
               <span
                 className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}
               >
                 {p.role}
               </span>
+              {p.connectionType === 'windows' && (
+                <span className="ml-1 px-1 py-0.5 rounded text-xs bg-cyan-800 text-cyan-100">
+                  USB
+                </span>
+              )}
               <span
                 className={`ml-1 px-1 py-0.5 rounded text-xs ${p.config?.arabic?.encoding === 'none' ? 'bg-gray-700 text-gray-300' : 'bg-purple-800 text-purple-100'}`}
               >

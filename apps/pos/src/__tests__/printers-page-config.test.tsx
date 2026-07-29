@@ -7,6 +7,7 @@ const mockList = vi.fn();
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockTest = vi.fn();
+const mockWindowsQueues = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
@@ -15,16 +16,27 @@ vi.mock('../api', () => ({
       create: (...args: any[]) => mockCreate(...args),
       update: (...args: any[]) => mockUpdate(...args),
       test: (...args: any[]) => mockTest(...args),
+      listWindowsQueues: (...args: any[]) => mockWindowsQueues(...args),
     },
   },
 }));
 
+const basePrinter = {
+  connectionType: 'tcp' as const,
+  windowsPrinterName: null as string | null,
+  createdAt: 1700000000,
+  updatedAt: 1700000000,
+  createdBy: 1,
+  updatedBy: 1,
+};
+
 const printerKitchen = {
+  ...basePrinter,
   id: 1,
   name: 'Kitchen',
   ip: '192.168.1.100',
   port: 9100,
-  role: 'kitchen',
+  role: 'kitchen' as const,
   isActive: true,
   config: {
     arabic: {
@@ -33,18 +45,15 @@ const printerKitchen = {
       visualRtl: false,
     },
   },
-  createdAt: 1700000000,
-  updatedAt: 1700000000,
-  createdBy: 1,
-  updatedBy: 1,
 };
 
 const printerReceipt = {
+  ...basePrinter,
   id: 2,
   name: 'Receipt',
   ip: '192.168.1.101',
   port: 9100,
-  role: 'receipt',
+  role: 'receipt' as const,
   isActive: true,
   config: {
     arabic: {
@@ -53,18 +62,15 @@ const printerReceipt = {
       visualRtl: false,
     },
   },
-  createdAt: 1700000000,
-  updatedAt: 1700000000,
-  createdBy: 1,
-  updatedBy: 1,
 };
 
 const printerRtl = {
+  ...basePrinter,
   id: 3,
   name: 'RTL Printer',
   ip: '192.168.1.102',
   port: 9100,
-  role: 'kitchen',
+  role: 'kitchen' as const,
   isActive: true,
   config: {
     arabic: {
@@ -73,10 +79,25 @@ const printerRtl = {
       visualRtl: true,
     },
   },
-  createdAt: 1700000000,
-  updatedAt: 1700000000,
-  createdBy: 1,
-  updatedBy: 1,
+};
+
+const printerWindows = {
+  ...basePrinter,
+  id: 4,
+  name: 'USB Printer',
+  connectionType: 'windows' as const,
+  windowsPrinterName: 'XP-80C',
+  ip: '',
+  port: 9100,
+  role: 'kitchen' as const,
+  isActive: true,
+  config: {
+    arabic: {
+      encoding: 'none' as const,
+      codePage: 0,
+      visualRtl: false,
+    },
+  },
 };
 
 function renderPage() {
@@ -92,8 +113,13 @@ function getByLabel(form: HTMLElement, labelText: string): HTMLElement {
   const labels = form.querySelectorAll('label');
   for (const label of labels) {
     if (label.textContent?.trim() === labelText) {
-      const input = label.nextElementSibling as HTMLElement;
-      if (input) return input;
+      // For labels followed by a div wrapper (flex layout), go into the wrapper
+      let sibling = label.nextElementSibling as HTMLElement;
+      if (sibling && sibling.tagName === 'DIV') {
+        const input = sibling.querySelector('input');
+        if (input) return input;
+      }
+      if (sibling) return sibling as HTMLElement;
     }
   }
   throw new Error(`Could not find input with label "${labelText}"`);
@@ -103,8 +129,9 @@ describe('PrintersPage — config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockList.mockResolvedValue([printerKitchen, printerReceipt, printerRtl]);
-    mockCreate.mockResolvedValue({ ...printerKitchen, id: 4 });
+    mockCreate.mockResolvedValue({ ...printerKitchen, id: 9 });
     mockUpdate.mockResolvedValue({ ...printerKitchen, id: 1 });
+    mockWindowsQueues.mockResolvedValue({ queues: ['XP-80C', 'Receipt Printer'] });
   });
 
   it('renders list printer with config summary (pc864/22)', async () => {
@@ -137,7 +164,6 @@ describe('PrintersPage — config', () => {
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'pc864' } });
 
-    // Code page input should now be 22
     await waitFor(() => {
       expect(screen.getByDisplayValue('22')).toBeInTheDocument();
     });
@@ -167,7 +193,6 @@ describe('PrintersPage — config', () => {
     fireEvent.change(encodingSelect, { target: { value: 'utf8' } });
 
     await waitFor(() => {
-      // Code page defaults to 0 for utf8
       const codePageInput = screen.getByDisplayValue('0');
       expect(codePageInput).toBeInTheDocument();
     });
@@ -181,33 +206,28 @@ describe('PrintersPage — config', () => {
 
     const form = container.querySelector('form')!;
 
-    // Fill name
     const nameInput = getByLabel(form, 'Name') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'New Printer' } });
 
-    // Fill IP
     const ipInput = getByLabel(form, 'IP Address') as HTMLInputElement;
     fireEvent.change(ipInput, { target: { value: '10.0.0.1' } });
 
-    // Fill Port (number input)
     const portInput = getByLabel(form, 'Port') as HTMLInputElement;
     fireEvent.change(portInput, { target: { value: '9100' } });
 
-    // Change encoding to pc864
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'pc864' } });
 
-    // Check visual RTL
     const rtlCheckbox = form.querySelector('input[type="checkbox"]') as HTMLInputElement;
     fireEvent.click(rtlCheckbox);
 
-    // Submit
     fireEvent.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'New Printer',
+          connectionType: 'tcp',
           ip: '10.0.0.1',
           port: 9100,
           role: 'kitchen',
@@ -230,19 +250,15 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('AR: pc864/22')).toBeInTheDocument();
     });
 
-    // Click edit on the first printer (Kitchen with pc864/22)
     const editButtons = screen.getAllByText('Edit');
     fireEvent.click(editButtons[0]);
 
-    // Form should now show pc864 encoding and codePage 22
     await waitFor(() => {
       expect(screen.getByTestId('encoding-select')).toHaveValue('pc864');
     });
-    // Code page input should show 22
     await waitFor(() => {
       expect(screen.getByDisplayValue('22')).toBeInTheDocument();
     });
-    // Heading should be "Edit Printer"
     expect(screen.getByText('Edit Printer')).toBeInTheDocument();
   });
 
@@ -262,7 +278,6 @@ describe('PrintersPage — config', () => {
     fireEvent.click(editButtons[0]);
 
     await waitFor(() => {
-      // Default encoding is 'none'
       expect(screen.getByTestId('encoding-select')).toHaveValue('none');
     });
   });
@@ -273,7 +288,6 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('AR: pc864/22')).toBeInTheDocument();
     });
 
-    // Click edit
     const editButtons = screen.getAllByText('Edit');
     fireEvent.click(editButtons[0]);
 
@@ -281,11 +295,9 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Edit Printer')).toBeInTheDocument();
     });
 
-    // Change encoding to w1256
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'w1256' } });
 
-    // Submit update
     fireEvent.click(screen.getByText('Update'));
 
     await waitFor(() => {
@@ -312,7 +324,6 @@ describe('PrintersPage — config', () => {
 
     const encodingSelect = screen.getByTestId('encoding-select');
 
-    // Check all options are present
     expect(within(encodingSelect).getByText('none — ASCII only')).toBeInTheDocument();
     expect(within(encodingSelect).getByText('utf8 — UTF-8')).toBeInTheDocument();
     expect(
@@ -321,5 +332,109 @@ describe('PrintersPage — config', () => {
     expect(
       within(encodingSelect).getByText('w1256 — Windows-1256 (often code page 50)'),
     ).toBeInTheDocument();
+  });
+
+  // ── Connection type tests ──────────────────────────────────────────────────
+
+  it('shows IP and Port fields when connection type is TCP', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    // Default is TCP — IP and Port labels should be visible
+    expect(screen.getByText('IP Address')).toBeInTheDocument();
+    expect(screen.getByText('Port')).toBeInTheDocument();
+  });
+
+  it('switches to Windows fields when connection type is changed', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    const connSelect = screen.getByTestId('connection-type-select');
+    fireEvent.change(connSelect, { target: { value: 'windows' } });
+
+    await waitFor(() => {
+      // Should now show Windows Printer Name label and Refresh button
+      expect(screen.getByText('Windows Printer Name')).toBeInTheDocument();
+      expect(screen.getByText('Refresh')).toBeInTheDocument();
+      // IP Address and Port should be gone
+      expect(screen.queryByText('IP Address')).not.toBeInTheDocument();
+      expect(screen.queryByText('Port')).not.toBeInTheDocument();
+    });
+  });
+
+  it('save payload includes connectionType when creating windows printer', async () => {
+    const { container } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    // Switch to windows
+    const connSelect = screen.getByTestId('connection-type-select');
+    fireEvent.change(connSelect, { target: { value: 'windows' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Windows Printer Name')).toBeInTheDocument();
+    });
+
+    const form = container.querySelector('form')!;
+    const nameField = getByLabel(form, 'Name') as HTMLInputElement;
+    fireEvent.change(nameField, { target: { value: 'USB Kitchen' } });
+
+    // Find the Windows Printer Name input
+    const winNameInput = getByLabel(form, 'Windows Printer Name') as HTMLInputElement;
+    fireEvent.change(winNameInput, { target: { value: 'XP-80C' } });
+
+    fireEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'USB Kitchen',
+          connectionType: 'windows',
+          windowsPrinterName: 'XP-80C',
+          ip: '',
+        }),
+      );
+    });
+  });
+
+  it('displays USB badge and Win: prefix for windows printers in list', async () => {
+    mockList.mockResolvedValue([printerWindows]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('USB')).toBeInTheDocument();
+      expect(screen.getByText('Win: XP-80C')).toBeInTheDocument();
+    });
+  });
+
+  it('displays ip:port for TCP printers in list', async () => {
+    mockList.mockResolvedValue([printerKitchen]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('192.168.1.100:9100')).toBeInTheDocument();
+    });
+  });
+
+  it('edit loads connection type for windows printer', async () => {
+    mockList.mockResolvedValue([printerWindows]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('USB Printer')).toBeInTheDocument();
+    });
+
+    const editButtons = screen.getAllByText('Edit');
+    fireEvent.click(editButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connection-type-select')).toHaveValue('windows');
+      expect(screen.getByDisplayValue('XP-80C')).toBeInTheDocument();
+    });
   });
 });
