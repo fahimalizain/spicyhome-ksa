@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { PayModal } from '../components/orders/PayModal';
+import { ConfirmActionButton } from '../components/ConfirmActionButton';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import type { CartItem } from '../hooks/useCart';
 import type {
@@ -828,13 +829,17 @@ export function OrderPage() {
                   </button>
                 )}
                 {permissions.voidOrder && (
-                  <button
-                    onClick={handleVoid}
+                  <ConfirmActionButton
+                    textContent="Void Order"
+                    confirmTextContent="Confirm Void Order"
+                    confirmationHoldDuration={2000}
+                    onConfirm={handleVoid}
                     disabled={loading}
+                    busy={loading}
+                    busyTextContent="Voiding..."
                     className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                  >
-                    Void Order
-                  </button>
+                    confirmClassName="w-full touch-target bg-red-900 hover:bg-red-800 rounded-lg text-sm font-bold text-red-100 py-3"
+                  />
                 )}
               </>
             )}
@@ -856,7 +861,7 @@ export function OrderPage() {
               </div>
             )}
 
-            {currentOrder && (
+            {currentOrder && !cart.isDirty && (
               <button
                 onClick={() => guardedNavigate(handleNewOrder)}
                 className={

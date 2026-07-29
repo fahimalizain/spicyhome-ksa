@@ -461,8 +461,8 @@ describe('OrderPage — staged cart', () => {
     });
   });
 
-  // ---- Test 9: D7 — Leave guard dialog via New Order button on dirty open order ----
-  it('open order: dirty + New Order shows leave guard dialog', async () => {
+  // ---- Test 9: New Order hidden when dirty; visible when clean (D7/D15) ----
+  it('open order: New Order hidden when dirty, visible when clean', async () => {
     mockGetReturns(makeOrder());
 
     renderOrderPage();
@@ -471,7 +471,7 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order #42')).toBeInTheDocument();
     });
 
-    // Verify New Order button is visible for open orders
+    // Clean: New Order visible
     expect(screen.getByText('New Order')).toBeInTheDocument();
 
     // Make a change to get dirty
@@ -481,38 +481,10 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Unsent changes')).toBeInTheDocument();
     });
 
-    // Click New Order → should trigger leave guard
-    fireEvent.click(screen.getByText('New Order'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Unsent Changes')).toBeInTheDocument();
-    });
-
-    // Keep Editing → guard closes, still on the order
-    fireEvent.click(screen.getByText('Keep Editing'));
-
-    await waitFor(() => {
-      expect(screen.queryByText('Unsent Changes')).not.toBeInTheDocument();
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
-    });
-
-    // Click New Order again → guard re-appears
-    fireEvent.click(screen.getByText('New Order'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Unsent Changes')).toBeInTheDocument();
-    });
-
-    // Discard Changes → clears to fresh session
-    fireEvent.click(screen.getByText('Discard Changes'));
-
-    await waitFor(() => {
-      // Back to pre-order state: "New Order" header, Create Order button visible
-      expect(screen.getByText('New Order')).toBeInTheDocument();
-      expect(screen.getByText('Create Order')).toBeInTheDocument();
-      // No order number visible
-      expect(screen.queryByText('Order #42')).not.toBeInTheDocument();
-    });
+    // Dirty: New Order hidden, Send/Discard present
+    expect(screen.queryByText('New Order')).not.toBeInTheDocument();
+    expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+    expect(screen.getByText('Discard')).toBeInTheDocument();
   });
 
   // ---- Test 9b: New Order on clean open order clears immediately ----
@@ -576,32 +548,4 @@ describe('OrderPage — staged cart', () => {
       { timeout: 5000 },
     );
   }, 8000);
-
-  // ---- Test 11: D7 — Discard changes via leave guard navigates ----
-  it('open order: LeaveGuard has Keep Editing and Discard Changes buttons', async () => {
-    mockGetReturns(makeOrder());
-
-    renderOrderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
-    });
-
-    // Make a change
-    fireEvent.click(screen.getAllByText('Burger')[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
-    });
-
-    // Discard should work
-    fireEvent.click(screen.getByText('Discard'));
-
-    await waitFor(() => {
-      // After discard, dirty should be gone
-      expect(screen.queryByText('Unsent changes')).not.toBeInTheDocument();
-      // Pay/Void should reappear
-      expect(screen.getByText('Pay')).toBeInTheDocument();
-    });
-  });
 });
