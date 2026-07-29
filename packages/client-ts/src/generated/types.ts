@@ -543,6 +543,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/orders/{id}/refunds/{refundId}/zatca-credit-note': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get ZATCA credit note status for a refund (clearance polling) */
+    get: operations['OrdersController_getZatcaCreditNoteStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Retry ZATCA clearance for a credit note in error status */
+    post: operations['OrdersController_retryZatcaCreditNoteClearance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refunds/{refundId}/zatca-credit-note/reissue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reissue a credit note after rejection (new attempt) */
+    post: operations['OrdersController_reissueZatcaCreditNote'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/zatca/onboard/csr': {
     parameters: {
       query?: never;
@@ -3376,6 +3427,71 @@ export interface operations {
         'application/json': components['schemas']['ZatcaInvoiceReissueDto'];
       };
     };
+    responses: {
+      /** @description Reissue result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  OrdersController_getZatcaCreditNoteStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        refundId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description ZATCA credit note status with clearance attempts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaInvoiceStatusResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_retryZatcaCreditNoteClearance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        refundId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Clearance result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  OrdersController_reissueZatcaCreditNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        refundId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Reissue result */
       201: {

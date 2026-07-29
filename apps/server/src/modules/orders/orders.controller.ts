@@ -173,4 +173,50 @@ export class OrdersController {
   ) {
     return this.ordersService.reissueZatcaInvoice(id, user.sub, dto.zatcaBuyerDetails as any);
   }
+
+  // ── ZATCA Standard Credit Note (refund clearance) ─────────────────────────
+
+  @Get(':id/refunds/:refundId/zatca-credit-note')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Get ZATCA credit note status for a refund (clearance polling)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiOkResponse({
+    description: 'ZATCA credit note status with clearance attempts',
+    type: ZatcaInvoiceStatusResponse,
+  })
+  getZatcaCreditNoteStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+  ) {
+    return this.ordersService.getZatcaCreditNoteStatus(id, refundId);
+  }
+
+  @Post(':id/refunds/:refundId/zatca-credit-note/retry-clearance')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Retry ZATCA clearance for a credit note in error status' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Clearance result' })
+  retryZatcaCreditNoteClearance(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.retryZatcaCreditNoteClearance(id, refundId, user.sub);
+  }
+
+  @Post(':id/refunds/:refundId/zatca-credit-note/reissue')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Reissue a credit note after rejection (new attempt)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Reissue result' })
+  reissueZatcaCreditNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.reissueZatcaCreditNote(id, refundId, user.sub);
+  }
 }

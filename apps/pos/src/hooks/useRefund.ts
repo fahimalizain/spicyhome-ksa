@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { client } from '../api';
-import type { OrderRefundResponse } from '@spicyhome/client-ts';
+import type { RefundResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 
 export function getRemainingQty(
   originalQty: number,
@@ -26,19 +26,19 @@ export function useRefund() {
       items: { orderItemId: number; qty: number }[],
       methodId: string,
       reason?: string,
-    ): Promise<boolean> => {
+    ): Promise<{ ok: false } | { ok: true; refundId: number }> => {
       setLoading(true);
       setError('');
       try {
-        await client.orders.refund(orderId, {
+        const result: RefundResponse = await client.orders.refund(orderId, {
           items,
           methodId,
           ...(reason ? { reason } : {}),
         });
-        return true;
+        return { ok: true, refundId: result.refundId };
       } catch (e: any) {
         setError(e.message || 'Refund failed');
-        return false;
+        return { ok: false };
       } finally {
         setLoading(false);
       }

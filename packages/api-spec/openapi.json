@@ -1607,6 +1607,130 @@
         ]
       }
     },
+    "/orders/{id}/refunds/{refundId}/zatca-credit-note": {
+      "get": {
+        "operationId": "OrdersController_getZatcaCreditNoteStatus",
+        "summary": "Get ZATCA credit note status for a refund (clearance polling)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "refundId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ZATCA credit note status with clearance attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaInvoiceStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance": {
+      "post": {
+        "operationId": "OrdersController_retryZatcaCreditNoteClearance",
+        "summary": "Retry ZATCA clearance for a credit note in error status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "refundId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Clearance result"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/refunds/{refundId}/zatca-credit-note/reissue": {
+      "post": {
+        "operationId": "OrdersController_reissueZatcaCreditNote",
+        "summary": "Reissue a credit note after rejection (new attempt)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "refundId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Reissue result"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/zatca/onboard/csr": {
       "post": {
         "operationId": "ZatcaController_generateCSR",

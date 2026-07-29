@@ -336,6 +336,27 @@ export class SpicyHomeClient {
       orderId: number,
       body?: { zatcaBuyerDetails?: Record<string, unknown> },
     ) => request<any>(this.config, 'POST', `/orders/${orderId}/zatca-invoice/reissue`, body),
+
+    getZatcaCreditNote: (orderId: number, refundId: number) =>
+      request<ZatcaInvoiceStatusResponse>(
+        this.config,
+        'GET',
+        `/orders/${orderId}/refunds/${refundId}/zatca-credit-note`,
+      ),
+
+    retryZatcaCreditNoteClearance: (orderId: number, refundId: number) =>
+      request<any>(
+        this.config,
+        'POST',
+        `/orders/${orderId}/refunds/${refundId}/zatca-credit-note/retry-clearance`,
+      ),
+
+    reissueZatcaCreditNote: (orderId: number, refundId: number) =>
+      request<any>(
+        this.config,
+        'POST',
+        `/orders/${orderId}/refunds/${refundId}/zatca-credit-note/reissue`,
+      ),
   };
 
   tables = {

@@ -6,12 +6,18 @@ import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 const mockRefund = vi.fn();
 const mockGetRefunds = vi.fn();
 const mockListEnabled = vi.fn();
+const mockGetZatcaCreditNote = vi.fn();
+const mockRetryZatcaCreditNoteClearance = vi.fn();
+const mockReissueZatcaCreditNote = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
     orders: {
       refund: (...args: any[]) => mockRefund(...args),
       getRefunds: (...args: any[]) => mockGetRefunds(...args),
+      getZatcaCreditNote: (...args: any[]) => mockGetZatcaCreditNote(...args),
+      retryZatcaCreditNoteClearance: (...args: any[]) => mockRetryZatcaCreditNoteClearance(...args),
+      reissueZatcaCreditNote: (...args: any[]) => mockReissueZatcaCreditNote(...args),
     },
     paymentMethods: {
       listEnabled: (...args: any[]) => mockListEnabled(...args),
@@ -102,6 +108,26 @@ describe('RefundPanel', () => {
     vi.clearAllMocks();
     mockGetRefunds.mockResolvedValue(emptyRefunds);
     mockListEnabled.mockResolvedValue(defaultMethods);
+    mockGetZatcaCreditNote.mockResolvedValue({
+      invoiceType: 'standard',
+      current: {
+        id: 1,
+        attemptNo: 1,
+        status: 'pending',
+        icv: 1,
+        uuid: 'abc',
+        errors: [],
+        warnings: [],
+        httpStatus: null,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      attempts: [],
+      canRetryClearance: false,
+      canReissue: false,
+    });
+    mockRetryZatcaCreditNoteClearance.mockResolvedValue({});
+    mockReissueZatcaCreditNote.mockResolvedValue({});
   });
 
   it('renders order items with refund steppers', async () => {
@@ -276,6 +302,42 @@ describe('RefundPanel', () => {
     });
 
     expect(screen.queryByText('Standard Tax Invoice')).not.toBeInTheDocument();
+  });
+
+  it('shows ZatcaClearanceModal for standard invoice refunds', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(defaultMethods);
+    mockRefund.mockResolvedValue({ success: true, refundId: 10, status: 'refunded' });
+
+    render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order #43')).toBeInTheDocument();
+    });
+
+    // Select 1 item
+    fireEvent.click(screen.getAllByText('+')[0]);
+
+    // Select Cash method
+    await waitFor(() => {
+      expect(screen.getByText('Cash')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Cash'));
+
+    // Process refund
+    fireEvent.click(screen.getByText('Process Refund'));
+    fireEvent.click(screen.getByText('Confirm Refund'));
+
+    // After successful refund, the clearance modal should appear
+    await waitFor(() => {
+      expect(screen.getByText('ZATCA Credit Note Clearance')).toBeInTheDocument();
+    });
+
+    // Should show clearing text
+    expect(screen.getByText('Clearing with ZATCA...')).toBeInTheDocument();
+
+    // Should poll getZatcaCreditNote
+    expect(mockGetZatcaCreditNote).toHaveBeenCalledWith(2, 10);
   });
 });
 

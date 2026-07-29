@@ -268,6 +268,186 @@ export class ZatcaStandardInvoiceService {
     return this.attemptClearance(orderId, userId);
   }
 
+  // ── Credit note lifecycle (retry / reissue) ──────────────────────────
+
+  /**
+   * Get the ZATCA credit note status for a refund (used by polling API/POS).
+   */
+  getCreditNoteStatus(orderId: number, refundId: number): ZatcaInvoiceStatusResponse {
+    const order = this.db
+      .select({ isStandardInvoice: orders.isStandardInvoice })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .get();
+
+    if (!order) {
+      return {
+        invoiceType: 'none',
+        current: null,
+        attempts: [],
+        canRetryClearance: false,
+        canReissue: false,
+      };
+    }
+
+    if (order.isStandardInvoice !== 1) {
+      return {
+        invoiceType: 'simplified',
+        current: null,
+        attempts: [],
+        canRetryClearance: false,
+        canReissue: false,
+      };
+    }
+
+    const cleared = this.invoiceService.getClearedCreditNoteByRefundId(refundId);
+    const attempts = this.invoiceService.listCreditNotesByRefundId(refundId);
+    const attemptMapped = attempts.map((r) => this.attemptFromRow(r));
+    const current = cleared
+      ? this.attemptFromRow(cleared)
+      : attemptMapped.length > 0
+        ? attemptMapped[attemptMapped.length - 1]
+        : null;
+
+    const latest = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+    const canRetryClearance = latest?.status === 'error' || false;
+    const canReissue = !cleared && latest?.status === 'rejected';
+
+    return {
+      invoiceType: 'standard',
+      current,
+      attempts: attemptMapped,
+      canRetryClearance,
+      canReissue,
+    };
+  }
+
+  /**
+   * Retry clearance for a credit note that is in `error` status (network/credentials).
+   * Resubmits the same payload (same UUID/ICV/Hash/XML).
+   */
+  async retryCreditNoteClearance(
+    orderId: number,
+    refundId: number,
+    userId?: number,
+  ): Promise<CreateStandardInvoiceResult> {
+    if (userId === undefined) userId = 1;
+
+    const latest = this.invoiceService.getLatestCreditNoteByRefundId(refundId);
+    if (!latest) {
+      throw new Error(`No credit note found for refund ${refundId} on order ${orderId}`);
+    }
+
+    if (latest.status !== 'error') {
+      throw new Error(
+        `Cannot retry clearance for refund ${refundId}: latest status is '${latest.status}', not 'error'`,
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // Resubmit the same payload
+    const clearance = await this.clearanceService.clearDocument({
+      invoiceHash: latest.invoiceHash,
+      uuid: latest.uuid,
+      xml: latest.xml,
+    });
+
+    const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
+      this.evaluateClearanceResult(clearance, latest.xml);
+
+    // Update the existing row
+    this.db
+      .update(zatcaCreditNotes)
+      .set({
+        status: storeStatus,
+        xml: storedXml,
+        clearanceErrors: clearanceErrors ?? null,
+        clearanceWarnings: clearanceWarnings ?? null,
+        httpStatus: clearance.httpStatus,
+        reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
+        updatedAt: now,
+      } as any)
+      .where(eq(zatcaCreditNotes.id, latest.id))
+      .run();
+
+    this.logger.log(`Credit note retry for refund ${refundId}: status=${storeStatus}`);
+
+    // Emit cleared event if cleared on retry
+    if (storeStatus === 'cleared') {
+      this.emitDomainEvent('zatca.credit_note.cleared', orderId, userId, {
+        creditNoteId: latest.id,
+        refundId,
+      });
+    }
+
+    const updated = this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(eq(zatcaCreditNotes.id, latest.id))
+      .get() as any;
+    return this.buildResultFromRow(updated, clearance.status);
+  }
+
+  /**
+   * Reissue a credit note after rejection — creates a new attempt with new ICV/UUID.
+   * No buyer edit for credit notes.
+   */
+  async reissueCreditNote(
+    orderId: number,
+    refundId: number,
+    userId?: number,
+  ): Promise<CreateStandardInvoiceResult> {
+    if (userId === undefined) userId = 1;
+
+    // Validate that we can reissue
+    const latest = this.invoiceService.getLatestCreditNoteByRefundId(refundId);
+    const cleared = this.invoiceService.getClearedCreditNoteByRefundId(refundId);
+
+    if (cleared) {
+      throw new Error(`Cannot reissue: refund ${refundId} already has a cleared credit note`);
+    }
+
+    if (!latest) {
+      throw new Error(`No credit note found for refund ${refundId} on order ${orderId}`);
+    }
+
+    if (latest.status !== 'rejected') {
+      throw new Error(
+        `Cannot reissue: latest credit note for refund ${refundId} is '${latest.status}', not 'rejected'`,
+      );
+    }
+
+    // Create a new attempt (no buyer body for credit notes)
+    const result = await this.attemptCreditNoteClearance(orderId, refundId, userId);
+    return {
+      id: result.id,
+      icv: result.icv,
+      uuid: result.uuid,
+      invoiceHash: '',
+      status: result.status,
+      attemptNo: result.attemptNo,
+      qrTlvBase64: '',
+      signedXml: '',
+      clearance: {
+        status:
+          result.status === 'cleared'
+            ? 'CLEARED'
+            : result.status === 'rejected'
+              ? 'REJECTED'
+              : result.status === 'error'
+                ? 'ERROR'
+                : 'PENDING',
+        httpStatus: 0,
+        clearedXml: null,
+        clearedInvoiceBase64: null,
+        warnings: [],
+        errors: [],
+        rawBody: null,
+      },
+    };
+  }
+
   /**
    * Get the ZATCA invoice status for an order (used by polling API/POS).
    */

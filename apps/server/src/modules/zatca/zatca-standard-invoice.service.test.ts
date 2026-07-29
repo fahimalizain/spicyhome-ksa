@@ -1154,4 +1154,258 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(persistedBuyer.vatNumber).toBe('399999999800004');
     });
   });
+
+  // ── Credit note lifecycle tests ────────────────────────────────────────
+
+  describe('credit note lifecycle (getCreditNoteStatus / retry / reissue)', () => {
+    it('getCreditNoteStatus returns standard type with current=null when no credit note exists', () => {
+      const orderId = createStandardOrder();
+
+      // Inline refund for this test
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const status = standardService.getCreditNoteStatus(orderId, refundId);
+      expect(status.invoiceType).toBe('standard');
+      expect(status.current).toBeNull();
+      expect(status.attempts).toHaveLength(0);
+      expect(status.canRetryClearance).toBe(false);
+      expect(status.canReissue).toBe(false);
+    });
+
+    it('getCreditNoteStatus returns rejected current and canReissue=true after rejection', async () => {
+      const orderId = createStandardOrder();
+
+      // Create invoice first
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      // Reject credit note
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid structure'] },
+        }),
+      });
+
+      await standardService.createStandardCreditNote(orderId, refundId, 1);
+
+      const status = standardService.getCreditNoteStatus(orderId, refundId);
+      expect(status.current?.status).toBe('rejected');
+      expect(status.canReissue).toBe(true);
+      expect(status.canRetryClearance).toBe(false);
+    });
+
+    it('retryCreditNoteClearance works when latest is error', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      // First attempt: error
+      fakeHttp.nextError = new Error('Network error');
+      const first = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(first.status).toBe('error');
+      const firstIcv = first.icv;
+      const firstUuid = first.uuid;
+
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+
+      // Retry with success
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote>retry_cleared</CreditNote>').toString('base64'),
+        }),
+      });
+
+      const retried = await standardService.retryCreditNoteClearance(orderId, refundId, 1);
+      expect(retried.status).toBe('cleared');
+      // Same ICV and UUID — resubmitted the same payload
+      expect(retried.icv).toBe(firstIcv);
+      expect(retried.uuid).toBe(firstUuid);
+
+      // DB row updated in place
+      const row = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE id = ?')
+        .get(first.id) as any;
+      expect(row.status).toBe('cleared');
+      expect(row.icv).toBe(firstIcv);
+      expect(row.uuid).toBe(firstUuid);
+    });
+
+    it('retryCreditNoteClearance throws when latest is not error', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardCreditNote(orderId, refundId, 1);
+
+      await expect(standardService.retryCreditNoteClearance(orderId, refundId, 1)).rejects.toThrow(
+        /Cannot retry.*not 'error'/,
+      );
+    });
+
+    it('reissueCreditNote creates new attempt with new ICV after rejection', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      // First attempt: rejected
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid structure'] },
+        }),
+      });
+
+      const first = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(first.status).toBe('rejected');
+      expect(first.attemptNo).toBe(1);
+      const firstIcv = first.icv;
+      const firstUuid = first.uuid;
+
+      fakeHttp.requests = [];
+
+      // Reissue with success
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote>reissued</CreditNote>').toString('base64'),
+        }),
+      });
+
+      const reissued = await standardService.reissueCreditNote(orderId, refundId, 1);
+      expect(reissued.status).toBe('cleared');
+      expect(reissued.attemptNo).toBe(2);
+      expect(reissued.icv).toBe(firstIcv + 1);
+      expect(reissued.uuid).not.toBe(firstUuid);
+
+      // First row still rejected
+      const firstRow = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE id = ?')
+        .get(first.id) as any;
+      expect(firstRow.status).toBe('rejected');
+      expect(firstRow.icv).toBe(firstIcv);
+    });
+
+    it('reissueCreditNote throws when already cleared', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardCreditNote(orderId, refundId, 1);
+
+      await expect(standardService.reissueCreditNote(orderId, refundId, 1)).rejects.toThrow(
+        /already has a cleared credit note/,
+      );
+    });
+
+    it('reissueCreditNote throws when latest is not rejected', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      // Error, not rejected
+      fakeHttp.nextError = new Error('Network error');
+      await standardService.createStandardCreditNote(orderId, refundId, 1);
+
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+
+      await expect(standardService.reissueCreditNote(orderId, refundId, 1)).rejects.toThrow(
+        /Cannot reissue.*not 'rejected'/,
+      );
+    });
+  });
 });

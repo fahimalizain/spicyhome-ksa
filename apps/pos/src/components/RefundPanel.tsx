@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useRefund, getRemainingQty } from '../hooks/useRefund';
+import { ZatcaClearanceModal } from './orders/ZatcaClearanceModal';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 
 interface PaymentMethod {
@@ -35,6 +36,10 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   const [reason, setReason] = useState('');
   const [confirmStep, setConfirmStep] = useState(false);
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+
+  // Clearance state for standard invoice refunds
+  const [clearanceRefundId, setClearanceRefundId] = useState<number | null>(null);
+  const [clearanceTotalHalalas, setClearanceTotalHalalas] = useState<number>(0);
 
   // Load payment methods on mount
   useEffect(() => {
@@ -105,10 +110,22 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
       qty: r.refundQty,
     }));
 
-    const success = await refund(order.id, items, selectedMethodId, reason || undefined);
-    if (success) {
-      onRefunded();
+    const result = await refund(order.id, items, selectedMethodId, reason || undefined);
+    if (result.ok) {
+      // For standard invoices, show clearance modal instead of closing immediately
+      if (order.isStandardInvoice) {
+        setClearanceRefundId(result.refundId);
+        setClearanceTotalHalalas(refundTotalHalalas);
+      } else {
+        onRefunded();
+      }
     }
+  }
+
+  function handleClearanceDone() {
+    setClearanceRefundId(null);
+    setClearanceTotalHalalas(0);
+    onRefunded();
   }
 
   if (loadingRefunds || loadingMethods) {
@@ -116,6 +133,19 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
       <div className="bg-gray-800 rounded-lg p-4">
         <p className="text-xs text-gray-400">Loading refund data...</p>
       </div>
+    );
+  }
+
+  // ── If clearance is active (standard invoice refund), show overlay ───
+  if (clearanceRefundId !== null) {
+    return (
+      <ZatcaClearanceModal
+        documentType="credit_note"
+        orderId={order.id}
+        refundId={clearanceRefundId}
+        orderTotalHalalas={clearanceTotalHalalas}
+        onDone={handleClearanceDone}
+      />
     );
   }
 

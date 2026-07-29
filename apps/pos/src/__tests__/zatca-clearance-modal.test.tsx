@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
+import type { ZatcaBuyerDetails } from '../components/orders/StandardInvoiceBuyerForm';
 
 // ── Mock API client ──────────────────────────────────────────────────────
 const mockGetZatcaInvoice = vi.fn();
 const mockRetryZatcaClearance = vi.fn();
 const mockReissueZatcaInvoice = vi.fn();
+const mockGetZatcaCreditNote = vi.fn();
+const mockRetryZatcaCreditNoteClearance = vi.fn();
+const mockReissueZatcaCreditNote = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
@@ -13,6 +17,9 @@ vi.mock('../api', () => ({
       getZatcaInvoice: (...args: any[]) => mockGetZatcaInvoice(...args),
       retryZatcaClearance: (...args: any[]) => mockRetryZatcaClearance(...args),
       reissueZatcaInvoice: (...args: any[]) => mockReissueZatcaInvoice(...args),
+      getZatcaCreditNote: (...args: any[]) => mockGetZatcaCreditNote(...args),
+      retryZatcaCreditNoteClearance: (...args: any[]) => mockRetryZatcaCreditNoteClearance(...args),
+      reissueZatcaCreditNote: (...args: any[]) => mockReissueZatcaCreditNote(...args),
     },
   },
 }));
@@ -43,6 +50,20 @@ function makePendingStatus() {
   return makeStatus('pending');
 }
 
+function makeBuyer(overrides: Partial<ZatcaBuyerDetails> = {}): ZatcaBuyerDetails {
+  return {
+    name: 'Test Co.',
+    vatNumber: '300123456789012',
+    street: 'King Fahd Road',
+    buildingNumber: '7845',
+    citySubdivision: 'Al-Olaya',
+    city: 'Riyadh',
+    postalCode: '12271',
+    country: 'SA',
+    ...overrides,
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────
 describe('ZatcaClearanceModal', () => {
   beforeEach(() => {
@@ -50,221 +71,432 @@ describe('ZatcaClearanceModal', () => {
     mockGetZatcaInvoice.mockResolvedValue(makePendingStatus());
     mockRetryZatcaClearance.mockResolvedValue({});
     mockReissueZatcaInvoice.mockResolvedValue({});
+    mockGetZatcaCreditNote.mockResolvedValue(makePendingStatus());
+    mockRetryZatcaCreditNoteClearance.mockResolvedValue({});
+    mockReissueZatcaCreditNote.mockResolvedValue({});
   });
 
-  describe('mount and clearance polling', () => {
-    it('calls getZatcaInvoice and shows "Clearing with ZATCA..." on mount', async () => {
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
+  // ── Invoice mode (default) ────────────────────────────────────────────
+  describe('invoice mode (documentType default)', () => {
+    describe('mount and clearance polling', () => {
+      it('calls getZatcaInvoice and shows "Clearing with ZATCA..." on mount', async () => {
+        render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
 
-      // The clearing phase text appears immediately (initial state is 'clearance')
-      expect(screen.getByText('Clearing with ZATCA...')).toBeInTheDocument();
-      // getZatcaInvoice is called synchronously from pollOnce (before await)
-      expect(mockGetZatcaInvoice).toHaveBeenCalledWith(1);
-    });
-
-    it('shows total in SAR', () => {
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
-
-      expect(screen.getByText('46.00 SAR')).toBeInTheDocument();
-    });
-
-    it('does NOT show "Continue without waiting" button in clearance phase (truly blocking)', () => {
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
-
-      expect(screen.queryByText('Continue without waiting')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('cleared status', () => {
-    it('shows "Invoice Cleared" and calls onDone after ~1500ms', async () => {
-      vi.useFakeTimers();
-      const onDone = vi.fn();
-
-      // First poll returns cleared
-      mockGetZatcaInvoice.mockResolvedValue(makeStatus('cleared'));
-
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={onDone} />);
-
-      // Advance timers to let the immediate pollOnce resolve and the interval tick
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(100);
+        expect(screen.getByText('Clearing with ZATCA...')).toBeInTheDocument();
+        expect(mockGetZatcaInvoice).toHaveBeenCalledWith(1);
       });
 
-      // Should show cleared text
-      expect(screen.getByText('Invoice Cleared')).toBeInTheDocument();
-      expect(screen.getByText('Printing tax receipt...')).toBeInTheDocument();
+      it('shows total in SAR', () => {
+        render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
 
-      // onDone should NOT have been called yet (1500ms delay)
-      expect(onDone).not.toHaveBeenCalled();
-
-      // Advance past 1500ms
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1500);
+        expect(screen.getByText('46.00 SAR')).toBeInTheDocument();
       });
 
-      expect(onDone).toHaveBeenCalledTimes(1);
+      it('does NOT show "Continue without waiting" button in clearance phase (truly blocking)', () => {
+        render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
 
-      vi.useRealTimers();
+        expect(screen.queryByText('Continue without waiting')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('cleared status', () => {
+      it('shows "Invoice Cleared" and calls onDone after ~1500ms', async () => {
+        vi.useFakeTimers();
+        const onDone = vi.fn();
+
+        mockGetZatcaInvoice.mockResolvedValue(makeStatus('cleared'));
+
+        render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={onDone} />);
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(screen.getByText('Invoice Cleared')).toBeInTheDocument();
+        expect(screen.getByText('Printing tax receipt...')).toBeInTheDocument();
+        expect(onDone).not.toHaveBeenCalled();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1500);
+        });
+
+        expect(onDone).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+      });
+    });
+
+    describe('rejected status', () => {
+      it('shows rejected UI with Done (Paid), Correct & Reissue, and buyer form', async () => {
+        mockGetZatcaInvoice.mockResolvedValue(
+          makeStatus('rejected', ['Buyer VAT mismatch', 'Invalid address']),
+        );
+
+        render(
+          <ZatcaClearanceModal
+            orderId={2}
+            orderTotalHalalas={2300}
+            initialBuyer={makeBuyer()}
+            onDone={vi.fn()}
+          />,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+        });
+
+        expect(screen.getByText('Done (Paid)')).toBeInTheDocument();
+        expect(screen.getByText('Correct & Reissue')).toBeInTheDocument();
+        expect(screen.getByText('Correct buyer info and reissue:')).toBeInTheDocument();
+        // Check buyer form fields are present
+        expect(screen.getByPlaceholderText('Company / Legal Name')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('300123456789012')).toBeInTheDocument();
+      });
+
+      it('Done (Paid) calls onDone', async () => {
+        const onDone = vi.fn();
+        mockGetZatcaInvoice.mockResolvedValue(makeStatus('rejected', ['Error']));
+
+        render(
+          <ZatcaClearanceModal
+            orderId={2}
+            orderTotalHalalas={2300}
+            initialBuyer={makeBuyer()}
+            onDone={onDone}
+          />,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Done (Paid)'));
+        expect(onDone).toHaveBeenCalledTimes(1);
+      });
+
+      it('Correct & Reissue calls reissueZatcaInvoice with zatcaBuyerDetails', async () => {
+        const buyer = makeBuyer();
+        mockGetZatcaInvoice
+          .mockResolvedValueOnce(makeStatus('rejected', ['Buyer VAT mismatch']))
+          .mockResolvedValue(makePendingStatus());
+
+        render(
+          <ZatcaClearanceModal
+            orderId={2}
+            orderTotalHalalas={2300}
+            initialBuyer={buyer}
+            onDone={vi.fn()}
+          />,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Correct & Reissue'));
+
+        expect(mockReissueZatcaInvoice).toHaveBeenCalledWith(2, {
+          zatcaBuyerDetails: buyer,
+        });
+        expect(mockReissueZatcaInvoice).toHaveBeenCalledTimes(1);
+      });
+
+      it('Correct & Reissue validates buyer — blocks empty required fields', async () => {
+        // Seed with a buyer that has empty name (invalid)
+        const seller = makeBuyer({ name: '', vatNumber: '', street: '' });
+        mockGetZatcaInvoice
+          .mockResolvedValueOnce(makeStatus('rejected', ['Buyer VAT mismatch']))
+          .mockResolvedValue(makePendingStatus());
+
+        render(
+          <ZatcaClearanceModal
+            orderId={2}
+            orderTotalHalalas={2300}
+            initialBuyer={seller}
+            onDone={vi.fn()}
+          />,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Correct & Reissue'));
+
+        // Should NOT have called reissue — validation blocked it
+        expect(mockReissueZatcaInvoice).not.toHaveBeenCalled();
+
+        // Should show validation errors
+        await waitFor(() => {
+          expect(screen.getByText('name is required')).toBeInTheDocument();
+        });
+      });
+
+      it('buyer form pre-fills from initialBuyer', async () => {
+        const seller = makeBuyer({ name: 'ACME Corp' });
+        mockGetZatcaInvoice.mockResolvedValue(makeStatus('rejected', ['Error']));
+
+        render(
+          <ZatcaClearanceModal
+            orderId={3}
+            orderTotalHalalas={4600}
+            initialBuyer={seller}
+            onDone={vi.fn()}
+          />,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+        });
+
+        // Name input should be pre-filled with ACME Corp
+        const nameInput = screen.getByPlaceholderText('Company / Legal Name') as HTMLInputElement;
+        expect(nameInput.value).toBe('ACME Corp');
+      });
+    });
+
+    describe('error status', () => {
+      it('Retry calls retryZatcaClearance', async () => {
+        mockGetZatcaInvoice
+          .mockResolvedValueOnce(makeStatus('error', []))
+          .mockResolvedValue(makePendingStatus());
+
+        render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('Network Error')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Retry Clearance'));
+
+        expect(mockRetryZatcaClearance).toHaveBeenCalledWith(1);
+      });
     });
   });
 
-  describe('rejected status', () => {
-    it('shows rejected UI with errors, Done (Paid) and Reissue buttons', async () => {
-      mockGetZatcaInvoice.mockResolvedValue(
-        makeStatus('rejected', ['Buyer VAT mismatch', 'Invalid address']),
+  // ── Credit note mode ──────────────────────────────────────────────────
+  describe('credit_note mode (documentType="credit_note")', () => {
+    it('shows "ZATCA Credit Note Clearance" title', () => {
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
       );
 
-      render(<ZatcaClearanceModal orderId={2} orderTotalHalalas={2300} onDone={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
-      });
-
-      expect(screen.getByText('Buyer VAT mismatch')).toBeInTheDocument();
-      expect(screen.getByText('Invalid address')).toBeInTheDocument();
-
-      // Should show Done and Reissue buttons (NO buyer form)
-      expect(screen.getByText('Done (Paid)')).toBeInTheDocument();
-      expect(screen.getByText('Reissue')).toBeInTheDocument();
-      // No buyer form label
-      expect(screen.queryByText('Correct buyer info and reissue:')).not.toBeInTheDocument();
+      expect(screen.getByText('ZATCA Credit Note Clearance')).toBeInTheDocument();
     });
 
-    it('Reissue calls reissueZatcaInvoice WITHOUT buyer body', async () => {
-      mockGetZatcaInvoice
-        .mockResolvedValueOnce(makeStatus('rejected', ['Buyer VAT mismatch']))
-        // After reissue, the polling resumes and gets a pending response
-        .mockResolvedValue(makePendingStatus());
+    it('polls getZatcaCreditNote instead of getZatcaInvoice', async () => {
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
 
-      render(<ZatcaClearanceModal orderId={2} orderTotalHalalas={2300} onDone={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
-      });
-
-      // Click Reissue
-      fireEvent.click(screen.getByText('Reissue'));
-
-      // Check that reissue was called WITHOUT buyer body
-      expect(mockReissueZatcaInvoice).toHaveBeenCalledWith(2);
-      // Should not pass a second argument (buyer body)
-      expect(mockReissueZatcaInvoice).toHaveBeenCalledTimes(1);
+      expect(mockGetZatcaCreditNote).toHaveBeenCalledWith(1, 5);
+      expect(mockGetZatcaInvoice).not.toHaveBeenCalled();
     });
 
-    it('Done (Paid) calls onDone', async () => {
-      const onDone = vi.fn();
+    it('shows "Credit Note Cleared" on success', async () => {
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('cleared'));
 
-      mockGetZatcaInvoice.mockResolvedValue(makeStatus('rejected', ['Error']));
-
-      render(<ZatcaClearanceModal orderId={2} orderTotalHalalas={2300} onDone={onDone} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Done (Paid)'));
-
-      expect(onDone).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows generic rejection message when no errors from ZATCA', async () => {
-      mockGetZatcaInvoice.mockResolvedValue(makeStatus('rejected', []));
-
-      render(<ZatcaClearanceModal orderId={3} orderTotalHalalas={1150} onDone={vi.fn()} />);
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
 
       await waitFor(() => {
-        expect(screen.getByText('Invoice rejected by ZATCA')).toBeInTheDocument();
+        expect(screen.getByText('Credit Note Cleared')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Printing refund receipt...')).toBeInTheDocument();
+    });
+
+    it('shows "Credit note rejected by ZATCA" generic rejection message', async () => {
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('rejected', []));
+
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Credit note rejected by ZATCA')).toBeInTheDocument();
       });
     });
-  });
 
-  describe('error status', () => {
-    it('shows error UI with Retry button that calls retryZatcaClearance', async () => {
-      const onDone = vi.fn();
+    it('shows "Done (Refunded)" button label', async () => {
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('rejected', ['Error']));
 
-      // First poll: error
-      mockGetZatcaInvoice
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Done (Refunded)')).toBeInTheDocument();
+      });
+    });
+
+    it('Retry calls retryZatcaCreditNoteClearance', async () => {
+      mockGetZatcaCreditNote
         .mockResolvedValueOnce(makeStatus('error', []))
-        // After retry, resume polling with a pending response
         .mockResolvedValue(makePendingStatus());
 
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={onDone} />);
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
 
       await waitFor(() => {
         expect(screen.getByText('Network Error')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Network or clearance error')).toBeInTheDocument();
-      expect(screen.getByText('Done (Paid)')).toBeInTheDocument();
-      expect(screen.getByText('Retry Clearance')).toBeInTheDocument();
-
-      // Click Retry
       fireEvent.click(screen.getByText('Retry Clearance'));
 
-      expect(mockRetryZatcaClearance).toHaveBeenCalledWith(1);
-
-      // After retry, polling resumes — verify getZatcaInvoice is called again
-      await waitFor(() => {
-        expect(mockGetZatcaInvoice).toHaveBeenCalledTimes(2);
-      });
+      expect(mockRetryZatcaCreditNoteClearance).toHaveBeenCalledWith(1, 5);
     });
 
-    it('Done (Paid) from error state calls onDone', async () => {
-      const onDone = vi.fn();
+    it('Reissue calls reissueZatcaCreditNote', async () => {
+      mockGetZatcaCreditNote
+        .mockResolvedValueOnce(makeStatus('rejected', ['Error']))
+        .mockResolvedValue(makePendingStatus());
 
-      mockGetZatcaInvoice.mockResolvedValue(makeStatus('error', []));
-
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={onDone} />);
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
 
       await waitFor(() => {
-        expect(screen.getByText('Network Error')).toBeInTheDocument();
+        expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText('Done (Paid)'));
+      fireEvent.click(screen.getByText('Reissue'));
 
+      expect(mockReissueZatcaCreditNote).toHaveBeenCalledWith(1, 5);
+    });
+
+    it('credit_note rejected does NOT show buyer form or "Correct buyer info"', async () => {
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('rejected', ['Error']));
+
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Clearance Rejected')).toBeInTheDocument();
+      });
+
+      // Should NOT show buyer-related UI
+      expect(screen.queryByText('Correct buyer info and reissue:')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Company / Legal Name')).not.toBeInTheDocument();
+      expect(screen.queryByText('Correct & Reissue')).not.toBeInTheDocument();
+
+      // Should show plain "Reissue" button
+      expect(screen.getByText('Reissue')).toBeInTheDocument();
+    });
+
+    it('Done (Refunded) from error state calls onDone', async () => {
+      const onDone = vi.fn();
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('error', []));
+
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={onDone}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Done (Refunded)')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Done (Refunded)'));
       expect(onDone).toHaveBeenCalledTimes(1);
     });
 
-    it('shows error details from ZATCA when present', async () => {
-      mockGetZatcaInvoice.mockResolvedValue(
-        makeStatus('error', ['Connection timeout', 'Server unreachable']),
+    it('Done (Refunded) from rejected state calls onDone', async () => {
+      const onDone = vi.fn();
+      mockGetZatcaCreditNote.mockResolvedValue(makeStatus('rejected', ['Error']));
+
+      render(
+        <ZatcaClearanceModal
+          documentType="credit_note"
+          orderId={1}
+          refundId={5}
+          orderTotalHalalas={4600}
+          onDone={onDone}
+        />,
       );
 
-      render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
-
       await waitFor(() => {
-        expect(screen.getByText('Network Error')).toBeInTheDocument();
+        expect(screen.getByText('Done (Refunded)')).toBeInTheDocument();
       });
 
-      // ZATCA error details are displayed
-      expect(screen.getByText('Connection timeout')).toBeInTheDocument();
-      expect(screen.getByText('Server unreachable')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Done (Refunded)'));
+      expect(onDone).toHaveBeenCalledTimes(1);
     });
   });
 
+  // ── Edge cases ─────────────────────────────────────────────────────────
   describe('timeout after MAX_POLL_COUNT', () => {
     it('shows timeout error after 90 polls', async () => {
       vi.useFakeTimers();
 
-      // Keep returning pending for every poll
       mockGetZatcaInvoice.mockResolvedValue(makePendingStatus());
 
       render(<ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />);
 
-      // Flush the first immediate poll (pollCount becomes 1)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(50);
       });
 
-      // Advance 90 more seconds (one per poll). After 90 interval ticks,
-      // pollCount reaches 91, which is > MAX_POLL_COUNT (90), triggering timeout.
       for (let i = 0; i < 90; i++) {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(1000);
         });
       }
 
-      // Should hit MAX_POLL_COUNT and show timeout error
       expect(screen.getByText('Network Error')).toBeInTheDocument();
       expect(
         screen.getByText('Clearance timed out. Check the order details for result.'),
@@ -278,25 +510,21 @@ describe('ZatcaClearanceModal', () => {
     it('clears the polling interval on unmount', async () => {
       vi.useFakeTimers();
 
-      // Return pending to keep polling alive
       mockGetZatcaInvoice.mockResolvedValue(makePendingStatus());
 
       const { unmount } = render(
         <ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={vi.fn()} />,
       );
 
-      // Let the first poll resolve and setInterval fire once
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
       });
 
       const callCountBeforeUnmount = mockGetZatcaInvoice.mock.calls.length;
-      expect(callCountBeforeUnmount).toBeGreaterThanOrEqual(2); // pollOnce + 1 interval
+      expect(callCountBeforeUnmount).toBeGreaterThanOrEqual(2);
 
-      // Unmount
       unmount();
 
-      // Advance more time — no more calls should happen
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5000);
       });
@@ -310,14 +538,12 @@ describe('ZatcaClearanceModal', () => {
       vi.useFakeTimers();
       const onDone = vi.fn();
 
-      // First poll returns cleared, triggering a 1500ms auto-close
       mockGetZatcaInvoice.mockResolvedValue(makeStatus('cleared'));
 
       const { unmount } = render(
         <ZatcaClearanceModal orderId={1} orderTotalHalalas={4600} onDone={onDone} />,
       );
 
-      // Let the immediate pollOnce resolve (cleared → setTimeout(1500))
       await act(async () => {
         await vi.advanceTimersByTimeAsync(100);
       });
@@ -325,15 +551,12 @@ describe('ZatcaClearanceModal', () => {
       expect(screen.getByText('Invoice Cleared')).toBeInTheDocument();
       expect(onDone).not.toHaveBeenCalled();
 
-      // Unmount before the 1500ms auto-close fires
       unmount();
 
-      // Advance past 1500ms
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
 
-      // onDone must NOT have been called — the timeout was cleared on unmount
       expect(onDone).not.toHaveBeenCalled();
 
       vi.useRealTimers();

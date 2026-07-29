@@ -1463,4 +1463,62 @@ export class OrdersService {
       throw e;
     }
   }
+
+  // ── ZATCA Standard Credit Note APIs ────────────────────────────────────────
+
+  /**
+   * Validate that a refund belongs to the given order.
+   * Throws NotFoundException or BadRequestException if not.
+   */
+  private validateRefundBelongsToOrder(orderId: number, refundId: number): void {
+    const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
+    if (!refund) {
+      throw new NotFoundException(`Refund ${refundId} not found`);
+    }
+    if (refund.orderId !== orderId) {
+      throw new BadRequestException(`Refund ${refundId} does not belong to order ${orderId}`);
+    }
+  }
+
+  /**
+   * Get ZATCA credit note status for a refund (for POS polling).
+   */
+  getZatcaCreditNoteStatus(orderId: number, refundId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    return this.zatcaStandardService.getCreditNoteStatus(orderId, refundId);
+  }
+
+  /**
+   * Retry clearance for a credit note with error status.
+   */
+  async retryZatcaCreditNoteClearance(orderId: number, refundId: number, userId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    try {
+      return await this.zatcaStandardService.retryCreditNoteClearance(orderId, refundId, userId);
+    } catch (e: any) {
+      if (e.message?.includes('Cannot retry') || e.message?.includes('No credit note found')) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Reissue a credit note after rejection (new attempt, new ICV).
+   */
+  async reissueZatcaCreditNote(orderId: number, refundId: number, userId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    try {
+      return await this.zatcaStandardService.reissueCreditNote(orderId, refundId, userId);
+    } catch (e: any) {
+      if (
+        e.message?.includes('Cannot reissue') ||
+        e.message?.includes('No credit note found') ||
+        e.message?.includes('already has a cleared credit note')
+      ) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
+  }
 }
