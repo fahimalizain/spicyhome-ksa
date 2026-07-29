@@ -117,7 +117,7 @@ export function OrdersPage() {
     <div className="h-full flex">
       {/* Order list */}
       <div
-        className={`${selectedOrder ? 'w-1/2' : 'w-full'} overflow-y-auto border-r border-gray-700`}
+        className={`${selectedOrder ? 'w-1/2' : 'w-full'} h-full min-h-0 overflow-y-auto scrollbar-thin border-r border-gray-700`}
       >
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
@@ -172,155 +172,173 @@ export function OrdersPage() {
 
       {/* Order detail */}
       {selectedOrder && (
-        <div className="w-1/2 overflow-y-auto p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Order #{selectedOrder.orderNo}</h2>
-            <span className={`px-2 py-1 rounded text-xs font-bold status-${selectedOrder.status}`}>
-              {STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
-            </span>
-          </div>
-
-          <div className="text-sm text-gray-400 mb-4">
-            <p>{selectedOrder.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</p>
-            <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
-          </div>
-
-          <div className="space-y-2 mb-4">
-            <h3 className="text-sm font-semibold text-gray-300">Items</h3>
-            {(selectedOrder.items || []).map((oi) => (
-              <div key={oi.id} className="bg-gray-800 rounded-lg p-2 flex justify-between">
-                <div>
-                  <span className="text-sm text-white">{oi.itemName}</span>
-                  {oi.notes && (
-                    <span className="text-xs text-gray-400 block">
-                      {oi.notes as unknown as string}
-                    </span>
-                  )}
-                </div>
-                <div className="text-right">
-                  <span className="text-sm text-gray-300">
-                    {oi.qty} × {halalasToSar(oi.unitPriceHalalas)}
-                  </span>
-                  <span className="text-sm text-brand-400 ml-2">
-                    {halalasToSar(oi.totalHalalas)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-gray-700 pt-3 space-y-1 text-sm">
-            <div className="flex justify-between text-gray-400">
-              <span>Subtotal</span>
-              <span>{halalasToSar(selectedOrder.subtotalHalalas)} SAR</span>
+        <div className="w-1/2 flex flex-col min-h-0 h-full border-l border-gray-700">
+          {/* Scrollable body */}
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">Order #{selectedOrder.orderNo}</h2>
+              <span
+                className={`px-2 py-1 rounded text-xs font-bold status-${selectedOrder.status}`}
+              >
+                {STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
+              </span>
             </div>
-            <div className="flex justify-between text-gray-400">
-              <span>VAT</span>
-              <span>{halalasToSar(selectedOrder.vatHalalas)} SAR</span>
-            </div>
-            <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-gray-700">
-              <span>Total</span>
-              <span>{halalasToSar(selectedOrder.totalHalalas)} SAR</span>
-            </div>
-          </div>
 
-          {/* Payments section */}
-          {(selectedOrder.payments?.length ?? 0) > 0 && (
-            <div className="mt-3">
-              <h3 className="text-sm font-semibold text-gray-300 mb-1">Payments</h3>
-              <div className="space-y-1">
-                {selectedOrder.payments!.map((p, i) => (
-                  <div key={i} className="flex justify-between text-sm text-gray-400">
-                    <span>{p.methodTitle}</span>
-                    <span>{halalasToSar(p.amountHalalas)} SAR</span>
+            <div className="text-sm text-gray-400 mb-4">
+              <p>{selectedOrder.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</p>
+              <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              <h3 className="text-sm font-semibold text-gray-300">Items</h3>
+              {(selectedOrder.items || []).map((oi) => (
+                <div key={oi.id} className="bg-gray-800 rounded-lg p-2 flex justify-between">
+                  <div>
+                    <span className="text-sm text-white">{oi.itemName}</span>
+                    {oi.notes && (
+                      <span className="text-xs text-gray-400 block">
+                        {oi.notes as unknown as string}
+                      </span>
+                    )}
                   </div>
-                ))}
+                  <div className="text-right">
+                    <span className="text-sm text-gray-300">
+                      {oi.qty} × {halalasToSar(oi.unitPriceHalalas)}
+                    </span>
+                    <span className="text-sm text-brand-400 ml-2">
+                      {halalasToSar(oi.totalHalalas)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-700 pt-3 space-y-1 text-sm">
+              <div className="flex justify-between text-gray-400">
+                <span>Subtotal</span>
+                <span>{halalasToSar(selectedOrder.subtotalHalalas)} SAR</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>VAT</span>
+                <span>{halalasToSar(selectedOrder.vatHalalas)} SAR</span>
+              </div>
+              <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-gray-700">
+                <span>Total</span>
+                <span>{halalasToSar(selectedOrder.totalHalalas)} SAR</span>
               </div>
             </div>
-          )}
 
-          {/* OrderActionBar for reprints */}
-          <div className="mt-3">
-            <OrderActionBar orderId={selectedOrder.id} status={selectedOrder.status} />
+            {/* Payments section */}
+            {(selectedOrder.payments?.length ?? 0) > 0 && (
+              <div className="mt-3">
+                <h3 className="text-sm font-semibold text-gray-300 mb-1">Payments</h3>
+                <div className="space-y-1">
+                  {selectedOrder.payments!.map((p, i) => (
+                    <div key={i} className="flex justify-between text-sm text-gray-400">
+                      <span>{p.methodTitle}</span>
+                      <span>{halalasToSar(p.amountHalalas)} SAR</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* OrderActionBar for reprints */}
+            <div className="mt-3">
+              <OrderActionBar orderId={selectedOrder.id} status={selectedOrder.status} />
+            </div>
+
+            {/* Refund button */}
+            {selectedOrder.status === 'paid' && permissions.refundOrder && !showRefund && (
+              <button
+                onClick={() => setShowRefund(true)}
+                className="touch-target mt-3 w-full bg-amber-600 hover:bg-amber-700 rounded-lg py-2 text-sm font-bold text-white"
+              >
+                Refund
+              </button>
+            )}
+
+            {/* RefundPanel */}
+            {showRefund && selectedOrder.status === 'paid' && (
+              <div className="mt-3">
+                <RefundPanel
+                  order={selectedOrder}
+                  onClose={() => setShowRefund(false)}
+                  onRefunded={async () => {
+                    setShowRefund(false);
+                    try {
+                      const [updated, refundsResult] = await Promise.all([
+                        client.orders.get(selectedOrder.id),
+                        client.orders.getRefunds(selectedOrder.id),
+                      ]);
+                      setSelectedOrder(updated);
+                      setRefunds(refundsResult);
+                      loadOrders();
+                    } catch {
+                      // Refetch failed, keep current state
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Refunds list */}
+            {refunds.length > 0 && (
+              <div className="mt-3">
+                <h3 className="text-sm font-semibold text-gray-300 mb-1">Refunds</h3>
+                <div className="space-y-1">
+                  {refunds.map((refund) => (
+                    <button
+                      key={refund.id}
+                      onClick={() => setSelectedRefund(refund)}
+                      className="touch-target w-full bg-gray-800 hover:bg-gray-750 rounded-lg p-3 flex justify-between items-start text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-white">
+                          {new Date(refund.createdAt * 1000).toLocaleTimeString()}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {refund.methodTitle}
+                          {refund.reason && (
+                            <span className="text-gray-500 ml-1 truncate">
+                              —{' '}
+                              {refund.reason.length > 30
+                                ? refund.reason.slice(0, 30) + '...'
+                                : refund.reason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-sm text-brand-400 ml-2 whitespace-nowrap">
+                        {halalasToSar(refund.totalHalalas)} SAR
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Refund detail modal */}
+            {selectedRefund && (
+              <RefundDetailModal refund={selectedRefund} onClose={() => setSelectedRefund(null)} />
+            )}
+
+            {/* Event timeline (replaces legacy audit trail) */}
+            <OrderEventTimeline orderId={selectedOrder.id} />
           </div>
 
-          {/* Refund button */}
-          {selectedOrder.status === 'paid' && permissions.refundOrder && !showRefund && (
-            <button
-              onClick={() => setShowRefund(true)}
-              className="touch-target mt-3 w-full bg-amber-600 hover:bg-amber-700 rounded-lg py-2 text-sm font-bold text-white"
-            >
-              Refund
-            </button>
-          )}
-
-          {/* RefundPanel */}
-          {showRefund && selectedOrder.status === 'paid' && (
-            <div className="mt-3">
-              <RefundPanel
-                order={selectedOrder}
-                onClose={() => setShowRefund(false)}
-                onRefunded={async () => {
-                  setShowRefund(false);
-                  try {
-                    const [updated, refundsResult] = await Promise.all([
-                      client.orders.get(selectedOrder.id),
-                      client.orders.getRefunds(selectedOrder.id),
-                    ]);
-                    setSelectedOrder(updated);
-                    setRefunds(refundsResult);
-                    loadOrders();
-                  } catch {
-                    // Refetch failed, keep current state
-                  }
-                }}
-              />
+          {/* Pinned footer — only when open */}
+          {selectedOrder.status === 'open' && (
+            <div className="shrink-0 border-t border-gray-700 p-3 bg-gray-900">
+              <button
+                type="button"
+                onClick={() => navigate(`/?orderId=${selectedOrder.id}`)}
+                className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg py-3 text-sm font-bold text-white"
+              >
+                Open Order
+              </button>
             </div>
           )}
-
-          {/* Refunds list */}
-          {refunds.length > 0 && (
-            <div className="mt-3">
-              <h3 className="text-sm font-semibold text-gray-300 mb-1">Refunds</h3>
-              <div className="space-y-1">
-                {refunds.map((refund) => (
-                  <button
-                    key={refund.id}
-                    onClick={() => setSelectedRefund(refund)}
-                    className="touch-target w-full bg-gray-800 hover:bg-gray-750 rounded-lg p-3 flex justify-between items-start text-left"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm text-white">
-                        {new Date(refund.createdAt * 1000).toLocaleTimeString()}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {refund.methodTitle}
-                        {refund.reason && (
-                          <span className="text-gray-500 ml-1 truncate">
-                            —{' '}
-                            {refund.reason.length > 30
-                              ? refund.reason.slice(0, 30) + '...'
-                              : refund.reason}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-sm text-brand-400 ml-2 whitespace-nowrap">
-                      {halalasToSar(refund.totalHalalas)} SAR
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Refund detail modal */}
-          {selectedRefund && (
-            <RefundDetailModal refund={selectedRefund} onClose={() => setSelectedRefund(null)} />
-          )}
-
-          {/* Event timeline (replaces legacy audit trail) */}
-          <OrderEventTimeline orderId={selectedOrder.id} />
         </div>
       )}
     </div>
