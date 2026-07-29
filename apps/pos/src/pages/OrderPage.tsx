@@ -14,6 +14,7 @@ import type {
   ItemResponse,
   TableResponse,
   OrderResponse,
+  OrderSummaryResponse,
 } from '@spicyhome/client-ts';
 
 /**
@@ -81,6 +82,7 @@ export function OrderPage() {
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
+  const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
@@ -158,9 +160,25 @@ export function OrderPage() {
     checkDay();
     loadMenu();
     loadTables();
+    loadOpenOrders();
   }, []);
 
-  // Listen for WebSocket events on the current order
+  // Refresh open orders whenever the table picker opens so occupancy is fresh
+  useEffect(() => {
+    if (showTablePicker) {
+      loadOpenOrders();
+    }
+  }, [showTablePicker]);
+
+  // Deep-link edge case: if we pre-selected a table via ?tableId= but it's now occupied
+  // and there's no currentOrder loaded, clear the selection to avoid a 409 on create.
+  useEffect(() => {
+    if (!currentOrder && cart.tableId != null && openOrders.length > 0) {
+      if (isTableOccupied(cart.tableId)) {
+        cart.setOrderType('dine_in', null);
+      }
+    }
+  }, [openOrders, currentOrder, cart.tableId]);
   useEffect(() => {
     if (!currentOrder) return;
 
@@ -238,6 +256,19 @@ export function OrderPage() {
     } catch {
       // tables optional
     }
+  }
+
+  async function loadOpenOrders() {
+    try {
+      const res = await client.orders.list('open');
+      setOpenOrders(res);
+    } catch {
+      // open orders optional — picker still works without occupancy data
+    }
+  }
+
+  function isTableOccupied(tableId: number): boolean {
+    return openOrders.some((o) => o.tableId != null && Number(o.tableId) === tableId);
   }
 
   const filteredItems = filterMenuItems(items, {
@@ -846,22 +877,39 @@ export function OrderPage() {
           >
             <h3 className="text-sm font-semibold text-white mb-3">Select Table</h3>
             <div className="grid grid-cols-3 gap-2">
-              {tables.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    cart.setOrderType('dine_in', t.id);
-                    setShowTablePicker(false);
-                  }}
-                  className={`touch-target py-3 rounded-lg text-sm font-bold ${
-                    cart.tableId === t.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {t.name}
-                </button>
-              ))}
+              {tables.map((t) => {
+                const occupied = isTableOccupied(t.id);
+                const selected = cart.tableId === t.id;
+                const openOrder = openOrders.find(
+                  (o) => o.tableId != null && Number(o.tableId) === t.id,
+                );
+
+                return (
+                  <button
+                    key={t.id}
+                    disabled={occupied}
+                    onClick={() => {
+                      if (occupied) return;
+                      cart.setOrderType('dine_in', t.id);
+                      setShowTablePicker(false);
+                    }}
+                    className={`touch-target py-3 rounded-lg text-sm font-bold ${
+                      occupied
+                        ? 'bg-gray-800 text-gray-600 border-2 border-amber-700/50 cursor-not-allowed opacity-60'
+                        : selected
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    <span>{t.name}</span>
+                    {occupied && openOrder && (
+                      <span className="block text-xs text-amber-500 mt-0.5">
+                        #{openOrder.orderNo}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
