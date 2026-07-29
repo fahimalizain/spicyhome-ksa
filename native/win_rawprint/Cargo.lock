@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "rawprint"
+name = "win_rawprint"
 version = "0.1.0"
 dependencies = [
  "windows-sys",

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { spawn } from 'child_process';
 import { Logger } from '@nestjs/common';
-import { resolveRawprintPath, isWindows } from './rawprint-helpers';
+import { resolveWinRawprintPath, isWindows } from './win-rawprint-helpers';
 
 /**
  * Transport interface for Windows raw spooler printing.
@@ -20,23 +20,23 @@ export interface WindowsSpoolerTransport {
 }
 
 /**
- * Maximum time (ms) to wait for rawprint.exe to finish a single job.
+ * Maximum time (ms) to wait for win_rawprint.exe to finish a single job.
  */
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 /**
- * Production transport: spawns rawprint.exe to send raw data via the
+ * Production transport: spawns win_rawprint.exe to send raw data via the
  * Windows spooler.
  */
-export class WindowsRawprintTransport implements WindowsSpoolerTransport {
-  private readonly logger = new Logger(WindowsRawprintTransport.name);
+export class WinRawprintTransport implements WindowsSpoolerTransport {
+  private readonly logger = new Logger(WinRawprintTransport.name);
   private readonly exePath: string | null;
 
   constructor() {
-    this.exePath = resolveRawprintPath();
+    this.exePath = resolveWinRawprintPath();
     if (!this.exePath) {
       this.logger.warn(
-        'rawprint.exe not found. Set RAWPRINT_PATH env or place rawprint.exe in cwd/prebuilt/. ' +
+        'win_rawprint.exe not found. Set WIN_RAWPRINT_PATH env or place win_rawprint.exe in cwd/prebuilt/. ' +
           'Windows spooler printing will not work until it is available.',
       );
     }
@@ -48,18 +48,18 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
    */
   private guardPlatform(): void {
     if (!isWindows()) {
-      throw new Error('WindowsSpoolerTransport: only supported on win32 platform');
+      throw new Error('WinRawprintTransport: only supported on win32 platform');
     }
   }
 
   /**
-   * Get the path to rawprint.exe, throwing if not found.
+   * Get the path to win_rawprint.exe, throwing if not found.
    */
   private getExe(): string {
     if (!this.exePath) {
       throw new Error(
-        'rawprint.exe not found. Ensure it is deployed alongside the server ' +
-          '(prebuilt/rawprint.exe) or set RAWPRINT_PATH.',
+        'win_rawprint.exe not found. Ensure it is deployed alongside the server ' +
+          '(prebuilt/win_rawprint.exe) or set WIN_RAWPRINT_PATH.',
       );
     }
     return this.exePath;
@@ -70,10 +70,10 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
     const exe = this.getExe();
 
     if (!printerName || printerName.trim().length === 0) {
-      throw new Error('WindowsSpoolerTransport.send: printerName is required');
+      throw new Error('WinRawprintTransport.send: printerName is required');
     }
 
-    // Write data to a temp file so we can pass the path to rawprint.exe
+    // Write data to a temp file so we can pass the path to win_rawprint.exe
     const tmpDir = os.tmpdir();
     const tmpFile = path.join(
       tmpDir,
@@ -105,7 +105,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         (name) => name.localeCompare(printerName, undefined, { sensitivity: 'base' }) === 0,
       );
     } catch {
-      // If listing fails, fall back to just checking that rawprint exists
+      // If listing fails, fall back to just checking that win_rawprint exists
       // and the name is non-empty.
       return this.exePath !== null && printerName.trim().length > 0;
     }
@@ -123,7 +123,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
   }
 
   /**
-   * Spawn rawprint.exe and wait for it to finish. Throws on non-zero exit code
+   * Spawn win_rawprint.exe and wait for it to finish. Throws on non-zero exit code
    * or timeout.
    */
   private spawnExe(exePath: string, args: string[], timeoutMs: number): Promise<void> {
@@ -140,7 +140,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         if (settled) return;
         settled = true;
         proc.kill();
-        reject(new Error(`rawprint.exe timed out after ${timeoutMs}ms`));
+        reject(new Error(`win_rawprint.exe timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       proc.stderr?.on('data', (chunk: Buffer) => {
@@ -151,7 +151,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        reject(new Error(`rawprint.exe spawn failed: ${err.message}`));
+        reject(new Error(`win_rawprint.exe spawn failed: ${err.message}`));
       });
 
       proc.on('close', (code: number | null) => {
@@ -167,26 +167,26 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         const msg = stderr.trim() || `exit code ${code}`;
         switch (code) {
           case 1:
-            reject(new Error(`rawprint: bad usage — ${msg}`));
+            reject(new Error(`win_rawprint: bad usage — ${msg}`));
             break;
           case 2:
-            reject(new Error(`rawprint: printer not found or access denied — ${msg}`));
+            reject(new Error(`win_rawprint: printer not found or access denied — ${msg}`));
             break;
           case 3:
-            reject(new Error(`rawprint: print job failed — ${msg}`));
+            reject(new Error(`win_rawprint: print job failed — ${msg}`));
             break;
           case 4:
-            reject(new Error(`rawprint: file I/O error — ${msg}`));
+            reject(new Error(`win_rawprint: file I/O error — ${msg}`));
             break;
           default:
-            reject(new Error(`rawprint: ${msg}`));
+            reject(new Error(`win_rawprint: ${msg}`));
         }
       });
     });
   }
 
   /**
-   * Spawn rawprint.exe, capture its stdout, and return it as a string.
+   * Spawn win_rawprint.exe, capture its stdout, and return it as a string.
    * Used for --list.
    */
   private spawnExeCapture(exePath: string, args: string[], timeoutMs: number): Promise<string> {
@@ -204,7 +204,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         if (settled) return;
         settled = true;
         proc.kill();
-        reject(new Error(`rawprint.exe timed out after ${timeoutMs}ms`));
+        reject(new Error(`win_rawprint.exe timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       proc.stdout?.on('data', (chunk: Buffer) => {
@@ -219,7 +219,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        reject(new Error(`rawprint.exe spawn failed: ${err.message}`));
+        reject(new Error(`win_rawprint.exe spawn failed: ${err.message}`));
       });
 
       proc.on('close', (code: number | null) => {
@@ -232,7 +232,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
           return;
         }
 
-        reject(new Error(`rawprint.exe ${args.join(' ')}: ${stderr.trim() || `exit ${code}`}`));
+        reject(new Error(`win_rawprint.exe ${args.join(' ')}: ${stderr.trim() || `exit ${code}`}`));
       });
     });
   }
@@ -241,7 +241,7 @@ export class WindowsRawprintTransport implements WindowsSpoolerTransport {
 /**
  * Fake transport for tests — records send operations instead of spawning.
  */
-export class FakeWindowsSpoolerTransport implements WindowsSpoolerTransport {
+export class FakeWinRawprintTransport implements WindowsSpoolerTransport {
   sent: Array<{ printerName: string; data: Buffer }> = [];
   queues: string[] = [];
   /** If set, throw this error on send. */

@@ -3,27 +3,27 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 /**
- * Resolve the path to rawprint.exe.
+ * Resolve the path to win_rawprint.exe.
  *
- * 1. RAWPRINT_PATH env var
- * 2. rawprint.exe next to current working directory
- * 3. rawprint.exe in bin/ subdirectory of cwd
- * 4. rawprint.exe in prebuilt/ subdirectory of cwd
- * 5. rawprint.exe next to process.execPath (for NSSM/standalone)
+ * 1. WIN_RAWPRINT_PATH env var
+ * 2. win_rawprint.exe next to current working directory
+ * 3. win_rawprint.exe in bin/ subdirectory of cwd
+ * 4. win_rawprint.exe in prebuilt/ subdirectory of cwd
+ * 5. win_rawprint.exe next to process.execPath (for NSSM/standalone)
  *
  * Returns the full path if found, or null.
  */
-export function resolveRawprintPath(): string | null {
+export function resolveWinRawprintPath(): string | null {
   // 1. Explicit env var
-  const envPath = process.env.RAWPRINT_PATH;
+  const envPath = process.env.WIN_RAWPRINT_PATH;
   if (envPath && fs.existsSync(envPath)) return envPath;
 
   // 2-4. Relative to cwd
   const cwd = process.cwd();
   const candidatesRelative = [
-    'rawprint.exe',
-    path.join('bin', 'rawprint.exe'),
-    path.join('prebuilt', 'rawprint.exe'),
+    'win_rawprint.exe',
+    path.join('bin', 'win_rawprint.exe'),
+    path.join('prebuilt', 'win_rawprint.exe'),
   ];
   for (const rel of candidatesRelative) {
     const full = path.join(cwd, rel);

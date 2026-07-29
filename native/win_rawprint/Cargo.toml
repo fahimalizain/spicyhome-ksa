@@ -1,5 +1,5 @@
 [package]
-name = "rawprint"
+name = "win_rawprint"
 version = "0.1.0"
 edition = "2021"
 description = "Windows spooler raw-print helper for SpicyHome POS"

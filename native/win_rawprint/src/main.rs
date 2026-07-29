@@ -1,9 +1,9 @@
-//! rawprint.exe — Windows spooler raw-print helper for SpicyHome POS.
+//! win_rawprint.exe — Windows spooler raw-print helper for SpicyHome POS.
 //!
 //! Usage:
-//!   rawprint.exe <printerName> <path-to-bin-file>
-//!   rawprint.exe --list
-//!   rawprint.exe --help
+//!   win_rawprint.exe <printerName> <path-to-bin-file>
+//!   win_rawprint.exe --list
+//!   win_rawprint.exe --help
 //!
 //! Exit codes:
 //!   0  success
@@ -16,16 +16,16 @@
 use std::env;
 use std::process;
 
-const HELP: &str = r#"rawprint.exe — Windows spooler raw-print helper
+const HELP: &str = r#"win_rawprint.exe — Windows spooler raw-print helper
 
 USAGE:
-  rawprint.exe <printerName> <path-to-bin-file>
+  win_rawprint.exe <printerName> <path-to-bin-file>
       Send a raw binary file to the named Windows printer queue.
 
-  rawprint.exe --list
+  win_rawprint.exe --list
       List locally installed and network-connected printer queue names.
 
-  rawprint.exe --help
+  win_rawprint.exe --help
       Print this message.
 
 EXIT CODES:
@@ -276,7 +276,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("rawprint: missing command. Use --help for usage.");
+        eprintln!("win_rawprint: missing command. Use --help for usage.");
         process::exit(1);
     }
 
@@ -290,7 +290,7 @@ fn main() {
         "--list" => {
             #[cfg(not(windows))]
             {
-                eprintln!("rawprint: --list is only supported on Windows.");
+                eprintln!("win_rawprint: --list is only supported on Windows.");
                 process::exit(5);
             }
             #[cfg(windows)]
@@ -303,17 +303,17 @@ fn main() {
                         process::exit(0);
                     }
                     Err(e) => {
-                        eprintln!("rawprint: {}", e);
+                        eprintln!("win_rawprint: {}", e);
                         process::exit(2);
                     }
                 }
             }
         }
         _ => {
-            // rawprint.exe <printerName> <path-to-bin>
+            // win_rawprint.exe <printerName> <path-to-bin>
             if args.len() < 3 {
                 eprintln!(
-                    "rawprint: missing arguments. Usage: rawprint.exe <printerName> <path-to-bin>"
+                    "win_rawprint: missing arguments. Usage: win_rawprint.exe <printerName> <path-to-bin>"
                 );
                 process::exit(1);
             }
@@ -325,7 +325,7 @@ fn main() {
             {
                 // Suppress unused variable warnings on non-Windows
                 let _ = (printer_name, file_path);
-                eprintln!("rawprint: printing is only supported on Windows.");
+                eprintln!("win_rawprint: printing is only supported on Windows.");
                 process::exit(5);
             }
 
@@ -334,20 +334,20 @@ fn main() {
                 let data = match std::fs::read(file_path) {
                     Ok(d) => d,
                     Err(e) => {
-                        eprintln!("rawprint: cannot read '{}': {}", file_path, e);
+                        eprintln!("win_rawprint: cannot read '{}': {}", file_path, e);
                         process::exit(4);
                     }
                 };
 
                 if data.is_empty() {
-                    eprintln!("rawprint: input file '{}' is empty, nothing to print.", file_path);
+                    eprintln!("win_rawprint: input file '{}' is empty, nothing to print.", file_path);
                     process::exit(0);
                 }
 
                 match winprint::raw_print(printer_name, &data) {
                     Ok(()) => process::exit(0),
                     Err(e) => {
-                        eprintln!("rawprint: {}", e);
+                        eprintln!("win_rawprint: {}", e);
                         process::exit(3);
                     }
                 }
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_help_args() {
-        assert!(HELP.contains("rawprint.exe"));
+        assert!(HELP.contains("win_rawprint.exe"));
         assert!(HELP.contains("<printerName>"));
         assert!(HELP.contains("--list"));
         assert!(HELP.contains("--help"));

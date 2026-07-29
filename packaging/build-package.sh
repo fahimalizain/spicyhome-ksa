@@ -187,16 +187,16 @@ mkdir -p "$PACKAGE_DIR/prebuilt"
 cp "$BETTER_SQLITE3_PREBUILT" "$PACKAGE_DIR/prebuilt/better_sqlite3.node"
 echo "better-sqlite3 native binary bundled."
 
-# ── Bundle rawprint.exe for Windows USB/spooler printers ────────
-echo "Bundling rawprint.exe..."
-RAWRINT_PREBUILT="$SCRIPT_DIR/prebuilt/rawprint.exe"
-if [ -f "$RAWRINT_PREBUILT" ]; then
-  cp "$RAWRINT_PREBUILT" "$PACKAGE_DIR/prebuilt/rawprint.exe"
+# ── Bundle win_rawprint.exe for Windows USB/spooler printers ────────
+echo "Bundling win_rawprint.exe..."
+WIN_RAWPRINT_PREBUILT="$SCRIPT_DIR/prebuilt/win_rawprint.exe"
+if [ -f "$WIN_RAWPRINT_PREBUILT" ]; then
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/prebuilt/win_rawprint.exe"
   # Also copy to root for easy discovery
-  cp "$RAWRINT_PREBUILT" "$PACKAGE_DIR/rawprint.exe"
-  echo "rawprint.exe bundled."
+  cp "$WIN_RAWPRINT_PREBUILT" "$PACKAGE_DIR/win_rawprint.exe"
+  echo "win_rawprint.exe bundled."
 else
-  echo "WARNING: rawprint.exe not found at $RAWRINT_PREBUILT. Build it first: cd native/rawprint && ./build.sh"
+  echo "WARNING: win_rawprint.exe not found at $WIN_RAWPRINT_PREBUILT. Build it first: cd native/win_rawprint && ./build.sh"
 fi
 
 # ──────────────────────────────────────────────────
@@ -235,7 +235,7 @@ $env:SPICYHOME_DB = Join-Path $scriptDir "data\spicyhome.db"
 $env:PORT = "3742"
 $env:MIGRATIONS_DIR = Join-Path $scriptDir "server\migrations"
 $env:APP_VERSION = "__PACKAGE_VERSION__"
-$env:RAWPRINT_PATH = Join-Path $scriptDir "prebuilt\rawprint.exe"
+$env:WIN_RAWPRINT_PATH = Join-Path $scriptDir "prebuilt\win_rawprint.exe"
 
 __SENTRY_ENV_BLOCK__
 

@@ -1,4 +1,4 @@
-# rawprint.exe — Windows Spooler Raw-Print Helper
+# win_rawprint.exe — Windows Spooler Raw-Print Helper
 
 Sends raw binary data (e.g. ESC/POS commands) to a named Windows printer queue
 via the native spooler API. Used by SpicyHome POS to drive USB printers that
@@ -11,14 +11,14 @@ are installed as Windows printer queues.
 ./build.sh
 ```
 
-The prebuilt artifact is committed at `packaging/prebuilt/rawprint.exe`.
+The prebuilt artifact is committed at `packaging/prebuilt/win_rawprint.exe`.
 
 ## CLI Contract
 
 ```
-rawprint.exe <printerName> <path-to-bin-file>
-rawprint.exe --list
-rawprint.exe --help
+win_rawprint.exe <printerName> <path-to-bin-file>
+win_rawprint.exe --list
+win_rawprint.exe --help
 ```
 
 ### Exit Codes
@@ -39,12 +39,12 @@ Prints one printer queue name per line to stdout. Uses `EnumPrintersW` with
 
 ## NestJS Integration
 
-The server resolves the path via `RAWPRINT_PATH` env var or falls back to
-`prebuilt/rawprint.exe` relative to the working directory. See
-`apps/server/src/modules/printers/windows-spooler-transport.ts`.
+The server resolves the path via `WIN_RAWPRINT_PATH` env var or falls back to
+`prebuilt/win_rawprint.exe` relative to the working directory. See
+`apps/server/src/modules/printers/win-rawprint-transport.ts`.
 
 ## Packaging
 
-The `build-package.sh` script copies `packaging/prebuilt/rawprint.exe` into
-the Win7 bundle under `prebuilt/rawprint.exe`. The `start-server.ps1` script
-sets `$env:RAWPRINT_PATH` accordingly.
+The `build-package.sh` script copies `packaging/prebuilt/win_rawprint.exe` into
+the Win7 bundle under `prebuilt/win_rawprint.exe`. The `start-server.ps1` script
+sets `$env:WIN_RAWPRINT_PATH` accordingly.

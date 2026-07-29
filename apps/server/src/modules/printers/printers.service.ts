@@ -10,7 +10,7 @@ import {
   TcpPrinterTransport,
   PrinterUnreachableError,
 } from './printer-transport';
-import { WindowsSpoolerTransport, WindowsRawprintTransport } from './windows-spooler-transport';
+import { WindowsSpoolerTransport, WinRawprintTransport } from './win-rawprint-transport';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -33,7 +33,7 @@ export class PrintersService {
 
   constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {
     this.transport = new TcpPrinterTransport(); // overridden in tests
-    this.windowsTransport = new WindowsRawprintTransport();
+    this.windowsTransport = new WinRawprintTransport();
   }
 
   /** Replace TCP transport for testing. */
@@ -158,7 +158,7 @@ export class PrintersService {
 
   /**
    * List Windows printer queue names. Returns empty array on non-Windows or
-   * if rawprint.exe is not available.
+   * if win_rawprint.exe is not available.
    */
   async listWindowsQueues(): Promise<string[]> {
     try {
