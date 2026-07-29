@@ -59,7 +59,6 @@ if (SENTRY_DSN) {
 
   const environment =
     process.env.SENTRY_ENVIRONMENT ||
-    process.env.WORKTREE_SLUG ||
     (process.env.NODE_ENV === 'production' ? 'production' : 'development');
 
   const release = `spicyhome-server@${VERSION}`;
