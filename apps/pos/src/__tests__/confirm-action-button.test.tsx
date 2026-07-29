@@ -62,7 +62,7 @@ describe('ConfirmActionButton', () => {
       <ConfirmActionButton
         textContent="Void Order"
         confirmTextContent="Confirm Void Order"
-        confirmationHoldDuration={2000}
+        confirmationHoldDuration={1500}
         onConfirm={onConfirm}
         {...overrides}
       />,
@@ -122,7 +122,7 @@ describe('ConfirmActionButton', () => {
     pressDown(armedBtn);
 
     // Advance time by full hold duration (plus margin)
-    await advanceTimers(2050);
+    await advanceTimers(1550);
 
     // onConfirm should have been called exactly once
     expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe('ConfirmActionButton', () => {
     pressDown(armedBtn);
 
     // Advance 50% of hold duration
-    await advanceTimers(1000);
+    await advanceTimers(750);
 
     // Release before completion
     release(armedBtn);
@@ -224,7 +224,7 @@ describe('ConfirmActionButton', () => {
     fireEvent.pointerLeave(armedBtn);
 
     // Advance rest of time — should NOT trigger onConfirm
-    await advanceTimers(2000);
+    await advanceTimers(1500);
 
     expect(onConfirm).not.toHaveBeenCalled();
 
@@ -251,7 +251,7 @@ describe('ConfirmActionButton', () => {
     fireEvent.pointerCancel(armedBtn);
 
     // Advance rest of time
-    await advanceTimers(2000);
+    await advanceTimers(1500);
 
     expect(onConfirm).not.toHaveBeenCalled();
 

@@ -832,7 +832,6 @@ export function OrderPage() {
                   <ConfirmActionButton
                     textContent="Void Order"
                     confirmTextContent="Confirm Void Order"
-                    confirmationHoldDuration={2000}
                     onConfirm={handleVoid}
                     disabled={loading}
                     busy={loading}

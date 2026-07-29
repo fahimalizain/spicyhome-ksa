@@ -5,7 +5,7 @@ export type ConfirmActionButtonProps = {
   textContent: string;
   /** Armed label, e.g. "Confirm Void Order" */
   confirmTextContent: string;
-  /** Hold duration in ms before onConfirm. Default 2000 */
+  /** Hold duration in ms before onConfirm. Default 1500 */
   confirmationHoldDuration?: number;
   onConfirm: () => void;
   disabled?: boolean;
@@ -22,7 +22,7 @@ type ButtonState = 'idle' | 'armed' | 'busy';
 export function ConfirmActionButton({
   textContent,
   confirmTextContent,
-  confirmationHoldDuration = 2000,
+  confirmationHoldDuration = 1500,
   onConfirm,
   disabled = false,
   className,
