@@ -319,7 +319,11 @@ if (-not (Test-Path $migrationsDir)) {
     New-Item -ItemType Directory -Path $migrationsDir | Out-Null
 }
 
-# First run: install server dependencies (requires internet)
+# First run: install dependencies for workspace packages and server.
+# npm does not install deps of file:-linked workspace packages, so shared's
+# own dependencies (e.g. zod) must be installed explicitly before server.
+# Do NOT npm install in packages/db — nested better-sqlite3 would shadow
+# the prebuilt binary under server/node_modules.
 $nodeModules = Join-Path $scriptDir "server\node_modules"
 if (-not (Test-Path $nodeModules)) {
     Write-Host ""
@@ -330,8 +334,38 @@ if (-not (Test-Path $nodeModules)) {
     Write-Host ""
 
     $serverDir = Join-Path $scriptDir "server"
+    $sharedDir = Join-Path $scriptDir "packages\shared"
     $npmCmd = Join-Path $scriptDir "node\npm.cmd"
 
+    # ── 1. Install shared workspace deps (e.g. zod) ──
+    if (Test-Path (Join-Path $sharedDir "package.json")) {
+        Write-Host "Installing dependencies for packages\shared ..."
+        $sharedLogOut = Join-Path $logsDir "npm-shared-out.log"
+        $sharedLogErr = Join-Path $logsDir "npm-shared-err.log"
+        $sharedProcess = Start-Process -FilePath $npmCmd `
+            -ArgumentList @("install", "--production", "--ignore-scripts") `
+            -WorkingDirectory $sharedDir `
+            -Wait -NoNewWindow -PassThru `
+            -RedirectStandardOutput $sharedLogOut `
+            -RedirectStandardError $sharedLogErr
+        if ($sharedProcess.ExitCode -ne 0) {
+            Write-Host "ERROR: npm install in packages\shared failed." -ForegroundColor Red
+            Write-Host ""
+            if (Test-Path $sharedLogOut) { Get-Content $sharedLogOut | Write-Output }
+            if (Test-Path $sharedLogErr) { Get-Content $sharedLogErr | Write-Output }
+            Write-Host ""
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+        Remove-Item $sharedLogOut, $sharedLogErr -ErrorAction SilentlyContinue
+        Write-Host "packages\shared dependencies installed."
+    } else {
+        Write-Host "ERROR: packages\shared\package.json not found." -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+
+    # ── 2. Install server deps ──
     $logOut = Join-Path $logsDir "npm-out.log"
     $logErr = Join-Path $logsDir "npm-err.log"
     # NODE_SKIP_PLATFORM_CHECK already set at script top for Win7.
@@ -343,7 +377,7 @@ if (-not (Test-Path $nodeModules)) {
         -RedirectStandardOutput $logOut `
         -RedirectStandardError $logErr
     if ($installProcess.ExitCode -ne 0) {
-        Write-Host "ERROR: npm install failed." -ForegroundColor Red
+        Write-Host "ERROR: npm install in server failed." -ForegroundColor Red
         Write-Host ""
         if (Test-Path $logOut) { Get-Content $logOut | Write-Output }
         if (Test-Path $logErr) { Get-Content $logErr | Write-Output }
