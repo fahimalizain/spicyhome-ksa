@@ -27,6 +27,31 @@ body,
   display: none; /* Chrome/Safari */
 }
 
+/* Thin dark scrollbar — Chrome 109+ & Firefox */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent; /* thumb track */
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #4b5563; /* gray-600 */
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #6b7280; /* gray-500 */
+}
+
 .status-open {
   @apply bg-yellow-700 text-yellow-100;
 }

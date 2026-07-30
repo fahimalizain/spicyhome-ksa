@@ -4,6 +4,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { OrdersPage } from '../pages/OrdersPage';
 import type { OrderRefundResponse } from '@spicyhome/client-ts';
 
+const mockNavigate = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 const mockList = vi.fn();
 const mockGet = vi.fn();
 const mockGetRefunds = vi.fn();
@@ -153,6 +160,47 @@ const sampleRefund: OrderRefundResponse = {
       totalHalalas: 2300,
     },
   ],
+};
+
+const openOrderSummary = {
+  id: 2,
+  orderNo: 55,
+  uuid: 'u2',
+  type: 'dine_in',
+  tableId: null,
+  dayOpeningId: 1,
+  status: 'open',
+  subtotalHalalas: 2000,
+  vatHalalas: 300,
+  totalHalalas: 2300,
+  discountHalalas: 0,
+  createdAt: 1700000000,
+  updatedAt: 1700000000,
+  createdBy: null,
+  updatedBy: null,
+};
+
+const openOrder = {
+  ...openOrderSummary,
+  items: [
+    {
+      id: 201,
+      orderId: 2,
+      itemId: 2,
+      itemName: 'Pizza',
+      unitPriceHalalas: 2300,
+      vatRateBp: 1500,
+      qty: 1,
+      totalHalalas: 2300,
+      notes: null,
+      createdAt: 1700000000,
+      updatedAt: 1700000000,
+      createdBy: null,
+      updatedBy: null,
+    },
+  ],
+  events: [],
+  payments: [],
 };
 
 function renderOrdersPage() {
@@ -392,5 +440,127 @@ describe('OrdersPage — refunds list and modal', () => {
     // The truncated reason should appear (first 30 chars + ...)
     const truncated = 'This is a very long reason str...';
     expect(screen.getByText(truncated, { exact: false })).toBeInTheDocument();
+  });
+});
+
+describe('OrdersPage — Open Order pinned footer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEvents.mockResolvedValue([]);
+    mockVerifyEvents.mockResolvedValue({ valid: true });
+    mockRealtimeSubscribe.mockReturnValue(vi.fn());
+  });
+
+  it('shows Open Order button when selected order status is open', async () => {
+    mockList.mockResolvedValue([openOrderSummary]);
+    mockGet.mockResolvedValue(openOrder);
+    mockGetRefunds.mockResolvedValue([]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#55')).toBeInTheDocument();
+    });
+
+    // Click open order to view detail
+    fireEvent.click(screen.getByText('#55'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order #55')).toBeInTheDocument();
+    });
+
+    // Open Order button should be visible
+    expect(screen.getByText('Open Order')).toBeInTheDocument();
+  });
+
+  it('clicking Open Order navigates to /?orderId=<id>', async () => {
+    mockList.mockResolvedValue([openOrderSummary]);
+    mockGet.mockResolvedValue(openOrder);
+    mockGetRefunds.mockResolvedValue([]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#55')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('#55'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Open Order')).toBeInTheDocument();
+    });
+
+    // Click the Open Order button
+    fireEvent.click(screen.getByText('Open Order'));
+
+    // Should navigate to /?orderId=2
+    expect(mockNavigate).toHaveBeenCalledWith('/?orderId=2');
+  });
+
+  it('does not show Open Order button for paid orders', async () => {
+    mockList.mockResolvedValue([orderSummary]);
+    mockGet.mockResolvedValue(paidOrder);
+    mockGetRefunds.mockResolvedValue([]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#42')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('#42'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order #42')).toBeInTheDocument();
+    });
+
+    // Open Order button must NOT be visible
+    expect(screen.queryByText('Open Order')).not.toBeInTheDocument();
+  });
+
+  it('does not show Open Order button for voided orders', async () => {
+    const voidedSummary = { ...orderSummary, id: 3, orderNo: 99, status: 'voided' };
+    const voidedOrder = { ...paidOrder, id: 3, orderNo: 99, status: 'voided' };
+
+    mockList.mockResolvedValue([voidedSummary]);
+    mockGet.mockResolvedValue(voidedOrder);
+    mockGetRefunds.mockResolvedValue([]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#99')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('#99'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order #99')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Open Order')).not.toBeInTheDocument();
+  });
+
+  it('does not show Open Order button for refunded orders', async () => {
+    const refundedSummary = { ...orderSummary, id: 4, orderNo: 77, status: 'refunded' };
+    const refundedOrder = { ...paidOrder, id: 4, orderNo: 77, status: 'refunded' };
+
+    mockList.mockResolvedValue([refundedSummary]);
+    mockGet.mockResolvedValue(refundedOrder);
+    mockGetRefunds.mockResolvedValue([]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#77')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('#77'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order #77')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Open Order')).not.toBeInTheDocument();
   });
 });

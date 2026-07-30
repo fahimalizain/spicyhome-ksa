@@ -4,6 +4,7 @@ import { client } from '../api';
 import { useRefund, getRemainingQty } from '../hooks/useRefund';
 import { ZatcaClearanceModal } from './orders/ZatcaClearanceModal';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
+import { ConfirmActionButton } from './ConfirmActionButton';
 
 interface PaymentMethod {
   id: string;
@@ -34,7 +35,6 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   const [loadingRefunds, setLoadingRefunds] = useState(true);
   const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
   const [reason, setReason] = useState('');
-  const [confirmStep, setConfirmStep] = useState(false);
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
 
   // Clearance state for standard invoice refunds
@@ -90,7 +90,6 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
 
   function setRefundQty(orderItemId: number, qty: number) {
     setRefundQtys((prev) => ({ ...prev, [orderItemId]: qty }));
-    setConfirmStep(false);
   }
 
   const selectedItems = useMemo(() => rows.filter((r) => r.refundQty > 0), [rows]);
@@ -274,8 +273,8 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
         </div>
       )}
 
-      {/* Confirm step: show selected method */}
-      {confirmStep && selectedMethodId && (
+      {/* Show selected method */}
+      {selectedMethodId && (
         <div className="mb-3 text-xs text-gray-400">
           Refunding via{' '}
           <span className="text-white">
@@ -289,32 +288,19 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
 
       {/* Actions */}
       <div className="flex gap-2">
-        {!confirmStep ? (
-          <button
-            onClick={() => setConfirmStep(true)}
-            disabled={!hasSelection || !selectedMethodId || loading}
-            className="flex-1 touch-target bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-2"
-          >
-            Process Refund
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={handleProcessRefund}
-              disabled={loading}
-              className="flex-1 touch-target bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg text-sm font-bold text-white py-2"
-            >
-              {loading ? 'Processing...' : 'Confirm Refund'}
-            </button>
-            <button
-              onClick={() => setConfirmStep(false)}
-              disabled={loading}
-              className="touch-target px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300"
-            >
-              Cancel
-            </button>
-          </>
-        )}
+        <ConfirmActionButton
+          key={`refund-${selectedMethodId ?? 'none'}-${refundTotalHalalas}-${JSON.stringify(refundQtys)}`}
+          textContent="Process Refund"
+          confirmTextContent="Confirm Refund"
+          onConfirm={() => {
+            void handleProcessRefund();
+          }}
+          disabled={!hasSelection || !selectedMethodId || loading}
+          busy={loading}
+          busyTextContent="Processing..."
+          className="flex-1 touch-target bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-2"
+          confirmClassName="flex-1 touch-target bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded-lg text-sm font-bold text-red-100 py-2"
+        />
       </div>
     </div>
   );

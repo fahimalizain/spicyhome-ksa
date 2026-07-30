@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { PayModal } from '../components/orders/PayModal';
+import { ConfirmActionButton } from '../components/ConfirmActionButton';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import type { CartItem } from '../hooks/useCart';
 import type {
@@ -14,6 +15,7 @@ import type {
   ItemResponse,
   TableResponse,
   OrderResponse,
+  OrderSummaryResponse,
 } from '@spicyhome/client-ts';
 
 /**
@@ -81,6 +83,7 @@ export function OrderPage() {
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
+  const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
@@ -158,9 +161,25 @@ export function OrderPage() {
     checkDay();
     loadMenu();
     loadTables();
+    loadOpenOrders();
   }, []);
 
-  // Listen for WebSocket events on the current order
+  // Refresh open orders whenever the table picker opens so occupancy is fresh
+  useEffect(() => {
+    if (showTablePicker) {
+      loadOpenOrders();
+    }
+  }, [showTablePicker]);
+
+  // Deep-link edge case: if we pre-selected a table via ?tableId= but it's now occupied
+  // and there's no currentOrder loaded, clear the selection to avoid a 409 on create.
+  useEffect(() => {
+    if (!currentOrder && cart.tableId != null && openOrders.length > 0) {
+      if (isTableOccupied(cart.tableId)) {
+        cart.setOrderType('dine_in', null);
+      }
+    }
+  }, [openOrders, currentOrder, cart.tableId]);
   useEffect(() => {
     if (!currentOrder) return;
 
@@ -240,6 +259,19 @@ export function OrderPage() {
     }
   }
 
+  async function loadOpenOrders() {
+    try {
+      const res = await client.orders.list('open');
+      setOpenOrders(res);
+    } catch {
+      // open orders optional — picker still works without occupancy data
+    }
+  }
+
+  function isTableOccupied(tableId: number): boolean {
+    return openOrders.some((o) => o.tableId != null && Number(o.tableId) === tableId);
+  }
+
   const filteredItems = filterMenuItems(items, {
     categoryId: selectedCategory,
     query: itemSearch,
@@ -266,6 +298,7 @@ export function OrderPage() {
   }
 
   function handleNewOrder() {
+    setError('');
     cart.clear();
     setCurrentOrder(null);
     setShowTablePicker(false);
@@ -639,7 +672,7 @@ export function OrderPage() {
         </div>
 
         {/* Item grid */}
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
           {filteredItems.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-sm text-gray-500">No items match</div>
@@ -665,9 +698,10 @@ export function OrderPage() {
       </div>
 
       {/* Right: Cart */}
-      <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0">
-        <div className="flex-1 overflow-y-auto p-3">
-          <h2 className="text-sm font-semibold text-gray-300 mb-3">
+      <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0 min-h-0">
+        {/* Header — pinned */}
+        <div className="shrink-0 px-3 pt-3 pb-2 border-b border-gray-700/80">
+          <h2 className="text-sm font-semibold text-gray-300">
             {currentOrder ? `Order #${currentOrder.orderNo}` : 'New Order'}
             {currentOrder && (
               <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${currentOrder.status}`}>
@@ -676,7 +710,10 @@ export function OrderPage() {
             )}
             {cart.isDirty && <span className="ml-2 text-xs text-amber-400">Unsent changes</span>}
           </h2>
+        </div>
 
+        {/* Items — only this scrolls */}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
           {cart.items.length === 0 ? (
             <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
           ) : (
@@ -792,13 +829,16 @@ export function OrderPage() {
                   </button>
                 )}
                 {permissions.voidOrder && (
-                  <button
-                    onClick={handleVoid}
+                  <ConfirmActionButton
+                    textContent="Void Order"
+                    confirmTextContent="Confirm Void Order"
+                    onConfirm={handleVoid}
                     disabled={loading}
+                    busy={loading}
+                    busyTextContent="Voiding..."
                     className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                  >
-                    Void Order
-                  </button>
+                    confirmClassName="w-full touch-target bg-red-900 hover:bg-red-800 rounded-lg text-sm font-bold text-red-100 py-3"
+                  />
                 )}
               </>
             )}
@@ -820,12 +860,16 @@ export function OrderPage() {
               </div>
             )}
 
-            {(currentOrder?.status === 'paid' ||
-              currentOrder?.status === 'voided' ||
-              currentOrder?.status === 'refunded') && (
+            {currentOrder && !cart.isDirty && (
               <button
                 onClick={() => guardedNavigate(handleNewOrder)}
-                className="w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3"
+                className={
+                  currentOrder.status === 'paid' ||
+                  currentOrder.status === 'voided' ||
+                  currentOrder.status === 'refunded'
+                    ? 'w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3'
+                    : 'w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3'
+                }
               >
                 New Order
               </button>
@@ -846,22 +890,39 @@ export function OrderPage() {
           >
             <h3 className="text-sm font-semibold text-white mb-3">Select Table</h3>
             <div className="grid grid-cols-3 gap-2">
-              {tables.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    cart.setOrderType('dine_in', t.id);
-                    setShowTablePicker(false);
-                  }}
-                  className={`touch-target py-3 rounded-lg text-sm font-bold ${
-                    cart.tableId === t.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {t.name}
-                </button>
-              ))}
+              {tables.map((t) => {
+                const occupied = isTableOccupied(t.id);
+                const selected = cart.tableId === t.id;
+                const openOrder = openOrders.find(
+                  (o) => o.tableId != null && Number(o.tableId) === t.id,
+                );
+
+                return (
+                  <button
+                    key={t.id}
+                    disabled={occupied}
+                    onClick={() => {
+                      if (occupied) return;
+                      cart.setOrderType('dine_in', t.id);
+                      setShowTablePicker(false);
+                    }}
+                    className={`touch-target py-3 rounded-lg text-sm font-bold ${
+                      occupied
+                        ? 'bg-gray-800 text-gray-600 border-2 border-amber-700/50 cursor-not-allowed opacity-60'
+                        : selected
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    <span>{t.name}</span>
+                    {occupied && openOrder && (
+                      <span className="block text-xs text-amber-500 mt-0.5">
+                        #{openOrder.orderNo}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

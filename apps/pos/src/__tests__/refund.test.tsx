@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { RefundPanel } from '../components/RefundPanel';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 
@@ -217,18 +217,45 @@ describe('RefundPanel', () => {
     });
     fireEvent.click(screen.getByText('Cash'));
 
-    // Click Process Refund
-    fireEvent.click(screen.getByText('Process Refund'));
-    // Click Confirm Refund
-    fireEvent.click(screen.getByText('Confirm Refund'));
+    // Setup fake timers for hold animation
+    let fakeNow = 0;
+    const origRaf = globalThis.requestAnimationFrame;
+    const origCancelRaf = globalThis.cancelAnimationFrame;
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
 
-    await waitFor(() => {
-      expect(mockRefund).toHaveBeenCalledWith(1, {
-        items: [{ orderItemId: 101, qty: 1 }],
-        methodId: 'cash',
-      });
-      expect(onRefunded).toHaveBeenCalled();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      return setTimeout(() => {
+        fakeNow += 16;
+        cb(fakeNow);
+      }, 16) as unknown as number;
+    };
+    globalThis.cancelAnimationFrame = (id: number) => clearTimeout(id as unknown as NodeJS.Timeout);
+
+    // Arm: tap Process Refund
+    const btn = screen.getByRole('button', { name: 'Process Refund' });
+    fireEvent.pointerDown(btn, { pointerId: 1 });
+    fireEvent.pointerUp(btn, { pointerId: 1 });
+
+    // Hold: press on armed Confirm Refund
+    const armed = screen.getByRole('button', { name: 'Confirm Refund' });
+    fireEvent.pointerDown(armed, { pointerId: 1 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
     });
+
+    // Restore real timers and cleanup stubs
+    vi.useRealTimers();
+    perfSpy.mockRestore();
+    globalThis.requestAnimationFrame = origRaf;
+    globalThis.cancelAnimationFrame = origCancelRaf;
+
+    expect(mockRefund).toHaveBeenCalledWith(1, {
+      items: [{ orderItemId: 101, qty: 1 }],
+      methodId: 'cash',
+    });
+    expect(onRefunded).toHaveBeenCalled();
   });
 
   it('shows error on refund failure', async () => {
@@ -252,8 +279,39 @@ describe('RefundPanel', () => {
     });
     fireEvent.click(screen.getByText('Cash'));
 
-    fireEvent.click(screen.getByText('Process Refund'));
-    fireEvent.click(screen.getByText('Confirm Refund'));
+    // Setup fake timers for hold animation
+    let fakeNow = 0;
+    const origRaf = globalThis.requestAnimationFrame;
+    const origCancelRaf = globalThis.cancelAnimationFrame;
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      return setTimeout(() => {
+        fakeNow += 16;
+        cb(fakeNow);
+      }, 16) as unknown as number;
+    };
+    globalThis.cancelAnimationFrame = (id: number) => clearTimeout(id as unknown as NodeJS.Timeout);
+
+    // Arm: tap Process Refund
+    const btn = screen.getByRole('button', { name: 'Process Refund' });
+    fireEvent.pointerDown(btn, { pointerId: 1 });
+    fireEvent.pointerUp(btn, { pointerId: 1 });
+
+    // Hold: press on armed Confirm Refund
+    const armed = screen.getByRole('button', { name: 'Confirm Refund' });
+    fireEvent.pointerDown(armed, { pointerId: 1 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    // Restore real timers and cleanup stubs
+    vi.useRealTimers();
+    perfSpy.mockRestore();
+    globalThis.requestAnimationFrame = origRaf;
+    globalThis.cancelAnimationFrame = origCancelRaf;
 
     await waitFor(() => {
       expect(screen.getByText('Only paid orders can be refunded')).toBeInTheDocument();
