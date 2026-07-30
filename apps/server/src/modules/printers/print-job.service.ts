@@ -1,5 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { eq, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import {
   orders,
   orderItems,
@@ -9,6 +9,7 @@ import {
   itemCategories,
   tables,
   zatcaInvoices,
+  zatcaCreditNotes,
 } from '@spicyhome/db';
 import { PrinterRole } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
@@ -19,6 +20,15 @@ import { KitchenTicketBuilder, KitchenTicketItem } from './kitchen-ticket-builde
 import { TestTicketBuilder } from './test-ticket-builder';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
+
+/**
+ * ZATCA statuses for which a signed QR payload is available.
+ * - simplified: signed (fresh), reported (reporting success), failed (reporting failure; QR still valid)
+ * - standard:   cleared (clearance success)
+ *
+ * Must NOT use QR from: pending, rejected, error (standard in-flight/failure).
+ */
+const PRINTABLE_QR_STATUSES = ['cleared', 'signed', 'reported', 'failed'] as const;
 
 @Injectable()
 export class PrintJobService {
@@ -97,17 +107,26 @@ export class PrintJobService {
       totalHalalas: oi.totalHalalas,
     }));
 
-    // Load QR from zatca_invoices if not provided by caller
+    // Load QR from a printable zatca_invoices row if not provided by caller.
+    // Printable statuses:
+    //   simplified: signed | reported | failed (signing already done; QR is valid)
+    //   standard:   cleared (clearance success)
+    // Must NOT use QR from: pending, rejected, error (standard in-flight/failure).
     let qrTlvPayload = opts?.qrTlvPayload ?? undefined;
     if (!qrTlvPayload) {
-      const cleared = this.db
+      const printable = this.db
         .select()
         .from(zatcaInvoices)
-        .where(eq(zatcaInvoices.orderId, orderId))
+        .where(
+          and(
+            eq(zatcaInvoices.orderId, orderId),
+            inArray(zatcaInvoices.status, [...PRINTABLE_QR_STATUSES]),
+          ),
+        )
         .orderBy(desc(zatcaInvoices.id))
         .get();
-      if (cleared?.qrTlv) {
-        qrTlvPayload = cleared.qrTlv;
+      if (printable?.qrTlv) {
+        qrTlvPayload = printable.qrTlv;
       }
     }
 
@@ -136,7 +155,7 @@ export class PrintJobService {
    */
   async printRefundReceipt(
     refundId: number,
-    opts?: { kickDrawer?: boolean },
+    opts?: { kickDrawer?: boolean; qrTlvPayload?: string },
   ): Promise<{ printer: PrinterRecord }> {
     const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
     if (!refund) throw new Error(`Refund ${refundId} not found`);
@@ -170,6 +189,29 @@ export class PrintJobService {
       totalHalalas: ri.totalHalalas,
     }));
 
+    // Load QR from a printable zatca_credit_notes row if not provided by caller.
+    // Printable statuses (same as invoices):
+    //   simplified: signed | reported | failed (signing already done; QR is valid)
+    //   standard:   cleared (clearance success)
+    // Must NOT use QR from: pending, rejected, error (standard in-flight/failure).
+    let qrTlvPayload = opts?.qrTlvPayload ?? undefined;
+    if (!qrTlvPayload) {
+      const printableCn = this.db
+        .select()
+        .from(zatcaCreditNotes)
+        .where(
+          and(
+            eq(zatcaCreditNotes.refundId, refundId),
+            inArray(zatcaCreditNotes.status, [...PRINTABLE_QR_STATUSES]),
+          ),
+        )
+        .orderBy(desc(zatcaCreditNotes.id))
+        .get();
+      if (printableCn?.qrTlv) {
+        qrTlvPayload = printableCn.qrTlv;
+      }
+    }
+
     const receipt = this.receiptBuilder.build({
       title: 'REFUND',
       restaurantName,
@@ -184,6 +226,7 @@ export class PrintJobService {
       totalHalalas: refund.totalHalalas,
       footer: `Refund processed — Original order #: ${order.orderNo}`,
       kickDrawer: opts?.kickDrawer ?? false,
+      qrTlvPayload,
     });
 
     await this.printersService.sendBuffer(receiptPrinter, receipt);

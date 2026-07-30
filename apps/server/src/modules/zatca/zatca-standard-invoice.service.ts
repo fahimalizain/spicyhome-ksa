@@ -251,7 +251,12 @@ export class ZatcaStandardInvoiceService {
       // Validate buyer details
       const parsed = parseZatcaBuyerDetails(buyerDetails);
       if (!parsed.success) {
-        throw new Error(`Invalid buyer details for reissue: ${JSON.stringify(parsed.error)}`);
+        // Log field names only (no values) for debugging
+        const fields = parsed.error.issues.map((i: any) => String(i.path[i.path.length - 1]));
+        this.logger.warn(
+          `Invalid buyer details for reissue (order ${orderId}): [${fields.join(', ')}]`,
+        );
+        throw new Error('Invalid buyer details provided for reissue', { cause: parsed.error });
       }
 
       this.db
@@ -419,33 +424,7 @@ export class ZatcaStandardInvoiceService {
     }
 
     // Create a new attempt (no buyer body for credit notes)
-    const result = await this.attemptCreditNoteClearance(orderId, refundId, userId);
-    return {
-      id: result.id,
-      icv: result.icv,
-      uuid: result.uuid,
-      invoiceHash: '',
-      status: result.status,
-      attemptNo: result.attemptNo,
-      qrTlvBase64: '',
-      signedXml: '',
-      clearance: {
-        status:
-          result.status === 'cleared'
-            ? 'CLEARED'
-            : result.status === 'rejected'
-              ? 'REJECTED'
-              : result.status === 'error'
-                ? 'ERROR'
-                : 'PENDING',
-        httpStatus: 0,
-        clearedXml: null,
-        clearedInvoiceBase64: null,
-        warnings: [],
-        errors: [],
-        rawBody: null,
-      },
-    };
+    return this.attemptCreditNoteClearance(orderId, refundId, userId);
   }
 
   /**
@@ -570,42 +549,29 @@ export class ZatcaStandardInvoiceService {
     orderId: number,
     refundId: number,
     userId?: number,
-  ): Promise<{ id: number; icv: number; uuid: string; status: string; attemptNo: number }> {
+  ): Promise<CreateStandardInvoiceResult> {
     if (userId === undefined) userId = 1;
 
     // Idempotency: check for cleared credit note
     const cleared = this.invoiceService.getClearedCreditNoteByRefundId(refundId);
     if (cleared) {
-      return {
-        id: cleared.id,
-        icv: cleared.icv,
-        uuid: cleared.uuid,
-        status: cleared.status,
-        attemptNo: cleared.attemptNo,
-      };
+      this.logger.log(`Credit note already cleared for refund ${refundId}`);
+      return this.buildResultFromRow(cleared, 'CLEARED');
     }
 
     // Check for pending
     const latest = this.invoiceService.getLatestCreditNoteByRefundId(refundId);
     if (latest && latest.status === 'pending') {
-      return {
-        id: latest.id,
-        icv: latest.icv,
-        uuid: latest.uuid,
-        status: latest.status,
-        attemptNo: latest.attemptNo,
-      };
+      this.logger.log(`Credit note pending for refund ${refundId}`);
+      return this.buildResultFromRow(latest, 'PENDING');
     }
 
     // Error → don't auto-retry
     if (latest && latest.status === 'error') {
-      return {
-        id: latest.id,
-        icv: latest.icv,
-        uuid: latest.uuid,
-        status: latest.status,
-        attemptNo: latest.attemptNo,
-      };
+      this.logger.log(
+        `Credit note has error status for refund ${refundId} — returning existing; call retryCreditNoteClearance() to retry`,
+      );
+      return this.buildResultFromRow(latest, 'ERROR');
     }
 
     return this.attemptCreditNoteClearance(orderId, refundId, userId);
@@ -781,7 +747,7 @@ export class ZatcaStandardInvoiceService {
     orderId: number,
     refundId: number,
     userId: number,
-  ): Promise<{ id: number; icv: number; uuid: string; status: string; attemptNo: number }> {
+  ): Promise<CreateStandardInvoiceResult> {
     // Load original cleared invoice
     const originalInvoice = this.invoiceService.getClearedInvoiceByOrderId(orderId);
     if (!originalInvoice) {
@@ -940,7 +906,12 @@ export class ZatcaStandardInvoiceService {
       });
     }
 
-    return { id: cnId, icv, uuid: invUuid, status: storeStatus, attemptNo };
+    const updatedRow = this.db
+      .select()
+      .from(zatcaCreditNotes)
+      .where(eq(zatcaCreditNotes.id, cnId))
+      .get() as any;
+    return this.buildResultFromRow(updatedRow, clearance.status);
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────
@@ -1076,8 +1047,15 @@ export class ZatcaStandardInvoiceService {
     try {
       requireZatcaBuyerDetails(order.zatcaBuyerDetails);
     } catch (err: any) {
+      // Log field names only (no values) for debugging
+      if (err.issues) {
+        const fields = err.issues.map((i: any) => String(i.path[i.path.length - 1]));
+        this.logger.warn(
+          `Order ${order.id} is a standard invoice but buyer details are missing or invalid: [${fields.join(', ')}]`,
+        );
+      }
       throw new Error(
-        `Order ${order.id} is a standard invoice but is missing buyer fields: ${err.message}`,
+        `Order ${order.id} is a standard invoice but buyer details are missing or invalid`,
         { cause: err },
       );
     }

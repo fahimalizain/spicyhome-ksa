@@ -430,8 +430,59 @@ describe('ZatcaStandardInvoiceService', () => {
       `);
 
       await expect(standardService.createStandardInvoice(orderId, 1)).rejects.toThrow(
-        /missing buyer fields/,
+        /missing or invalid/,
       );
+    });
+
+    it('does not expose buyer field values in validation error messages', async () => {
+      orderSeq++;
+      const uuid = `order-pii-uuid-${orderSeq}`;
+      const orderNo = 301 + orderSeq;
+
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-07-19', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Partial buyer with a specific VAT number that must not appear
+      const partialJson = JSON.stringify({
+        name: 'Secret Co',
+        vatNumber: '399999999800010',
+        street: 'Secret Address 123',
+      });
+
+      sqlite.exec(`
+        INSERT INTO orders (
+          order_no, uuid, type, day_opening_id, status,
+          subtotal_halalas, vat_halalas, total_halalas,
+          is_standard_invoice,
+          zatca_buyer_details,
+          created_at, updated_at
+        ) VALUES (
+          ${orderNo}, '${uuid}', 'dine_in', ${doId}, 'paid',
+          3000, 450, 3450,
+          1,
+          '${partialJson.replace(/'/g, "''")}',
+          ${now}, ${now}
+        )
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES (${orderId}, 'Item', 3450, 1500, 1, 3450, ${now}, ${now})
+      `);
+
+      expect.assertions(3);
+      try {
+        await standardService.createStandardInvoice(orderId, 1);
+      } catch (err: any) {
+        expect(err.message).toContain('missing or invalid');
+        // P1-004: buyer field values must not appear in the thrown message
+        expect(err.message).not.toContain('399999999800010');
+        expect(err.message).not.toContain('Secret Address 123');
+      }
     });
 
     it('shares ICV chain with simplified invoices via allocateNextIcv', async () => {
@@ -591,6 +642,17 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(result.icv).toBe(invoiceRow.icv + 1); // next ICV after the invoice
       expect(result.uuid).toBeTruthy();
       expect(result.status).toBe('cleared');
+
+      // P1-001: full result shape — non-empty hash, QR, XML, real clearance info
+      expect(result.invoiceHash).toBeTruthy();
+      expect(result.invoiceHash.length).toBeGreaterThan(0);
+      expect(result.qrTlvBase64).toBeTruthy();
+      expect(result.qrTlvBase64.length).toBeGreaterThan(0);
+      expect(result.signedXml).toBeTruthy();
+      expect(result.signedXml.length).toBeGreaterThan(0);
+      expect(result.clearance.status).toBe('CLEARED');
+      expect(result.clearance.httpStatus).toBe(200);
+      expect(result.clearance.clearedXml).not.toBeNull();
 
       // Verify DB row
       const row = sqlite
@@ -1340,6 +1402,17 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(reissued.attemptNo).toBe(2);
       expect(reissued.icv).toBe(firstIcv + 1);
       expect(reissued.uuid).not.toBe(firstUuid);
+
+      // P1-001: full result shape — non-empty hash, QR, XML, real clearance info
+      expect(reissued.invoiceHash).toBeTruthy();
+      expect(reissued.invoiceHash.length).toBeGreaterThan(0);
+      expect(reissued.qrTlvBase64).toBeTruthy();
+      expect(reissued.qrTlvBase64.length).toBeGreaterThan(0);
+      expect(reissued.signedXml).toBeTruthy();
+      expect(reissued.signedXml.length).toBeGreaterThan(0);
+      expect(reissued.clearance.status).toBe('CLEARED');
+      expect(reissued.clearance.httpStatus).toBe(200);
+      expect(reissued.clearance.clearedXml).not.toBeNull();
 
       // First row still rejected
       const firstRow = sqlite
