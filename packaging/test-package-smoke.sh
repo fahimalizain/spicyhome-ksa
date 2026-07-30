@@ -1,12 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# Local test for the Windows 7 package build — verifies:
+# Packaging smoke test — verifies the production install flow:
 #   1. Bazel outputs exist
 #   2. Package directory is assembled correctly
 #   3. package.json files are generated with correct file: references
-#   4. npm install resolves all deps including workspace packages
-#   5. Key modules (including workspace imports) load without errors
+#   4. npm install in packages/shared (for zod and other workspace-only deps)
+#   5. npm install in server (with file: workspace symlinks)
+#   6. Workspace package requires resolve correctly (regression guard for zod)
+#   7. No npm install in packages/db (protects better-sqlite3 prebuilt)
+#
+# Runs on macOS (local dev) and Linux (GitHub Actions ubuntu-latest).
+# Mirrors the install order used by spicyhome.ps1 Install-NpmDeps and the
+# generated start-server.ps1 first-run block.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -90,9 +96,18 @@ check_file_ref packages/db/package.json @spicyhome/shared file:../shared
 
 echo "  OK"
 
-# ── 4. npm install ─────────────────────────────
+# ── 4. npm install — shared first, then server ──
+# This mirrors spicyhome.ps1 Install-NpmDeps and start-server.ps1 first-run
+# order. Shared deps (e.g. zod) must exist before server links shared.
+# Do NOT npm install in packages/db — nested better-sqlite3 would shadow
+# the prebuilt binary under server/node_modules.
 echo ""
-echo "Running npm install..."
+echo "Running npm install in packages/shared ..."
+cd "$TEST_DIR/packages/shared"
+npm install --production --ignore-scripts 2>&1 | tail -3
+
+echo ""
+echo "Running npm install in server ..."
 cd "$TEST_DIR/server"
 npm install --production --ignore-scripts 2>&1 | tail -3
 
@@ -116,12 +131,64 @@ check_symlink node_modules/@spicyhome/db ../../../packages/db
 echo "  OK"
 
 # ── 6. Verify key modules resolve ──────────────
+# NODE_PATH ensures workspace packages find server-hoisted deps.
+export NODE_PATH="$TEST_DIR/server/node_modules"
+
 echo ""
 echo "Verifying module resolution..."
 
 node -e "require('drizzle-orm/sqlite-core')" 2>/dev/null && echo "  drizzle-orm/sqlite-core  ✓" || { echo "  drizzle-orm/sqlite-core  ✗"; exit 1; }
 node -e "require('bcryptjs')" 2>/dev/null && echo "  bcryptjs  ✓" || { echo "  bcryptjs  ✗"; exit 1; }
 node -e "require('reflect-metadata')" 2>/dev/null && echo "  reflect-metadata  ✓" || { echo "  reflect-metadata  ✗"; exit 1; }
+
+# ── 7. Verify workspace packages resolve ───────
+echo ""
+echo "Verifying workspace package resolution..."
+
+# 7a. @spicyhome/shared — must load (core regression guard for zod).
+#     shared/index.js re-exports printer-config which requires zod.
+echo -n "  require('@spicyhome/shared') ... "
+if node -e "require('@spicyhome/shared')" 2>/dev/null; then
+  echo "✓"
+else
+  echo "✗ FAILED"
+  echo "  ERROR: @spicyhome/shared failed to load. This likely means zod is missing"
+  echo "  from packages/shared/node_modules. Verify npm install ran there first."
+  exit 1
+fi
+
+# 7b. Verify zod exists in shared's own node_modules (the fix under test).
+echo -n "  packages/shared/node_modules/zod ... "
+if [ -d "$TEST_DIR/packages/shared/node_modules/zod" ]; then
+  echo "✓"
+else
+  echo "✗ MISSING"
+  echo "  ERROR: zod not found in packages/shared/node_modules."
+  echo "  npm install must run in packages/shared BEFORE server."
+  exit 1
+fi
+
+# 7c. @spicyhome/db — schema only (avoids better-sqlite3 native addon).
+#     Full db index.js loads migrate.ts → better-sqlite3 → will fail on
+#     macOS/Linux with the Windows prebuilt. Schema only needs drizzle.
+echo -n "  require('@spicyhome/db/schema.js') ... "
+if node -e "require('@spicyhome/db/schema.js')" 2>/dev/null; then
+  echo "✓"
+else
+  echo "✗ FAILED"
+  echo "  ERROR: @spicyhome/db schema failed to load."
+  exit 1
+fi
+
+# 7d. Confirm no npm install ran in packages/db (protect better-sqlite3 prebuilt).
+echo -n "  packages/db has no nested node_modules (protect prebuilt) ... "
+if [ -d "$TEST_DIR/packages/db/node_modules" ]; then
+  echo "✗ UNEXPECTED"
+  echo "  ERROR: packages/db/node_modules exists. Nested better-sqlite3 may shadow the prebuilt binary."
+  exit 1
+else
+  echo "✓"
+fi
 
 echo ""
 echo "=== All checks passed ==="

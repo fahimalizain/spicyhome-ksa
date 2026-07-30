@@ -117,6 +117,9 @@ jobs:
           SENTRY_TRACES_SAMPLE_RATE: '1.0'
           SENTRY_PROFILES_SAMPLE_RATE: '1.0'
 
+      - name: Packaging smoke test
+        run: pnpm package:smoke
+
       - name: Stage release assets
         run: |
           mkdir -p release

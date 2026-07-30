@@ -407,6 +407,7 @@ function Install-NpmDeps {
   param([string]$ReleaseDir, [string]$LogDir)
   $npm = Join-Path $ReleaseDir "node\npm.cmd"
   $serverDir = Join-Path $ReleaseDir "server"
+  $sharedDir = Join-Path $ReleaseDir "packages\shared"
   if (-not (Test-Path $npm)) {
     Write-Log "ERROR: npm.cmd not found at $npm"
     return $false
@@ -414,9 +415,47 @@ function Install-NpmDeps {
   if (-not (Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
   }
-  $logOut = Join-Path $LogDir "npm-install-out.log"
-  $logErr = Join-Path $LogDir "npm-install-err.log"
-  Write-Log "Running npm install in $serverDir ..."
+
+  # ── Install shared workspace deps (e.g. zod) first ──
+  # npm does not install deps of file:-linked workspace packages, so shared's
+  # own dependencies must be installed explicitly before server links it.
+  if (Test-Path (Join-Path $sharedDir "package.json")) {
+    $sharedLogOut = Join-Path $LogDir "npm-install-shared-out.log"
+    $sharedLogErr = Join-Path $LogDir "npm-install-shared-err.log"
+    Write-Log "Running npm install in packages\shared ..."
+    Write-Log "npm: $npm"
+    try {
+      $env:NODE_SKIP_PLATFORM_CHECK = "1"
+      $sharedProc = Start-Process -FilePath $npm `
+        -ArgumentList @("install", "--production", "--ignore-scripts") `
+        -WorkingDirectory $sharedDir `
+        -Wait -NoNewWindow -PassThru `
+        -RedirectStandardOutput $sharedLogOut `
+        -RedirectStandardError $sharedLogErr
+      if ($sharedProc.ExitCode -ne 0) {
+        Write-Log "ERROR: npm install in packages\shared failed with exit code $($sharedProc.ExitCode)"
+        foreach ($lf in @($sharedLogOut, $sharedLogErr)) {
+          if (Test-Path $lf) {
+            Write-Log ("--- " + (Split-Path $lf -Leaf) + " (last 30 lines) ---")
+            Get-Content $lf | Select-Object -Last 30 | ForEach-Object { Write-Log $_ }
+          }
+        }
+        return $false
+      }
+      Write-Log "npm install in packages\shared complete"
+    } catch {
+      Write-Log "ERROR: npm install in packages\shared failed: $($_.Exception.Message)"
+      return $false
+    }
+  } else {
+    Write-Log "ERROR: packages\shared\package.json not found - server depends on @spicyhome/shared"
+    return $false
+  }
+
+  # ── Install server deps ──
+  $serverLogOut = Join-Path $LogDir "npm-install-server-out.log"
+  $serverLogErr = Join-Path $LogDir "npm-install-server-err.log"
+  Write-Log "Running npm install in server ..."
   Write-Log "npm: $npm"
   try {
     # Ensure Win7 platform check is skipped for this child (and any nested node).
@@ -428,11 +467,11 @@ function Install-NpmDeps {
       -ArgumentList @("install", "--production", "--ignore-scripts") `
       -WorkingDirectory $serverDir `
       -Wait -NoNewWindow -PassThru `
-      -RedirectStandardOutput $logOut `
-      -RedirectStandardError $logErr
+      -RedirectStandardOutput $serverLogOut `
+      -RedirectStandardError $serverLogErr
     if ($proc.ExitCode -ne 0) {
-      Write-Log "ERROR: npm install failed with exit code $($proc.ExitCode)"
-      foreach ($lf in @($logOut, $logErr)) {
+      Write-Log "ERROR: npm install in server failed with exit code $($proc.ExitCode)"
+      foreach ($lf in @($serverLogOut, $serverLogErr)) {
         if (Test-Path $lf) {
           Write-Log ("--- " + (Split-Path $lf -Leaf) + " (last 30 lines) ---")
           Get-Content $lf | Select-Object -Last 30 | ForEach-Object { Write-Log $_ }
@@ -440,9 +479,9 @@ function Install-NpmDeps {
       }
       return $false
     }
-    Write-Log "npm install complete"
+    Write-Log "npm install in server complete"
   } catch {
-    Write-Log "ERROR: npm install failed: $($_.Exception.Message)"
+    Write-Log "ERROR: npm install in server failed: $($_.Exception.Message)"
     return $false
   }
   # Copy better-sqlite3 prebuilt binary
