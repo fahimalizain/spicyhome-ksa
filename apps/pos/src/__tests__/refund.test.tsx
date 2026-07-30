@@ -382,9 +382,39 @@ describe('RefundPanel', () => {
     });
     fireEvent.click(screen.getByText('Cash'));
 
-    // Process refund
-    fireEvent.click(screen.getByText('Process Refund'));
-    fireEvent.click(screen.getByText('Confirm Refund'));
+    // Setup fake timers for hold animation
+    let fakeNow = 0;
+    const origRaf = globalThis.requestAnimationFrame;
+    const origCancelRaf = globalThis.cancelAnimationFrame;
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      return setTimeout(() => {
+        fakeNow += 16;
+        cb(fakeNow);
+      }, 16) as unknown as number;
+    };
+    globalThis.cancelAnimationFrame = (id: number) => clearTimeout(id as unknown as NodeJS.Timeout);
+
+    // Arm: tap Process Refund
+    const btn = screen.getByRole('button', { name: 'Process Refund' });
+    fireEvent.pointerDown(btn, { pointerId: 1 });
+    fireEvent.pointerUp(btn, { pointerId: 1 });
+
+    // Hold: press on armed Confirm Refund
+    const armed = screen.getByRole('button', { name: 'Confirm Refund' });
+    fireEvent.pointerDown(armed, { pointerId: 1 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    // Restore real timers and cleanup stubs
+    vi.useRealTimers();
+    perfSpy.mockRestore();
+    globalThis.requestAnimationFrame = origRaf;
+    globalThis.cancelAnimationFrame = origCancelRaf;
 
     // After successful refund, the clearance modal should appear
     await waitFor(() => {
