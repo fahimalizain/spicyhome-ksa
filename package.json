@@ -16,6 +16,7 @@
     "ensure-android-env": "node -e \"const a=process.env.ANDROID_HOME,j=process.env.JAVA_HOME,fs=require('fs'),p=require('path');if(!a||!fs.existsSync(p.join(a,'platforms'))){console.error('ERROR: ANDROID_HOME must point to a valid Android SDK');process.exit(1)}if(!j||!fs.existsSync(p.join(j,'bin','java'))){console.error('ERROR: JAVA_HOME must point to a valid JDK');process.exit(1)}\"",
     "check": "pnpm lint && pnpm format && pnpm typecheck",
     "package:win7": "bash packaging/build-package.sh",
+    "package:smoke": "bash packaging/test-package-smoke.sh",
     "postinstall": "lefthook install",
     "lefthook": "lefthook"
   },
