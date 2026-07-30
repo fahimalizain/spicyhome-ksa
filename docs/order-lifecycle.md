@@ -146,6 +146,20 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 | `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }`                                       |
 | `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                     |
 
+#### ZATCA Clearance Events
+
+| Type                       | Trigger                                                                                                         | Payload                                                                                                                                                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zatca_clearance_rejected` | Standard invoice/credit note clearance returns business rejection (4xx HTTP / `NOT_CLEARED` / validation ERROR) | `{ documentKind: 'invoice' \| 'credit_note', documentId: number, attemptNo: number, icv: number, uuid: string, cbcId: string, orderId: number, refundId?: number, httpStatus: number \| null, errors: string[] }` |
+
+> **Burn semantics**: A `zatca_clearance_rejected` event signals that the ICV
+> associated with this attempt is permanently burned — the invoice cannot be
+> retried with the same ICV/UUID. The operator must fix the issue and call
+> `reissue()` (or `reissueCreditNote()`) which allocates a new ICV+UUID.
+> These events are written atomically with the DB status update inside a
+> transaction. They are **not** emitted for `error` status (network/5xx —
+> retryable) or `cleared` status.
+
 ### Payload Fields for Item Mutations
 
 Every `item_added`, `item_updated`, and `item_removed` event carries enough data to reconstruct the full item history:

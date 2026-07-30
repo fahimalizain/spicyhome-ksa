@@ -22,6 +22,7 @@ import type { CsrExtensionParams } from './zatca-crypto.service';
 import { zatcaKey, slugifyOrgUnit, isStandardComplianceType } from '@spicyhome/shared';
 import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
+import { extractMessage } from './zatca-clearance-classify';
 
 // ── Compliance Request ID helpers ────────────────────────────────────────────
 
@@ -732,12 +733,4 @@ function isSubmittedBefore(body: string): boolean {
   } catch {
     return false;
   }
-}
-
-function extractMessage(item: unknown): string {
-  if (typeof item === 'string') return item;
-  if (item && typeof item === 'object' && 'message' in item) {
-    return String((item as { message: string }).message);
-  }
-  return JSON.stringify(item);
 }

@@ -670,7 +670,7 @@ describe('runComplianceCheck response and persistence', () => {
 
     expect(result.success).toBe(false);
     expect(result.status).toBe(406);
-    expect(result.errors).toContain('Invoice XML is malformed.');
+    expect(result.errors).toContain('ERROR: Invoice XML is malformed. (Invalid-XML)');
 
     const entries = parseComplianceResults(store);
     expect(entries).toHaveLength(1);

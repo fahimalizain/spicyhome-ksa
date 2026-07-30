@@ -25,6 +25,7 @@ import {
 } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
+import { OrderEventsService } from '../orders/order-events.service';
 import { createAuditFields } from '../../common/audit-fields.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -109,6 +110,7 @@ export class ZatcaStandardInvoiceService {
     private invoiceService: ZatcaInvoiceService,
     private clearanceService: ZatcaClearanceService,
     private eventEmitter: EventEmitter2,
+    private orderEvents: OrderEventsService,
   ) {}
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -184,20 +186,45 @@ export class ZatcaStandardInvoiceService {
     const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
       this.evaluateClearanceResult(clearance, latest.xml);
 
-    // Update the existing row
-    this.db
-      .update(zatcaInvoices)
-      .set({
-        status: storeStatus,
-        xml: storedXml,
-        clearanceErrors: clearanceErrors ?? null,
-        clearanceWarnings: clearanceWarnings ?? null,
-        httpStatus: clearance.httpStatus,
-        reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
-        updatedAt: now,
-      } as any)
-      .where(eq(zatcaInvoices.id, latest.id))
-      .run();
+    // Update status AND emit burn event in a transaction when rejected
+    const updated = this.db.transaction((tx: any) => {
+      tx.update(zatcaInvoices)
+        .set({
+          status: storeStatus,
+          xml: storedXml,
+          clearanceErrors: clearanceErrors ?? null,
+          clearanceWarnings: clearanceWarnings ?? null,
+          httpStatus: clearance.httpStatus,
+          reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
+          updatedAt: now,
+        } as any)
+        .where(eq(zatcaInvoices.id, latest.id))
+        .run();
+
+      // On business rejection: append immutable burn event
+      if (storeStatus === 'rejected') {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_rejected',
+          {
+            documentKind: 'invoice',
+            documentId: latest.id,
+            attemptNo: latest.attemptNo || 1,
+            icv: latest.icv,
+            uuid: latest.uuid,
+            cbcId: String(latest.icv),
+            orderId,
+            httpStatus: clearance.httpStatus,
+            errors: clearance.errors,
+          },
+          now,
+        );
+      }
+
+      return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, latest.id)).get() as any;
+    });
 
     this.logger.log(`Standard invoice retry for order ${orderId}: status=${storeStatus}`);
 
@@ -206,11 +233,6 @@ export class ZatcaStandardInvoiceService {
       this.emitDomainEvent('zatca.invoice.cleared', orderId, userId, { invoiceId: latest.id });
     }
 
-    const updated = this.db
-      .select()
-      .from(zatcaInvoices)
-      .where(eq(zatcaInvoices.id, latest.id))
-      .get() as any;
     return this.buildResultFromRow(updated, clearance.status);
   }
 
@@ -361,20 +383,50 @@ export class ZatcaStandardInvoiceService {
     const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
       this.evaluateClearanceResult(clearance, latest.xml);
 
-    // Update the existing row
-    this.db
-      .update(zatcaCreditNotes)
-      .set({
-        status: storeStatus,
-        xml: storedXml,
-        clearanceErrors: clearanceErrors ?? null,
-        clearanceWarnings: clearanceWarnings ?? null,
-        httpStatus: clearance.httpStatus,
-        reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
-        updatedAt: now,
-      } as any)
-      .where(eq(zatcaCreditNotes.id, latest.id))
-      .run();
+    // Update status AND emit burn event in a transaction when rejected
+    const updated = this.db.transaction((tx: any) => {
+      tx.update(zatcaCreditNotes)
+        .set({
+          status: storeStatus,
+          xml: storedXml,
+          clearanceErrors: clearanceErrors ?? null,
+          clearanceWarnings: clearanceWarnings ?? null,
+          httpStatus: clearance.httpStatus,
+          reportedAt: storeStatus === 'cleared' ? now : latest.reportedAt,
+          updatedAt: now,
+        } as any)
+        .where(eq(zatcaCreditNotes.id, latest.id))
+        .run();
+
+      // On business rejection: append immutable burn event
+      if (storeStatus === 'rejected') {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_rejected',
+          {
+            documentKind: 'credit_note',
+            documentId: latest.id,
+            attemptNo: latest.attemptNo || 1,
+            icv: latest.icv,
+            uuid: latest.uuid,
+            cbcId: String(latest.icv),
+            orderId,
+            refundId,
+            httpStatus: clearance.httpStatus,
+            errors: clearance.errors,
+          },
+          now,
+        );
+      }
+
+      return tx
+        .select()
+        .from(zatcaCreditNotes)
+        .where(eq(zatcaCreditNotes.id, latest.id))
+        .get() as any;
+    });
 
     this.logger.log(`Credit note retry for refund ${refundId}: status=${storeStatus}`);
 
@@ -386,11 +438,6 @@ export class ZatcaStandardInvoiceService {
       });
     }
 
-    const updated = this.db
-      .select()
-      .from(zatcaCreditNotes)
-      .where(eq(zatcaCreditNotes.id, latest.id))
-      .get() as any;
     return this.buildResultFromRow(updated, clearance.status);
   }
 
@@ -712,19 +759,45 @@ export class ZatcaStandardInvoiceService {
     const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
       this.evaluateClearanceResult(clearance, finalSignedXml);
 
-    this.db
-      .update(zatcaInvoices)
-      .set({
-        status: storeStatus,
-        xml: storedXml,
-        clearanceErrors: clearanceErrors ?? null,
-        clearanceWarnings: clearanceWarnings ?? null,
-        httpStatus: clearance.httpStatus,
-        reportedAt: storeStatus === 'cleared' ? now : null,
-        updatedAt: now,
-      } as any)
-      .where(eq(zatcaInvoices.id, invoiceId))
-      .run();
+    // Update status AND emit burn event in a transaction when rejected
+    const updatedRow = this.db.transaction((tx: any) => {
+      tx.update(zatcaInvoices)
+        .set({
+          status: storeStatus,
+          xml: storedXml,
+          clearanceErrors: clearanceErrors ?? null,
+          clearanceWarnings: clearanceWarnings ?? null,
+          httpStatus: clearance.httpStatus,
+          reportedAt: storeStatus === 'cleared' ? now : null,
+          updatedAt: now,
+        } as any)
+        .where(eq(zatcaInvoices.id, invoiceId))
+        .run();
+
+      // On business rejection: append immutable burn event
+      if (storeStatus === 'rejected') {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_rejected',
+          {
+            documentKind: 'invoice',
+            documentId: invoiceId,
+            attemptNo,
+            icv,
+            uuid: invUuid,
+            cbcId: String(icv),
+            orderId,
+            httpStatus: clearance.httpStatus,
+            errors: clearance.errors,
+          },
+          now,
+        );
+      }
+
+      return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, invoiceId)).get() as any;
+    });
 
     this.logger.log(
       `Standard invoice attempt ${attemptNo} for order ${orderId}: status=${storeStatus}, ICV=${icv}`,
@@ -735,11 +808,6 @@ export class ZatcaStandardInvoiceService {
       this.emitDomainEvent('zatca.invoice.cleared', orderId, userId, { invoiceId });
     }
 
-    const updatedRow = this.db
-      .select()
-      .from(zatcaInvoices)
-      .where(eq(zatcaInvoices.id, invoiceId))
-      .get() as any;
     return this.buildResultFromRow(updatedRow, clearance.status);
   }
 
@@ -885,19 +953,46 @@ export class ZatcaStandardInvoiceService {
     const { storeStatus, storedXml, clearanceErrors, clearanceWarnings } =
       this.evaluateClearanceResult(clearance, finalSignedXml);
 
-    this.db
-      .update(zatcaCreditNotes)
-      .set({
-        status: storeStatus,
-        xml: storedXml,
-        clearanceErrors: clearanceErrors ?? null,
-        clearanceWarnings: clearanceWarnings ?? null,
-        httpStatus: clearance.httpStatus,
-        reportedAt: storeStatus === 'cleared' ? now : null,
-        updatedAt: now,
-      } as any)
-      .where(eq(zatcaCreditNotes.id, cnId))
-      .run();
+    // Update status AND emit burn event in a transaction when rejected
+    const updatedRow = this.db.transaction((tx: any) => {
+      tx.update(zatcaCreditNotes)
+        .set({
+          status: storeStatus,
+          xml: storedXml,
+          clearanceErrors: clearanceErrors ?? null,
+          clearanceWarnings: clearanceWarnings ?? null,
+          httpStatus: clearance.httpStatus,
+          reportedAt: storeStatus === 'cleared' ? now : null,
+          updatedAt: now,
+        } as any)
+        .where(eq(zatcaCreditNotes.id, cnId))
+        .run();
+
+      // On business rejection: append immutable burn event
+      if (storeStatus === 'rejected') {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_rejected',
+          {
+            documentKind: 'credit_note',
+            documentId: cnId,
+            attemptNo,
+            icv,
+            uuid: invUuid,
+            cbcId: String(icv),
+            orderId,
+            refundId,
+            httpStatus: clearance.httpStatus,
+            errors: clearance.errors,
+          },
+          now,
+        );
+      }
+
+      return tx.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, cnId)).get() as any;
+    });
 
     if (storeStatus === 'cleared') {
       this.emitDomainEvent('zatca.credit_note.cleared', orderId, userId, {
@@ -906,11 +1001,6 @@ export class ZatcaStandardInvoiceService {
       });
     }
 
-    const updatedRow = this.db
-      .select()
-      .from(zatcaCreditNotes)
-      .where(eq(zatcaCreditNotes.id, cnId))
-      .get() as any;
     return this.buildResultFromRow(updatedRow, clearance.status);
   }
 

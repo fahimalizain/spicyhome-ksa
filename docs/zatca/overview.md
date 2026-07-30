@@ -78,14 +78,60 @@ pre-approved by ZATCA before it can be issued to the buyer.
 
 ### Current Gap
 
-| Capability                         | Status                                                   |
-| :--------------------------------- | :------------------------------------------------------- |
-| Simplified Tax Invoice (B2C)       | Implemented                                              |
-| Standard Tax Invoice (B2B)         | **Not yet implemented** — known gap / future requirement |
-| ZATCA Clearance API (pre-approval) | Not yet implemented                                      |
+| Capability                         | Status                                                                 |
+| :--------------------------------- | :--------------------------------------------------------------------- |
+| Simplified Tax Invoice (B2C)       | Implemented                                                            |
+| Standard Tax Invoice (B2B)         | **Implemented** — clearance flow with multi-attempt lifecycle          |
+| ZATCA Clearance API (pre-approval) | **Implemented** — real-time clearance via `/invoices/clearance/single` |
 
-SpicyHome does not currently support buyer VAT registration capture, B2B
-invoice generation, or ZATCA clearance. These are planned additions for a
-future iteration of the ZATCA Phase 2 rollout — in particular when the system
-needs to handle corporate / catering / bulk orders that require input-tax-
-enabled invoices (notably larger orders above 1,000 SAR).
+## Standard Invoice Clearance Lifecycle
+
+Standard invoices (B2B) and credit/debit notes use ZATCA's **clearance** flow:
+the invoice XML must be pre-approved by ZATCA before it can be issued to the
+buyer.
+
+### Multi-Attempt Lifecycle
+
+Each clearance attempt follows these rules:
+
+1. **Persist XML, UUID, ICV, hash, PIH as `pending` before the API call** —
+   the ICV is burned and the store of record is written before ZATCA is contacted.
+
+2. **Never reuse UUID/ICV when fixing validation errors** — a rejected attempt
+   keeps its ICV/UUID in the hash chain. Recovery requires a **new** ICV+UUID
+   via `reissue()`.
+
+3. **PIH (Previous Invoice Hash)** is always the hash of the last local document
+   (invoice or credit note) — independent of clearance success or failure.
+
+4. **`error` → identical payload retry** — network errors, 5xx ZATCA errors,
+   and credentials issues are transient. `retryClearance()` resubmits the
+   **exact same** XML/UUID/ICV/Hash. No new ICV is allocated.
+
+5. **HTTP classification rules** (from `categorizeClearanceResponse`):
+   - **5xx** → `ERROR` (retry with same ICV)
+   - **4xx** → `REJECTED` (ICV burned — must reissue with new ICV)
+   - **Network error** → `ERROR` (httpStatus 0)
+   - **200/202 + `clearedInvoice` present OR `clearanceStatus === 'CLEARED'`** → `CLEARED`
+   - **200/202 + `clearanceStatus` present and ≠ `CLEARED`** → `REJECTED`
+   - **200/202 + `validationResults.status` is `ERROR` or `REJECTED`** → `REJECTED`
+   - **200/202 + non-empty error messages** → `REJECTED`
+   - **200/202 without `clearedInvoice` AND without errors AND no rejecting status** → **Unhandled → treated as `ERROR`** (never CLEARED)
+
+6. **Burn meaning** — a rejected attempt keeps its ICV/UUID in the hash chain
+   forever. The operator must fix the problem and call `reissue()` which
+   allocates a new ICV, generates a new UUID, and builds new XML (with
+   optionally updated buyer details).
+
+7. **UBL `cbc:ID`** is currently the **ICV** (not `order.id`). See
+   `zatca-xml-builder.service.ts` line 180: `<cbc:ID>${icv}</cbc:ID>`.
+
+8. **Uniqueness**: `UNIQUE` on `(uuid)` and `(icv)`. Partial unique on
+   `(order_id, status)` for `cleared` only (one cleared invoice per order).
+   **Do not** restore a full `UNIQUE` on `order_id` — multi-attempt reissue
+   creates multiple rows for the same order.
+
+9. **Audit**: on business rejection (`status = 'rejected'`), an immutable
+   `order_events` row of type `zatca_clearance_rejected` records the ICV,
+   UUID, `cbcId`, `orderId`, `errors`, and `httpStatus`. This provides
+   a permanent audit trail of burned ICVs for operator recovery.

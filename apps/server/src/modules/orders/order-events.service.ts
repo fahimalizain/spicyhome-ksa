@@ -1,7 +1,9 @@
 import { createHash } from 'crypto';
 import { orderEvents } from '@spicyhome/db';
 import { eq, desc, sql } from 'drizzle-orm';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class OrderEventsService {
   private computeHash(
     orderId: number,

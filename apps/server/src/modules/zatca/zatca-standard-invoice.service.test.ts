@@ -17,6 +17,7 @@ import { DRIZZLE } from '../database/database.module';
 import { ZatcaStandardInvoiceService } from './zatca-standard-invoice.service';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaClearanceService } from './zatca-clearance.service';
+import { OrderEventsService } from '../orders/order-events.service';
 import { FakeZatcaHttpClient, ZatcaHttpService } from './zatca-http.service';
 import { generateKeyPair } from './zatca-crypto.service';
 import { zatcaKey } from '@spicyhome/shared';
@@ -120,6 +121,7 @@ describe('ZatcaStandardInvoiceService', () => {
         ZatcaInvoiceService,
         ZatcaClearanceService,
         ZatcaHttpService,
+        OrderEventsService,
       ],
     })
       .overrideProvider(DRIZZLE)
@@ -305,7 +307,7 @@ describe('ZatcaStandardInvoiceService', () => {
       fakeHttp.responses.set('clearance', {
         status: 200,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ clearanceStatus: 'CLEARED' }),
       });
 
       const result = await standardService.createStandardInvoice(orderId, 1);
@@ -1479,6 +1481,239 @@ describe('ZatcaStandardInvoiceService', () => {
       await expect(standardService.reissueCreditNote(orderId, refundId, 1)).rejects.toThrow(
         /Cannot reissue.*not 'rejected'/,
       );
+    });
+  });
+
+  // ── Burn event tests ─────────────────────────────────────────────────────
+
+  describe('zatca_clearance_rejected order_events', () => {
+    // Helper to count zatca_clearance_rejected events for an order
+    function getBurnEventsCount(orderId: number): number {
+      // Use named parameter to avoid any positional binding ambiguity
+      const row = sqlite
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM order_events WHERE order_id = $oid AND type = 'zatca_clearance_rejected'",
+        )
+        .get({ oid: orderId }) as any;
+      return row.cnt;
+    }
+
+    function getBurnEvents(orderId: number): any[] {
+      return sqlite
+        .prepare(
+          "SELECT * FROM order_events WHERE order_id = $oid AND type = 'zatca_clearance_rejected' ORDER BY event_idx",
+        )
+        .all({ oid: orderId });
+    }
+
+    it('writes burn event on invoice HTTP 400 → rejected', async () => {
+      const orderId = createStandardOrder();
+
+      // Count total burn events before
+      const beforeCount = (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) as cnt FROM order_events WHERE type = 'zatca_clearance_rejected'",
+          )
+          .get() as any
+      ).cnt as number;
+
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            errorMessages: ['Invalid invoice structure'],
+          },
+        }),
+      });
+
+      await standardService.createStandardInvoice(orderId, 1);
+
+      // Count total burn events after
+      const afterCount = (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) as cnt FROM order_events WHERE type = 'zatca_clearance_rejected'",
+          )
+          .get() as any
+      ).cnt as number;
+
+      // Exactly one new burn event should have been created
+      expect(afterCount).toBe(beforeCount + 1);
+
+      // Invoice row stays rejected, ICV burned
+      const row = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(row.status).toBe('rejected');
+      // ICV is accumulated across tests; just verify it's positive
+      expect(row.icv).toBeGreaterThan(0);
+    });
+
+    it('HTTP 500 → error, NO burn event, ICV unchanged on retryClearance success', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: 500 → error
+      fakeHttp.responses.set('clearance', {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ errors: ['Internal server error'] }),
+      });
+
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('error');
+      const firstIcv = first.icv;
+      const firstUuid = first.uuid;
+
+      // No burn event for error
+      expect(getBurnEventsCount(orderId)).toBe(0);
+
+      // Retry with success — same ICV
+      fakeHttp.requests = [];
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice>retry_cleared</Invoice>').toString('base64'),
+        }),
+      });
+
+      const retried = await standardService.retryClearance(orderId, 1);
+      expect(retried.status).toBe('cleared');
+      expect(retried.icv).toBe(firstIcv);
+      expect(retried.uuid).toBe(firstUuid);
+
+      // Still no burn event
+      expect(getBurnEventsCount(orderId)).toBe(0);
+    });
+
+    it('createStandardInvoice when latest is error does NOT allocate new ICV', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: error
+      fakeHttp.nextError = new Error('Connection refused');
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('error');
+      const firstIcv = first.icv;
+      const firstId = first.id;
+
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+
+      // Second call with fake success — but should return existing error row
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+
+      const second = await standardService.createStandardInvoice(orderId, 1);
+      // Should return existing error, not make a new call
+      expect(second.id).toBe(firstId);
+      expect(second.status).toBe('error');
+      expect(second.icv).toBe(firstIcv);
+
+      // No new clearance requests, no new ICV
+      expect(fakeHttp.requests.length).toBe(0);
+
+      // Only 1 row
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .all(orderId) as any[];
+      expect(rows.length).toBe(1);
+    });
+
+    it('reissue after reject → new ICV; first row stays rejected; second attempt can also reject and write second burn event', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: 400 → rejected
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid buyer'] },
+        }),
+      });
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('rejected');
+      const firstIcv = first.icv;
+
+      // First burn event
+      expect(getBurnEventsCount(orderId)).toBe(1);
+      const firstBurnPayload = JSON.parse(getBurnEvents(orderId)[0].payload);
+      expect(firstBurnPayload.icv).toBe(firstIcv);
+
+      fakeHttp.requests = [];
+
+      // Reissue: second attempt also rejected
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Still invalid'] },
+        }),
+      });
+      const reissued = await standardService.reissue(orderId, 1);
+      expect(reissued.status).toBe('rejected');
+      expect(reissued.attemptNo).toBe(2);
+      expect(reissued.icv).toBe(firstIcv + 1);
+
+      // Second burn event
+      const secondBurnEvents = getBurnEvents(orderId);
+      expect(secondBurnEvents.length).toBe(2);
+
+      const payload2 = JSON.parse(secondBurnEvents[1].payload);
+      expect(payload2.documentKind).toBe('invoice');
+      expect(payload2.icv).toBe(firstIcv + 1);
+      expect(payload2.attemptNo).toBe(2);
+
+      // First row still rejected
+      const firstRow = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE id = ?')
+        .get(first.id) as any;
+      expect(firstRow.status).toBe('rejected');
+    });
+
+    it('credit note reject writes burn event with documentKind credit_note and refundId', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid credit note'] },
+        }),
+      });
+
+      await standardService.createStandardCreditNote(orderId, refundId, 1);
+
+      const events = getBurnEvents(orderId);
+      expect(events.length).toBe(1);
+
+      const payload = JSON.parse(events[0].payload);
+      expect(payload.documentKind).toBe('credit_note');
+      expect(payload.orderId).toBe(orderId);
+      expect(payload.refundId).toBe(refundId);
+      expect(payload.icv).toBeGreaterThan(0);
+      expect(payload.cbcId).toBe(String(payload.icv));
     });
   });
 });

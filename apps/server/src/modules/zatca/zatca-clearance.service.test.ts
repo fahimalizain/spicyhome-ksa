@@ -3,6 +3,8 @@
  *
  * Tests the synchronous clearance API client using an in-memory SQLite DB,
  * a NestJS test module, and a Fake HTTP client.
+ *
+ * Updated: 5xx → ERROR, 4xx → REJECTED, ambiguous 2xx → ERROR (via UnhandledClearanceResponseError)
  */
 
 import { Test } from '@nestjs/testing';
@@ -15,6 +17,11 @@ import { PrintersModule } from '../printers/printers.module';
 import { PrintersService } from '../printers/printers.service';
 import { DRIZZLE } from '../database/database.module';
 import { ZatcaClearanceService } from './zatca-clearance.service';
+import {
+  categorizeClearanceResponse,
+  extractMessage,
+  UnhandledClearanceResponseError,
+} from './zatca-clearance-classify';
 import { FakeZatcaHttpClient, ZatcaHttpService } from './zatca-http.service';
 import { zatcaKey } from '@spicyhome/shared';
 
@@ -178,7 +185,7 @@ describe('ZatcaClearanceService', () => {
       expect(result.clearedXml).toBe(clearedXml);
     });
 
-    it('returns CLEARED for HTTP 200 without explicit clearanceStatus or clearedInvoice (ambiguous success)', async () => {
+    it('returns ERROR for HTTP 200 without clearedInvoice, errors, or rejecting status (ambiguous 2xx)', async () => {
       fakeHttp.responses.set('clearance', {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -187,10 +194,12 @@ describe('ZatcaClearanceService', () => {
 
       const result = await clearanceService.clearDocument(sampleInput);
 
-      expect(result.status).toBe('CLEARED');
+      // Ambiguous 2xx → ERROR (not CLEARED)
+      expect(result.status).toBe('ERROR');
       expect(result.httpStatus).toBe(200);
       expect(result.clearedXml).toBeNull();
-      expect(result.errors).toEqual([]);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('Unhandled');
     });
 
     it('extracts warnings from validationResults.warningMessages on 202', async () => {
@@ -238,6 +247,8 @@ describe('ZatcaClearanceService', () => {
       expect(result.warnings).toContain('Warning B');
     });
 
+    // ── 4xx → REJECTED ──
+
     it('returns REJECTED for HTTP 400 with validation errors', async () => {
       fakeHttp.responses.set('clearance', {
         status: 400,
@@ -260,6 +271,20 @@ describe('ZatcaClearanceService', () => {
       expect(result.errors).toContain('Missing required field');
     });
 
+    it('returns REJECTED for HTTP 401', async () => {
+      fakeHttp.responses.set('clearance', {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message: 'Unauthorized' }),
+      });
+
+      const result = await clearanceService.clearDocument(sampleInput);
+
+      expect(result.status).toBe('REJECTED');
+      expect(result.httpStatus).toBe(401);
+      expect(result.errors).toContain('Unauthorized');
+    });
+
     it('returns REJECTED for HTTP 200 with clearanceStatus NOT_CLEARED and no clearedInvoice', async () => {
       fakeHttp.responses.set('clearance', {
         status: 200,
@@ -280,7 +305,9 @@ describe('ZatcaClearanceService', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('returns REJECTED for HTTP 500 with errors top-level array', async () => {
+    // ── 5xx → ERROR ──
+
+    it('returns ERROR for HTTP 500 with errors top-level array', async () => {
       fakeHttp.responses.set('clearance', {
         status: 500,
         headers: { 'content-type': 'application/json' },
@@ -291,10 +318,24 @@ describe('ZatcaClearanceService', () => {
 
       const result = await clearanceService.clearDocument(sampleInput);
 
-      expect(result.status).toBe('REJECTED');
+      expect(result.status).toBe('ERROR');
       expect(result.httpStatus).toBe(500);
       expect(result.clearedXml).toBeNull();
       expect(result.errors).toContain('Internal server error');
+    });
+
+    it('returns ERROR for HTTP 502 (bad gateway)', async () => {
+      fakeHttp.responses.set('clearance', {
+        status: 502,
+        headers: { 'content-type': 'text/plain' },
+        body: 'Bad Gateway',
+      });
+
+      const result = await clearanceService.clearDocument(sampleInput);
+
+      expect(result.status).toBe('ERROR');
+      expect(result.httpStatus).toBe(502);
+      expect(result.errors).toContain('Bad Gateway');
     });
 
     it('returns REJECTED for HTTP 400 with JSON message field', async () => {
@@ -510,7 +551,7 @@ describe('ZatcaClearanceService', () => {
       expect(result.clearedXml).toBeNull();
     });
 
-    it('handles unparseable JSON body on success HTTP status gracefully', async () => {
+    it('handles unparseable JSON body on success HTTP status — ERROR not CLEARED', async () => {
       fakeHttp.responses.set('clearance', {
         status: 200,
         headers: { 'content-type': 'text/html' },
@@ -519,10 +560,48 @@ describe('ZatcaClearanceService', () => {
 
       const result = await clearanceService.clearDocument(sampleInput);
 
-      // Ambiguous 200 without parseable body → CLEARED (graceful fallback)
-      expect(result.status).toBe('CLEARED');
+      // Ambiguous 200 without parseable body → ERROR (not CLEARED)
+      expect(result.status).toBe('ERROR');
       expect(result.httpStatus).toBe(200);
       expect(result.clearedXml).toBeNull();
+    });
+
+    it('returns ERROR for HTTP 200 with validationResults.status ERROR', async () => {
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            status: 'ERROR',
+            errorMessages: ['Buyer VAT mismatch'],
+          },
+        }),
+      });
+
+      const result = await clearanceService.clearDocument(sampleInput);
+
+      expect(result.status).toBe('REJECTED');
+      expect(result.httpStatus).toBe(200);
+      expect(result.errors).toContain('Buyer VAT mismatch');
+    });
+
+    it('returns REJECTED for HTTP 200 with validationResults.status REJECTED', async () => {
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            status: 'REJECTED',
+            errorMessages: ['Invoice rejected by rules engine'],
+          },
+        }),
+      });
+
+      const result = await clearanceService.clearDocument(sampleInput);
+
+      expect(result.status).toBe('REJECTED');
+      expect(result.httpStatus).toBe(200);
+      expect(result.errors).toContain('Invoice rejected by rules engine');
     });
 
     it('uses configurable API base URL from settings', async () => {
@@ -540,5 +619,107 @@ describe('ZatcaClearanceService', () => {
       expect(fakeHttp.requests[0].url).toContain('https://custom-zatca.example.com/api');
       expect(fakeHttp.requests[0].url).toContain('/invoices/clearance/single');
     });
+  });
+});
+
+// ── Unit tests for categorizeClearanceResponse ────────────────────────────────
+
+describe('categorizeClearanceResponse', () => {
+  it('returns ERROR for HTTP 500', () => {
+    const result = categorizeClearanceResponse(500, '{"errors":["Internal error"]}');
+    expect(result.category).toBe('ERROR');
+    expect(result.errors).toContain('Internal error');
+  });
+
+  it('returns ERROR for HTTP 502', () => {
+    const result = categorizeClearanceResponse(502, 'Bad Gateway');
+    expect(result.category).toBe('ERROR');
+  });
+
+  it('returns REJECTED for HTTP 400', () => {
+    const result = categorizeClearanceResponse(400, '{"message":"Bad request"}');
+    expect(result.category).toBe('REJECTED');
+    expect(result.errors).toContain('Bad request');
+  });
+
+  it('returns REJECTED for HTTP 401', () => {
+    const result = categorizeClearanceResponse(401, '{"message":"Unauthorized"}');
+    expect(result.category).toBe('REJECTED');
+  });
+
+  it('returns CLEARED for HTTP 200 with clearedInvoice', () => {
+    const clearedB64 = Buffer.from('<Invoice/>').toString('base64');
+    const result = categorizeClearanceResponse(
+      200,
+      JSON.stringify({ clearanceStatus: 'CLEARED', clearedInvoice: clearedB64 }),
+    );
+    expect(result.category).toBe('CLEARED');
+    expect(result.clearedXml).toBe('<Invoice/>');
+  });
+
+  it('returns CLEARED for HTTP 200 with clearanceStatus CLEARED (no clearedInvoice)', () => {
+    const result = categorizeClearanceResponse(200, JSON.stringify({ clearanceStatus: 'CLEARED' }));
+    expect(result.category).toBe('CLEARED');
+  });
+
+  it('returns REJECTED for HTTP 200 with clearanceStatus NOT_CLEARED', () => {
+    const result = categorizeClearanceResponse(
+      200,
+      JSON.stringify({ clearanceStatus: 'NOT_CLEARED' }),
+    );
+    expect(result.category).toBe('REJECTED');
+  });
+
+  it('returns REJECTED for HTTP 200 with validationResults.status ERROR', () => {
+    const result = categorizeClearanceResponse(
+      200,
+      JSON.stringify({ validationResults: { status: 'ERROR' } }),
+    );
+    expect(result.category).toBe('REJECTED');
+  });
+
+  it('throws UnhandledClearanceResponseError for ambiguous 200 with no errors/status', () => {
+    expect(() => categorizeClearanceResponse(200, JSON.stringify({ status: 'SUCCESS' }))).toThrow(
+      UnhandledClearanceResponseError,
+    );
+  });
+});
+
+// ── Unit tests for extractMessage ────────────────────────────────────────────
+
+describe('extractMessage', () => {
+  it('returns plain strings as-is', () => {
+    expect(extractMessage('Hello')).toBe('Hello');
+  });
+
+  it('extracts message from { message: "..." }', () => {
+    expect(extractMessage({ message: 'Error occurred' })).toBe('Error occurred');
+  });
+
+  it('formats { type, message, code } as "TYPE: message (CODE)"', () => {
+    expect(extractMessage({ type: 'ERROR', message: 'Invalid buyer', code: 'BR-KSA-01' })).toBe(
+      'ERROR: Invalid buyer (BR-KSA-01)',
+    );
+  });
+
+  it('formats { type, message } as "TYPE: message"', () => {
+    expect(extractMessage({ type: 'WARNING', message: 'Schema deviation' })).toBe(
+      'WARNING: Schema deviation',
+    );
+  });
+
+  it('formats { message, code } as "message (CODE)"', () => {
+    expect(extractMessage({ message: 'Missing field', code: 'BR-001' })).toBe(
+      'Missing field (BR-001)',
+    );
+  });
+
+  it('falls back to JSON.stringify for unknown shapes', () => {
+    expect(extractMessage({ data: 123 })).toBe('{"data":123}');
+  });
+
+  it('handles non-object, non-string', () => {
+    expect(extractMessage(42)).toBe('42');
+    expect(extractMessage(null)).toBe('null');
   });
 });
