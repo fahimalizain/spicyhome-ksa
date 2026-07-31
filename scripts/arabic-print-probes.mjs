@@ -2,6 +2,9 @@
 /**
  * arabic-print-probes.mjs — generate Arabic ESC/POS probe .bin files
  *
+ * See docs/printing/arabic-thermal.md for the full 01–06 probe procedure,
+ * interpretation table, and validation log.
+ *
  * Writes complete ESC/POS jobs under tmp/arabic-probes/ that you copy to a
  * Windows machine and print via:
  *

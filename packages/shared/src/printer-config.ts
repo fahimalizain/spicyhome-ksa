@@ -3,11 +3,14 @@ import { z } from 'zod';
 /**
  * Arabic encoding configuration for thermal printers.
  *
- * Probe results from real hardware:
- *  - `utf8`  — some printers accept UTF-8 (ours did not)
- *  - `pc864` + codePage 22 — produced Arabic glyphs on the tested unit
- *  - `w1256` + codePage 50 — dead on the tested unit but kept as an option
- *  - `none`  — current production behaviour (ASCII sanitize only)
+ * Hardware truth (validated 2026-08 on Epson via Windows raw / win_rawprint):
+ *  - `w1256` + codePage 50 + `visualRtl` + `renderMode: raster` is the
+ *    production-quality path (joined letters, correct bidi).
+ *  - Charset mode with the same encoding gives correct reading order but
+ *    isolated glyphs (W1256 has one glyph per letter — no joining).
+ *  - `pc864`/22 remains an option for other printers; run the 01–06 probes
+ *    (docs/printing/arabic-thermal.md) before enabling Arabic on new hardware.
+ *  - `none` — no Arabic encoding (ASCII sanitize only).
  */
 
 export const ArabicEncoding = {
