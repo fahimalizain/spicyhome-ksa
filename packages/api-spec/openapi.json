@@ -3797,7 +3797,8 @@
             "description": "Windows printer queue name. Required when connectionType is \"windows\"."
           },
           "ip": {
-            "type": "string"
+            "type": "string",
+            "description": "IP address or hostname. Required when connectionType is \"tcp\". Can be empty string for windows."
           },
           "port": {
             "type": "integer",

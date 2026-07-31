@@ -152,6 +152,8 @@ ts_project(
         ":node_modules/@types/node-forge",
         ":node_modules/@types/supertest",
         ":node_modules/@types/ws",
+        ":node_modules/class-transformer",
+        ":node_modules/class-validator",
         ":node_modules/jest",
         ":node_modules/node-forge",
         ":node_modules/supertest",
