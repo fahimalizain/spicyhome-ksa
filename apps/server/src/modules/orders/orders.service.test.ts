@@ -527,6 +527,109 @@ describe('Order Refunds', () => {
     });
   });
 
+  describe('reprint refund receipt', () => {
+    it('POST /orders/:id/refunds/:refundId/print reprints the specific refund receipt', async () => {
+      const { orderId, items } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      // Issue a partial refund
+      const refundRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
+        .expect(201);
+      const refundId = refundRes.body.refundId;
+      expect(refundId).toBeGreaterThan(0);
+
+      // Wait for the async auto-print, then clear the transport
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Reprint the refund receipt
+      const reprintRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refunds/${refundId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(201);
+
+      expect(reprintRes.body.success).toBe(true);
+
+      // The reprint is awaited in the handler, but keep a small settle window
+      await new Promise((r) => setTimeout(r, 100));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const str = receiptPrints[receiptPrints.length - 1].data.toString('ascii');
+      expect(str).toContain('REFUND');
+
+      // Events: the reprint's enqueued + succeeded events carry refundId
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const enqueuedEvents = eventsRes.body.filter((e: any) => e.type === 'receipt_print_enqueued');
+      const lastEnqueued = enqueuedEvents[enqueuedEvents.length - 1];
+      expect(lastEnqueued).toBeDefined();
+      const enqueuedPayload =
+        typeof lastEnqueued.payload === 'string'
+          ? JSON.parse(lastEnqueued.payload)
+          : lastEnqueued.payload;
+      expect(enqueuedPayload.refundId).toBe(refundId);
+
+      const succeededEvents = eventsRes.body.filter(
+        (e: any) => e.type === 'receipt_print_succeeded',
+      );
+      const lastSucceeded = succeededEvents[succeededEvents.length - 1];
+      expect(lastSucceeded).toBeDefined();
+      const succeededPayload =
+        typeof lastSucceeded.payload === 'string'
+          ? JSON.parse(lastSucceeded.payload)
+          : lastSucceeded.payload;
+      expect(succeededPayload.refundId).toBe(refundId);
+
+      // Chain integrity preserved
+      const verifyRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events/verify`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      expect(verifyRes.body.valid).toBe(true);
+    });
+
+    it('returns 404 for unknown refundId', async () => {
+      const { orderId } = await createPaidOrder();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refunds/999999/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(404);
+    });
+
+    it('returns 404 for unknown order', async () => {
+      await request(app.getHttpServer())
+        .post('/orders/999999/refunds/1/print')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(404);
+    });
+
+    it('returns 400 when the refund belongs to a different order', async () => {
+      const { orderId: orderIdA, items } = await createPaidOrder();
+      const { orderId: orderIdB } = await createPaidOrder();
+      const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
+
+      const refundRes = await request(app.getHttpServer())
+        .post(`/orders/${orderIdA}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
+        .expect(201);
+
+      // Try to reprint refund A's receipt through order B
+      await request(app.getHttpServer())
+        .post(`/orders/${orderIdB}/refunds/${refundRes.body.refundId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(400);
+    });
+  });
+
   describe('events endpoints', () => {
     it('GET /orders/:id/events returns the event chain', async () => {
       const { orderId } = await createPaidOrder();

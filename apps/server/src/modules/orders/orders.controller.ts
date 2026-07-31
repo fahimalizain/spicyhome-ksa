@@ -122,6 +122,20 @@ export class OrdersController {
     return this.ordersService.getOrderRefunds(id);
   }
 
+  @Post(':id/refunds/:refundId/print')
+  @RequiresPermission('update_order')
+  @ApiOperation({ summary: 'Reprint a specific refund receipt' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Print result', type: PrintResponse })
+  reprintRefundReceipt(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.reprintRefundReceipt(orderId, refundId, user.sub);
+  }
+
   @Get(':id/events')
   @ApiOperation({ summary: 'Get the complete event chain for an order' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
