@@ -124,6 +124,40 @@ describe('Auth (e2e)', () => {
     expect(res.body.usernames).toContain('admin');
     expect(res.body.usernames).not.toContain('inactive_user');
   });
+
+  it('GET /auth/usernames?platform=android returns active users with android_login=1', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/usernames?platform=android')
+      .expect(200);
+    expect(res.body.usernames).toBeDefined();
+    expect(Array.isArray(res.body.usernames)).toBe(true);
+    // admin is seeded with android_login defaulting to 1
+    expect(res.body.usernames).toContain('admin');
+    // inactive user must stay excluded even with android_login default 1
+    expect(res.body.usernames).not.toContain('inactive_user');
+  });
+
+  it('GET /auth/usernames?platform=android excludes users with android_login=0 (included without platform)', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT INTO users (username, pin_hash, name, role_id, is_active, android_login, created_at, updated_at)
+      VALUES ('android_hidden', '$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'Android Hidden', 2, 1, 0, ${now}, ${now});
+    `);
+
+    const all = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    expect(all.body.usernames).toContain('android_hidden');
+
+    const android = await request(app.getHttpServer())
+      .get('/auth/usernames?platform=android')
+      .expect(200);
+    expect(android.body.usernames).not.toContain('android_hidden');
+  });
+
+  it('GET /auth/usernames?platform=unknown treats unknown platform as no filter', async () => {
+    const res = await request(app.getHttpServer()).get('/auth/usernames?platform=ios').expect(200);
+    expect(res.body.usernames).toContain('admin');
+    expect(res.body.usernames).toContain('android_hidden');
+  });
 });
 
 describe('Business Day (e2e)', () => {

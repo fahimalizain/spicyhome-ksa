@@ -250,7 +250,14 @@ export class SpicyHomeClient {
 
     me: () => request<MeResponse>(this.config, 'GET', '/auth/me'),
 
-    listUsernames: () => request<UsernamesResponse>(this.config, 'GET', '/auth/usernames'),
+    listUsernames: (opts?: { platform?: 'android' }) =>
+      request<UsernamesResponse>(
+        this.config,
+        'GET',
+        '/auth/usernames',
+        undefined,
+        opts?.platform ? { platform: opts.platform } : undefined,
+      ),
 
     listUsers: () => request<UserResponse[]>(this.config, 'GET', '/auth/users'),
 

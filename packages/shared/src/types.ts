@@ -36,6 +36,7 @@ export interface User {
   name: string;
   roleId: number;
   isActive: boolean;
+  androidLogin: boolean;
   createdAt: number;
   updatedAt: number;
   createdBy: number | null;

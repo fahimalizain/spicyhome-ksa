@@ -19,6 +19,11 @@ export class UpdateUserDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({ example: true, description: 'Whether the user appears on Android login' })
+  @IsOptional()
+  @IsBoolean()
+  androidLogin?: boolean;
+
   @ApiPropertyOptional({ type: String, example: '5678', description: 'New PIN (4-6 digits)' })
   @IsOptional()
   @IsString()

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compareSync, hashSync } from 'bcryptjs';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { users, userRoles } from '@spicyhome/db';
 import { getNextServiceDayBoundaryUnix } from '@spicyhome/shared';
 import { MeResponse } from './dto/me-response.dto';
@@ -32,7 +32,7 @@ const DTO_TO_DB_PERMISSIONS: Record<string, string> = {
   manageSettings: 'manage_settings',
 };
 
-const USER_BOOL_FIELDS = ['isActive'] as const;
+const USER_BOOL_FIELDS = ['isActive', 'androidLogin'] as const;
 const ROLE_BOOL_FIELDS = Object.keys(DTO_TO_DB_PERMISSIONS) as readonly string[];
 
 @Injectable()
@@ -42,11 +42,15 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  listUsernames(): { usernames: string[] } {
+  listUsernames(platform?: string): { usernames: string[] } {
+    const where =
+      platform === 'android'
+        ? and(eq(users.isActive, 1), eq(users.androidLogin, 1))
+        : eq(users.isActive, 1);
     const rows = this.db
       .select({ username: users.username })
       .from(users)
-      .where(eq(users.isActive, 1))
+      .where(where)
       .orderBy(users.username)
       .all();
     return { usernames: rows.map((r) => r.username) };
@@ -111,6 +115,7 @@ export class AuthService {
         name: users.name,
         roleId: users.roleId,
         isActive: users.isActive,
+        androidLogin: users.androidLogin,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
         createdBy: users.createdBy,
@@ -129,7 +134,7 @@ export class AuthService {
   }
 
   createUser(
-    dto: { username: string; pin: string; name: string; roleId: number },
+    dto: { username: string; pin: string; name: string; roleId: number; androidLogin?: boolean },
     createdBy: number,
   ): any {
     const existing = this.db.select().from(users).where(eq(users.username, dto.username)).get();
@@ -146,6 +151,7 @@ export class AuthService {
       name: dto.name,
       roleId: dto.roleId,
       isActive: 1,
+      androidLogin: dto.androidLogin === false ? 0 : 1,
       ...createAuditFields(createdBy, now),
     };
 
@@ -159,12 +165,19 @@ export class AuthService {
       name: dto.name,
       roleId: dto.roleId,
       isActive: true,
+      androidLogin: dto.androidLogin !== false,
     };
   }
 
   updateUser(
     id: number,
-    dto: { name?: string; roleId?: number; isActive?: boolean; pin?: string },
+    dto: {
+      name?: string;
+      roleId?: number;
+      isActive?: boolean;
+      pin?: string;
+      androidLogin?: boolean;
+    },
     updatedBy: number,
   ): any {
     const user = this.db.select().from(users).where(eq(users.id, id)).get();
@@ -181,6 +194,7 @@ export class AuthService {
       updates.roleId = dto.roleId;
     }
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
+    if (dto.androidLogin !== undefined) updates.androidLogin = dto.androidLogin ? 1 : 0;
     if (dto.pin !== undefined) updates.pinHash = hashSync(dto.pin, 10);
 
     this.db.update(users).set(updates).where(eq(users.id, id)).run();

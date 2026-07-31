@@ -17,6 +17,9 @@ export class UserResponse {
   @ApiProperty({ example: true })
   isActive!: boolean;
 
+  @ApiProperty({ example: true })
+  androidLogin!: boolean;
+
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 

@@ -212,12 +212,15 @@ List active usernames for login dropdown
 
 val apiClient = ApiClient()
 val webService = apiClient.createWebservice(AuthApi::class.java)
+val platform : kotlin.String = platform_example // kotlin.String | When \"android\", only users with androidLogin=true are returned
 
-val result : UsernamesResponse = webService.authControllerListUsernames()
+val result : UsernamesResponse = webService.authControllerListUsernames(platform)
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **platform** | **kotlin.String**| When \&quot;android\&quot;, only users with androidLogin&#x3D;true are returned | [optional] [enum: android] |
 
 ### Return type
 
