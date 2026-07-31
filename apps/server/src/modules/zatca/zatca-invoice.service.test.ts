@@ -566,4 +566,74 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(cn).toBeUndefined();
     });
   });
+
+  // ── documentId projection on list/get endpoints ────────────────────────
+
+  describe('documentId projection (list/get)', () => {
+    it('listInvoices and getById project the order documentId', async () => {
+      // Fresh day opening + order WITH a document_id
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-07-25', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at, updated_at)
+        VALUES (7001, 'order-docid-inv', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, 'INV-LIST-001', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId}, 900, 'inv-docid-list', 'hash-docid-list', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      `);
+      const invoiceId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const all = service.listInvoices(50, 0);
+      const row = all.find((r: any) => r.id === invoiceId);
+      expect(row).toBeDefined();
+      expect(row.orderId).toBe(orderId);
+      expect(row.documentId).toBe('INV-LIST-001');
+
+      const detail = service.getById(invoiceId);
+      expect(detail.documentId).toBe('INV-LIST-001');
+    });
+
+    it('listCreditNotes and getCreditNoteById project the refund documentId', async () => {
+      // Fresh day opening + order + refund WITH a document_id + credit note
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-07-26', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at, updated_at)
+        VALUES (7002, 'order-docid-cn', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, 'INV-LIST-002', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Refund docid', 'REF-LIST-001', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'inv-docid-list', 901, 'cn-docid-list', 'hash-cn-docid', '', '<CreditNote/>', 'tlv', 'signed', 11500, 1500, 'Refund docid', ${now}, ${now})
+      `);
+      const cnId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const all = service.listCreditNotes(50, 0);
+      const row = all.find((r: any) => r.id === cnId);
+      expect(row).toBeDefined();
+      expect(row.refundId).toBe(refundId);
+      expect(row.documentId).toBe('REF-LIST-001');
+
+      const detail = service.getCreditNoteById(cnId);
+      expect(detail.documentId).toBe('REF-LIST-001');
+    });
+  });
 });

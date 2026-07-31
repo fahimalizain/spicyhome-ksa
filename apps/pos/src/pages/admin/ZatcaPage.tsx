@@ -376,6 +376,7 @@ export function ZatcaPage() {
     kind: 'invoice' | 'credit_note';
     id: number;
     icv: number;
+    documentId: string | null;
     status: string;
     createdAt: number;
   }[] = [
@@ -383,6 +384,7 @@ export function ZatcaPage() {
       kind: 'invoice' as const,
       id: inv.id,
       icv: inv.icv,
+      documentId: inv.documentId ?? null,
       status: inv.status,
       createdAt: inv.createdAt,
     })),
@@ -390,6 +392,7 @@ export function ZatcaPage() {
       kind: 'credit_note' as const,
       id: cn.id,
       icv: cn.icv,
+      documentId: cn.documentId ?? null,
       status: cn.status,
       createdAt: cn.createdAt,
     })),
@@ -849,7 +852,14 @@ export function ZatcaPage() {
                               className="flex items-center justify-between bg-gray-700/50 rounded px-3 py-2"
                             >
                               <div className="flex items-center gap-2">
-                                <span className="text-xs text-white font-mono">#{inv.icv}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-xs text-white font-mono leading-tight">
+                                    {inv.documentId || '—'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500 font-mono leading-tight">
+                                    #{inv.icv}
+                                  </span>
+                                </div>
                                 {result && (
                                   <span
                                     className={
@@ -971,7 +981,14 @@ export function ZatcaPage() {
                 onClick={() => viewDocumentDetail(doc.kind, doc.id)}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-white font-mono">#{doc.icv}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-white font-mono leading-tight">
+                      {doc.documentId || '—'}
+                    </span>
+                    <span className="text-xs text-gray-500 font-mono leading-tight">
+                      #{doc.icv}
+                    </span>
+                  </div>
                   {docTypeBadge(doc.kind)}
                   {statusBadge(doc.status)}
                 </div>
@@ -1008,8 +1025,12 @@ export function ZatcaPage() {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">
                   {selectedDoc?.kind === 'credit_note'
-                    ? `Credit Note #${selectedDoc.data.icv}`
-                    : `Invoice #${selectedDoc?.kind === 'invoice' ? selectedDoc.data.icv : '...'}`}
+                    ? `Credit Note ${selectedDoc.data.documentId || `#${selectedDoc.data.icv}`}`
+                    : `Invoice ${
+                        selectedDoc?.kind === 'invoice'
+                          ? selectedDoc.data.documentId || `#${selectedDoc.data.icv}`
+                          : '...'
+                      }`}
                 </h3>
                 <button
                   onClick={() => setSelectedDoc(null)}
@@ -1030,6 +1051,12 @@ export function ZatcaPage() {
                     <div>
                       <span className="text-gray-500">Order: </span>
                       <span className="text-gray-300">#{selectedDoc.data.orderId}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Document ID: </span>
+                      <span className="text-gray-300 font-mono">
+                        {selectedDoc.data.documentId ?? '—'}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-500">UUID: </span>

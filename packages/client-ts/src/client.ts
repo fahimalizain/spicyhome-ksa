@@ -86,6 +86,8 @@ export interface ZatcaInvoice {
   reportedAt: number | null;
   createdAt: number;
   updatedAt: number;
+  /** Current order document ID (orders.document_id); null only for orphan rows */
+  documentId: string | null;
 }
 
 export interface ZatcaCreditNote {
@@ -106,6 +108,8 @@ export interface ZatcaCreditNote {
   reason: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Current refund document ID (order_refunds.document_id); null only for orphan rows */
+  documentId: string | null;
 }
 
 export interface ZatcaReportingResult {
