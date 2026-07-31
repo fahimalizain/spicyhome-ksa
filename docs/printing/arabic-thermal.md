@@ -23,7 +23,7 @@ Thermal heads are **LTR**: they consume and print bytes left-to-right. Arabic
 is logically RTL, so three problems stack up:
 
 1. **LTR heads** — sending logical-order Arabic produces garbage; bytes must
-   arrive in *visual* order (reading right-to-left on paper).
+   arrive in _visual_ order (reading right-to-left on paper).
 2. **ESC/POS code pages have one glyph per letter** — W1256 (code page 50) and
    PC864 (code page 22) map each base letter to a single isolated glyph.
    Charset mode therefore **cannot join** letters into connected cursive words
@@ -48,25 +48,25 @@ logical Unicode
 
 Modules:
 
-| Module | Responsibility |
-| --- | --- |
-| `apps/server/src/modules/printers/arabic-shape.ts` | Pure-JS contextual shaping: isolated/initial/medial/final forms and lam-alef ligatures into Arabic Presentation Forms-B (U+FE70–U+FEFF). |
-| `apps/server/src/modules/printers/arabic-bidi.ts` | Segment-aware visual ordering: splits the shaped text into Arabic / non-Arabic runs and reverses only the Arabic runs, so `5x` and digits stay in place. Neutrals between Arabic characters merge into the run, keeping multi-word phrases as one reversal unit. |
-| `apps/server/src/modules/printers/arabic-encode.ts` | Encodes ordered text to printer bytes (W1256 / PC864 / UTF-8) via `ESC t` code pages; presentation forms decompose to base letters for the charset maps. |
-| `apps/server/src/modules/printers/arabic-raster.ts` | Renders shaped + ordered text into a 1-bit monochrome bitmap and emits it as `GS v 0` (raster bit image) — true joined letterforms. |
-| `apps/server/src/modules/printers/receipt-builder.ts` | Production receipt / credit-note builder; picks charset vs raster per printer config. |
-| `apps/server/assets/arabic-glyph-atlas.json` | Committed glyph atlas (Tajawal, OFL) that the raster renderer blits from. |
+| Module                                                | Responsibility                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/src/modules/printers/arabic-shape.ts`    | Pure-JS contextual shaping: isolated/initial/medial/final forms and lam-alef ligatures into Arabic Presentation Forms-B (U+FE70–U+FEFF).                                                                                                                         |
+| `apps/server/src/modules/printers/arabic-bidi.ts`     | Segment-aware visual ordering: splits the shaped text into Arabic / non-Arabic runs and reverses only the Arabic runs, so `5x` and digits stay in place. Neutrals between Arabic characters merge into the run, keeping multi-word phrases as one reversal unit. |
+| `apps/server/src/modules/printers/arabic-encode.ts`   | Encodes ordered text to printer bytes (W1256 / PC864 / UTF-8) via `ESC t` code pages; presentation forms decompose to base letters for the charset maps.                                                                                                         |
+| `apps/server/src/modules/printers/arabic-raster.ts`   | Renders shaped + ordered text into a 1-bit monochrome bitmap and emits it as `GS v 0` (raster bit image) — true joined letterforms.                                                                                                                              |
+| `apps/server/src/modules/printers/receipt-builder.ts` | Production receipt / credit-note builder; picks charset vs raster per printer config.                                                                                                                                                                            |
+| `apps/server/assets/arabic-glyph-atlas.json`          | Committed glyph atlas (Tajawal, OFL) that the raster renderer blits from.                                                                                                                                                                                        |
 
 ## 4. Printer config (`PrinterArabicConfig`)
 
 Stored per printer, editable in Admin → Printers.
 
-| Field | Meaning |
-| --- | --- |
-| `encoding` | `none` / `utf8` / `pc864` / `w1256` — byte encoding for Arabic text |
-| `codePage` | `ESC t n` code-page index (50 = W1256, 22 = PC864) |
-| `visualRtl` | Segment-aware visual order for LTR heads |
-| `renderMode` | `charset` (ESC t bytes) or `raster` (GS v 0 bitmaps) |
+| Field        | Meaning                                                             |
+| ------------ | ------------------------------------------------------------------- |
+| `encoding`   | `none` / `utf8` / `pc864` / `w1256` — byte encoding for Arabic text |
+| `codePage`   | `ESC t n` code-page index (50 = W1256, 22 = PC864)                  |
+| `visualRtl`  | Segment-aware visual order for LTR heads                            |
+| `renderMode` | `charset` (ESC t bytes) or `raster` (GS v 0 bitmaps)                |
 
 **Recommended for the validated Epson (Windows raw):**
 
@@ -115,14 +115,14 @@ win_rawprint.exe "Exact Queue Name" 06-lam-alef.bin
 
 ### What each probe tells you
 
-| # | File | What it tests | What good looks like | What bad looks like |
-| --- | --- | --- | --- | --- |
-| 01 | `01-baseline-w1256-blind-rtl.bin` | The old whole-string reverse bug (regression baseline) | (intentional bad) `5x` on the right, `4321` | n/a — this is the baseline |
-| 02 | `02-charset-w1256-cp50-shaped-bidi.bin` | Charset order + `5x`/digits with shaping + segment bidi | `5x` left, `1234` intact, Arabic readable RTL but disconnected | flipped qty/digits, garbage code page |
-| 03 | `03-raster-shaped-bidi.bin` | Joined letters via `GS v 0` | Proper joined Arabic phrases | blank, boxes, or still disconnected |
-| 04 | `04-mixed-item-line.bin` | Item lines (qty + Arabic name) in charset | `2x`/`1x`/`3x` left of the Arabic | `x2` on the wrong side |
-| 05 | `05-mixed-item-line-raster.bin` | Item lines in raster | Production-quality menu Arabic | fuzzy / cut off if width wrong |
-| 06 | `06-lam-alef.bin` | لا / لله / بالله — charset vs raster side by side | Raster shows true ligatures | charset may show ل + ا split |
+| #   | File                                    | What it tests                                           | What good looks like                                           | What bad looks like                   |
+| --- | --------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| 01  | `01-baseline-w1256-blind-rtl.bin`       | The old whole-string reverse bug (regression baseline)  | (intentional bad) `5x` on the right, `4321`                    | n/a — this is the baseline            |
+| 02  | `02-charset-w1256-cp50-shaped-bidi.bin` | Charset order + `5x`/digits with shaping + segment bidi | `5x` left, `1234` intact, Arabic readable RTL but disconnected | flipped qty/digits, garbage code page |
+| 03  | `03-raster-shaped-bidi.bin`             | Joined letters via `GS v 0`                             | Proper joined Arabic phrases                                   | blank, boxes, or still disconnected   |
+| 04  | `04-mixed-item-line.bin`                | Item lines (qty + Arabic name) in charset               | `2x`/`1x`/`3x` left of the Arabic                              | `x2` on the wrong side                |
+| 05  | `05-mixed-item-line-raster.bin`         | Item lines in raster                                    | Production-quality menu Arabic                                 | fuzzy / cut off if width wrong        |
+| 06  | `06-lam-alef.bin`                       | لا / لله / بالله — charset vs raster side by side       | Raster shows true ligatures                                    | charset may show ل + ا split          |
 
 Notes:
 
@@ -166,15 +166,15 @@ node scripts/make-arabic-glyph-atlas.mjs
 
 ## 8. Troubleshooting
 
-| Symptom | Likely cause / fix |
-| --- | --- |
-| Garbage Arabic (wrong letters / mojibake) | Wrong `encoding` / `codePage` for the printer. Re-run the probes (§5) and/or the Admin test ticket (§9) to find a working combo. |
-| Correct letters but reversed reading order | `visualRtl` is off. Enable it in Admin → Printers. |
-| `5x` or digits flipped | You are on the old blind whole-string reverse. Ensure you are on the new segment bidi (`visualRtl` + current code) — probe 02 should show `5x` left of Arabic. |
-| Joined letters required | Set `renderMode: raster`; confirm `arabic-glyph-atlas.json` is present in server assets (probe 03 prints a marker line when it is missing). |
-| Raster blank / missing Arabic | Atlas path or packaging problem — check server logs for atlas load failures, verify the asset is in the Win7 bundle, or fall back to `charset` until fixed. |
-| Fuzzy / cut-off raster text | Bitmap wider than the paper — check `maxWidthDots` against the printer's dot width (probe 05). |
-| Kitchen tickets have no Arabic | By design — Arabic is receipts/credit notes only (§1). |
+| Symptom                                    | Likely cause / fix                                                                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Garbage Arabic (wrong letters / mojibake)  | Wrong `encoding` / `codePage` for the printer. Re-run the probes (§5) and/or the Admin test ticket (§9) to find a working combo.                               |
+| Correct letters but reversed reading order | `visualRtl` is off. Enable it in Admin → Printers.                                                                                                             |
+| `5x` or digits flipped                     | You are on the old blind whole-string reverse. Ensure you are on the new segment bidi (`visualRtl` + current code) — probe 02 should show `5x` left of Arabic. |
+| Joined letters required                    | Set `renderMode: raster`; confirm `arabic-glyph-atlas.json` is present in server assets (probe 03 prints a marker line when it is missing).                    |
+| Raster blank / missing Arabic              | Atlas path or packaging problem — check server logs for atlas load failures, verify the asset is in the Win7 bundle, or fall back to `charset` until fixed.    |
+| Fuzzy / cut-off raster text                | Bitmap wider than the paper — check `maxWidthDots` against the printer's dot width (probe 05).                                                                 |
+| Kitchen tickets have no Arabic             | By design — Arabic is receipts/credit notes only (§1).                                                                                                         |
 
 ## 9. Related
 
