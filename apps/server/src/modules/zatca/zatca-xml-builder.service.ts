@@ -18,6 +18,8 @@
 import {
   decomposeVat,
   halalasToSar,
+  DEFAULT_ZATCA_PAYMENT_MEANS_CODE,
+  isZatcaPaymentMeansCode,
   ZATCAInvoiceDocumentType,
   ZATCA_INVOICE_TYPE_CODES,
   ZATCA_SIMPLIFIED_SUBTYPES,
@@ -92,6 +94,11 @@ export interface InvoiceXMLInput {
   billingReferenceId?: string;
   /** Payment instruction note (KSA-10 reason for credit/debit notes) */
   paymentNote?: string;
+  /**
+   * UN/ECE 4461 Payment Means code (ZATCA allow-list: 10, 30, 42, 48, 1).
+   * Defaults to '10' and any non-allow-listed value is coerced to '10'.
+   */
+  paymentMeansCode?: string;
   /** default 'simplified' — existing callers unchanged */
   invoiceProfile?: 'simplified' | 'standard';
   /** Buyer details for standard invoices */
@@ -326,8 +333,11 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   // ── PaymentMeans ──
   const instructionNote =
     input.paymentNote || (isCorrection ? 'Cancellation or Additional Charge' : undefined);
+  const paymentMeansCode = isZatcaPaymentMeansCode(input.paymentMeansCode ?? '')
+    ? input.paymentMeansCode!
+    : DEFAULT_ZATCA_PAYMENT_MEANS_CODE;
   parts.push(`  <cac:PaymentMeans>`);
-  parts.push(`    <cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>`);
+  parts.push(`    <cbc:PaymentMeansCode>${paymentMeansCode}</cbc:PaymentMeansCode>`);
   if (instructionNote) {
     parts.push(`    <cbc:InstructionNote>${escapeXml(instructionNote)}</cbc:InstructionNote>`);
   }

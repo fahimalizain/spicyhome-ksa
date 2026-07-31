@@ -154,6 +154,21 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
   });
 
+  it('emits explicit PaymentMeansCode when provided', () => {
+    const input: InvoiceXMLInput = { ...baseInput, paymentMeansCode: '48' };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(xml).not.toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+  });
+
+  it('coerces a non-allow-listed PaymentMeansCode to 10', () => {
+    for (const bad of ['54', '55', '99', '']) {
+      const input: InvoiceXMLInput = { ...baseInput, paymentMeansCode: bad };
+      const xml = buildUnsignedInvoiceXML(input);
+      expect(xml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+    }
+  });
+
   it('includes ICV and PIH in AdditionalDocumentReference', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:ID>ICV</cbc:ID>');
@@ -221,6 +236,26 @@ describe('UBL XML Builder', () => {
     };
     const xml = buildUnsignedInvoiceXML(input);
     expect(xml).toContain('<cbc:InstructionNote>Refund for returned items</cbc:InstructionNote>');
+  });
+
+  it('emits custom PaymentMeansCode together with InstructionNote on credit notes', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+      paymentMeansCode: '48',
+      paymentNote: 'Refund for returned items',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(xml).toContain('<cbc:InstructionNote>Refund for returned items</cbc:InstructionNote>');
+    // InstructionNote must sit inside the same PaymentMeans block
+    const meansIdx = xml.indexOf('<cac:PaymentMeans>');
+    const meansEnd = xml.indexOf('</cac:PaymentMeans>');
+    const meansSection = xml.substring(meansIdx, meansEnd);
+    expect(meansSection).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(meansSection).toContain(
+      '<cbc:InstructionNote>Refund for returned items</cbc:InstructionNote>',
+    );
   });
 
   it('includes default InstructionNote for credit notes without paymentNote', () => {

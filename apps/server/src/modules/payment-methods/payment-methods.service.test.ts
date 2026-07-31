@@ -40,6 +40,7 @@ describe('PaymentMethodsService', () => {
       CREATE TABLE IF NOT EXISTS payment_methods (
         id TEXT PRIMARY KEY NOT NULL,
         title TEXT NOT NULL,
+        zatca_payment_means_code TEXT NOT NULL DEFAULT '10',
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
@@ -61,12 +62,12 @@ describe('PaymentMethodsService', () => {
 
     // Seed default payment methods
     sqlite.exec(`
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
     `);
 
     db = drizzle(sqlite, { schema });
@@ -114,6 +115,7 @@ describe('PaymentMethodsService', () => {
       const method = service.get('cash');
       expect(method.id).toBe('cash');
       expect(method.title).toBe('Cash');
+      expect(method.zatcaPaymentMeansCode).toBe('10');
       expect(method.enabled).toBe(true);
     });
 
@@ -124,44 +126,75 @@ describe('PaymentMethodsService', () => {
 
   describe('create', () => {
     it('creates a payment method with slug from title', () => {
-      const method = service.create({ title: 'STC Pay' }, 1);
+      const method = service.create({ title: 'STC Pay', zatcaPaymentMeansCode: '30' }, 1);
       expect(method.id).toBe('stc-pay');
       expect(method.title).toBe('STC Pay');
+      expect(method.zatcaPaymentMeansCode).toBe('30');
       expect(method.enabled).toBe(true);
       expect(method.sortOrder).toBe(0);
     });
 
     it('generates kebab-case slug and returns row', () => {
-      const method = service.create({ title: 'Apple Pay' }, 1);
+      const method = service.create({ title: 'Apple Pay', zatcaPaymentMeansCode: '48' }, 1);
       expect(method.id).toBe('apple-pay');
       expect(method.title).toBe('Apple Pay');
+      expect(method.zatcaPaymentMeansCode).toBe('48');
+    });
+
+    it('accepts any allow-listed ZATCA code', () => {
+      for (const code of ['10', '30', '42', '48', '1']) {
+        const method = service.create({ title: `Pay ${code}`, zatcaPaymentMeansCode: code }, 1);
+        expect(method.zatcaPaymentMeansCode).toBe(code);
+      }
+    });
+
+    it('rejects create without zatcaPaymentMeansCode (400)', () => {
+      expect(() => service.create({ title: 'No Code' } as any, 1)).toThrow(BadRequestException);
+      expect(() => service.create({ title: 'No Code' } as any, 1)).toThrow(
+        'zatcaPaymentMeansCode must be one of',
+      );
+    });
+
+    it('rejects create with non-allow-listed code (400)', () => {
+      expect(() => service.create({ title: 'Bad Code', zatcaPaymentMeansCode: '55' }, 1)).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.create({ title: 'Bad Code', zatcaPaymentMeansCode: '55' }, 1)).toThrow(
+        'zatcaPaymentMeansCode must be one of',
+      );
     });
 
     it('collapses multiple hyphens and trims', () => {
-      const method = service.create({ title: '  My   Pay!!! ' }, 1);
+      const method = service.create({ title: '  My   Pay!!! ', zatcaPaymentMeansCode: '42' }, 1);
       expect(method.id).toBe('my-pay');
     });
 
     it('rejects title that produces empty slug (400)', () => {
-      expect(() => service.create({ title: '!!!' }, 1)).toThrow(BadRequestException);
-      expect(() => service.create({ title: '!!!' }, 1)).toThrow(
+      expect(() => service.create({ title: '!!!', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.create({ title: '!!!', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
         'Title must contain at least one alphanumeric character',
       );
     });
 
     it('rejects title of only hyphens (400)', () => {
-      expect(() => service.create({ title: '---' }, 1)).toThrow(BadRequestException);
+      expect(() => service.create({ title: '---', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('rejects duplicate slug (409)', () => {
-      expect(() => service.create({ title: 'Cash' }, 1)).toThrow(ConflictException);
-      expect(() => service.create({ title: 'Cash' }, 1)).toThrow(
+      expect(() => service.create({ title: 'Cash', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
+        ConflictException,
+      );
+      expect(() => service.create({ title: 'Cash', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
         'A payment method with slug "cash" already exists',
       );
     });
 
     it('trims whitespace from title', () => {
-      const method = service.create({ title: '  SADAD  ' }, 1);
+      const method = service.create({ title: '  SADAD  ', zatcaPaymentMeansCode: '30' }, 1);
       expect(method.id).toBe('sadad');
       expect(method.title).toBe('SADAD');
     });
@@ -172,6 +205,34 @@ describe('PaymentMethodsService', () => {
       const method = service.update('card', { title: 'Debit Card' }, 1);
       expect(method.title).toBe('Debit Card');
       expect(method.id).toBe('card'); // slug immutable
+    });
+
+    it('updates the ZATCA payment means code for a non-cash method', () => {
+      const method = service.update('card', { zatcaPaymentMeansCode: '42' }, 1);
+      expect(method.zatcaPaymentMeansCode).toBe('42');
+    });
+
+    it('rejects updating to a non-allow-listed code (400)', () => {
+      expect(() => service.update('card', { zatcaPaymentMeansCode: '55' }, 1)).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.update('card', { zatcaPaymentMeansCode: '55' }, 1)).toThrow(
+        'zatcaPaymentMeansCode must be one of',
+      );
+    });
+
+    it('allows keeping cash code at 10', () => {
+      const method = service.update('cash', { zatcaPaymentMeansCode: '10' }, 1);
+      expect(method.zatcaPaymentMeansCode).toBe('10');
+    });
+
+    it('rejects changing the cash code away from 10 (403)', () => {
+      expect(() => service.update('cash', { zatcaPaymentMeansCode: '48' }, 1)).toThrow(
+        ForbiddenException,
+      );
+      expect(() => service.update('cash', { zatcaPaymentMeansCode: '48' }, 1)).toThrow(
+        'The cash payment method ZATCA payment means code cannot be changed from 10',
+      );
     });
 
     it('updates sortOrder', () => {

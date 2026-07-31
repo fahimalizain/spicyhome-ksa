@@ -70,12 +70,12 @@ describe('ZatcaReportingService', () => {
     `);
     // Payment methods required by order_refunds FK
     sqlite.exec(`
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
     `);
 
     db = drizzle(sqlite, { schema });
@@ -192,8 +192,8 @@ describe('ZatcaReportingService', () => {
     `);
 
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test refund', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test refund', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -564,8 +564,8 @@ describe('ZatcaReportingService', () => {
       `);
       const orderId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId2}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId2}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`

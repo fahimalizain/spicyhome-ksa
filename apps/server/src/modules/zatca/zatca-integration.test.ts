@@ -691,8 +691,8 @@ describe('ZATCA Integration', () => {
       `);
 
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test report', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test report', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -778,8 +778,8 @@ describe('ZATCA Integration', () => {
       `);
 
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'CN detail test', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'CN detail test', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -828,8 +828,8 @@ describe('ZATCA Integration', () => {
 
       // Refund 1 + credit note 1
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'CN retry 1', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 5000, 750, 5750, 'CN retry 1', ${now})
       `);
       const refundId1 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
@@ -840,8 +840,8 @@ describe('ZATCA Integration', () => {
 
       // Refund 2 + credit note 2
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'CN retry 2', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 5000, 750, 5750, 'CN retry 2', ${now})
       `);
       const refundId2 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`

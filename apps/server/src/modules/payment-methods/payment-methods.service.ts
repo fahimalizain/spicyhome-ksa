@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { eq, asc } from 'drizzle-orm';
 import { paymentMethods } from '@spicyhome/db';
+import { isZatcaPaymentMeansCode, ZATCA_PAYMENT_MEANS_CODES } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { mapBools } from '../../common/bool-mapper.helper';
@@ -60,7 +61,14 @@ export class PaymentMethodsService {
   }
 
   /** Create a new payment method */
-  create(dto: { title: string }, userId: number): any {
+  create(dto: { title: string; zatcaPaymentMeansCode: string }, userId: number): any {
+    // ZATCA allow-list (10, 30, 42, 48, 1) — required on create
+    if (!isZatcaPaymentMeansCode(dto.zatcaPaymentMeansCode)) {
+      throw new BadRequestException(
+        `zatcaPaymentMeansCode must be one of: ${ZATCA_PAYMENT_MEANS_CODES.join(', ')}`,
+      );
+    }
+
     const slug = slugify(dto.title);
     if (!slug) {
       throw new BadRequestException('Title must contain at least one alphanumeric character');
@@ -76,6 +84,7 @@ export class PaymentMethodsService {
     const row = {
       id: slug,
       title: dto.title.trim(),
+      zatcaPaymentMeansCode: dto.zatcaPaymentMeansCode,
       enabled: 1,
       sortOrder: 0,
       ...createAuditFields(userId, now),
@@ -95,13 +104,13 @@ export class PaymentMethodsService {
   /** Update a payment method */
   update(
     id: string,
-    dto: { title?: string; enabled?: boolean; sortOrder?: number },
+    dto: { title?: string; enabled?: boolean; sortOrder?: number; zatcaPaymentMeansCode?: string },
     userId: number,
   ): any {
     const method = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get();
     if (!method) throw new NotFoundException('Payment method not found');
 
-    // Cash lock: reject title change and enabled=false
+    // Cash lock: reject title change, enabled=false, and ZATCA code change away from 10
     if (id === 'cash') {
       if (dto.title !== undefined) {
         throw new ForbiddenException('The cash payment method title cannot be changed');
@@ -109,11 +118,28 @@ export class PaymentMethodsService {
       if (dto.enabled === false) {
         throw new ForbiddenException('The cash payment method cannot be disabled');
       }
+      if (dto.zatcaPaymentMeansCode !== undefined && dto.zatcaPaymentMeansCode !== '10') {
+        throw new ForbiddenException(
+          'The cash payment method ZATCA payment means code cannot be changed from 10',
+        );
+      }
+    }
+
+    if (
+      dto.zatcaPaymentMeansCode !== undefined &&
+      !isZatcaPaymentMeansCode(dto.zatcaPaymentMeansCode)
+    ) {
+      throw new BadRequestException(
+        `zatcaPaymentMeansCode must be one of: ${ZATCA_PAYMENT_MEANS_CODES.join(', ')}`,
+      );
     }
 
     const updates: Record<string, any> = { ...updateAuditFields(userId) };
     if (dto.title !== undefined) {
       updates.title = dto.title.trim();
+    }
+    if (dto.zatcaPaymentMeansCode !== undefined) {
+      updates.zatcaPaymentMeansCode = dto.zatcaPaymentMeansCode;
     }
     if (dto.enabled !== undefined) {
       updates.enabled = dto.enabled ? 1 : 0;

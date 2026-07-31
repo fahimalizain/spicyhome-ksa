@@ -575,6 +575,7 @@ export class OrdersService {
       const paymentRecords: Array<{
         methodId: string;
         methodTitle: string;
+        zatcaPaymentMeansCode: string;
         amountHalalas: number;
         tenderedHalalas?: number;
         changeHalalas?: number;
@@ -646,6 +647,7 @@ export class OrdersService {
         paymentRecords.push({
           methodId: line.methodId,
           methodTitle: pm.title,
+          zatcaPaymentMeansCode: pm.zatcaPaymentMeansCode,
           amountHalalas: line.amountHalalas,
           tenderedHalalas: tendered ?? undefined,
           changeHalalas: change ?? undefined,
@@ -666,6 +668,7 @@ export class OrdersService {
             orderId,
             methodId: pr.methodId,
             methodTitle: pr.methodTitle,
+            zatcaPaymentMeansCode: pr.zatcaPaymentMeansCode,
             amountHalalas: pr.amountHalalas,
             tenderedHalalas: pr.tenderedHalalas ?? null,
             changeHalalas: pr.changeHalalas ?? null,
@@ -693,6 +696,7 @@ export class OrdersService {
         payments: paymentRecords.map((pr) => ({
           methodId: pr.methodId,
           methodTitle: pr.methodTitle,
+          zatcaPaymentMeansCode: pr.zatcaPaymentMeansCode,
           amountHalalas: pr.amountHalalas,
           ...(pr.tenderedHalalas !== undefined
             ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
@@ -1051,6 +1055,7 @@ export class OrdersService {
           userId,
           methodId: dto.methodId,
           methodTitle: pm.title,
+          zatcaPaymentMeansCode: pm.zatcaPaymentMeansCode,
           subtotalHalalas,
           vatHalalas,
           totalHalalas,
@@ -1190,6 +1195,7 @@ export class OrdersService {
         userId: refund.userId,
         methodId: refund.methodId,
         methodTitle: refund.methodTitle,
+        zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
         subtotalHalalas: refund.subtotalHalalas,
         vatHalalas: refund.vatHalalas,
         totalHalalas: refund.totalHalalas,
@@ -1385,6 +1391,7 @@ export class OrdersService {
         payments: payments.map((p) => ({
           methodId: p.methodId,
           methodTitle: p.methodTitle,
+          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
           amountHalalas: p.amountHalalas,
           tenderedHalalas: p.tenderedHalalas,
           changeHalalas: p.changeHalalas,

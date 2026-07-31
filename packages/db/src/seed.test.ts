@@ -129,6 +129,8 @@ describe('seed', () => {
     methods.forEach((m: any) => {
       expect(m.enabled).toBe(1);
     });
+    // ZATCA UN/ECE 4461 Payment Means codes: cash → 10, card/mada → 48
+    expect(methods.map((m: any) => m.zatca_payment_means_code)).toEqual(['10', '48', '48']);
   });
 
   it('is idempotent — running seed twice does not duplicate rows', () => {

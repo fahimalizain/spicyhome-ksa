@@ -136,6 +136,7 @@ describe('ReportsService', () => {
       CREATE TABLE IF NOT EXISTS payment_methods (
         id TEXT PRIMARY KEY NOT NULL,
         title TEXT NOT NULL,
+        zatca_payment_means_code TEXT NOT NULL DEFAULT '10',
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
@@ -148,6 +149,7 @@ describe('ReportsService', () => {
         order_id INTEGER NOT NULL REFERENCES orders(id),
         method_id TEXT NOT NULL REFERENCES payment_methods(id),
         method_title TEXT NOT NULL,
+        zatca_payment_means_code TEXT NOT NULL DEFAULT '10',
         amount_halalas INTEGER NOT NULL,
         tendered_halalas INTEGER,
         change_halalas INTEGER,
@@ -160,6 +162,7 @@ describe('ReportsService', () => {
         user_id INTEGER NOT NULL REFERENCES users(id),
         method_id TEXT NOT NULL REFERENCES payment_methods(id),
         method_title TEXT NOT NULL,
+        zatca_payment_means_code TEXT NOT NULL DEFAULT '10',
         subtotal_halalas INTEGER NOT NULL,
         vat_halalas INTEGER NOT NULL,
         total_halalas INTEGER NOT NULL,
@@ -180,9 +183,9 @@ describe('ReportsService', () => {
 
     // Seed payment methods
     sqlite.exec(`
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('card', 'Card', 1, 1, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at) VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
     `);
 
     sqlite.exec(`
@@ -221,12 +224,12 @@ describe('ReportsService', () => {
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'paid', 2000, 300, 2300, ${now}, ${now}, 1);
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (1, 'card', 'Card', 2300, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (1, 'card', 'Card', '48', 2300, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'paid', 4000, 600, 4600, ${now}, ${now}, 1);
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (2, 'cash', 'Cash', 4600, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (2, 'cash', 'Cash', '10', 4600, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
         VALUES (3, 3, 'c', 'dine_in', ${day.id}, 'open', 1000, 150, 1150, ${now}, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
@@ -259,10 +262,10 @@ describe('ReportsService', () => {
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
         VALUES (10, 10, 'split', 'dine_in', ${day.id}, 'paid', 8250, ${now}, ${now});
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (10, 'card', 'Card', 5000, ${now});
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, tendered_halalas, change_halalas, created_at)
-        VALUES (10, 'cash', 'Cash', 3250, 10000, 6750, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (10, 'card', 'Card', '48', 5000, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, tendered_halalas, change_halalas, created_at)
+        VALUES (10, 'cash', 'Cash', '10', 3250, 10000, 6750, ${now});
       `);
 
       const report: any = await service.getXReport();
@@ -340,14 +343,14 @@ describe('ReportsService', () => {
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'paid', 2000, 300, 2300, ${now}, ${now}, 1);
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (1, 'cash', 'Cash', 2300, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (1, 'cash', 'Cash', '10', 2300, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'refunded', 1000, 150, 1150, ${now}, ${now}, 1);
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (2, 'card', 'Card', 1150, ${now});
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
-        VALUES (2, 1, 'card', 'Card', 1000, 150, 1150, 'REF26-TEST1', ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (2, 'card', 'Card', '48', 1150, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+        VALUES (2, 1, 'card', 'Card', '48', 1000, 150, 1150, 'REF26-TEST1', ${now});
       `);
 
       const report: any = await service.getXReport();
@@ -367,10 +370,10 @@ describe('ReportsService', () => {
       sqlite.exec(`
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at, created_by)
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'refunded', 2000, 300, 2300, ${now}, ${now}, 1);
-        INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
-        VALUES (1, 'cash', 'Cash', 2300, ${now});
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
-        VALUES (1, 1, 'cash', 'Cash', 2000, 300, 2300, 'REF26-TEST2', ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (1, 'cash', 'Cash', '10', 2300, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+        VALUES (1, 1, 'cash', 'Cash', '10', 2000, 300, 2300, 'REF26-TEST2', ${now});
       `);
 
       // Install a receipt printer so printXReport works

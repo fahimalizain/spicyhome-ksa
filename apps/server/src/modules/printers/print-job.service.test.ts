@@ -68,8 +68,8 @@ describe('PrintJobService', () => {
 
     // Seed: payment methods (required by order_refunds FK)
     sqlite.exec(`
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now})
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now})
     `);
 
     db = drizzle(sqlite, { schema });
@@ -136,8 +136,8 @@ describe('PrintJobService', () => {
 
   function createRefundForOrder(orderId: number): number {
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Test', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 

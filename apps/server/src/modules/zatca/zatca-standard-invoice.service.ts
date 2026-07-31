@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 import {
   orders,
   orderItems,
+  orderPayments,
   orderRefunds,
   orderRefundItems,
   zatcaInvoices,
@@ -57,6 +58,7 @@ import {
   zatcaKey,
   requireZatcaBuyerDetails,
   parseZatcaBuyerDetails,
+  resolvePaymentMeansCode,
 } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 
@@ -728,6 +730,13 @@ export class ZatcaStandardInvoiceService {
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
+    // Resolve the Payment Means code from the order's payment snapshots
+    // (largest amount wins; tie-break by method id). Falls back to '10'.
+    const paymentRows = this.db
+      .select()
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, orderId))
+      .all();
     const xmlInput: InvoiceXMLInput = {
       documentId: order.documentId,
       icv,
@@ -740,6 +749,13 @@ export class ZatcaStandardInvoiceService {
       prevInvoiceHash,
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
+      paymentMeansCode: resolvePaymentMeansCode(
+        paymentRows.map((p) => ({
+          amountHalalas: p.amountHalalas,
+          methodId: p.methodId,
+          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
+        })),
+      ),
     };
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
@@ -953,6 +969,8 @@ export class ZatcaStandardInvoiceService {
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
       billingReferenceId: originalInvoice.uuid,
+      // Snapshot of the refund method's ZATCA code (fallback '10' handled in the builder)
+      paymentMeansCode: refund.zatcaPaymentMeansCode,
       paymentNote: refund.reason || 'Refund',
     };
 

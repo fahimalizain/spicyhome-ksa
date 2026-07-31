@@ -273,12 +273,12 @@ function seedPaymentMethods(sqlite: Database.Database): void {
   if (existing.cnt > 0) return;
 
   sqlite.exec(`
-    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-    VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
-    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-    VALUES ('card', 'Card', 1, 1, ${now}, ${now});
-    INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-    VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+    INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+    VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
+    INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+    VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
+    INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+    VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
   `);
 }
 

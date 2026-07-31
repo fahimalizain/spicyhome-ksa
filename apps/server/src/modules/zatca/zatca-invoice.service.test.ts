@@ -99,12 +99,12 @@ describe('ZatcaInvoiceService — credit notes', () => {
     `);
     // Payment methods required by order_refunds FK
     sqlite.exec(`
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('cash', 'Cash', 1, 0, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('card', 'Card', 1, 1, ${now}, ${now});
-      INSERT INTO payment_methods (id, title, enabled, sort_order, created_at, updated_at)
-      VALUES ('mada', 'mada', 1, 2, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
     `);
 
     // ── Now create the drizzle instance and the NestJS module ──────────────
@@ -190,8 +190,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
   function createRefundForOrder(orderId: number): number {
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Item was cold', 'REF-TEST-HP', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Item was cold', 'REF-TEST-HP', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -223,8 +223,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'Wrong item', 'REF-TEST-NOINV', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 5000, 750, 5750, 'Wrong item', 'REF-TEST-NOINV', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -348,8 +348,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund with NULL reason
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, NULL, 'REF-TEST-NULL-REASON', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 5000, 750, 5750, NULL, 'REF-TEST-NULL-REASON', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -402,8 +402,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 2000, 300, 2300, 'Test sequence', 'REF-TEST-SEQ', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 2000, 300, 2300, 'Test sequence', 'REF-TEST-SEQ', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -545,8 +545,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create a refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Reason', 'REF-TEST-STDSKIP', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Reason', 'REF-TEST-STDSKIP', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -616,8 +616,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Refund docid', 'REF-LIST-001', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Refund docid', 'REF-LIST-001', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -693,8 +693,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Refund rotate', 'REF-SNAP-001', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Refund rotate', 'REF-SNAP-001', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -715,11 +715,109 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       const listRow = service.listCreditNotes(50, 0).find((r: any) => r.id === cnId);
       expect(listRow.documentId).toBe('REF-SNAP-001');
+    });
+  });
 
-      const refund = sqlite
-        .prepare('SELECT document_id FROM order_refunds WHERE id = ?')
+  // ── Payment Means code resolution ────────────────────────────────────────
+
+  describe('PaymentMeansCode resolution', () => {
+    function createPaidOrderForInvoice(
+      payments: Array<{ methodId: string; amount: number }>,
+    ): number {
+      const seq = sqlite
+        .prepare('SELECT COALESCE(MAX(order_no), 0) + 1 AS next FROM orders')
+        .get() as any;
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-08-0${seq.next}', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at, updated_at)
+        VALUES (${seq.next}, 'order-uuid-pm-${seq.next}', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, 'INV26-PM-${seq.next}', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES (${orderId}, 'Burger', 11500, 1500, 1, 11500, ${now}, ${now})
+      `);
+
+      for (const p of payments) {
+        sqlite.exec(`
+          INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+          VALUES (${orderId}, '${p.methodId}', '${p.methodId}', (SELECT zatca_payment_means_code FROM payment_methods WHERE id = '${p.methodId}'), ${p.amount}, ${now})
+        `);
+      }
+
+      return orderId;
+    }
+
+    it('emits PaymentMeansCode 10 for a cash-paid order', async () => {
+      const orderId = createPaidOrderForInvoice([{ methodId: 'cash', amount: 11500 }]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      expect(result.signedXml).not.toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    });
+
+    it('emits PaymentMeansCode 48 for a card-paid order', async () => {
+      const orderId = createPaidOrderForInvoice([{ methodId: 'card', amount: 11500 }]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).not.toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+    });
+
+    it('emits PaymentMeansCode 48 for mada-paid order (mada maps to bank card)', async () => {
+      const orderId = createPaidOrderForInvoice([{ methodId: 'mada', amount: 11500 }]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    });
+
+    it('split tender uses the largest-amount line code', async () => {
+      // card 7000 > cash 4500 → 48
+      const orderId = createPaidOrderForInvoice([
+        { methodId: 'card', amount: 7000 },
+        { methodId: 'cash', amount: 4500 },
+      ]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    });
+
+    it('split tender tie-breaks by methodId ascending', async () => {
+      // Equal amounts: 'card' < 'cash' lexicographically → 48
+      const orderId = createPaidOrderForInvoice([
+        { methodId: 'cash', amount: 5750 },
+        { methodId: 'card', amount: 5750 },
+      ]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    });
+
+    it('credit note uses the refund method snapshot code', async () => {
+      const orderId = createPaidOrderForInvoice([{ methodId: 'cash', amount: 11500 }]);
+      const invoice = await service.createInvoice(orderId);
+
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'card', 'Card', '48', 10000, 1500, 11500, 'Card refund', 'REF26-PM-1', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      const result = await service.createCreditNote(orderId, refundId);
+      const row = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
         .get(refundId) as any;
-      expect(refund.document_id).toBe('REF-SNAP-002');
+
+      expect(result.icv).toBe(invoice.icv + 1);
+      expect(row.xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(row.xml).toContain('<cbc:InstructionNote>Card refund</cbc:InstructionNote>');
+    });
+
+    it('invoice falls back to 10 when order has no payment rows (legacy edge case)', async () => {
+      const orderId = createPaidOrderForInvoice([]);
+      const result = await service.createInvoice(orderId);
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
     });
   });
 });
