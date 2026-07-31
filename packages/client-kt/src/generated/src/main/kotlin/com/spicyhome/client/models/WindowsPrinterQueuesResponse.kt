@@ -22,19 +22,15 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param title 
- * @param zatcaPaymentMeansCode ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+ * @param queues List of available Windows printer queue names.
  */
 
 
-data class CreatePaymentMethodDto (
+data class WindowsPrinterQueuesResponse (
 
-    @Json(name = "title")
-    val title: kotlin.String,
-
-    /* ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1) */
-    @Json(name = "zatcaPaymentMeansCode")
-    val zatcaPaymentMeansCode: kotlin.String
+    /* List of available Windows printer queue names. */
+    @Json(name = "queues")
+    val queues: kotlin.collections.List<kotlin.String>
 
 ) {
 

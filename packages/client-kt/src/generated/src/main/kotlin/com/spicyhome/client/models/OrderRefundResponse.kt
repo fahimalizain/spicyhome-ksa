@@ -28,10 +28,12 @@ import com.squareup.moshi.JsonClass
  * @param userId 
  * @param methodId Payment method slug used for this refund
  * @param methodTitle Payment method title snapshot at refund time
+ * @param zatcaPaymentMeansCode ZATCA UN/ECE 4461 Payment Means code snapshot at refund time
  * @param subtotalHalalas 
  * @param vatHalalas 
  * @param totalHalalas 
  * @param reason 
+ * @param documentId Refund document ID
  * @param createdAt 
  * @param items 
  */
@@ -56,6 +58,10 @@ data class OrderRefundResponse (
     @Json(name = "methodTitle")
     val methodTitle: kotlin.String,
 
+    /* ZATCA UN/ECE 4461 Payment Means code snapshot at refund time */
+    @Json(name = "zatcaPaymentMeansCode")
+    val zatcaPaymentMeansCode: kotlin.String,
+
     @Json(name = "subtotalHalalas")
     val subtotalHalalas: kotlin.Long,
 
@@ -67,6 +73,10 @@ data class OrderRefundResponse (
 
     @Json(name = "reason")
     val reason: kotlin.String?,
+
+    /* Refund document ID */
+    @Json(name = "documentId")
+    val documentId: kotlin.String,
 
     @Json(name = "createdAt")
     val createdAt: kotlin.Long,

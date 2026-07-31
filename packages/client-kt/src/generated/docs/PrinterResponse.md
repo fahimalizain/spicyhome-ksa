@@ -6,6 +6,7 @@
 | ------------ | ------------- | ------------- | ------------- |
 | **id** | **kotlin.Long** |  |  |
 | **name** | **kotlin.String** |  |  |
+| **connectionType** | [**inline**](#ConnectionType) |  |  |
 | **ip** | **kotlin.String** |  |  |
 | **port** | **kotlin.Int** |  |  |
 | **role** | **kotlin.String** |  |  |
@@ -15,6 +16,14 @@
 | **updatedAt** | **kotlin.Long** |  |  |
 | **createdBy** | **kotlin.Long** |  |  |
 | **updatedBy** | **kotlin.Long** |  |  |
+| **windowsPrinterName** | **kotlin.String** |  |  [optional] |
+
+
+<a id="ConnectionType"></a>
+## Enum: connectionType
+| Name | Value |
+| ---- | ----- |
+| connectionType | tcp, windows |
 
 
 

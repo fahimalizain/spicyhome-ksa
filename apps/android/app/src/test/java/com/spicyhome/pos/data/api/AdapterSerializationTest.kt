@@ -189,7 +189,7 @@ class AdapterSerializationTest {
 
     @Test
     fun `CreateOrderResponse deserializes from JSON with number fields`() {
-        val json = """{"id":42,"uuid":"abc-123","orderNo":1001}"""
+        val json = """{"id":42,"uuid":"abc-123","orderNo":1001,"documentId":"INV26-42"}"""
         val response = moshi.adapter(CreateOrderResponse::class.java).fromJson(json)
         assertThat(response).isNotNull()
         assertThat(response!!.id).isEqualTo(42L)
@@ -202,7 +202,8 @@ class AdapterSerializationTest {
         val original = CreateOrderResponse(
             id = 42L,
             uuid = "abc-123",
-            orderNo = 1001L
+            orderNo = 1001L,
+            documentId = "INV26-42"
         )
         val json = moshi.adapter(CreateOrderResponse::class.java).toJson(original)
         val roundTripped = moshi.adapter(CreateOrderResponse::class.java).fromJson(json)
@@ -268,6 +269,7 @@ class AdapterSerializationTest {
                 "vatHalalas": 600,
                 "totalHalalas": 4600,
                 "discountHalalas": 0,
+                "documentId": "INV26-1",
                 "createdAt": 1700000000,
                 "updatedAt": 1700000000,
                 "createdBy": 1,
@@ -299,6 +301,7 @@ class AdapterSerializationTest {
                     "vatHalalas": 600,
                     "totalHalalas": 4600,
                     "discountHalalas": 0,
+                    "documentId": "INV26-1",
                     "createdAt": 1700000000,
                     "updatedAt": 1700000000,
                     "createdBy": 1,
@@ -316,6 +319,7 @@ class AdapterSerializationTest {
                     "vatHalalas": 300,
                     "totalHalalas": 2300,
                     "discountHalalas": 0,
+                    "documentId": "INV26-2",
                     "createdAt": 1700000000,
                     "updatedAt": 1700000000,
                     "createdBy": 2,

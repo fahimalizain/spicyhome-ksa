@@ -24,6 +24,7 @@ import com.squareup.moshi.JsonClass
  *
  * @param methodId Payment method slug
  * @param methodTitle Payment method display title
+ * @param zatcaPaymentMeansCode ZATCA UN/ECE 4461 Payment Means code snapshot at pay time
  * @param amountHalalas Amount paid in halalas
  * @param tenderedHalalas Cash tendered in halalas (null for non-cash)
  * @param changeHalalas Change given in halalas (null for non-cash)
@@ -39,6 +40,10 @@ data class OrderPaymentResponse (
     /* Payment method display title */
     @Json(name = "methodTitle")
     val methodTitle: kotlin.String,
+
+    /* ZATCA UN/ECE 4461 Payment Means code snapshot at pay time */
+    @Json(name = "zatcaPaymentMeansCode")
+    val zatcaPaymentMeansCode: kotlin.String,
 
     /* Amount paid in halalas */
     @Json(name = "amountHalalas")

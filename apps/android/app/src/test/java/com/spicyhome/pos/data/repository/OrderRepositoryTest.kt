@@ -77,6 +77,7 @@ class OrderRepositoryTest {
             id = 42L,
             uuid = "uuid-123",
             orderNo = 1001L,
+            documentId = "INV26-42",
         )
         every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
         every { createCall.execute() } returns Response.success(created)

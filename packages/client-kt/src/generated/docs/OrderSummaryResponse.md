@@ -15,6 +15,7 @@
 | **vatHalalas** | **kotlin.Long** |  |  |
 | **totalHalalas** | **kotlin.Long** |  |  |
 | **discountHalalas** | **kotlin.Long** |  |  |
+| **documentId** | **kotlin.String** | ZATCA root cbc:ID — the business invoice number |  |
 | **createdAt** | **kotlin.Long** |  |  |
 | **updatedAt** | **kotlin.Long** |  |  |
 | **createdBy** | **kotlin.Long** |  |  |

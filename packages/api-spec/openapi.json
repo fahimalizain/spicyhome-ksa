@@ -1554,7 +1554,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Clearance result"
+            "description": "Clearance result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaReissueResultDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1594,7 +1601,14 @@
         },
         "responses": {
           "201": {
-            "description": "Reissue result"
+            "description": "Reissue result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaReissueResultDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1679,7 +1693,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Clearance result"
+            "description": "Clearance result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaReissueResultDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1718,7 +1739,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Reissue result"
+            "description": "Reissue result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaReissueResultDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4051,6 +4079,11 @@
             "example": "Card",
             "description": "Payment method display title"
           },
+          "zatcaPaymentMeansCode": {
+            "type": "string",
+            "example": "48",
+            "description": "ZATCA UN/ECE 4461 Payment Means code snapshot at pay time"
+          },
           "amountHalalas": {
             "type": "integer",
             "format": "int64",
@@ -4075,6 +4108,7 @@
         "required": [
           "methodId",
           "methodTitle",
+          "zatcaPaymentMeansCode",
           "amountHalalas",
           "tenderedHalalas",
           "changeHalalas"
@@ -4575,6 +4609,11 @@
             "example": "Cash",
             "description": "Payment method title snapshot at refund time"
           },
+          "zatcaPaymentMeansCode": {
+            "type": "string",
+            "example": "48",
+            "description": "ZATCA UN/ECE 4461 Payment Means code snapshot at refund time"
+          },
           "subtotalHalalas": {
             "type": "integer",
             "format": "int64",
@@ -4618,6 +4657,7 @@
           "userId",
           "methodId",
           "methodTitle",
+          "zatcaPaymentMeansCode",
           "subtotalHalalas",
           "vatHalalas",
           "totalHalalas",
@@ -4730,6 +4770,109 @@
           "attempts",
           "canRetryClearance",
           "canReissue"
+        ]
+      },
+      "ZatcaClearanceDetailDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "CLEARED"
+          },
+          "httpStatus": {
+            "type": "number",
+            "example": 200
+          },
+          "clearedXml": {
+            "type": "string",
+            "example": "<Invoice>...</Invoice>",
+            "nullable": true
+          },
+          "clearedInvoiceBase64": {
+            "type": "string",
+            "example": "base64...",
+            "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rawBody": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "httpStatus",
+          "clearedXml",
+          "clearedInvoiceBase64",
+          "warnings",
+          "errors",
+          "rawBody"
+        ]
+      },
+      "ZatcaReissueResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "icv": {
+            "type": "number",
+            "example": 1
+          },
+          "uuid": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "invoiceHash": {
+            "type": "string",
+            "example": "hash..."
+          },
+          "status": {
+            "type": "string",
+            "example": "pending"
+          },
+          "attemptNo": {
+            "type": "number",
+            "example": 1
+          },
+          "qrTlvBase64": {
+            "type": "string",
+            "example": "base64..."
+          },
+          "signedXml": {
+            "type": "string",
+            "example": "<Invoice>...</Invoice>"
+          },
+          "clearance": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaClearanceDetailDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "icv",
+          "uuid",
+          "invoiceHash",
+          "status",
+          "attemptNo",
+          "qrTlvBase64",
+          "signedXml"
         ]
       },
       "ZatcaInvoiceReissueDto": {
@@ -5154,6 +5297,11 @@
             "type": "string",
             "example": "Cash"
           },
+          "zatcaPaymentMeansCode": {
+            "type": "string",
+            "example": "10",
+            "description": "ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)"
+          },
           "enabled": {
             "type": "boolean",
             "example": true
@@ -5189,6 +5337,7 @@
         "required": [
           "id",
           "title",
+          "zatcaPaymentMeansCode",
           "enabled",
           "sortOrder",
           "createdAt",
@@ -5203,10 +5352,16 @@
           "title": {
             "type": "string",
             "example": "SADAD"
+          },
+          "zatcaPaymentMeansCode": {
+            "type": "string",
+            "example": "30",
+            "description": "ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)"
           }
         },
         "required": [
-          "title"
+          "title",
+          "zatcaPaymentMeansCode"
         ]
       },
       "UpdatePaymentMethodDto": {
@@ -5215,6 +5370,11 @@
           "title": {
             "type": "string",
             "example": "SADAD"
+          },
+          "zatcaPaymentMeansCode": {
+            "type": "string",
+            "example": "30",
+            "description": "ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)"
           },
           "enabled": {
             "type": "boolean",

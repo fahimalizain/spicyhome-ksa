@@ -72,10 +72,16 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerGetOrder**](docs/OrdersApi.md#orderscontrollergetorder) | **GET** orders/{id} | Get order by ID with items and events |
 | *OrdersApi* | [**ordersControllerGetOrderEvents**](docs/OrdersApi.md#orderscontrollergetorderevents) | **GET** orders/{id}/events | Get the complete event chain for an order |
 | *OrdersApi* | [**ordersControllerGetOrderRefunds**](docs/OrdersApi.md#orderscontrollergetorderrefunds) | **GET** orders/{id}/refunds | Get all refunds for an order |
+| *OrdersApi* | [**ordersControllerGetZatcaCreditNoteStatus**](docs/OrdersApi.md#orderscontrollergetzatcacreditnotestatus) | **GET** orders/{id}/refunds/{refundId}/zatca-credit-note | Get ZATCA credit note status for a refund (clearance polling) |
+| *OrdersApi* | [**ordersControllerGetZatcaInvoiceStatus**](docs/OrdersApi.md#orderscontrollergetzatcainvoicestatus) | **GET** orders/{id}/zatca-invoice | Get ZATCA invoice status for an order (clearance polling) |
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
 | *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid with payment methods (open → paid) |
 | *OrdersApi* | [**ordersControllerRefundOrder**](docs/OrdersApi.md#orderscontrollerrefundorder) | **POST** orders/{id}/refund | Refund items on a paid order |
+| *OrdersApi* | [**ordersControllerReissueZatcaCreditNote**](docs/OrdersApi.md#orderscontrollerreissuezatcacreditnote) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/reissue | Reissue a credit note after rejection (new attempt) |
+| *OrdersApi* | [**ordersControllerReissueZatcaInvoice**](docs/OrdersApi.md#orderscontrollerreissuezatcainvoice) | **POST** orders/{id}/zatca-invoice/reissue | Reissue a standard invoice after rejection (new attempt) |
 | *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
+| *OrdersApi* | [**ordersControllerRetryZatcaClearance**](docs/OrdersApi.md#orderscontrollerretryzatcaclearance) | **POST** orders/{id}/zatca-invoice/retry-clearance | Retry ZATCA clearance for an invoice in error status |
+| *OrdersApi* | [**ordersControllerRetryZatcaCreditNoteClearance**](docs/OrdersApi.md#orderscontrollerretryzatcacreditnoteclearance) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance | Retry ZATCA clearance for a credit note in error status |
 | *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
@@ -83,10 +89,11 @@ All URIs are relative to *http://localhost*
 | *PaymentMethodsApi* | [**paymentMethodsControllerList**](docs/PaymentMethodsApi.md#paymentmethodscontrollerlist) | **GET** payment-methods | List all payment methods (including disabled) |
 | *PaymentMethodsApi* | [**paymentMethodsControllerListEnabled**](docs/PaymentMethodsApi.md#paymentmethodscontrollerlistenabled) | **GET** payment-methods/enabled | List enabled payment methods (no special permission required) |
 | *PaymentMethodsApi* | [**paymentMethodsControllerUpdate**](docs/PaymentMethodsApi.md#paymentmethodscontrollerupdate) | **PATCH** payment-methods/{id} | Update a payment method |
-| *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer TCP reachability |
+| *PrintersApi* | [**printersControllerCheckStatus**](docs/PrintersApi.md#printerscontrollercheckstatus) | **GET** printers/{id}/status | Check printer reachability |
 | *PrintersApi* | [**printersControllerCreate**](docs/PrintersApi.md#printerscontrollercreate) | **POST** printers | Create a printer |
 | *PrintersApi* | [**printersControllerGet**](docs/PrintersApi.md#printerscontrollerget) | **GET** printers/{id} | Get printer by ID |
 | *PrintersApi* | [**printersControllerList**](docs/PrintersApi.md#printerscontrollerlist) | **GET** printers | List all printers |
+| *PrintersApi* | [**printersControllerListWindowsQueues**](docs/PrintersApi.md#printerscontrollerlistwindowsqueues) | **GET** printers/windows-queues | List available Windows printer queue names |
 | *PrintersApi* | [**printersControllerTestPrint**](docs/PrintersApi.md#printerscontrollertestprint) | **POST** printers/{id}/test | Print a test ticket |
 | *PrintersApi* | [**printersControllerUpdate**](docs/PrintersApi.md#printerscontrollerupdate) | **PUT** printers/{id} | Update a printer |
 | *ReportsApi* | [**reportsControllerGetSales**](docs/ReportsApi.md#reportscontrollergetsales) | **GET** reports/sales | Daily sales totals over a date range |
@@ -174,7 +181,14 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateUserDto](docs/UpdateUserDto.md)
  - [com.spicyhome.client.models.UserResponse](docs/UserResponse.md)
  - [com.spicyhome.client.models.UsernamesResponse](docs/UsernamesResponse.md)
+ - [com.spicyhome.client.models.WindowsPrinterQueuesResponse](docs/WindowsPrinterQueuesResponse.md)
+ - [com.spicyhome.client.models.ZatcaBuyerDetailsDto](docs/ZatcaBuyerDetailsDto.md)
+ - [com.spicyhome.client.models.ZatcaClearanceDetailDto](docs/ZatcaClearanceDetailDto.md)
  - [com.spicyhome.client.models.ZatcaConfigDto](docs/ZatcaConfigDto.md)
+ - [com.spicyhome.client.models.ZatcaInvoiceAttemptDto](docs/ZatcaInvoiceAttemptDto.md)
+ - [com.spicyhome.client.models.ZatcaInvoiceReissueDto](docs/ZatcaInvoiceReissueDto.md)
+ - [com.spicyhome.client.models.ZatcaInvoiceStatusResponse](docs/ZatcaInvoiceStatusResponse.md)
+ - [com.spicyhome.client.models.ZatcaReissueResultDto](docs/ZatcaReissueResultDto.md)
 
 
 <a id="documentation-for-authorization"></a>

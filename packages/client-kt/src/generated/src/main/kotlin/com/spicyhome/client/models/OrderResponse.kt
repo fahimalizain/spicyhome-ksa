@@ -18,6 +18,7 @@ package com.spicyhome.client.models
 import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderPaymentResponse
+import com.spicyhome.client.models.ZatcaBuyerDetailsDto
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -36,6 +37,8 @@ import com.squareup.moshi.JsonClass
  * @param vatHalalas 
  * @param totalHalalas 
  * @param discountHalalas 
+ * @param documentId ZATCA root cbc:ID — the business invoice number
+ * @param isStandardInvoice Whether this order is a ZATCA standard invoice
  * @param createdAt 
  * @param updatedAt 
  * @param createdBy 
@@ -43,6 +46,7 @@ import com.squareup.moshi.JsonClass
  * @param items 
  * @param events 
  * @param payments 
+ * @param zatcaBuyerDetails ZATCA standard invoice buyer details (JSON)
  */
 
 
@@ -81,6 +85,14 @@ data class OrderResponse (
     @Json(name = "discountHalalas")
     val discountHalalas: kotlin.Long,
 
+    /* ZATCA root cbc:ID — the business invoice number */
+    @Json(name = "documentId")
+    val documentId: kotlin.String,
+
+    /* Whether this order is a ZATCA standard invoice */
+    @Json(name = "isStandardInvoice")
+    val isStandardInvoice: kotlin.Boolean,
+
     @Json(name = "createdAt")
     val createdAt: kotlin.Long,
 
@@ -100,7 +112,11 @@ data class OrderResponse (
     val events: kotlin.collections.List<OrderEventResponse>,
 
     @Json(name = "payments")
-    val payments: kotlin.collections.List<OrderPaymentResponse>
+    val payments: kotlin.collections.List<OrderPaymentResponse>,
+
+    /* ZATCA standard invoice buyer details (JSON) */
+    @Json(name = "zatcaBuyerDetails")
+    val zatcaBuyerDetails: ZatcaBuyerDetailsDto? = null
 
 ) {
 

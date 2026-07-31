@@ -25,6 +25,7 @@ import com.squareup.moshi.JsonClass
  *
  * @param id 
  * @param name 
+ * @param connectionType 
  * @param ip 
  * @param port 
  * @param role 
@@ -34,6 +35,7 @@ import com.squareup.moshi.JsonClass
  * @param updatedAt 
  * @param createdBy 
  * @param updatedBy 
+ * @param windowsPrinterName 
  */
 
 
@@ -44,6 +46,9 @@ data class PrinterResponse (
 
     @Json(name = "name")
     val name: kotlin.String,
+
+    @Json(name = "connectionType")
+    val connectionType: PrinterResponse.ConnectionType,
 
     @Json(name = "ip")
     val ip: kotlin.String,
@@ -70,10 +75,23 @@ data class PrinterResponse (
     val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Long?
+    val updatedBy: kotlin.Long?,
+
+    @Json(name = "windowsPrinterName")
+    val windowsPrinterName: kotlin.String? = null
 
 ) {
 
+    /**
+     * 
+     *
+     * Values: tcp,windows
+     */
+    @JsonClass(generateAdapter = false)
+    enum class ConnectionType(val value: kotlin.String) {
+        @Json(name = "tcp") tcp("tcp"),
+        @Json(name = "windows") windows("windows");
+    }
 
 }
 

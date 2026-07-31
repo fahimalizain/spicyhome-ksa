@@ -22,19 +22,15 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param title 
- * @param zatcaPaymentMeansCode ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+ * @param zatcaBuyerDetails Updated ZATCA buyer details for the reissued invoice
  */
 
 
-data class CreatePaymentMethodDto (
+data class ZatcaInvoiceReissueDto (
 
-    @Json(name = "title")
-    val title: kotlin.String,
-
-    /* ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1) */
-    @Json(name = "zatcaPaymentMeansCode")
-    val zatcaPaymentMeansCode: kotlin.String
+    /* Updated ZATCA buyer details for the reissued invoice */
+    @Json(name = "zatcaBuyerDetails")
+    val zatcaBuyerDetails: kotlin.Any? = null
 
 ) {
 
