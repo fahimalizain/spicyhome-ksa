@@ -1,4 +1,4 @@
-import { IsString, MinLength, IsInt, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, MinLength, MaxLength, IsInt, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiInt64 } from '../../../common/api-property-helpers';
 
@@ -10,7 +10,8 @@ export class CreateUserDto {
 
   @ApiProperty({ example: '1234' })
   @IsString()
-  @MinLength(4)
+  @MinLength(1)
+  @MaxLength(6)
   pin!: string;
 
   @ApiProperty({ example: 'Ahmed' })

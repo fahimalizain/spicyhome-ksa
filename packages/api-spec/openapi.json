@@ -2700,7 +2700,7 @@
           },
           "pin": {
             "type": "string",
-            "example": "1234"
+            "example": "771133"
           }
         },
         "required": [
@@ -2955,7 +2955,7 @@
           "pin": {
             "type": "string",
             "example": "5678",
-            "description": "New PIN (4-6 digits)"
+            "description": "New PIN (1-6 digits)"
           }
         }
       },

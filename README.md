@@ -54,7 +54,8 @@ pnpm package:win7
 The package supports two deployment layouts:
 
 - **Flat** (unzip and run): extract anywhere, run `start-server.bat`, open
-  `http://localhost:3742`. Default login: admin / 1234. Change PIN immediately.
+  `http://localhost:3742`. Default logins: admin / 771133 (POS/back-office),
+  cashier / 1 (Android tablet). Change the admin PIN immediately.
 - **Side-by-side** (production): run `install.bat -InstallDir D:\SpicyHomePOS`.
   Creates `releases\{version}\`, a `current\` junction, an NSSM Windows service,
   and `data\` outside the release tree for persistence across updates. Use

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import * as Sentry from '@sentry/react';
 import { client, setToken, setMe } from '../api';
 
-const PIN_LENGTH = 4;
+const PIN_MAX_LENGTH = 6;
 
 type UsernameMode = 'loading' | 'select' | 'input';
 
@@ -55,7 +55,7 @@ export function LoginPage() {
   const handleDigit = useCallback((digit: string) => {
     setError('');
     setPin((prev) => {
-      if (prev.length >= PIN_LENGTH) return prev;
+      if (prev.length >= PIN_MAX_LENGTH) return prev;
       return prev + digit;
     });
   }, []);
@@ -69,8 +69,12 @@ export function LoginPage() {
     setError('');
   }, []);
 
+  const canLogin = useCallback(() => {
+    return username.trim().length > 0 && pin.length >= 1 && pin.length <= PIN_MAX_LENGTH;
+  }, [username, pin]);
+
   const handleLogin = useCallback(async () => {
-    if (!username.trim() || pin.length !== PIN_LENGTH) return;
+    if (!username.trim() || pin.length < 1 || pin.length > PIN_MAX_LENGTH) return;
     setLoading(true);
     setError('');
     try {
@@ -88,12 +92,6 @@ export function LoginPage() {
       setLoading(false);
     }
   }, [username, pin, navigate]);
-
-  useEffect(() => {
-    if (pin.length === PIN_LENGTH) {
-      handleLogin();
-    }
-  }, [pin, handleLogin]);
 
   return (
     <div className="h-full flex flex-col items-center justify-center bg-gray-900 px-4">
@@ -144,7 +142,7 @@ export function LoginPage() {
         <div className="mb-4">
           <label className="block text-sm text-gray-400 mb-1">PIN</label>
           <div className="flex gap-2 justify-center mb-2">
-            {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+            {Array.from({ length: PIN_MAX_LENGTH }).map((_, i) => (
               <div
                 key={i}
                 className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold ${
@@ -194,6 +192,14 @@ export function LoginPage() {
             ⌫
           </button>
         </div>
+
+        <button
+          onClick={handleLogin}
+          disabled={loading || !canLogin()}
+          className="touch-target w-full bg-brand-500 hover:bg-brand-600 active:bg-brand-700 rounded-xl text-xl font-bold text-white py-4 mt-6 disabled:opacity-50"
+        >
+          Login
+        </button>
 
         {loading && <div className="text-center text-gray-400 text-sm mt-4">Logging in...</div>}
 

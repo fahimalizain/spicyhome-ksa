@@ -51,7 +51,7 @@ beforeAll(async () => {
 
   const loginRes = await request(app.getHttpServer())
     .post('/auth/login')
-    .send({ username: 'admin', pin: '1234' });
+    .send({ username: 'admin', pin: '771133' });
   jwtToken = loginRes.body.accessToken;
 });
 
@@ -64,7 +64,7 @@ describe('Auth (e2e)', () => {
   it('POST /auth/login works', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ username: 'admin', pin: '1234' })
+      .send({ username: 'admin', pin: '771133' })
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
   });
@@ -103,6 +103,8 @@ describe('Auth (e2e)', () => {
     expect(res.body.usernames).toBeDefined();
     expect(Array.isArray(res.body.usernames)).toBe(true);
     expect(res.body.usernames).toContain('admin');
+    // Seeded cashier (staff, android_login=1) is included without a platform filter
+    expect(res.body.usernames).toContain('cashier');
     // Response must not contain sensitive fields
     expect(res.body.usernames.every((u: string) => typeof u === 'string')).toBe(true);
     expect(Object.keys(res.body)).toEqual(['usernames']);
@@ -131,8 +133,10 @@ describe('Auth (e2e)', () => {
       .expect(200);
     expect(res.body.usernames).toBeDefined();
     expect(Array.isArray(res.body.usernames)).toBe(true);
-    // admin is seeded with android_login defaulting to 1
-    expect(res.body.usernames).toContain('admin');
+    // admin is seeded with android_login=0 (POS/back-office only) — must be hidden
+    expect(res.body.usernames).not.toContain('admin');
+    // cashier is seeded with android_login=1 — must be shown
+    expect(res.body.usernames).toContain('cashier');
     // inactive user must stay excluded even with android_login default 1
     expect(res.body.usernames).not.toContain('inactive_user');
   });

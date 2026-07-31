@@ -24,10 +24,10 @@ export class UpdateUserDto {
   @IsBoolean()
   androidLogin?: boolean;
 
-  @ApiPropertyOptional({ type: String, example: '5678', description: 'New PIN (4-6 digits)' })
+  @ApiPropertyOptional({ type: String, example: '5678', description: 'New PIN (1-6 digits)' })
   @IsOptional()
   @IsString()
-  @MinLength(4)
+  @MinLength(1)
   @MaxLength(6)
   pin?: string;
 }
