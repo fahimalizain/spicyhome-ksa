@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Packaging smoke test — verifies the production install flow:
 #   1. Bazel outputs exist
-#   2. Package directory is assembled correctly
+#   2. Package directory is assembled correctly (incl. db seed catalog JSON)
 #   3. package.json files are generated with correct file: references
 #   4. npm install in packages/shared (for zod and other workspace-only deps)
 #   5. npm install in server (with file: workspace symlinks)
@@ -24,7 +24,7 @@ echo "=== Packaging smoke test ==="
 echo ""
 echo "Checking Bazel outputs..."
 MISSING=false
-for target in apps/server/src/main.js packages/shared/src/index.js packages/db/src/index.js; do
+for target in apps/server/src/main.js packages/shared/src/index.js packages/db/src/index.js packages/db/src/data/spicyhome_dump_20260731.json; do
   if [ ! -f "$ROOT_DIR/bazel-bin/$target" ]; then
     echo "  MISSING: bazel-bin/$target (run: bazel build //apps/server:lib //packages/shared:lib //packages/db:lib)"
     MISSING=true
@@ -54,7 +54,7 @@ find bazel-bin/packages/shared/src -name "*.js" -print0 2>/dev/null | while IFS=
   cp -f "$f" "$TEST_DIR/packages/shared/$rel"
 done
 
-find bazel-bin/packages/db/src -name "*.js" -print0 2>/dev/null | while IFS= read -r -d '' f; do
+find bazel-bin/packages/db/src \( -name "*.js" -o -name "*.json" \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
   rel="${f#bazel-bin/packages/db/src/}"
   mkdir -p "$TEST_DIR/packages/db/$(dirname "$rel")"
   cp -f "$f" "$TEST_DIR/packages/db/$rel"
@@ -71,6 +71,21 @@ cp packaging/prebuilt/win_rawprint.exe "$TEST_DIR/prebuilt/" 2>/dev/null || true
 
 # Run fixup
 node "$SCRIPT_DIR/fixup-packages.js" "$TEST_DIR"
+
+# Seed catalog JSON must be present and parse — seed.js requires it relative
+# to packages/db/ at server boot (Win7 MODULE_NOT_FOUND regression guard).
+# Only the JSON is required here; requiring seed.js would load the Windows
+# better-sqlite3 prebuilt and fail on macOS/Linux.
+echo -n "  packages/db/data/spicyhome_dump_20260731.json ... "
+if [ -f "$TEST_DIR/packages/db/data/spicyhome_dump_20260731.json" ] \
+  && node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$TEST_DIR/packages/db/data/spicyhome_dump_20260731.json" 2>/dev/null; then
+  echo "✓"
+else
+  echo "✗ MISSING OR INVALID"
+  echo "  ERROR: seed catalog JSON not copied (or invalid). Bazel must emit it:"
+  echo "    bazel build //packages/db:lib"
+  exit 1
+fi
 
 echo "  OK"
 

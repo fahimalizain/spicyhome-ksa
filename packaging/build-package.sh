@@ -7,6 +7,7 @@ set -euo pipefail
 #   node/node.exe + node/npm.cmd  — Node.js v18.20.5 win-x64 (portable)
 #   server/                       — compiled NestJS server JS + package.json
 #   packages/db/drizzle/          — Drizzle SQL migration files
+#   packages/db/data/             — seed catalog JSON (RMS dump required by seed.js)
 #   pos/                          — SPA static dist (from Vite)
 #   VERSION                       — release version file
 #   start-server.bat / .ps1       — debug startup scripts
@@ -159,7 +160,10 @@ find "$ROOT_DIR/bazel-bin/packages/shared/src" -name "*.js" -print0 2>/dev/null 
   chmod 644 "$PACKAGE_DIR/packages/shared/$rel"
 done
 
-find "$ROOT_DIR/bazel-bin/packages/db/src" -name "*.js" -print0 2>/dev/null | while IFS= read -r -d '' f; do
+# Copy compiled JS plus JSON assets (seed catalog dump required by seed.js
+# via resolveJsonModule; keep the same rel-path flattening so data/ lands
+# next to seed.js under packages/db/).
+find "$ROOT_DIR/bazel-bin/packages/db/src" \( -name "*.js" -o -name "*.json" \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
   rel="${f#$ROOT_DIR/bazel-bin/packages/db/src/}"
   mkdir -p "$PACKAGE_DIR/packages/db/$(dirname "$rel")"
   cp -f "$f" "$PACKAGE_DIR/packages/db/$rel"
