@@ -136,7 +136,12 @@ export class UpdatePrinterDto {
   @MinLength(1)
   windowsPrinterName?: string;
 
-  @ApiPropertyOptional({ type: String })
+  @ApiPropertyOptional({
+    type: String,
+    description:
+      'IP address or hostname. Required when connectionType is "tcp". Can be empty string for windows.',
+  })
+  @ValidateIf((o: any) => (o.connectionType ?? 'tcp') === 'tcp')
   @IsOptional()
   @IsString()
   @MinLength(1)
