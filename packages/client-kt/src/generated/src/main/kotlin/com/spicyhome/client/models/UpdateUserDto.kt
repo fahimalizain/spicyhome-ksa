@@ -25,6 +25,7 @@ import com.squareup.moshi.JsonClass
  * @param name 
  * @param roleId 
  * @param isActive 
+ * @param androidLogin Whether the user appears on Android login
  * @param pin New PIN (4-6 digits)
  */
 
@@ -39,6 +40,10 @@ data class UpdateUserDto (
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean? = null,
+
+    /* Whether the user appears on Android login */
+    @Json(name = "androidLogin")
+    val androidLogin: kotlin.Boolean? = null,
 
     /* New PIN (4-6 digits) */
     @Json(name = "pin")

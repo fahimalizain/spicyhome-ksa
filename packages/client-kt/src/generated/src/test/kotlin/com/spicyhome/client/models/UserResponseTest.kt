@@ -55,6 +55,12 @@ class UserResponseTest : ShouldSpec() {
             //modelInstance.isActive shouldBe ("TODO")
         }
 
+        // to test the property `androidLogin`
+        should("test androidLogin") {
+            // uncomment below to test the property
+            //modelInstance.androidLogin shouldBe ("TODO")
+        }
+
         // to test the property `createdAt`
         should("test createdAt") {
             // uncomment below to test the property

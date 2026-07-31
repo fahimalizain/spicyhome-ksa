@@ -221,7 +221,10 @@ async function request<T>(
 
   if (!response.ok) {
     if (response.status === 401 && config.onUnauthorized) {
-      config.onUnauthorized();
+      // POST /auth/login 401 means bad credentials — not an expired session.
+      if (!(method === 'POST' && path === '/auth/login')) {
+        config.onUnauthorized();
+      }
     }
     const errorBody = await response.text().catch(() => 'Unknown error');
     throw new Error(`HTTP ${response.status} ${response.statusText}: ${errorBody}`);
@@ -250,7 +253,14 @@ export class SpicyHomeClient {
 
     me: () => request<MeResponse>(this.config, 'GET', '/auth/me'),
 
-    listUsernames: () => request<UsernamesResponse>(this.config, 'GET', '/auth/usernames'),
+    listUsernames: (opts?: { platform?: 'android' }) =>
+      request<UsernamesResponse>(
+        this.config,
+        'GET',
+        '/auth/usernames',
+        undefined,
+        opts?.platform ? { platform: opts.platform } : undefined,
+      ),
 
     listUsers: () => request<UserResponse[]>(this.config, 'GET', '/auth/users'),
 

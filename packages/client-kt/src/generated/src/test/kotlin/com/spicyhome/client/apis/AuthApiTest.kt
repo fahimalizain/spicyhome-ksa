@@ -76,7 +76,8 @@ class AuthApiTest : ShouldSpec() {
         // to test authControllerListUsernames
         should("test authControllerListUsernames") {
             // uncomment below to test authControllerListUsernames
-            //val result : UsernamesResponse = apiInstance.authControllerListUsernames()
+            //val platform : kotlin.String = platform_example // kotlin.String | When \"android\", only users with androidLogin=true are returned
+            //val result : UsernamesResponse = apiInstance.authControllerListUsernames(platform)
             //result shouldBe ("TODO")
         }
 

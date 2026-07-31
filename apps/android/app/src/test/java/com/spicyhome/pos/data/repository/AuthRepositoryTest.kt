@@ -119,19 +119,25 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `listUsernames delegates to authApi`() {
-        every { authApi.authControllerListUsernames() } returns usernamesCall
+    fun `listUsernames delegates to authApi with android platform filter`() {
+        every {
+            authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
+        } returns usernamesCall
 
         val result = repository.listUsernames()
 
         assertThat(result).isSameInstanceAs(usernamesCall)
-        verify { authApi.authControllerListUsernames() }
+        verify {
+            authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
+        }
     }
 
     @Test
     fun `listUsernames success returns usernames`() {
         val usernames = UsernamesResponse(usernames = listOf("admin", "cashier1"))
-        every { authApi.authControllerListUsernames() } returns usernamesCall
+        every {
+            authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
+        } returns usernamesCall
         every { usernamesCall.execute() } returns Response.success(usernames)
 
         val result = repository.listUsernames().execute()
@@ -144,7 +150,9 @@ class AuthRepositoryTest {
     fun `listUsernames failure returns error`() {
         val response = Response.error<UsernamesResponse>(500, okhttp3.ResponseBody.create(null, ""))
 
-        every { authApi.authControllerListUsernames() } returns usernamesCall
+        every {
+            authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
+        } returns usernamesCall
         every { usernamesCall.execute() } returns response
 
         val result = repository.listUsernames().execute()

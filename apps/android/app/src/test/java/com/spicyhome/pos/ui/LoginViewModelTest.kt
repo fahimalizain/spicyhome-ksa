@@ -44,7 +44,9 @@ class LoginViewModelTest {
         every { preferencesManager.serverUrl } returns serverUrlFlow
         every { preferencesManager.authToken } returns MutableStateFlow(null)
         every { apiClientProvider.createAuthApi(any()) } returns authApi
-        every { authApi.authControllerListUsernames() } returns usernamesCall
+        every {
+            authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
+        } returns usernamesCall
         every { usernamesCall.execute() } returns
             Response.success(UsernamesResponse(usernames = listOf("admin", "cashier1")))
     }

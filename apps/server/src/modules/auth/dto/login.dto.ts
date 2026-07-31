@@ -7,9 +7,9 @@ export class LoginDto {
   @MinLength(1)
   username!: string;
 
-  @ApiProperty({ example: '1234' })
+  @ApiProperty({ example: '771133' })
   @IsString()
-  @MinLength(4)
+  @MinLength(1)
   @MaxLength(6)
   pin!: string;
 }

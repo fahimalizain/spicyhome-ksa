@@ -49,7 +49,7 @@ sleep 2
 echo "=== Logging in as admin ==="
 LOGIN_RESP=$(curl -s "http://localhost:$PORT/auth/login" \
   -H 'Content-Type: application/json' \
-  --data-raw '{"username":"admin","pin":"1234"}')
+  --data-raw '{"username":"admin","pin":"771133"}')
 
 echo "Login response: $LOGIN_RESP"
 
