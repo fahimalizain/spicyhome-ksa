@@ -92,16 +92,30 @@ describe('seed', () => {
     expect(compareSync('1', cashier.pin_hash)).toBe(true);
   });
 
-  it('inserts 5 tables', () => {
+  it('inserts 40 tables (T1 – T40 from RMS dump)', () => {
     seedRaw(sqlite);
 
     const tables = sqlite.prepare('SELECT * FROM tables ORDER BY sort_order').all() as any[];
-    expect(tables.length).toBe(5);
-    expect(tables.map((t: any) => t.name)).toEqual(['T1', 'T2', 'T3', 'T4', 'T5']);
+    expect(tables.length).toBe(40);
+
+    const expectedNames = Array.from({ length: 40 }, (_, i) => `T${i + 1}`);
+    expect(tables.map((t: any) => t.name)).toEqual(expectedNames);
+    expect(tables.map((t: any) => t.sort_order)).toEqual(
+      Array.from({ length: 40 }, (_, i) => i + 1),
+    );
+
     tables.forEach((t: any) => {
       expect(t.is_active).toBe(1);
       expect(t.created_by).toBe(1);
     });
+
+    // Spot-check first/last tables
+    const first = sqlite.prepare("SELECT * FROM tables WHERE name = 'T1'").get() as any;
+    const last = sqlite.prepare("SELECT * FROM tables WHERE name = 'T40'").get() as any;
+    expect(first).toBeDefined();
+    expect(first.sort_order).toBe(1);
+    expect(last).toBeDefined();
+    expect(last.sort_order).toBe(40);
   });
 
   it('inserts 7 categories (Courses only, Title Case)', () => {
@@ -238,7 +252,7 @@ describe('seed', () => {
     expect(cashiers.cnt).toBe(1);
 
     const tables = sqlite.prepare('SELECT COUNT(*) as cnt FROM tables').get() as any;
-    expect(tables.cnt).toBe(5);
+    expect(tables.cnt).toBe(40);
 
     const categories = sqlite.prepare('SELECT COUNT(*) as cnt FROM item_categories').get() as any;
     expect(categories.cnt).toBe(7);

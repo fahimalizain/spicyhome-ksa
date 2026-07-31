@@ -32,9 +32,20 @@ interface DumpItem {
   sub_course_id: number;
 }
 
+/** A dining table from the RMS dump (dbo.Tables); id is RMS provenance only. */
+interface DumpTable {
+  id: number;
+  name: string;
+  name_raw: string;
+  dine_id: number;
+  branch: number;
+  inactive: boolean;
+}
+
 /** Shape of packages/db/src/data/spicyhome_dump_20260731.json. */
 interface CatalogDump {
   meta: Record<string, unknown>;
+  tables: DumpTable[];
   courses: DumpCourse[];
   sub_courses: DumpSubCourse[];
   items: DumpItem[];
@@ -77,7 +88,8 @@ const catalog: CatalogDump = catalogJson;
  *   - Cashier (tablet floor user): username cashier, name Cashier, PIN 1,
  *     role staff, android_login = 1 (shown on Android login)
  *
- * Tables: T1 – T5
+ * Tables: T1 – T40 from RMS dump (dbo.Tables, DineId=2, Branch=1).
+ * Raw TableName 'T -  N' normalized to display name 'TN' (no spaces).
  *
  * Idempotent: skips insert if rows already exist.
  */
@@ -166,18 +178,26 @@ function seedTables(sqlite: Database.Database): void {
 
   if (existing.cnt > 0) return;
 
-  sqlite.exec(`
+  // Missing/empty dump tables is a data-integrity error; fail the seed
+  // loudly instead of silently inserting nothing.
+  if (!Array.isArray(catalog.tables) || catalog.tables.length === 0) {
+    throw new Error('Seed integrity: catalog dump has no tables to seed');
+  }
+
+  const insert = sqlite.prepare(`
     INSERT INTO tables (name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('T1', 1, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO tables (name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('T2', 2, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO tables (name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('T3', 3, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO tables (name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('T4', 4, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO tables (name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('T5', 5, 1, ${now}, ${now}, 1, 1);
+    VALUES (?, ?, ?, ?, ?, 1, 1)
   `);
+
+  const insertAll = sqlite.transaction(() => {
+    // sort_order = RMS id ascending (167..206 -> T1..T40)
+    const tables = [...catalog.tables].sort((a, b) => a.id - b.id);
+    tables.forEach((table, index) => {
+      insert.run(table.name, index + 1, table.inactive ? 0 : 1, now, now);
+    });
+  });
+
+  insertAll();
 }
 
 function seedCategories(sqlite: Database.Database): void {
