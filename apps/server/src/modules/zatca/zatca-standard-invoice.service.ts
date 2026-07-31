@@ -58,7 +58,8 @@ import {
   zatcaKey,
   requireZatcaBuyerDetails,
   parseZatcaBuyerDetails,
-  resolvePaymentMeansCode,
+  buildInvoicePaymentMeans,
+  buildCreditNotePaymentMeans,
 } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 
@@ -730,8 +731,8 @@ export class ZatcaStandardInvoiceService {
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
-    // Resolve the Payment Means code from the order's payment snapshots
-    // (largest amount wins; tie-break by method id). Falls back to '10'.
+    // Build one cac:PaymentMeans block per payment line (BT-81 1..n),
+    // sorted by methodId; empty fallback handled by the XML builder.
     const paymentRows = this.db
       .select()
       .from(orderPayments)
@@ -749,10 +750,11 @@ export class ZatcaStandardInvoiceService {
       prevInvoiceHash,
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
-      paymentMeansCode: resolvePaymentMeansCode(
+      paymentMeans: buildInvoicePaymentMeans(
         paymentRows.map((p) => ({
-          amountHalalas: p.amountHalalas,
           methodId: p.methodId,
+          methodTitle: p.methodTitle,
+          amountHalalas: p.amountHalalas,
           zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
         })),
       ),
@@ -969,9 +971,14 @@ export class ZatcaStandardInvoiceService {
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
       billingReferenceId: originalInvoice.uuid,
-      // Snapshot of the refund method's ZATCA code (fallback '10' handled in the builder)
-      paymentMeansCode: refund.zatcaPaymentMeansCode,
-      paymentNote: refund.reason || 'Refund',
+      // Single block from the refund tender: KSA-10 reason + method snapshot
+      paymentMeans: buildCreditNotePaymentMeans({
+        methodId: refund.methodId,
+        methodTitle: refund.methodTitle,
+        zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
+        reason: refund.reason || 'Refund',
+        amountHalalas: refund.totalHalalas,
+      }),
     };
 
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);

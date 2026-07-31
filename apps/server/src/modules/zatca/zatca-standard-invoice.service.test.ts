@@ -350,11 +350,15 @@ describe('ZatcaStandardInvoiceService', () => {
 
       const result = await standardService.createStandardInvoice(orderId, 1);
       expect(result.status).toBe('cleared');
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(1);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
       expect(result.signedXml).not.toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>Card | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
-    it('split-tender standard invoice uses the largest-amount line code', async () => {
+    it('split-tender standard invoice emits one block per payment line', async () => {
       const orderId = createStandardOrder();
       sqlite.exec(`
         INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
@@ -371,7 +375,19 @@ describe('ZatcaStandardInvoiceService', () => {
 
       const result = await standardService.createStandardInvoice(orderId, 1);
       expect(result.status).toBe('cleared');
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(2);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>Card | 85.00 SAR</cbc:InstructionNote>',
+      );
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>Cash | 30.00 SAR</cbc:InstructionNote>',
+      );
+      // 'card' < 'cash' → card block first
+      expect(result.signedXml.indexOf('Card | 85.00 SAR')).toBeLessThan(
+        result.signedXml.indexOf('Cash | 30.00 SAR'),
+      );
     });
 
     it('persists with status rejected on clearance REJECTED (no throw, returns result)', async () => {
@@ -839,7 +855,9 @@ describe('ZatcaStandardInvoiceService', () => {
       // Verify the XML contains the default reason
       const reqBody = JSON.parse(fakeHttp.requests[0]?.options.body ?? '{}');
       const submittedXml = Buffer.from(reqBody.invoice ?? '', 'base64').toString('utf8');
-      expect(submittedXml).toContain('<cbc:InstructionNote>Refund</cbc:InstructionNote>');
+      expect(submittedXml).toContain(
+        '<cbc:InstructionNote>Refund | Cash | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
     it('throws for simplified orders', async () => {

@@ -169,6 +169,108 @@ describe('UBL XML Builder', () => {
     }
   });
 
+  // ── Multi-block paymentMeans (BT-81 1..n) ────────────────────────────────
+
+  it('emits one PaymentMeans block per paymentMeans entry', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [
+        { code: '48', instructionNote: 'Card | 70.00 SAR' },
+        { code: '10', instructionNote: 'Cash | 45.00 SAR' },
+      ],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml.match(/<cac:PaymentMeans>/g)).toHaveLength(2);
+    expect(xml.match(/<cbc:PaymentMeansCode>/g)).toHaveLength(2);
+    expect(xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(xml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+    expect(xml).toContain('<cbc:InstructionNote>Card | 70.00 SAR</cbc:InstructionNote>');
+    expect(xml).toContain('<cbc:InstructionNote>Cash | 45.00 SAR</cbc:InstructionNote>');
+  });
+
+  it('preserves block order as given (caller sorts by methodId)', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [
+        { code: '48', instructionNote: 'Card | 70.00 SAR' },
+        { code: '10', instructionNote: 'Cash | 45.00 SAR' },
+      ],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    const cardIdx = xml.indexOf('Card | 70.00 SAR');
+    const cashIdx = xml.indexOf('Cash | 45.00 SAR');
+    expect(cardIdx).toBeGreaterThan(-1);
+    expect(cashIdx).toBeGreaterThan(cardIdx);
+  });
+
+  it('coerces invalid codes per block to 10 while keeping the note', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [{ code: '55', instructionNote: 'Card | 70.00 SAR' }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+    expect(xml).toContain('<cbc:InstructionNote>Card | 70.00 SAR</cbc:InstructionNote>');
+    expect(xml).not.toContain('<cbc:PaymentMeansCode>55</cbc:PaymentMeansCode>');
+  });
+
+  it('omits InstructionNote for invoice blocks without one', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [{ code: '48' }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(xml).not.toContain('<cbc:InstructionNote>');
+  });
+
+  it('fills a missing note on credit note blocks from paymentNote (BR-KSA-17)', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+      paymentNote: 'Item was cold',
+      paymentMeans: [{ code: '48' }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+    expect(xml).toContain('<cbc:InstructionNote>Item was cold</cbc:InstructionNote>');
+  });
+
+  it('fills a missing note on credit note blocks with the correction default (BR-KSA-17)', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      type: 'credit_note',
+      paymentMeans: [{ code: '48' }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain(
+      '<cbc:InstructionNote>Cancellation or Additional Charge</cbc:InstructionNote>',
+    );
+  });
+
+  it('escapes XML special characters in InstructionNote', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [{ code: '10', instructionNote: 'Cash & Co <test> | 5.00 SAR' }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    expect(xml).toContain(
+      '<cbc:InstructionNote>Cash &amp; Co &lt;test&gt; | 5.00 SAR</cbc:InstructionNote>',
+    );
+  });
+
+  it('clamps InstructionNote to 1000 chars (BR-KSA-F-06-C13)', () => {
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      paymentMeans: [{ code: '10', instructionNote: 'x'.repeat(1500) }],
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+    const match = xml.match(/<cbc:InstructionNote>([^<]*)<\/cbc:InstructionNote>/);
+    expect(match).not.toBeNull();
+    expect(match![1].length).toBe(1000);
+    expect(match![1].endsWith('...')).toBe(true);
+  });
+
   it('includes ICV and PIH in AdditionalDocumentReference', () => {
     const xml = buildUnsignedInvoiceXML(baseInput);
     expect(xml).toContain('<cbc:ID>ICV</cbc:ID>');

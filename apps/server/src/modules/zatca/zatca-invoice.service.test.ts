@@ -304,7 +304,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(row.xml).toContain('<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>');
       expect(row.xml).toContain('BillingReference');
       expect(row.xml).toContain(invoiceUuid);
-      expect(row.xml).toContain('<cbc:InstructionNote>Item was cold</cbc:InstructionNote>');
+      expect(row.xml).toContain(
+        '<cbc:InstructionNote>Item was cold | Cash | 115.00 SAR</cbc:InstructionNote>',
+      );
 
       // QR TLV should be present
       expect(row.qr_tlv).toBeTruthy();
@@ -366,7 +368,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
         .get(refundId) as any;
 
       expect(row.reason).toBe('Refund');
-      expect(row.xml).toContain('<cbc:InstructionNote>Refund</cbc:InstructionNote>');
+      expect(row.xml).toContain(
+        '<cbc:InstructionNote>Refund | Cash | 57.50 SAR</cbc:InstructionNote>',
+      );
     });
 
     it('ICV is monotonically increasing across invoices and credit_notes', async () => {
@@ -718,9 +722,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
     });
   });
 
-  // ── Payment Means code resolution ────────────────────────────────────────
+  // ── Payment Means emission (one block per payment line) ───────────────────
 
-  describe('PaymentMeansCode resolution', () => {
+  describe('PaymentMeans emission', () => {
     function createPaidOrderForInvoice(
       payments: Array<{ methodId: string; amount: number }>,
     ): number {
@@ -754,47 +758,80 @@ describe('ZatcaInvoiceService — credit notes', () => {
       return orderId;
     }
 
-    it('emits PaymentMeansCode 10 for a cash-paid order', async () => {
+    it('emits one PaymentMeans block with code 10 and note for a cash-paid order', async () => {
       const orderId = createPaidOrderForInvoice([{ methodId: 'cash', amount: 11500 }]);
       const result = await service.createInvoice(orderId);
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(1);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
       expect(result.signedXml).not.toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>cash | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
-    it('emits PaymentMeansCode 48 for a card-paid order', async () => {
+    it('emits one PaymentMeans block with code 48 and note for a card-paid order', async () => {
       const orderId = createPaidOrderForInvoice([{ methodId: 'card', amount: 11500 }]);
       const result = await service.createInvoice(orderId);
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(1);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
       expect(result.signedXml).not.toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>card | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
     it('emits PaymentMeansCode 48 for mada-paid order (mada maps to bank card)', async () => {
       const orderId = createPaidOrderForInvoice([{ methodId: 'mada', amount: 11500 }]);
       const result = await service.createInvoice(orderId);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>mada | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
-    it('split tender uses the largest-amount line code', async () => {
-      // card 7000 > cash 4500 → 48
+    it('split tender emits one block per line with both codes and notes', async () => {
+      // card 7000 + cash 4500 → both blocks, not just the largest
       const orderId = createPaidOrderForInvoice([
         { methodId: 'card', amount: 7000 },
         { methodId: 'cash', amount: 4500 },
       ]);
       const result = await service.createInvoice(orderId);
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(2);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>card | 70.00 SAR</cbc:InstructionNote>',
+      );
+      expect(result.signedXml).toContain(
+        '<cbc:InstructionNote>cash | 45.00 SAR</cbc:InstructionNote>',
+      );
     });
 
-    it('split tender tie-breaks by methodId ascending', async () => {
-      // Equal amounts: 'card' < 'cash' lexicographically → 48
+    it('split tender blocks are ordered by methodId ASC', async () => {
+      // 'card' < 'cash' → card block first
+      const orderId = createPaidOrderForInvoice([
+        { methodId: 'cash', amount: 4500 },
+        { methodId: 'card', amount: 7000 },
+      ]);
+      const result = await service.createInvoice(orderId);
+      const cardIdx = result.signedXml.indexOf('card | 70.00 SAR');
+      const cashIdx = result.signedXml.indexOf('cash | 45.00 SAR');
+      expect(cardIdx).toBeGreaterThan(-1);
+      expect(cashIdx).toBeGreaterThan(cardIdx);
+    });
+
+    it('equal split amounts emit both blocks', async () => {
       const orderId = createPaidOrderForInvoice([
         { methodId: 'cash', amount: 5750 },
         { methodId: 'card', amount: 5750 },
       ]);
       const result = await service.createInvoice(orderId);
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(2);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
+      expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
     });
 
-    it('credit note uses the refund method snapshot code', async () => {
+    it('credit note uses the refund method snapshot code with reason + method', async () => {
       const orderId = createPaidOrderForInvoice([{ methodId: 'cash', amount: 11500 }]);
       const invoice = await service.createInvoice(orderId);
 
@@ -810,14 +847,20 @@ describe('ZatcaInvoiceService — credit notes', () => {
         .get(refundId) as any;
 
       expect(result.icv).toBe(invoice.icv + 1);
+      expect(row.xml.match(/<cac:PaymentMeans>/g)).toHaveLength(1);
       expect(row.xml).toContain('<cbc:PaymentMeansCode>48</cbc:PaymentMeansCode>');
-      expect(row.xml).toContain('<cbc:InstructionNote>Card refund</cbc:InstructionNote>');
+      expect(row.xml).toContain(
+        '<cbc:InstructionNote>Card refund | Card | 115.00 SAR</cbc:InstructionNote>',
+      );
     });
 
-    it('invoice falls back to 10 when order has no payment rows (legacy edge case)', async () => {
+    it('invoice falls back to a single 10 block when order has no payment rows (legacy edge case)', async () => {
       const orderId = createPaidOrderForInvoice([]);
       const result = await service.createInvoice(orderId);
+      expect(result.signedXml.match(/<cac:PaymentMeans>/g)).toHaveLength(1);
       expect(result.signedXml).toContain('<cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>');
+      // No payment rows → no InstructionNote on the fallback invoice block
+      expect(result.signedXml).not.toContain('<cbc:InstructionNote>');
     });
   });
 });

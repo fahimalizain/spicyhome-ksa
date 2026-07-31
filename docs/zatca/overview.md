@@ -76,16 +76,27 @@ Implementation Standard `docs/zatca/20230519_ZATCA_Electronic_Invoice_XML_Implem
 | `card` / `mada` | `48`                                                        | credit/debit cards (UN/ECE 54/55 are excluded from ZATCA's subset) |
 | custom methods  | any allow-listed code (default `30`/`42` for bank transfer) | bank transfer / other                                              |
 
+**Emission rules:**
+
 - **Snapshot**: `order_payments` and `order_refunds` copy the catalog value
   (`payment_methods.zatca_payment_means_code`) at pay/refund time, so signed
   XML stays stable even if the catalog method is later re-mapped.
-- **Split tender (v1)**: one `cac:PaymentMeans` block only — the code of the
-  largest tender line wins; ties break by `methodId` ASC. Multi-block
-  `1..n` emission is **out of scope** for v1.
-- **Credit notes**: use the refund row's snapshot code; `InstructionNote`
-  (KSA-10 / BR-KSA-17) behavior unchanged.
-- **Fallback**: `10` when no payment rows exist or the snapshot is invalid.
-- Reference implementation: `packages/shared/src/zatca-payment-means.ts`.
+- **Invoices**: one `cac:PaymentMeans` block **per `order_payments` line**
+  (BT-81 cardinality `1..n`), sorted by `methodId` ASC for deterministic
+  (C14N-stable) output. Each block carries an `cbc:InstructionNote` with the
+  method title and amount: `{methodTitle} | {amount} SAR`.
+- **Credit/debit notes**: one block from the **refund** tender (not the
+  original order's multi-pay). **BR-KSA-17** requires every block on a
+  credit/debit note to carry an `cbc:InstructionNote` — the KSA-10 reason
+  stays first, then the method (and the refund amount when known):
+  `{reason} | {methodTitle} | {amount} SAR`. Missing notes are filled with the
+  default correction text (`Cancellation or Additional Charge`).
+- **InstructionNote length**: clamped to 1000 chars (BR-KSA-F-06-C13),
+  truncating from the end so the reason prefix survives.
+- **Fallback**: a single `10` block when no payment rows exist or the snapshot
+  is invalid.
+- Reference implementation: `packages/shared/src/zatca-payment-means.ts`
+  (`buildInvoicePaymentMeans` / `buildCreditNotePaymentMeans`).
 
 ## EGS Registration
 

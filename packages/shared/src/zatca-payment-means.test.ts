@@ -1,7 +1,10 @@
 import {
+  buildCreditNotePaymentMeans,
+  buildInvoicePaymentMeans,
+  clampInstructionNote,
   DEFAULT_ZATCA_PAYMENT_MEANS_CODE,
   isZatcaPaymentMeansCode,
-  resolvePaymentMeansCode,
+  MAX_INSTRUCTION_NOTE_LENGTH,
   ZATCA_PAYMENT_MEANS_CODE_LABELS,
   ZATCA_PAYMENT_MEANS_CODES,
 } from './zatca-payment-means';
@@ -41,100 +44,146 @@ describe('ZATCA payment means codes', () => {
   });
 });
 
-describe('resolvePaymentMeansCode', () => {
-  it('returns default 10 for no payment lines', () => {
-    expect(resolvePaymentMeansCode([])).toBe('10');
+describe('clampInstructionNote', () => {
+  it('keeps notes within the limit untouched', () => {
+    const note = 'x'.repeat(1000);
+    expect(clampInstructionNote(note)).toBe(note);
   });
 
-  it('returns 10 for a single cash payment', () => {
-    expect(
-      resolvePaymentMeansCode([
-        { amountHalalas: 5000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-      ]),
-    ).toBe('10');
+  it('truncates notes over 1000 chars with a trailing ellipsis', () => {
+    const note = 'a'.repeat(1500);
+    const clamped = clampInstructionNote(note);
+    expect(clamped).toHaveLength(MAX_INSTRUCTION_NOTE_LENGTH);
+    expect(clamped.endsWith('...')).toBe(true);
+    // Reason prefix (leading content) is preserved
+    expect(clamped.startsWith('aaa')).toBe(true);
+  });
+});
+
+describe('buildInvoicePaymentMeans', () => {
+  it('returns an empty array for no payment lines (builder falls back to 10)', () => {
+    expect(buildInvoicePaymentMeans([])).toEqual([]);
   });
 
-  it('returns 48 for a single card payment', () => {
-    expect(
-      resolvePaymentMeansCode([
-        { amountHalalas: 5000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-      ]),
-    ).toBe('48');
+  it('builds one block for a single cash payment with note format {title} | {amount} SAR', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 11500, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result).toEqual([{ code: '10', instructionNote: 'Cash | 115.00 SAR' }]);
   });
 
-  it('picks the code of the largest-amount line in split tender', () => {
-    const lines = [
-      { amountHalalas: 3000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-      { amountHalalas: 7000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('48');
+  it('builds one block for a single card payment', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 11500, zatcaPaymentMeansCode: '48' },
+    ]);
+    expect(result).toEqual([{ code: '48', instructionNote: 'Card | 115.00 SAR' }]);
   });
 
-  it('picks the code of the largest-amount line regardless of order', () => {
-    const lines = [
-      { amountHalalas: 7000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-      { amountHalalas: 3000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('48');
+  it('builds one block per line for split tender, sorted by methodId ASC', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 4500, zatcaPaymentMeansCode: '10' },
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 7000, zatcaPaymentMeansCode: '48' },
+    ]);
+    expect(result).toEqual([
+      { code: '48', instructionNote: 'Card | 70.00 SAR' },
+      { code: '10', instructionNote: 'Cash | 45.00 SAR' },
+    ]);
   });
 
-  it('breaks amount ties by lexicographically smallest methodId', () => {
-    // card vs cash: 'card' < 'cash' lexicographically
-    const lines = [
-      { amountHalalas: 5000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-      { amountHalalas: 5000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('48');
+  it('sort is stable regardless of input order', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 7000, zatcaPaymentMeansCode: '48' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 4500, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result.map((m) => m.code)).toEqual(['48', '10']);
   });
 
-  it('tie-break is stable regardless of input order', () => {
-    const lines = [
-      { amountHalalas: 5000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-      { amountHalalas: 5000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('48');
+  it('keeps both lines with equal amounts (no winner selection)', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 5750, zatcaPaymentMeansCode: '10' },
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 5750, zatcaPaymentMeansCode: '48' },
+    ]);
+    expect(result.map((m) => m.code)).toEqual(['48', '10']);
+    expect(result).toHaveLength(2);
   });
 
-  it('tie-break uses methodId ASC among equal amounts with equal codes', () => {
-    // mada and card both map to 48; 'card' wins the tie-break
-    const lines = [
-      { amountHalalas: 2500, methodId: 'mada', zatcaPaymentMeansCode: '48' },
-      { amountHalalas: 2500, methodId: 'card', zatcaPaymentMeansCode: '48' },
-      { amountHalalas: 2500, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('48');
+  it('coerces an invalid code per line to 10 but still emits the line', () => {
+    const result = buildInvoicePaymentMeans([
+      {
+        methodId: 'custom',
+        methodTitle: 'Custom',
+        amountHalalas: 9000,
+        zatcaPaymentMeansCode: '99',
+      },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 1000, zatcaPaymentMeansCode: '10' },
+    ]);
+    // 'cash' < 'custom' → cash block first, custom line still emitted (coerced to 10)
+    expect(result).toEqual([
+      { code: '10', instructionNote: 'Cash | 10.00 SAR' },
+      { code: '10', instructionNote: 'Custom | 90.00 SAR' },
+    ]);
   });
 
-  it('returns default 10 when the winning line has an invalid code', () => {
-    const lines = [
-      { amountHalalas: 9000, methodId: 'custom', zatcaPaymentMeansCode: '99' },
-      { amountHalalas: 1000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('10');
+  it('falls back to methodId when the method title is blank', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: '   ', amountHalalas: 5000, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result[0].instructionNote).toBe('cash | 50.00 SAR');
+  });
+});
+
+describe('buildCreditNotePaymentMeans', () => {
+  it('builds a single block with reason + method', () => {
+    const result = buildCreditNotePaymentMeans({
+      methodId: 'card',
+      methodTitle: 'Card',
+      zatcaPaymentMeansCode: '48',
+      reason: 'Item was cold',
+    });
+    expect(result).toEqual([{ code: '48', instructionNote: 'Item was cold | Card' }]);
   });
 
-  it('returns default 10 when the winning line has an empty code', () => {
-    const lines = [
-      { amountHalalas: 9000, methodId: 'card', zatcaPaymentMeansCode: '' },
-      { amountHalalas: 1000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('10');
+  it('appends the refund amount when known: reason | method | amount SAR', () => {
+    const result = buildCreditNotePaymentMeans({
+      methodId: 'card',
+      methodTitle: 'Card',
+      zatcaPaymentMeansCode: '48',
+      reason: 'Item was cold',
+      amountHalalas: 11500,
+    });
+    expect(result).toEqual([{ code: '48', instructionNote: 'Item was cold | Card | 115.00 SAR' }]);
   });
 
-  it('returns default 10 when every line has an invalid code', () => {
-    const lines = [
-      { amountHalalas: 5000, methodId: 'cash', zatcaPaymentMeansCode: '55' },
-      { amountHalalas: 5000, methodId: 'card', zatcaPaymentMeansCode: '54' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('10');
+  it('defaults an empty reason to Refund (BR-KSA-F-06-C13 min length)', () => {
+    const result = buildCreditNotePaymentMeans({
+      methodId: 'cash',
+      methodTitle: 'Cash',
+      zatcaPaymentMeansCode: '10',
+      reason: '   ',
+      amountHalalas: 5750,
+    });
+    expect(result[0].instructionNote).toBe('Refund | Cash | 57.50 SAR');
   });
 
-  it('valid codes lose to larger amounts', () => {
-    // Larger cash amount wins over smaller card amount
-    const lines = [
-      { amountHalalas: 6000, methodId: 'cash', zatcaPaymentMeansCode: '10' },
-      { amountHalalas: 4000, methodId: 'card', zatcaPaymentMeansCode: '48' },
-    ];
-    expect(resolvePaymentMeansCode(lines)).toBe('10');
+  it('coerces an invalid refund code to 10', () => {
+    const result = buildCreditNotePaymentMeans({
+      methodId: 'card',
+      methodTitle: 'Card',
+      zatcaPaymentMeansCode: '55',
+      reason: 'Refund',
+    });
+    expect(result[0].code).toBe('10');
+  });
+
+  it('clamps a long reason but keeps the reason prefix', () => {
+    const longReason = 'r'.repeat(1500);
+    const result = buildCreditNotePaymentMeans({
+      methodId: 'card',
+      methodTitle: 'Card',
+      zatcaPaymentMeansCode: '48',
+      reason: longReason,
+    });
+    expect(result[0].instructionNote).toHaveLength(MAX_INSTRUCTION_NOTE_LENGTH);
+    expect(result[0].instructionNote.startsWith('rrr')).toBe(true);
   });
 });
