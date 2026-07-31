@@ -331,6 +331,9 @@ export class SpicyHomeClient {
     getRefunds: (orderId: number) =>
       request<OrderRefundResponse[]>(this.config, 'GET', `/orders/${orderId}/refunds`),
 
+    reprintRefund: (orderId: number, refundId: number) =>
+      request<PrintResponse>(this.config, 'POST', `/orders/${orderId}/refunds/${refundId}/print`),
+
     getEvents: (orderId: number) =>
       request<OrderEventResponse[]>(this.config, 'GET', `/orders/${orderId}/events`),
 

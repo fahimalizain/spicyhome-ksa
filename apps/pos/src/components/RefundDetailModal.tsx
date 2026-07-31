@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
+import { client } from '../api';
+import { usePermissions } from '../hooks/usePermissions';
 import type { OrderRefundResponse } from '@spicyhome/client-ts';
 
 interface RefundDetailModalProps {
@@ -7,6 +10,30 @@ interface RefundDetailModalProps {
 }
 
 export function RefundDetailModal({ refund, onClose }: RefundDetailModalProps) {
+  const permissions = usePermissions();
+  const [printing, setPrinting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  async function handlePrintReceipt() {
+    setError('');
+    setSuccess('');
+    setPrinting(true);
+
+    try {
+      const result = await client.orders.reprintRefund(refund.orderId, refund.id);
+      if (result.success) {
+        setSuccess('Receipt printed');
+      } else {
+        setError(result.errors?.join('; ') || 'Print failed');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Print failed');
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
@@ -83,6 +110,19 @@ export function RefundDetailModal({ refund, onClose }: RefundDetailModalProps) {
             <span>{halalasToSar(refund.totalHalalas)} SAR</span>
           </div>
         </div>
+
+        {/* Print receipt — reprints this refund's receipt (not the sale) */}
+        {permissions.updateOrder && (
+          <button
+            onClick={handlePrintReceipt}
+            disabled={printing}
+            className="touch-target w-full mt-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg py-2 text-sm font-bold text-white"
+          >
+            {printing ? 'Printing...' : 'Print Receipt'}
+          </button>
+        )}
+        {error && <div className="text-red-400 text-xs mt-2">{error}</div>}
+        {success && <div className="text-green-400 text-xs mt-2">{success}</div>}
       </div>
     </div>
   );
