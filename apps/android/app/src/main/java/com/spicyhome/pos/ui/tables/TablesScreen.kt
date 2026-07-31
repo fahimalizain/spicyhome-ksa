@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.pos.ui.theme.*
+import com.spicyhome.pos.util.ElapsedTimeFormatter
 import kotlinx.coroutines.delay
 
 @Composable
@@ -34,7 +35,7 @@ fun TablesScreen(
     var nowSeconds by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(10_000)
+            delay(1_000)
             nowSeconds = System.currentTimeMillis() / 1000
         }
     }
@@ -112,7 +113,7 @@ private fun TableCardView(card: TableCard, nowSeconds: Long, onOpenTable: (Long,
     val statusColor = if (isOccupied) Warning else OnDarkSecondary
     val statusText = if (isOccupied) {
         val elapsedSec = nowSeconds - card.openOrder!!.createdAt.toLong()
-        formatElapsed(elapsedSec)
+        ElapsedTimeFormatter.format(elapsedSec)
     } else {
         "Free"
     }
@@ -147,18 +148,3 @@ private fun TableCardView(card: TableCard, nowSeconds: Long, onOpenTable: (Long,
     }
 }
 
-private fun formatElapsed(totalSec: Long): String {
-    if (totalSec < 60) {
-        return "<1m"
-    }
-    val minutes = totalSec / 60
-    if (minutes < 60) {
-        return "${minutes}m"
-    }
-    val hours = minutes / 60
-    val remMinutes = minutes % 60
-    if (remMinutes == 0L) {
-        return "${hours}h"
-    }
-    return "${hours}h ${remMinutes}m"
-}

@@ -2,23 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api';
 import { realtime } from '../realtime';
+import { formatElapsed } from '../lib/format-elapsed';
 import type { TableResponse, OrderSummaryResponse } from '@spicyhome/client-ts';
-
-function formatElapsed(seconds: number): string {
-  if (seconds < 60) {
-    return '<1m';
-  }
-  const m = Math.floor(seconds / 60);
-  if (m < 60) {
-    return `${m}m`;
-  }
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  if (rm === 0) {
-    return `${h}h`;
-  }
-  return `${h}h ${rm}m`;
-}
 
 export function TablesViewPage() {
   const [tables, setTables] = useState<TableResponse[]>([]);
@@ -35,7 +20,7 @@ export function TablesViewPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Math.floor(Date.now() / 1000));
-    }, 10000);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
