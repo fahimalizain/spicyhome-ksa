@@ -444,6 +444,7 @@ describe('Order Refunds', () => {
       expect(refund.orderId).toBe(orderId);
       expect(refund.methodId).toBe('cash');
       expect(refund.methodTitle).toBe('Cash');
+      expect(refund.zatcaPaymentMeansCode).toBe('10');
       expect(refund.reason).toBe('Test refund');
       expect(refund.totalHalalas).toBeGreaterThan(0);
       expect(refund.subtotalHalalas).toBeGreaterThan(0);
@@ -504,6 +505,15 @@ describe('Order Refunds', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'card' })
         .expect(201);
+
+      // Refund row snapshots the card method's ZATCA code
+      const refundRow = db
+        .select()
+        .from(schema.orderRefunds)
+        .where(eq(schema.orderRefunds.orderId, orderId))
+        .get() as any;
+      expect(refundRow.methodId).toBe('card');
+      expect(refundRow.zatcaPaymentMeansCode).toBe('48');
 
       // Wait for async print
       await new Promise((r) => setTimeout(r, 200));
@@ -761,6 +771,7 @@ describe('Pay with payment methods', () => {
       .all();
     expect(payments).toHaveLength(1);
     expect(payments[0].methodId).toBe('cash');
+    expect(payments[0].zatcaPaymentMeansCode).toBe('10');
     expect(payments[0].amountHalalas).toBe(totalHalalas);
     expect(payments[0].tenderedHalalas).toBe(totalHalalas);
     expect(payments[0].changeHalalas).toBe(0);
@@ -809,6 +820,7 @@ describe('Pay with payment methods', () => {
       .all();
     expect(payments).toHaveLength(1);
     expect(payments[0].methodId).toBe('card');
+    expect(payments[0].zatcaPaymentMeansCode).toBe('48');
     expect(payments[0].tenderedHalalas).toBeNull();
     expect(payments[0].changeHalalas).toBeNull();
 
@@ -855,9 +867,11 @@ describe('Pay with payment methods', () => {
 
     const cardPayment = payments.find((p: any) => p.methodId === 'card')!;
     expect(cardPayment.amountHalalas).toBe(cardAmount);
+    expect(cardPayment.zatcaPaymentMeansCode).toBe('48');
 
     const cashPayment = payments.find((p: any) => p.methodId === 'cash')!;
     expect(cashPayment.amountHalalas).toBe(cashAmount);
+    expect(cashPayment.zatcaPaymentMeansCode).toBe('10');
     expect(cashPayment.tenderedHalalas).toBe(cashAmount + 500);
     expect(cashPayment.changeHalalas).toBe(500);
   });

@@ -20,6 +20,9 @@ import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.ZatcaInvoiceReissueDto
+import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
+import com.spicyhome.client.models.ZatcaReissueResultDto
 
 interface OrdersApi {
     /**
@@ -75,6 +78,33 @@ interface OrdersApi {
     fun ordersControllerGetOrderRefunds(@Path("id") id: kotlin.Long): Call<kotlin.collections.List<OrderRefundResponse>>
 
     /**
+     * GET orders/{id}/refunds/{refundId}/zatca-credit-note
+     * Get ZATCA credit note status for a refund (clearance polling)
+     * 
+     * Responses:
+     *  - 200: ZATCA credit note status with clearance attempts
+     *
+     * @param id 
+     * @param refundId 
+     * @return [Call]<[ZatcaInvoiceStatusResponse]>
+     */
+    @GET("orders/{id}/refunds/{refundId}/zatca-credit-note")
+    fun ordersControllerGetZatcaCreditNoteStatus(@Path("id") id: kotlin.Long, @Path("refundId") refundId: kotlin.Long): Call<ZatcaInvoiceStatusResponse>
+
+    /**
+     * GET orders/{id}/zatca-invoice
+     * Get ZATCA invoice status for an order (clearance polling)
+     * 
+     * Responses:
+     *  - 200: ZATCA invoice status with clearance attempts
+     *
+     * @param id 
+     * @return [Call]<[ZatcaInvoiceStatusResponse]>
+     */
+    @GET("orders/{id}/zatca-invoice")
+    fun ordersControllerGetZatcaInvoiceStatus(@Path("id") id: kotlin.Long): Call<ZatcaInvoiceStatusResponse>
+
+    /**
      * GET orders
      * List orders with optional filters
      * 
@@ -117,6 +147,34 @@ interface OrdersApi {
     fun ordersControllerRefundOrder(@Path("id") id: kotlin.Long, @Body createRefundDto: CreateRefundDto): Call<RefundResponse>
 
     /**
+     * POST orders/{id}/refunds/{refundId}/zatca-credit-note/reissue
+     * Reissue a credit note after rejection (new attempt)
+     * 
+     * Responses:
+     *  - 201: Reissue result
+     *
+     * @param id 
+     * @param refundId 
+     * @return [Call]<[ZatcaReissueResultDto]>
+     */
+    @POST("orders/{id}/refunds/{refundId}/zatca-credit-note/reissue")
+    fun ordersControllerReissueZatcaCreditNote(@Path("id") id: kotlin.Long, @Path("refundId") refundId: kotlin.Long): Call<ZatcaReissueResultDto>
+
+    /**
+     * POST orders/{id}/zatca-invoice/reissue
+     * Reissue a standard invoice after rejection (new attempt)
+     * 
+     * Responses:
+     *  - 201: Reissue result
+     *
+     * @param id 
+     * @param zatcaInvoiceReissueDto 
+     * @return [Call]<[ZatcaReissueResultDto]>
+     */
+    @POST("orders/{id}/zatca-invoice/reissue")
+    fun ordersControllerReissueZatcaInvoice(@Path("id") id: kotlin.Long, @Body zatcaInvoiceReissueDto: ZatcaInvoiceReissueDto): Call<ZatcaReissueResultDto>
+
+    /**
      * POST orders/{id}/print
      * Reprint receipt or kitchen ticket for an order
      * 
@@ -129,6 +187,33 @@ interface OrdersApi {
      */
     @POST("orders/{id}/print")
     fun ordersControllerReprintOrder(@Path("id") id: kotlin.Long, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
+
+    /**
+     * POST orders/{id}/zatca-invoice/retry-clearance
+     * Retry ZATCA clearance for an invoice in error status
+     * 
+     * Responses:
+     *  - 201: Clearance result
+     *
+     * @param id 
+     * @return [Call]<[ZatcaReissueResultDto]>
+     */
+    @POST("orders/{id}/zatca-invoice/retry-clearance")
+    fun ordersControllerRetryZatcaClearance(@Path("id") id: kotlin.Long): Call<ZatcaReissueResultDto>
+
+    /**
+     * POST orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance
+     * Retry ZATCA clearance for a credit note in error status
+     * 
+     * Responses:
+     *  - 201: Clearance result
+     *
+     * @param id 
+     * @param refundId 
+     * @return [Call]<[ZatcaReissueResultDto]>
+     */
+    @POST("orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance")
+    fun ordersControllerRetryZatcaCreditNoteClearance(@Path("id") id: kotlin.Long, @Path("refundId") refundId: kotlin.Long): Call<ZatcaReissueResultDto>
 
     /**
      * PUT orders/{orderId}/items/sync

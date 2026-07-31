@@ -24,6 +24,8 @@ import com.squareup.moshi.JsonClass
  * 
  *
  * @param name 
+ * @param connectionType How to connect to the printer: TCP/IP network or Windows spooler queue.
+ * @param windowsPrinterName Windows printer queue name. Required when connectionType is \"windows\".
  * @param ip 
  * @param port 
  * @param role 
@@ -36,6 +38,14 @@ data class UpdatePrinterDto (
 
     @Json(name = "name")
     val name: kotlin.String? = null,
+
+    /* How to connect to the printer: TCP/IP network or Windows spooler queue. */
+    @Json(name = "connectionType")
+    val connectionType: UpdatePrinterDto.ConnectionType? = null,
+
+    /* Windows printer queue name. Required when connectionType is \"windows\". */
+    @Json(name = "windowsPrinterName")
+    val windowsPrinterName: kotlin.String? = null,
 
     @Json(name = "ip")
     val ip: kotlin.String? = null,
@@ -55,6 +65,16 @@ data class UpdatePrinterDto (
 
 ) {
 
+    /**
+     * How to connect to the printer: TCP/IP network or Windows spooler queue.
+     *
+     * Values: tcp,windows
+     */
+    @JsonClass(generateAdapter = false)
+    enum class ConnectionType(val value: kotlin.String) {
+        @Json(name = "tcp") tcp("tcp"),
+        @Json(name = "windows") windows("windows");
+    }
     /**
      * 
      *

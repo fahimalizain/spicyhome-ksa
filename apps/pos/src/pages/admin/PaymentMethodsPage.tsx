@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
+import { ZATCA_PAYMENT_MEANS_CODE_LABELS, ZATCA_PAYMENT_MEANS_CODES } from '@spicyhome/shared';
 
 interface PaymentMethod {
   id: string;
   title: string;
+  zatcaPaymentMeansCode: string;
   enabled: boolean;
   sortOrder: number;
 }
@@ -14,7 +16,13 @@ export function PaymentMethodsPage() {
   const [error, setError] = useState('');
   const [editSlug, setEditSlug] = useState<string | null>(null);
   const [createTitle, setCreateTitle] = useState('');
-  const [editForm, setEditForm] = useState({ title: '', sortOrder: 0, enabled: true });
+  const [createCode, setCreateCode] = useState<string>('30');
+  const [editForm, setEditForm] = useState({
+    title: '',
+    sortOrder: 0,
+    enabled: true,
+    zatcaPaymentMeansCode: '10',
+  });
 
   useEffect(() => {
     loadData();
@@ -34,7 +42,12 @@ export function PaymentMethodsPage() {
 
   function startEdit(m: PaymentMethod) {
     setEditSlug(m.id);
-    setEditForm({ title: m.title, sortOrder: m.sortOrder, enabled: m.enabled });
+    setEditForm({
+      title: m.title,
+      sortOrder: m.sortOrder,
+      enabled: m.enabled,
+      zatcaPaymentMeansCode: m.zatcaPaymentMeansCode,
+    });
   }
 
   function cancelEdit() {
@@ -54,8 +67,12 @@ export function PaymentMethodsPage() {
     if (!createTitle.trim()) return;
     setError('');
     try {
-      await client.paymentMethods.create({ title: createTitle.trim() });
+      await client.paymentMethods.create({
+        title: createTitle.trim(),
+        zatcaPaymentMeansCode: createCode,
+      });
       setCreateTitle('');
+      setCreateCode('30');
       await loadData();
     } catch (e: any) {
       setError(e.message || 'Failed to create');
@@ -71,6 +88,7 @@ export function PaymentMethodsPage() {
         title: editForm.title,
         sortOrder: editForm.sortOrder,
         enabled: editForm.enabled,
+        zatcaPaymentMeansCode: editForm.zatcaPaymentMeansCode,
       });
       cancelEdit();
       await loadData();
@@ -116,6 +134,26 @@ export function PaymentMethodsPage() {
             </p>
           )}
         </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">
+            ZATCA Payment Means Code (BT-81)
+          </label>
+          <select
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+            value={createCode}
+            onChange={(e) => setCreateCode(e.target.value)}
+            required
+          >
+            {ZATCA_PAYMENT_MEANS_CODES.map((code) => (
+              <option key={code} value={code}>
+                {code} — {ZATCA_PAYMENT_MEANS_CODE_LABELS[code]}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            ZATCA BT-81 code for invoices: cash / card / bank transfer / other.
+          </p>
+        </div>
         <button
           type="submit"
           className="touch-target bg-brand-600 hover:bg-brand-700 rounded px-4 py-2 text-sm text-white"
@@ -145,6 +183,34 @@ export function PaymentMethodsPage() {
                     required
                     disabled={m.id === 'cash'}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    ZATCA Payment Means Code (BT-81)
+                  </label>
+                  <select
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                    value={editForm.zatcaPaymentMeansCode}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, zatcaPaymentMeansCode: e.target.value }))
+                    }
+                    disabled={m.id === 'cash'}
+                  >
+                    {ZATCA_PAYMENT_MEANS_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {code} — {ZATCA_PAYMENT_MEANS_CODE_LABELS[code]}
+                      </option>
+                    ))}
+                  </select>
+                  {m.id === 'cash' ? (
+                    <p className="text-xs text-amber-500 mt-1">
+                      Cash is locked to code 10 (In cash).
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      ZATCA BT-81 code for invoices: cash / card / bank transfer / other.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Sort Order</label>
@@ -190,6 +256,16 @@ export function PaymentMethodsPage() {
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-white font-medium">{m.title}</span>
                   <code className="text-xs text-gray-500">{m.id}</code>
+                  <span
+                    className="text-xs bg-gray-700 text-brand-300 px-1.5 py-0.5 rounded"
+                    title={
+                      ZATCA_PAYMENT_MEANS_CODE_LABELS[
+                        m.zatcaPaymentMeansCode as keyof typeof ZATCA_PAYMENT_MEANS_CODE_LABELS
+                      ] || m.zatcaPaymentMeansCode
+                    }
+                  >
+                    {m.zatcaPaymentMeansCode}
+                  </span>
                   {m.id === 'cash' && (
                     <span className="text-xs text-amber-500" title="Cash is locked">
                       🔒

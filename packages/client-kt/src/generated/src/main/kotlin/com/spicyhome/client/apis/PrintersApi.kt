@@ -11,11 +11,12 @@ import com.spicyhome.client.models.PrinterResponse
 import com.spicyhome.client.models.PrinterStatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdatePrinterDto
+import com.spicyhome.client.models.WindowsPrinterQueuesResponse
 
 interface PrintersApi {
     /**
      * GET printers/{id}/status
-     * Check printer TCP reachability
+     * Check printer reachability
      * 
      * Responses:
      *  - 200: Printer reachability status
@@ -63,6 +64,18 @@ interface PrintersApi {
      */
     @GET("printers")
     fun printersControllerList(): Call<kotlin.collections.List<PrinterResponse>>
+
+    /**
+     * GET printers/windows-queues
+     * List available Windows printer queue names
+     * 
+     * Responses:
+     *  - 200: Windows printer queue names
+     *
+     * @return [Call]<[WindowsPrinterQueuesResponse]>
+     */
+    @GET("printers/windows-queues")
+    fun printersControllerListWindowsQueues(): Call<WindowsPrinterQueuesResponse>
 
     /**
      * POST printers/{id}/test

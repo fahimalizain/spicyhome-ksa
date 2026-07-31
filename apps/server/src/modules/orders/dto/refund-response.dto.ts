@@ -48,6 +48,13 @@ export class OrderRefundResponse {
   })
   methodTitle!: string;
 
+  @ApiProperty({
+    type: String,
+    example: '48',
+    description: 'ZATCA UN/ECE 4461 Payment Means code snapshot at refund time',
+  })
+  zatcaPaymentMeansCode!: string;
+
   @ApiProperty({ ...ApiInt64, example: 4348 })
   subtotalHalalas!: number;
 

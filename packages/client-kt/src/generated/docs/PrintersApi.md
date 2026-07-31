@@ -4,16 +4,17 @@ All URIs are relative to *http://localhost*
 
 | Method | HTTP request | Description |
 | ------------- | ------------- | ------------- |
-| [**printersControllerCheckStatus**](PrintersApi.md#printersControllerCheckStatus) | **GET** printers/{id}/status | Check printer TCP reachability |
+| [**printersControllerCheckStatus**](PrintersApi.md#printersControllerCheckStatus) | **GET** printers/{id}/status | Check printer reachability |
 | [**printersControllerCreate**](PrintersApi.md#printersControllerCreate) | **POST** printers | Create a printer |
 | [**printersControllerGet**](PrintersApi.md#printersControllerGet) | **GET** printers/{id} | Get printer by ID |
 | [**printersControllerList**](PrintersApi.md#printersControllerList) | **GET** printers | List all printers |
+| [**printersControllerListWindowsQueues**](PrintersApi.md#printersControllerListWindowsQueues) | **GET** printers/windows-queues | List available Windows printer queue names |
 | [**printersControllerTestPrint**](PrintersApi.md#printersControllerTestPrint) | **POST** printers/{id}/test | Print a test ticket |
 | [**printersControllerUpdate**](PrintersApi.md#printersControllerUpdate) | **PUT** printers/{id} | Update a printer |
 
 
 
-Check printer TCP reachability
+Check printer reachability
 
 ### Example
 ```kotlin
@@ -149,6 +150,41 @@ This endpoint does not need any parameter.
 ### Return type
 
 [**kotlin.collections.List&lt;PrinterResponse&gt;**](PrinterResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+List available Windows printer queue names
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(PrintersApi::class.java)
+
+val result : WindowsPrinterQueuesResponse = webService.printersControllerListWindowsQueues()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**WindowsPrinterQueuesResponse**](WindowsPrinterQueuesResponse.md)
 
 ### Authorization
 

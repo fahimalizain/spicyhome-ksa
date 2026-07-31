@@ -8,6 +8,12 @@ export class OrderPaymentResponse {
   @ApiProperty({ example: 'Card', description: 'Payment method display title' })
   methodTitle!: string;
 
+  @ApiProperty({
+    example: '48',
+    description: 'ZATCA UN/ECE 4461 Payment Means code snapshot at pay time',
+  })
+  zatcaPaymentMeansCode!: string;
+
   @ApiProperty({ ...ApiInt64, example: 5000, description: 'Amount paid in halalas' })
   amountHalalas!: number;
 

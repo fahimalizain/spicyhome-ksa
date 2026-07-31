@@ -18,6 +18,10 @@
 import {
   decomposeVat,
   halalasToSar,
+  clampInstructionNote,
+  DEFAULT_ZATCA_PAYMENT_MEANS_CODE,
+  isZatcaPaymentMeansCode,
+  ZatcaPaymentMeansCode,
   ZATCAInvoiceDocumentType,
   ZATCA_INVOICE_TYPE_CODES,
   ZATCA_SIMPLIFIED_SUBTYPES,
@@ -63,6 +67,21 @@ export interface BuyerInfo {
   country?: string; // default SA
 }
 
+/**
+ * One `cac:PaymentMeans` block. Codes outside the ZATCA subset
+ * (10|30|42|48|1, BR-KSA-16) are coerced to `10`.
+ */
+export interface PaymentMeansXmlInput {
+  /** UN/ECE 4461 code; invalid values are coerced to '10'. */
+  code: string;
+  /**
+   * InstructionNote body (plain text — escaped and length-clamped by the
+   * builder). Required on credit/debit notes (BR-KSA-17); the builder fills a
+   * missing note from `paymentNote` / the correction default when missing.
+   */
+  instructionNote?: string;
+}
+
 export interface InvoiceXMLInput {
   /** Document type */
   type?: ZATCAInvoiceDocumentType;
@@ -92,6 +111,17 @@ export interface InvoiceXMLInput {
   billingReferenceId?: string;
   /** Payment instruction note (KSA-10 reason for credit/debit notes) */
   paymentNote?: string;
+  /**
+   * One entry per `cac:PaymentMeans` block to emit (BT-81 cardinality `1..n`).
+   * Prefer this over the single-code `paymentMeansCode`; when omitted/empty a
+   * single fallback block with code `10` is emitted.
+   */
+  paymentMeans?: PaymentMeansXmlInput[];
+  /**
+   * @deprecated Prefer `paymentMeans[]` (one block per payment line). Kept as
+   * a fallback shim: used only when `paymentMeans` is empty/omitted.
+   */
+  paymentMeansCode?: string;
   /** default 'simplified' — existing callers unchanged */
   invoiceProfile?: 'simplified' | 'standard';
   /** Buyer details for standard invoices */
@@ -324,14 +354,44 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   }
 
   // ── PaymentMeans ──
-  const instructionNote =
-    input.paymentNote || (isCorrection ? 'Cancellation or Additional Charge' : undefined);
-  parts.push(`  <cac:PaymentMeans>`);
-  parts.push(`    <cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>`);
-  if (instructionNote) {
-    parts.push(`    <cbc:InstructionNote>${escapeXml(instructionNote)}</cbc:InstructionNote>`);
+  // BT-81 cardinality is 1..n: one block per payment line. BR-KSA-17 requires
+  // every block on credit/debit notes (381/383) to carry an InstructionNote
+  // (KSA-10 reason), so missing notes are filled for corrections.
+  const correctionDefaultNote = isCorrection ? 'Cancellation or Additional Charge' : undefined;
+  const meansBlocks: Array<{ code: ZatcaPaymentMeansCode; note?: string }> = [];
+  const meansInput = input.paymentMeans;
+  if (meansInput && meansInput.length > 0) {
+    for (const m of meansInput) {
+      const rawCode = m.code ?? '';
+      const code: ZatcaPaymentMeansCode = isZatcaPaymentMeansCode(rawCode)
+        ? rawCode
+        : DEFAULT_ZATCA_PAYMENT_MEANS_CODE;
+      let note = m.instructionNote?.trim() ? m.instructionNote : undefined;
+      if (isCorrection && !note) {
+        note = input.paymentNote || correctionDefaultNote;
+      }
+      meansBlocks.push({ code, note });
+    }
+  } else {
+    // Fallback: legacy single-code path (paymentMeansCode / paymentNote).
+    const rawCode = input.paymentMeansCode ?? '';
+    const code: ZatcaPaymentMeansCode = isZatcaPaymentMeansCode(rawCode)
+      ? rawCode
+      : DEFAULT_ZATCA_PAYMENT_MEANS_CODE;
+    const note = input.paymentNote || correctionDefaultNote;
+    meansBlocks.push({ code, note });
   }
-  parts.push(`  </cac:PaymentMeans>`);
+
+  for (const block of meansBlocks) {
+    parts.push(`  <cac:PaymentMeans>`);
+    parts.push(`    <cbc:PaymentMeansCode>${block.code}</cbc:PaymentMeansCode>`);
+    if (block.note) {
+      parts.push(
+        `    <cbc:InstructionNote>${escapeXml(clampInstructionNote(block.note))}</cbc:InstructionNote>`,
+      );
+    }
+    parts.push(`  </cac:PaymentMeans>`);
+  }
 
   // ── Invoice-level AllowanceCharge (discount) ──
   if (discount > 0) {

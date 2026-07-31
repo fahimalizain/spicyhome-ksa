@@ -1829,6 +1829,11 @@ export interface components {
        */
       methodTitle: string;
       /**
+       * @description ZATCA UN/ECE 4461 Payment Means code snapshot at pay time
+       * @example 48
+       */
+      zatcaPaymentMeansCode: string;
+      /**
        * Format: int64
        * @description Amount paid in halalas
        * @example 5000
@@ -2139,6 +2144,11 @@ export interface components {
        */
       methodTitle: string;
       /**
+       * @description ZATCA UN/ECE 4461 Payment Means code snapshot at refund time
+       * @example 48
+       */
+      zatcaPaymentMeansCode: string;
+      /**
        * Format: int64
        * @example 4348
        */
@@ -2190,6 +2200,38 @@ export interface components {
       attempts: components['schemas']['ZatcaInvoiceAttemptDto'][];
       canRetryClearance: boolean;
       canReissue: boolean;
+    };
+    ZatcaClearanceDetailDto: {
+      /** @example CLEARED */
+      status: string;
+      /** @example 200 */
+      httpStatus: number;
+      /** @example <Invoice>...</Invoice> */
+      clearedXml: string | null;
+      /** @example base64... */
+      clearedInvoiceBase64: string | null;
+      warnings: string[];
+      errors: string[];
+      rawBody: string | null;
+    };
+    ZatcaReissueResultDto: {
+      /** @example 1 */
+      id: number;
+      /** @example 1 */
+      icv: number;
+      /** @example 550e8400-e29b-41d4-a716-446655440000 */
+      uuid: string;
+      /** @example hash... */
+      invoiceHash: string;
+      /** @example pending */
+      status: string;
+      /** @example 1 */
+      attemptNo: number;
+      /** @example base64... */
+      qrTlvBase64: string;
+      /** @example <Invoice>...</Invoice> */
+      signedXml: string;
+      clearance?: components['schemas']['ZatcaClearanceDetailDto'] | null;
     };
     ZatcaInvoiceReissueDto: {
       /** @description Updated ZATCA buyer details for the reissued invoice */
@@ -2430,6 +2472,11 @@ export interface components {
       id: string;
       /** @example Cash */
       title: string;
+      /**
+       * @description ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+       * @example 10
+       */
+      zatcaPaymentMeansCode: string;
       /** @example true */
       enabled: boolean;
       /**
@@ -2461,10 +2508,20 @@ export interface components {
     CreatePaymentMethodDto: {
       /** @example SADAD */
       title: string;
+      /**
+       * @description ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+       * @example 30
+       */
+      zatcaPaymentMeansCode: string;
     };
     UpdatePaymentMethodDto: {
       /** @example SADAD */
       title?: string;
+      /**
+       * @description ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+       * @example 30
+       */
+      zatcaPaymentMeansCode?: string;
       /** @default true */
       enabled: boolean;
       /**
@@ -3444,7 +3501,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ZatcaReissueResultDto'];
+        };
       };
     };
   };
@@ -3468,7 +3527,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ZatcaReissueResultDto'];
+        };
       };
     };
   };
@@ -3512,7 +3573,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ZatcaReissueResultDto'];
+        };
       };
     };
   };
@@ -3533,7 +3596,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ZatcaReissueResultDto'];
+        };
       };
     };
   };

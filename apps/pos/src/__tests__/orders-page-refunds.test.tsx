@@ -148,6 +148,7 @@ const sampleRefund: OrderRefundResponse = {
   userId: 1,
   methodId: 'cash',
   methodTitle: 'Cash',
+  zatcaPaymentMeansCode: '10',
   documentId: 'REF26-0001',
   subtotalHalalas: 2000,
   vatHalalas: 300,

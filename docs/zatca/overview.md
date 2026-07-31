@@ -50,6 +50,54 @@ the signed XML) is **`orders.document_id`** for tax invoices and
 - Wired in `zatca-xml-builder.service.ts`: `<cbc:ID>${documentId}</cbc:ID>`.
 - On clearance **rejection**, `document_id` is rotated (new INV/REF number) together with a new ICV/UUID on reissue. On **error**/retry it is **not** rotated.
 
+## Payment Means (BT-81) — `cac:PaymentMeans/cbc:PaymentMeansCode`
+
+The **Payment means type code** (EN 16931 business term BT-81) tells ZATCA how
+the document was paid. Emitted as `cac:PaymentMeans/cbc:PaymentMeansCode`.
+
+Sources (in-repo): Data dictionary `docs/zatca/20230519_EInvoice_Data_Dictionary vF.xlsx`
+(BT-81; resolution field **9.1** maps "cash, credit/debit cards, bank transfer,
+credit, and/or others"; code list is a "subset of UNTDID 4461") and the XML
+Implementation Standard `docs/zatca/20230519_ZATCA_Electronic_Invoice_XML_Implementation_Standard_ vF.pdf`
+(§11.2.5, **BR-KSA-16**).
+
+| Fact                    | Value                                                           |
+| ----------------------- | --------------------------------------------------------------- |
+| Path                    | `cac:PaymentMeans / cbc:PaymentMeansCode`                       |
+| Cardinality             | `1..n` (UBL/EN 16931)                                           |
+| Status                  | Optional — but **BR-KSA-16**: if present, must be in the subset |
+| Allow-list (schematron) | `10 \| 30 \| 42 \| 48 \| 1`                                     |
+
+**SpicyHome mapping** (payment method → code):
+
+| Method          | Code                                                        | Resolution 9.1 category                                            |
+| --------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `cash`          | `10`                                                        | cash                                                               |
+| `card` / `mada` | `48`                                                        | credit/debit cards (UN/ECE 54/55 are excluded from ZATCA's subset) |
+| custom methods  | any allow-listed code (default `30`/`42` for bank transfer) | bank transfer / other                                              |
+
+**Emission rules:**
+
+- **Snapshot**: `order_payments` and `order_refunds` copy the catalog value
+  (`payment_methods.zatca_payment_means_code`) at pay/refund time, so signed
+  XML stays stable even if the catalog method is later re-mapped.
+- **Invoices**: one `cac:PaymentMeans` block **per `order_payments` line**
+  (BT-81 cardinality `1..n`), sorted by `methodId` ASC for deterministic
+  (C14N-stable) output. Each block carries an `cbc:InstructionNote` with the
+  method title and amount: `{methodTitle} | {amount} SAR`.
+- **Credit/debit notes**: one block from the **refund** tender (not the
+  original order's multi-pay). **BR-KSA-17** requires every block on a
+  credit/debit note to carry an `cbc:InstructionNote` — the KSA-10 reason
+  stays first, then the method (and the refund amount when known):
+  `{reason} | {methodTitle} | {amount} SAR`. Missing notes are filled with the
+  default correction text (`Cancellation or Additional Charge`).
+- **InstructionNote length**: clamped to 1000 chars (BR-KSA-F-06-C13),
+  truncating from the end so the reason prefix survives.
+- **Fallback**: a single `10` block when no payment rows exist or the snapshot
+  is invalid.
+- Reference implementation: `packages/shared/src/zatca-payment-means.ts`
+  (`buildInvoicePaymentMeans` / `buildCreditNotePaymentMeans`).
+
 ## EGS Registration
 
 SpicyHome POS targets **branch-level EGS registration**. Each physical branch

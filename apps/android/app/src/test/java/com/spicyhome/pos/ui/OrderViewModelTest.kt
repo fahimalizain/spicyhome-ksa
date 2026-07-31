@@ -496,6 +496,8 @@ class OrderViewModelTest {
         )
         val order = OrderResponse(
             id = 42L, orderNo = 1001L, uuid = "abc-123",
+            documentId = "INV26-42",
+            isStandardInvoice = false,
             type = "dine_in", tableId = 5L, dayOpeningId = 1L,
             status = "open",
             subtotalHalalas = 2608L, vatHalalas = 392L, totalHalalas = 3000L,
@@ -530,6 +532,8 @@ class OrderViewModelTest {
     fun `initialOrderId paid order transitions to ORDER_TERMINAL`() = runTest(testDispatcher) {
         val order = OrderResponse(
             id = 42L, orderNo = 1001L, uuid = "abc-123",
+            documentId = "INV26-42",
+            isStandardInvoice = false,
             type = "dine_in", tableId = 5L, dayOpeningId = 1L,
             status = "paid",
             subtotalHalalas = 4000L, vatHalalas = 600L, totalHalalas = 4600L,
@@ -840,7 +844,7 @@ class OrderViewModelTest {
         val createCall = mockk<Call<com.spicyhome.client.models.CreateOrderResponse>>(relaxed = true)
         every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
         every { createCall.execute() } returns Response.success(
-            com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L)
+            com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L, documentId = "INV26-10")
         )
 
         // B6: After creation, the VM refetches to get real updatedAt
@@ -1109,6 +1113,8 @@ class OrderViewModelTest {
         id = id,
         orderNo = orderNo,
         uuid = "uuid-$id",
+        documentId = "INV26-$id",
+        isStandardInvoice = false,
         type = "dine_in",
         tableId = 5L,
         dayOpeningId = 1L,

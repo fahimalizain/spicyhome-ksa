@@ -23,6 +23,7 @@ import com.squareup.moshi.JsonClass
  * 
  *
  * @param title 
+ * @param zatcaPaymentMeansCode ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
  * @param enabled 
  * @param sortOrder 
  */
@@ -32,6 +33,10 @@ data class UpdatePaymentMethodDto (
 
     @Json(name = "title")
     val title: kotlin.String? = null,
+
+    /* ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1) */
+    @Json(name = "zatcaPaymentMeansCode")
+    val zatcaPaymentMeansCode: kotlin.String? = null,
 
     @Json(name = "enabled")
     val enabled: kotlin.Boolean? = true,

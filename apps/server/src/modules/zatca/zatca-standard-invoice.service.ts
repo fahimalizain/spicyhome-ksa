@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 import {
   orders,
   orderItems,
+  orderPayments,
   orderRefunds,
   orderRefundItems,
   zatcaInvoices,
@@ -57,6 +58,8 @@ import {
   zatcaKey,
   requireZatcaBuyerDetails,
   parseZatcaBuyerDetails,
+  buildInvoicePaymentMeans,
+  buildCreditNotePaymentMeans,
 } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 
@@ -728,6 +731,13 @@ export class ZatcaStandardInvoiceService {
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
+    // Build one cac:PaymentMeans block per payment line (BT-81 1..n),
+    // sorted by methodId; empty fallback handled by the XML builder.
+    const paymentRows = this.db
+      .select()
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, orderId))
+      .all();
     const xmlInput: InvoiceXMLInput = {
       documentId: order.documentId,
       icv,
@@ -740,6 +750,14 @@ export class ZatcaStandardInvoiceService {
       prevInvoiceHash,
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
+      paymentMeans: buildInvoicePaymentMeans(
+        paymentRows.map((p) => ({
+          methodId: p.methodId,
+          methodTitle: p.methodTitle,
+          amountHalalas: p.amountHalalas,
+          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
+        })),
+      ),
     };
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
@@ -953,7 +971,14 @@ export class ZatcaStandardInvoiceService {
       invoiceProfile: 'standard',
       buyer: this.getBuyerFromOrder(order),
       billingReferenceId: originalInvoice.uuid,
-      paymentNote: refund.reason || 'Refund',
+      // Single block from the refund tender: KSA-10 reason + method snapshot
+      paymentMeans: buildCreditNotePaymentMeans({
+        methodId: refund.methodId,
+        methodTitle: refund.methodTitle,
+        zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
+        reason: refund.reason || 'Refund',
+        amountHalalas: refund.totalHalalas,
+      }),
     };
 
     const unsignedXml = buildUnsignedInvoiceXML(xmlInput);

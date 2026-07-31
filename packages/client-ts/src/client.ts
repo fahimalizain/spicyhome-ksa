@@ -430,10 +430,18 @@ export class SpicyHomeClient {
 
     listEnabled: () => request<any[]>(this.config, 'GET', '/payment-methods/enabled'),
 
-    create: (dto: { title: string }) => request<any>(this.config, 'POST', '/payment-methods', dto),
+    create: (dto: { title: string; zatcaPaymentMeansCode: string }) =>
+      request<any>(this.config, 'POST', '/payment-methods', dto),
 
-    update: (id: string, dto: { title?: string; enabled?: boolean; sortOrder?: number }) =>
-      request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
+    update: (
+      id: string,
+      dto: {
+        title?: string;
+        enabled?: boolean;
+        sortOrder?: number;
+        zatcaPaymentMeansCode?: string;
+      },
+    ) => request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
   };
 
   reports = {

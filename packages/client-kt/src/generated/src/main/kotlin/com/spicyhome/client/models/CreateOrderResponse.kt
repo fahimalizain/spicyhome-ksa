@@ -25,6 +25,7 @@ import com.squareup.moshi.JsonClass
  * @param id 
  * @param uuid 
  * @param orderNo 
+ * @param documentId ZATCA root cbc:ID — the business invoice number
  */
 
 
@@ -37,7 +38,11 @@ data class CreateOrderResponse (
     val uuid: kotlin.String,
 
     @Json(name = "orderNo")
-    val orderNo: kotlin.Long
+    val orderNo: kotlin.Long,
+
+    /* ZATCA root cbc:ID — the business invoice number */
+    @Json(name = "documentId")
+    val documentId: kotlin.String
 
 ) {
 

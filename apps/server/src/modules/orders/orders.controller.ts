@@ -21,6 +21,7 @@ import { OrderRefundResponse } from './dto/refund-response.dto';
 import { PrintResponse } from './dto/print-response.dto';
 import { ZatcaInvoiceStatusResponse } from './dto/zatca-invoice-status-response.dto';
 import { ZatcaInvoiceReissueDto } from './dto/zatca-invoice-reissue.dto';
+import { ZatcaReissueResultDto } from './dto/zatca-reissue-result.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -170,7 +171,7 @@ export class OrdersController {
   @RequiresPermission('pay_order')
   @ApiOperation({ summary: 'Retry ZATCA clearance for an invoice in error status' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Clearance result' })
+  @ApiCreatedResponse({ description: 'Clearance result', type: ZatcaReissueResultDto })
   retryZatcaClearance(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.ordersService.retryZatcaClearance(id, user.sub);
   }
@@ -179,7 +180,7 @@ export class OrdersController {
   @RequiresPermission('pay_order')
   @ApiOperation({ summary: 'Reissue a standard invoice after rejection (new attempt)' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Reissue result' })
+  @ApiCreatedResponse({ description: 'Reissue result', type: ZatcaReissueResultDto })
   reissueZatcaInvoice(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ZatcaInvoiceReissueDto,
@@ -211,7 +212,7 @@ export class OrdersController {
   @ApiOperation({ summary: 'Retry ZATCA clearance for a credit note in error status' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Clearance result' })
+  @ApiCreatedResponse({ description: 'Clearance result', type: ZatcaReissueResultDto })
   retryZatcaCreditNoteClearance(
     @Param('id', ParseIntPipe) id: number,
     @Param('refundId', ParseIntPipe) refundId: number,
@@ -225,7 +226,7 @@ export class OrdersController {
   @ApiOperation({ summary: 'Reissue a credit note after rejection (new attempt)' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
-  @ApiCreatedResponse({ description: 'Reissue result' })
+  @ApiCreatedResponse({ description: 'Reissue result', type: ZatcaReissueResultDto })
   reissueZatcaCreditNote(
     @Param('id', ParseIntPipe) id: number,
     @Param('refundId', ParseIntPipe) refundId: number,

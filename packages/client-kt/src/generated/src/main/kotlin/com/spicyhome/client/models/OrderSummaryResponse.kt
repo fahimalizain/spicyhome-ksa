@@ -33,6 +33,7 @@ import com.squareup.moshi.JsonClass
  * @param vatHalalas 
  * @param totalHalalas 
  * @param discountHalalas 
+ * @param documentId ZATCA root cbc:ID — the business invoice number
  * @param createdAt 
  * @param updatedAt 
  * @param createdBy 
@@ -74,6 +75,10 @@ data class OrderSummaryResponse (
 
     @Json(name = "discountHalalas")
     val discountHalalas: kotlin.Long,
+
+    /* ZATCA root cbc:ID — the business invoice number */
+    @Json(name = "documentId")
+    val documentId: kotlin.String,
 
     @Json(name = "createdAt")
     val createdAt: kotlin.Long,
