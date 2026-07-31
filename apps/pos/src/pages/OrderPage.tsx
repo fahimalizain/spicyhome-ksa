@@ -885,7 +885,7 @@ export function OrderPage() {
           onClick={() => setShowTablePicker(false)}
         >
           <div
-            className="bg-gray-800 rounded-xl p-4 w-80 max-h-96 overflow-y-auto"
+            className="bg-gray-800 rounded-xl p-4 w-[32rem] max-w-[90vw] max-h-[70vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-white mb-3">Select Table</h3>
@@ -906,7 +906,7 @@ export function OrderPage() {
                       cart.setOrderType('dine_in', t.id);
                       setShowTablePicker(false);
                     }}
-                    className={`touch-target py-3 rounded-lg text-sm font-bold ${
+                    className={`touch-target flex flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 min-w-0 rounded-lg text-sm font-bold ${
                       occupied
                         ? 'bg-gray-800 text-gray-600 border-2 border-amber-700/50 cursor-not-allowed opacity-60'
                         : selected
@@ -914,9 +914,12 @@ export function OrderPage() {
                           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                   >
-                    <span>{t.name}</span>
+                    <span className="leading-tight">{t.name}</span>
                     {occupied && openOrder && (
-                      <span className="block text-xs text-amber-500 mt-0.5">
+                      <span
+                        title={openOrder.documentId}
+                        className="block text-[10px] font-medium text-amber-500 leading-tight break-all max-w-full text-center"
+                      >
                         {openOrder.documentId}
                       </span>
                     )}
