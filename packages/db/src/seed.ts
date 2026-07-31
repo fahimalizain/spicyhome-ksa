@@ -80,12 +80,15 @@ const catalog: CatalogDump = catalogJson;
  *
  * Roles:
  *   - admin: all permissions = 1
- *   - staff: create_order = 1, update_order = 1, rest = 0 (incl. pay_order)
+ *   - staff: all permissions = 1 except manage_tables, manage_users, and
+ *     manage_settings = 0
  *
  * Users:
  *   - Admin (POS/back-office only): username admin, PIN 771133,
  *     role admin, android_login = 0 (hidden from Android login)
- *   - Cashier (tablet floor user): username cashier, name Cashier, PIN 1,
+ *   - Cashier (POS only): username cashier, name Cashier, PIN 1,
+ *     role staff, android_login = 0 (hidden from Android login)
+ *   - Waiter (tablet floor user): username waiter, name Waiter, PIN 2,
  *     role staff, android_login = 1 (shown on Android login)
  *
  * Tables: T1 – T40 from RMS dump (dbo.Tables, DineId=2, Branch=1).
@@ -135,7 +138,7 @@ function seedRoles(sqlite: Database.Database): void {
     VALUES ('admin', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ${now}, ${now});
 
     INSERT INTO user_roles (name, create_order, update_order, delete_order_item, void_order, refund_order, pay_order, manage_menu, manage_tables, manage_printers, manage_users, manage_settings, created_at, updated_at)
-    VALUES ('staff', 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, ${now}, ${now});
+    VALUES ('staff', 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, ${now}, ${now});
   `);
 }
 
@@ -166,8 +169,16 @@ function seedUsers(sqlite: Database.Database): void {
     .prepare('SELECT COUNT(*) as cnt FROM users WHERE username = ?')
     .get('cashier') as { cnt: number };
   if (cashierExists.cnt === 0) {
-    // Cashier: tablet floor user
-    insertUser.run('cashier', hashSync('1', 10), 'Cashier', staffRole.id, 1);
+    // Cashier: POS only
+    insertUser.run('cashier', hashSync('1', 10), 'Cashier', staffRole.id, 0);
+  }
+
+  const waiterExists = sqlite
+    .prepare('SELECT COUNT(*) as cnt FROM users WHERE username = ?')
+    .get('waiter') as { cnt: number };
+  if (waiterExists.cnt === 0) {
+    // Waiter: tablet floor user
+    insertUser.run('waiter', hashSync('2', 10), 'Waiter', staffRole.id, 1);
   }
 }
 
