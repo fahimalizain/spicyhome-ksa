@@ -29,6 +29,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
   return {
     id: 1,
     orderNo: 42,
+    documentId: 'INV26-0042',
     uuid: 'test-uuid',
     type: 'dine_in',
     tableId: null,

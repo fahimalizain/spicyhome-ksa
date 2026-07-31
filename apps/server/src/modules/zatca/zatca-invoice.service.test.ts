@@ -190,8 +190,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
   function createRefundForOrder(orderId: number): number {
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Item was cold', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Item was cold', 'REF-TEST-HP', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -223,8 +223,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'Wrong item', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, 'Wrong item', 'REF-TEST-NOINV', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -348,8 +348,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create refund with NULL reason
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, NULL, ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 5000, 750, 5750, NULL, 'REF-TEST-NULL-REASON', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -402,8 +402,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 2000, 300, 2300, 'Test sequence', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 2000, 300, 2300, 'Test sequence', 'REF-TEST-SEQ', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -514,8 +514,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
       const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       sqlite.exec(`
-        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
-        VALUES (999, 'uuid-phase6-simple', 'dine_in', ${doId}, 'paid', 5000, 750, 5750, ${now}, ${now})
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at, updated_at)
+        VALUES (999, 'uuid-phase6-simple', 'dine_in', ${doId}, 'paid', 5000, 750, 5750, 'INV-TEST-PHASE6', ${now}, ${now})
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -545,8 +545,8 @@ describe('ZatcaInvoiceService — credit notes', () => {
 
       // Create a refund
       sqlite.exec(`
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Reason', ${now})
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', 10000, 1500, 11500, 'Reason', 'REF-TEST-STDSKIP', ${now})
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 

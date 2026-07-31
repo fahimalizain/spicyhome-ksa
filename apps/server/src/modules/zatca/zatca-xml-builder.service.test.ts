@@ -18,6 +18,7 @@ describe('UBL XML Builder', () => {
   };
 
   const baseInput: InvoiceXMLInput = {
+    documentId: 'INV-1',
     icv: 1,
     uuid: '550e8400-e29b-41d4-a716-446655440000',
     issueDate: '2024-01-15',
@@ -67,11 +68,14 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:ProfileID>reporting:1.0</cbc:ProfileID>');
   });
 
-  it('includes ICV as the invoice ID', () => {
-    const input = { ...baseInput, icv: 42 };
+  it('includes documentId as the root cbc:ID, not ICV', () => {
+    const input = { ...baseInput, documentId: 'DOC-42', icv: 42 };
     const xml = buildUnsignedInvoiceXML(input);
-    // The top-level cbc:ID (ICV) is 42
-    expect(xml).toMatch(/<cbc:ID>42<\/cbc:ID>/);
+    // The top-level cbc:ID is the documentId
+    expect(xml).toMatch(/<cbc:ID>DOC-42<\/cbc:ID>/);
+    // ICV is still in AdditionalDocumentReference
+    expect(xml).toContain('<cbc:ID>ICV</cbc:ID>');
+    expect(xml).toContain('<cbc:UUID>42</cbc:UUID>');
   });
 
   it('includes UUID', () => {

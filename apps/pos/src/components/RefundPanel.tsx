@@ -151,7 +151,7 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   return (
     <div className="bg-gray-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-white">Refund for Order #{order.orderNo}</h3>
+        <h3 className="text-sm font-bold text-white">Refund for Order {order.documentId}</h3>
         <button
           onClick={onClose}
           className="touch-target w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"

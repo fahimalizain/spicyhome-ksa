@@ -33,6 +33,7 @@ const defaultMethods = [
 const mockOrder: OrderResponse = {
   id: 1,
   orderNo: 42,
+  documentId: 'INV26-0042',
   uuid: 'test-uuid',
   type: 'dine_in',
   tableId: null,
@@ -90,6 +91,7 @@ const mockStandardOrder: OrderResponse = {
   ...mockOrder,
   id: 2,
   orderNo: 43,
+  documentId: 'INV26-0043',
   isStandardInvoice: true,
   zatcaBuyerDetails: {
     name: 'Abdullah Al-Otaibi Est.',
@@ -135,7 +137,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Burger')).toBeInTheDocument();
@@ -152,7 +154,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Find the plus button for Burger (first item)
@@ -179,7 +181,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Initially no total shown
@@ -205,7 +207,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={onRefunded} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Select 1 Burger
@@ -267,7 +269,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={onRefunded} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Select 1 item
@@ -325,7 +327,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={onClose} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('\u2715'));
@@ -337,7 +339,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #43')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0043')).toBeInTheDocument();
     });
 
     // Notice banner
@@ -356,7 +358,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Standard Tax Invoice')).not.toBeInTheDocument();
@@ -370,7 +372,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #43')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0043')).toBeInTheDocument();
     });
 
     // Select 1 item
@@ -446,6 +448,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -476,6 +479,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 4600,
         vatHalalas: 600,
         totalHalalas: 4600,
@@ -506,6 +510,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -529,6 +534,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'card',
         methodTitle: 'Card',
+        documentId: 'REF26-0002',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,

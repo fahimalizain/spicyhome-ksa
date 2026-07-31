@@ -140,25 +140,35 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 
 | Type            | Trigger                   | Payload                                                                                                                            |
 | --------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid }`                                                                                                 |
+| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid, documentId }`                                                                                     |
 | `paid`          | `POST /orders/:id/pay`    | `{ fromStatus: "open", toStatus: "paid", payments: [{ methodId, methodTitle, amountHalalas, tenderedHalalas?, changeHalalas? }] }` |
 | `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                                                       |
-| `refund_issued` | `POST /orders/:id/refund` | `{ refundId, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }`                                       |
+| `refund_issued` | `POST /orders/:id/refund` | `{ refundId, documentId, methodId, methodTitle, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }`    |
 | `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                     |
+
+> **`documentId` = ZATCA UBL root `cbc:ID`**: The `documentId` field on the
+> `created` and `refund_issued` events is the business Invoice ID / document
+> number that appears as the root `<cbc:ID>` in the signed ZATCA XML. See
+> [overview.md](./zatca/overview.md#document-id-document_id--ubl-invoice-cbcid).
 
 #### ZATCA Clearance Events
 
-| Type                       | Trigger                                                                                                         | Payload                                                                                                                                                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zatca_clearance_rejected` | Standard invoice/credit note clearance returns business rejection (4xx HTTP / `NOT_CLEARED` / validation ERROR) | `{ documentKind: 'invoice' \| 'credit_note', documentId: number, attemptNo: number, icv: number, uuid: string, cbcId: string, orderId: number, refundId?: number, httpStatus: number \| null, errors: string[] }` |
+| Type                       | Trigger                                                                                                         | Payload                                                                                                                                                                                                                                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zatca_clearance_rejected` | Standard invoice/credit note clearance returns business rejection (4xx HTTP / `NOT_CLEARED` / validation ERROR) | `{ documentKind: 'invoice' \| 'credit_note', zatcaRecordId: number, attemptNo: number, icv: number, uuid: string, cbcId: string (burned business document_id), documentId: string (same as cbcId — business document number INV…/REF…), orderId: number, refundId?: number, httpStatus: number \| null, errors: string[] }` |
 
 > **Burn semantics**: A `zatca_clearance_rejected` event signals that the ICV
 > associated with this attempt is permanently burned — the invoice cannot be
-> retried with the same ICV/UUID. The operator must fix the issue and call
-> `reissue()` (or `reissueCreditNote()`) which allocates a new ICV+UUID.
-> These events are written atomically with the DB status update inside a
-> transaction. They are **not** emitted for `error` status (network/5xx —
-> retryable) or `cleared` status.
+> retried with the same ICV/UUID. The `cbcId` field records the burned
+> `orders.document_id` (or `order_refunds.document_id`), and the
+> order/refund `document_id` is rotated atomically within the same
+> transaction so the next reissue gets a fresh document number. The
+> `orders.id` never changes. The operator must fix the issue and call
+> `reissue()` (or `reissueCreditNote()`) which allocates a new
+> ICV+UUID+document_id. These events are written atomically with the DB
+> status update + document_id rotation inside a single transaction. They are
+> **not** emitted for `error` status (network/5xx — retryable) or `cleared`
+> status.
 
 ### Payload Fields for Item Mutations
 

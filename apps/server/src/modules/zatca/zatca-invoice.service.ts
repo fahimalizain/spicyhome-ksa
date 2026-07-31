@@ -242,7 +242,11 @@ export class ZatcaInvoiceService {
     const invUuid = require('crypto').randomUUID();
 
     // Build unsigned XML
+    if (!order.documentId) {
+      throw new Error(`Order ${orderId} is missing document_id`);
+    }
     const xmlInput: InvoiceXMLInput = {
+      documentId: order.documentId,
       icv,
       uuid: invUuid,
       issueDate,
@@ -441,8 +445,12 @@ export class ZatcaInvoiceService {
     const invUuid = require('crypto').randomUUID();
 
     // 11. Build unsigned XML
+    if (!refund.documentId) {
+      throw new Error(`Refund ${refundId} is missing document_id`);
+    }
     const xmlInput: InvoiceXMLInput = {
       type: 'credit_note',
+      documentId: refund.documentId,
       icv,
       uuid: invUuid,
       issueDate,
@@ -713,6 +721,7 @@ export class ZatcaInvoiceService {
 
     const xmlInput: InvoiceXMLInput = {
       type,
+      documentId: 'COMPLIANCE-1',
       icv,
       uuid: invUuid,
       issueDate,
@@ -854,6 +863,7 @@ export class ZatcaInvoiceService {
 
     const xmlInput: InvoiceXMLInput = {
       type: baseType,
+      documentId: 'COMPLIANCE-STD-1',
       icv,
       uuid: invUuid,
       issueDate,

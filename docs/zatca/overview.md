@@ -31,6 +31,25 @@ SpicyHome manages ICV via `last_icv` settings and `allocateICV()` in
 - The previous-invoice-hash chain lookup spans both `zatca_invoices` and
   `zatca_credit_notes` tables to maintain hash continuity across document types.
 
+## Document ID (`document_id`) — UBL Invoice `cbc:ID`
+
+The root UBL element **`cbc:ID`** (the business Invoice ID / document number in
+the signed XML) is **`orders.document_id`** for tax invoices and
+**`order_refunds.document_id`** for credit notes.
+
+| Kind                   | Column                      | Format         | Example      |
+| ---------------------- | --------------------------- | -------------- | ------------ |
+| Invoices               | `orders.document_id`        | `INV{YY}-####` | `INV26-0001` |
+| Credit notes (refunds) | `order_refunds.document_id` | `REF{YY}-####` | `REF26-0001` |
+
+- `{YY}` = last two digits of the calendar year in **Asia/Riyadh** at allocation.
+- Sequence zero-padded to at least 4 digits; may grow beyond 9999.
+- Allocated by `DocumentIdService` (`document-id.allocator.ts`).
+- Counters in settings via `zatcaKey(env, orgUnit, 'last_inv_document' | 'last_ref_document')`, value `"{yy}:{seq}"` (year change resets seq to 1).
+- **Not** the ICV and **not** `orders.id`. ICV stays in the AdditionalDocumentReference ICV block; root `cbc:ID` is only `document_id`.
+- Wired in `zatca-xml-builder.service.ts`: `<cbc:ID>${documentId}</cbc:ID>`.
+- On clearance **rejection**, `document_id` is rotated (new INV/REF number) together with a new ICV/UUID on reissue. On **error**/retry it is **not** rotated.
+
 ## EGS Registration
 
 SpicyHome POS targets **branch-level EGS registration**. Each physical branch
@@ -60,12 +79,11 @@ ZATCA defines two invoice formats with different requirements:
 | **Simplified Tax Invoice** | B2C           | Retail / restaurant sales to end consumers                          | Reporting (batch, polling-based)         |
 | **Standard Tax Invoice**   | B2B           | Sales to VAT-registered businesses that require input tax deduction | Clearance (pre-approval before issuance) |
 
-### Simplified (B2C) — What SpicyHome Generates Today
+### Simplified (B2C) — Restaurant POS Invoices
 
-SpicyHome currently generates only **Simplified Tax Invoices** (B2C). This
-covers the restaurant POS use case: a customer walks in, orders, pays, and
-receives a simplified invoice. Simplified invoices are reported to ZATCA via
-the Reporting API within 24 hours of issuance.
+For walk-in restaurant customers, SpicyHome generates **Simplified Tax Invoices**
+(B2C). The customer orders, pays, and receives a simplified invoice. Simplified
+invoices are reported to ZATCA via the Reporting API within 24 hours of issuance.
 
 ### Standard (B2B) — Threshold and Input Tax
 
@@ -123,15 +141,31 @@ Each clearance attempt follows these rules:
    allocates a new ICV, generates a new UUID, and builds new XML (with
    optionally updated buyer details).
 
-7. **UBL `cbc:ID`** is currently the **ICV** (not `order.id`). See
-   `zatca-xml-builder.service.ts` line 180: `<cbc:ID>${icv}</cbc:ID>`.
+7. **UBL `cbc:ID`** — see [Document ID section](#document-id-document_id--ubl-invoice-cbcid)
+   above. The root Invoice ID in the signed XML is `orders.document_id`
+   (or `order_refunds.document_id`), never `orders.id`.
 
-8. **Uniqueness**: `UNIQUE` on `(uuid)` and `(icv)`. Partial unique on
-   `(order_id, status)` for `cleared` only (one cleared invoice per order).
-   **Do not** restore a full `UNIQUE` on `order_id` — multi-attempt reissue
-   creates multiple rows for the same order.
+8. **cbc:ID rotation**: on business rejection (`status = 'rejected'`),
+   the `document_id` is rotated to a new value so the next reissue gets a
+   fresh document number. The burn event records the burned business document
+   number in both `cbcId` and `documentId` fields (they carry the same value).
+   The `zatcaRecordId` field records the PK of the ZATCA row.
+   `orders.id` is **never** renumbered. On `error` / retry, the
+   `document_id` is **not** rotated.
 
-9. **Audit**: on business rejection (`status = 'rejected'`), an immutable
-   `order_events` row of type `zatca_clearance_rejected` records the ICV,
-   UUID, `cbcId`, `orderId`, `errors`, and `httpStatus`. This provides
-   a permanent audit trail of burned ICVs for operator recovery.
+9. **Uniqueness**: `UNIQUE` on `(uuid)`, `(icv)`, and
+   `(orders.document_id)`. Partial unique on `(order_id, status)` for
+   `cleared` only (one cleared invoice per order). **Do not** restore a full
+   `UNIQUE` on `order_id` — multi-attempt reissue creates multiple rows for
+   the same order.
+
+10. **Audit**: on business rejection (`status = 'rejected'`), an immutable
+    `order_events` row of type `zatca_clearance_rejected` records the ICV,
+    UUID, `cbcId` and `documentId` (= burned business document_id),
+    `zatcaRecordId` (= PK of the zatca row), `orderId`, `errors`, and
+    `httpStatus`. This provides a permanent audit trail of burned document
+    numbers for operator recovery.
+
+11. **Document ID counters**: allocated by `DocumentIdService` — see
+    [Document ID section](#document-id-document_id--ubl-invoice-cbcid) above
+    for format, scoping, and sequence rules.

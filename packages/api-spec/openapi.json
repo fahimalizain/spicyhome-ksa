@@ -3801,6 +3801,11 @@
             "format": "int64",
             "example": 0
           },
+          "documentId": {
+            "type": "string",
+            "description": "ZATCA root cbc:ID — the business invoice number",
+            "example": "INV26-0001"
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -3836,6 +3841,7 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "documentId",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -4130,6 +4136,11 @@
             "format": "int64",
             "example": 0
           },
+          "documentId": {
+            "type": "string",
+            "description": "ZATCA root cbc:ID — the business invoice number",
+            "example": "INV26-0001"
+          },
           "isStandardInvoice": {
             "type": "boolean",
             "description": "Whether this order is a ZATCA standard invoice",
@@ -4197,6 +4208,7 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "documentId",
           "isStandardInvoice",
           "createdAt",
           "updatedAt",
@@ -4245,12 +4257,18 @@
             "type": "integer",
             "format": "int64",
             "example": 1
+          },
+          "documentId": {
+            "type": "string",
+            "description": "ZATCA root cbc:ID — the business invoice number",
+            "example": "INV26-0001"
           }
         },
         "required": [
           "id",
           "uuid",
-          "orderNo"
+          "orderNo",
+          "documentId"
         ]
       },
       "SyncOrderItemDto": {
@@ -4577,6 +4595,11 @@
             "example": "Customer changed mind",
             "nullable": true
           },
+          "documentId": {
+            "type": "string",
+            "description": "Refund document ID",
+            "example": "REF26-0001"
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -4599,6 +4622,7 @@
           "vatHalalas",
           "totalHalalas",
           "reason",
+          "documentId",
           "createdAt",
           "items"
         ]

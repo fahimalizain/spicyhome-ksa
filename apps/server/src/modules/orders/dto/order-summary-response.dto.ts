@@ -35,6 +35,12 @@ export class OrderSummaryResponse {
   @ApiProperty({ ...ApiInt64, example: 0 })
   discountHalalas!: number;
 
+  @ApiProperty({
+    description: 'ZATCA root cbc:ID — the business invoice number',
+    example: 'INV26-0001',
+  })
+  documentId!: string;
+
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 

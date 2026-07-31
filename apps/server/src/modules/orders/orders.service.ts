@@ -31,6 +31,7 @@ import { createAuditFields, updateAuditFields } from '../../common/audit-fields.
 import { mapBools } from '../../common/bool-mapper.helper';
 import { OrderEventsService } from './order-events.service';
 import { PrintJobService } from '../printers/print-job.service';
+import { DocumentIdService } from './document-id.allocator';
 import { ZatcaBuyerDetailsDto } from './dto/zatca-buyer-details.dto';
 import { ZatcaStandardInvoiceService } from '../zatca/zatca-standard-invoice.service';
 import type { PrinterRecord } from '../printers/printers.service';
@@ -73,6 +74,7 @@ export class OrdersService {
     private eventEmitter: EventEmitter2,
     private printJobService: PrintJobService,
     private orderEvents: OrderEventsService,
+    private documentIdService: DocumentIdService,
     private zatcaStandardService: ZatcaStandardInvoiceService,
   ) {}
 
@@ -120,6 +122,7 @@ export class OrdersService {
       }
 
       const orderNo = this.getNextOrderNo(tx, now);
+      const documentId = this.documentIdService.allocateInvoiceDocumentId(tx);
 
       const insertResult = tx
         .insert(orders)
@@ -134,6 +137,7 @@ export class OrdersService {
           vatHalalas: 0,
           totalHalalas: 0,
           discountHalalas: 0,
+          documentId,
           ...createAuditFields(userId, now),
         })
         .run();
@@ -150,11 +154,12 @@ export class OrdersService {
           tableId: dto.tableId ?? null,
           orderNo,
           uuid: orderUuid,
+          documentId,
         },
         now,
       );
 
-      return { id: orderId, uuid: orderUuid, orderNo };
+      return { id: orderId, uuid: orderUuid, orderNo, documentId };
     });
 
     this.emitDomainEvent('order.created', result.id, userId);
@@ -1035,6 +1040,9 @@ export class OrdersService {
       const totalHalalas = lineTotals.reduce((a, b) => a + b, 0);
       refundTotalHalalas = totalHalalas;
 
+      // Allocate document_id for the refund
+      const refundDocumentId = this.documentIdService.allocateRefundDocumentId(tx);
+
       // Insert order_refunds
       const refundInsert = tx
         .insert(orderRefunds)
@@ -1047,6 +1055,7 @@ export class OrdersService {
           vatHalalas,
           totalHalalas,
           reason: dto.reason ?? null,
+          documentId: refundDocumentId,
           ...createAuditFields(userId, now),
         })
         .run();
@@ -1078,6 +1087,7 @@ export class OrdersService {
         'refund_issued',
         {
           refundId,
+          documentId: refundDocumentId,
           methodId: dto.methodId,
           methodTitle: pm.title,
           items: refundItems,
@@ -1184,6 +1194,7 @@ export class OrdersService {
         vatHalalas: refund.vatHalalas,
         totalHalalas: refund.totalHalalas,
         reason: refund.reason,
+        documentId: refund.documentId,
         createdAt: refund.createdAt,
         items: rifItems.map((ri) => ({
           id: ri.id,
@@ -1379,6 +1390,7 @@ export class OrdersService {
           changeHalalas: p.changeHalalas,
         })),
         zatcaBuyerDetails: this.parseOrderBuyerDetails(order),
+        documentId: order.documentId,
       },
       ['isStandardInvoice'],
     );

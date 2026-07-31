@@ -26,6 +26,7 @@ import {
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { OrderEventsService } from '../orders/order-events.service';
+import { DocumentIdService } from '../orders/document-id.allocator';
 import { createAuditFields } from '../../common/audit-fields.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -109,6 +110,7 @@ export class ZatcaStandardInvoiceService {
     private printersService: PrintersService,
     private invoiceService: ZatcaInvoiceService,
     private clearanceService: ZatcaClearanceService,
+    private documentIdService: DocumentIdService,
     private eventEmitter: EventEmitter2,
     private orderEvents: OrderEventsService,
   ) {}
@@ -201,8 +203,17 @@ export class ZatcaStandardInvoiceService {
         .where(eq(zatcaInvoices.id, latest.id))
         .run();
 
-      // On business rejection: append immutable burn event
+      // On business rejection: append immutable burn event and rotate document_id
       if (storeStatus === 'rejected') {
+        // Read the order to get the current document_id (which was in the retried XML).
+        // Since retry is only allowed from 'error' status, the document_id has NOT been
+        // rotated yet — so the current order.document_id matches the XML.
+        const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+        if (!order?.documentId) {
+          throw new Error(`Order ${orderId} is missing document_id`);
+        }
+        const burnedDocumentId = order.documentId;
+
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -210,17 +221,25 @@ export class ZatcaStandardInvoiceService {
           'zatca_clearance_rejected',
           {
             documentKind: 'invoice',
-            documentId: latest.id,
+            zatcaRecordId: latest.id,
             attemptNo: latest.attemptNo || 1,
             icv: latest.icv,
             uuid: latest.uuid,
-            cbcId: String(latest.icv),
+            cbcId: burnedDocumentId,
+            documentId: burnedDocumentId,
             orderId,
             httpStatus: clearance.httpStatus,
             errors: clearance.errors,
           },
           now,
         );
+
+        // Rotate document_id for the next reissue
+        const newDocumentId = this.documentIdService.allocateInvoiceDocumentId(tx);
+        tx.update(orders)
+          .set({ documentId: newDocumentId, updatedAt: now })
+          .where(eq(orders.id, orderId))
+          .run();
       }
 
       return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, latest.id)).get() as any;
@@ -398,8 +417,17 @@ export class ZatcaStandardInvoiceService {
         .where(eq(zatcaCreditNotes.id, latest.id))
         .run();
 
-      // On business rejection: append immutable burn event
+      // On business rejection: append immutable burn event and rotate refund document_id
       if (storeStatus === 'rejected') {
+        // Read the refund to get the current document_id (which was in the retried XML).
+        // Since retry is only allowed from 'error' status, the document_id has NOT been
+        // rotated yet — so the current refund.document_id matches the XML.
+        const refund = tx.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
+        if (!refund?.documentId) {
+          throw new Error(`Refund ${refundId} is missing document_id`);
+        }
+        const burnedDocumentId = refund.documentId;
+
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -407,11 +435,12 @@ export class ZatcaStandardInvoiceService {
           'zatca_clearance_rejected',
           {
             documentKind: 'credit_note',
-            documentId: latest.id,
+            zatcaRecordId: latest.id,
             attemptNo: latest.attemptNo || 1,
             icv: latest.icv,
             uuid: latest.uuid,
-            cbcId: String(latest.icv),
+            cbcId: burnedDocumentId,
+            documentId: burnedDocumentId,
             orderId,
             refundId,
             httpStatus: clearance.httpStatus,
@@ -419,6 +448,13 @@ export class ZatcaStandardInvoiceService {
           },
           now,
         );
+
+        // Rotate refund document_id for the next reissue
+        const newDocumentId = this.documentIdService.allocateRefundDocumentId(tx);
+        tx.update(orderRefunds)
+          .set({ documentId: newDocumentId, updatedAt: now })
+          .where(eq(orderRefunds.id, refundId))
+          .run();
       }
 
       return tx
@@ -689,7 +725,11 @@ export class ZatcaStandardInvoiceService {
     const invUuid = require('crypto').randomUUID();
 
     // Build unsigned XML
+    if (!order.documentId) {
+      throw new Error(`Order ${orderId} is missing document_id`);
+    }
     const xmlInput: InvoiceXMLInput = {
+      documentId: order.documentId,
       icv,
       uuid: invUuid,
       issueDate,
@@ -774,8 +814,14 @@ export class ZatcaStandardInvoiceService {
         .where(eq(zatcaInvoices.id, invoiceId))
         .run();
 
-      // On business rejection: append immutable burn event
+      // On business rejection: append immutable burn event and rotate document_id
       if (storeStatus === 'rejected') {
+        // Capture the burned document_id from the in-scope order variable
+        // (the same value that was signed into the XML). Do NOT re-read from
+        // the DB — the order reference was read before the transaction and
+        // holds the value that was in the submitted UBL cbc:ID.
+        const burnedDocumentId = order.documentId;
+
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -783,17 +829,26 @@ export class ZatcaStandardInvoiceService {
           'zatca_clearance_rejected',
           {
             documentKind: 'invoice',
-            documentId: invoiceId,
+            zatcaRecordId: invoiceId,
             attemptNo,
             icv,
             uuid: invUuid,
-            cbcId: String(icv),
+            cbcId: burnedDocumentId,
+            documentId: burnedDocumentId,
             orderId,
             httpStatus: clearance.httpStatus,
             errors: clearance.errors,
           },
           now,
         );
+
+        // Rotate document_id: allocate new ID and update the order so the next
+        // reissue gets a fresh invoice number as root cbc:ID.
+        const newDocumentId = this.documentIdService.allocateInvoiceDocumentId(tx);
+        tx.update(orders)
+          .set({ documentId: newDocumentId, updatedAt: now })
+          .where(eq(orders.id, orderId))
+          .run();
       }
 
       return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, invoiceId)).get() as any;
@@ -880,8 +935,13 @@ export class ZatcaStandardInvoiceService {
 
     const invUuid = require('crypto').randomUUID();
 
+    if (!refund.documentId) {
+      throw new Error(`Refund ${refundId} is missing document_id`);
+    }
+
     const xmlInput: InvoiceXMLInput = {
       type: 'credit_note',
+      documentId: refund.documentId,
       icv,
       uuid: invUuid,
       issueDate,
@@ -968,8 +1028,14 @@ export class ZatcaStandardInvoiceService {
         .where(eq(zatcaCreditNotes.id, cnId))
         .run();
 
-      // On business rejection: append immutable burn event
+      // On business rejection: append immutable burn event and rotate refund document_id
       if (storeStatus === 'rejected') {
+        // Capture the burned document_id from the in-scope refund variable
+        // (the same value that was signed into the XML). Do NOT re-read from
+        // the DB — the refund reference was read before the transaction and
+        // holds the value that was in the submitted UBL cbc:ID.
+        const burnedDocumentId = refund.documentId;
+
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -977,11 +1043,12 @@ export class ZatcaStandardInvoiceService {
           'zatca_clearance_rejected',
           {
             documentKind: 'credit_note',
-            documentId: cnId,
+            zatcaRecordId: cnId,
             attemptNo,
             icv,
             uuid: invUuid,
-            cbcId: String(icv),
+            cbcId: burnedDocumentId,
+            documentId: burnedDocumentId,
             orderId,
             refundId,
             httpStatus: clearance.httpStatus,
@@ -989,6 +1056,13 @@ export class ZatcaStandardInvoiceService {
           },
           now,
         );
+
+        // Rotate refund document_id for the next reissue
+        const newDocumentId = this.documentIdService.allocateRefundDocumentId(tx);
+        tx.update(orderRefunds)
+          .set({ documentId: newDocumentId, updatedAt: now })
+          .where(eq(orderRefunds.id, refundId))
+          .run();
       }
 
       return tx.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, cnId)).get() as any;

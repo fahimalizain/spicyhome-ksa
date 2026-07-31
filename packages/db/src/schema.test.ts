@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 7 rows after apply', () => {
+    it('__drizzle_migrations has exactly 8 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(7);
+      expect(rows.cnt).toBe(8);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(7);
+      expect(after).toBe(8);
 
       sqlite.close();
     });
@@ -702,6 +702,65 @@ describe('schema — invariants', () => {
       const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 605').get() as any;
       expect(row.uuid).toBe('uuid-sv-existing');
       expect(row.status).toBe('open');
+    });
+  });
+
+  describe('orders — document_id', () => {
+    it('has document_id column on orders table', () => {
+      const info = sqlite.prepare('PRAGMA table_info(orders)').all() as any[];
+      const names = info.map((c: any) => c.name);
+      expect(names).toContain('document_id');
+    });
+
+    it('orders.document_id is unique', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, document_id, created_at, updated_at)
+        VALUES (700, 'uuid-doc-id-1', 'dine_in', ${doId}, 'open', 'INV26-0001', ${now}, ${now})
+      `);
+
+      // Duplicate document_id should fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, document_id, created_at, updated_at)
+          VALUES (701, 'uuid-doc-id-2', 'dine_in', ${doId}, 'open', 'INV26-0001', ${now}, ${now})
+        `),
+      ).toThrow();
+    });
+
+    it('order_refunds has document_id column', () => {
+      const info = sqlite.prepare('PRAGMA table_info(order_refunds)').all() as any[];
+      const names = info.map((c: any) => c.name);
+      expect(names).toContain('document_id');
+    });
+
+    it('order_refunds.document_id is unique (nullable unique)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      // Create order
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, document_id, created_at, updated_at)
+        VALUES (702, 'uuid-ref-doc-1', 'dine_in', ${doId}, 'paid', 'INV26-R1', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Insert refund with document_id
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+        VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'REF26-0999', ${now})
+      `);
+
+      // Duplicate document_id should fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+          VALUES (${orderId}, ${userId}, 'cash', 'Cash', 1000, 150, 1150, 'REF26-0999', ${now})
+        `),
+      ).toThrow();
     });
   });
 });

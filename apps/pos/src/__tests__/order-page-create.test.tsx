@@ -164,7 +164,12 @@ describe('OrderPage — create order with sync', () => {
   });
 
   it('dine-in + items + no table: clicking Create shows error, no API call', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 1,
+      orderNo: 1,
+      documentId: 'INV26-0001',
+      uuid: 'test',
+    });
 
     renderOrderPage();
 
@@ -190,11 +195,17 @@ describe('OrderPage — create order with sync', () => {
   });
 
   it('select table then Create calls orders.create with dine_in + tableId + syncItems', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 10, orderNo: 42, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 10,
+      orderNo: 42,
+      documentId: 'INV26-0042',
+      uuid: 'test',
+    });
     // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
       id: 10,
       orderNo: 42,
+      documentId: 'INV26-0042',
       uuid: 'test',
       type: 'dine_in',
       tableId: 1,
@@ -202,10 +213,12 @@ describe('OrderPage — create order with sync', () => {
       updatedAt: 5000,
       items: [],
       events: [],
+      payments: [],
     });
     mockOrdersSyncItems.mockResolvedValue({
       id: 10,
       orderNo: 42,
+      documentId: 'INV26-0042',
       type: 'dine_in',
       tableId: 1,
       status: 'open',
@@ -277,21 +290,29 @@ describe('OrderPage — create order with sync', () => {
   });
 
   it('takeaway + items, no table: Create calls create+sync', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 20, orderNo: 5, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 20,
+      orderNo: 5,
+      documentId: 'INV26-0005',
+      uuid: 'test',
+    });
     // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
       id: 20,
       orderNo: 5,
+      documentId: 'INV26-0005',
       uuid: 'test',
       type: 'takeaway',
       status: 'open',
       updatedAt: 5000,
       items: [],
       events: [],
+      payments: [],
     });
     mockOrdersSyncItems.mockResolvedValue({
       id: 20,
       orderNo: 5,
+      documentId: 'INV26-0005',
       type: 'takeaway',
       status: 'open',
       updatedAt: 6000,
@@ -332,11 +353,17 @@ describe('OrderPage — create order with sync', () => {
   });
 
   it('deep-link /?tableId=5 pre-selects table, Create works with sync', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 30, orderNo: 7, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 30,
+      orderNo: 7,
+      documentId: 'INV26-0007',
+      uuid: 'test',
+    });
     // B6: After creation, the code fetches the order to get updatedAt
     mockOrdersGet.mockResolvedValue({
       id: 30,
       orderNo: 7,
+      documentId: 'INV26-0007',
       uuid: 'test',
       type: 'dine_in',
       tableId: 5,
@@ -344,10 +371,12 @@ describe('OrderPage — create order with sync', () => {
       updatedAt: 5000,
       items: [],
       events: [],
+      payments: [],
     });
     mockOrdersSyncItems.mockResolvedValue({
       id: 30,
       orderNo: 7,
+      documentId: 'INV26-0007',
       type: 'dine_in',
       tableId: 5,
       status: 'open',
@@ -381,7 +410,12 @@ describe('OrderPage — create order with sync', () => {
   });
 
   it('dine-in with table: re-clicking Dine-in preserves table selection', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 1, orderNo: 1, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 1,
+      orderNo: 1,
+      documentId: 'INV26-0001',
+      uuid: 'test',
+    });
 
     renderOrderPage(['/?tableId=1']);
 
@@ -434,6 +468,7 @@ describe('OrderPage — create order with sync', () => {
     const openOrder = {
       id: 99,
       orderNo: 42,
+      documentId: 'INV26-0042',
       uuid: 'occ-uuid',
       type: 'dine_in',
       tableId: 1,
@@ -473,8 +508,8 @@ describe('OrderPage — create order with sync', () => {
       const t1Btn = screen.getByText('T1').closest('button')!;
       expect(t1Btn).toBeDisabled();
 
-      // T1 should show the order number
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      // T1 should show the documentId
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
 
       // T2 should NOT be disabled
       const t2Btn = screen.getByText('T2').closest('button')!;

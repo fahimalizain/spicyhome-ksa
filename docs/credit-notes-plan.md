@@ -99,6 +99,10 @@ export const zatcaCreditNotes = sqliteTable('zatca_credit_notes', {
 });
 ```
 
+> **UBL `cbc:ID`**: The root Invoice ID is `order_refunds.document_id`
+> (`REF{YY}-####`), **not** the ICV. ICV remains in the
+> AdditionalDocumentReference ICV block. See [overview.md](./zatca/overview.md#document-id-document_id--ubl-invoice-cbcid).
+
 ## ICV and PIH Sequencing
 
 The ZATCA simplified-invoice counter (`ICV`) must be strictly monotonic across **all** issued documents (invoice, credit note, debit note). We keep the existing `last_icv` setting as the single source of truth.

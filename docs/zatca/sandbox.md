@@ -245,6 +245,13 @@ stored under settings keys of the form `zatca_<env>_<ouSlug>_<suffix>` (e.g.
 `zatca_sandbox_spicyhome-pos_private_key_encrypted`) and do not interfere with
 simulation or production credentials.
 
+## Document Numbers in Sandbox
+
+Regardless of environment (sandbox / simulation / production), the signed XML
+root **`cbc:ID`** is the business **`document_id`** (`INV{YY}-####` /
+`REF{YY}-####`), not the ICV. See
+[overview.md](./overview.md#document-id-document_id--ubl-invoice-cbcid).
+
 ## Sources
 
 - `apps/pos/src/hooks/useZatcaSandboxDefaults.ts` -- POS sandbox autofill defaults

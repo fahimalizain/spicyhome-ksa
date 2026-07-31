@@ -66,6 +66,12 @@ export interface BuyerInfo {
 export interface InvoiceXMLInput {
   /** Document type */
   type?: ZATCAInvoiceDocumentType;
+  /**
+   * Root `cbc:ID` — the business invoice/credit-note number.
+   * This is `orders.document_id` for invoices and `order_refunds.document_id`
+   * for credit notes. It is NOT the ICV.
+   */
+  documentId: string;
   /** Invoice Counter Value (strictly incrementing) */
   icv: number;
   /** UUID for the invoice */
@@ -104,6 +110,7 @@ export interface InvoiceXMLInput {
 export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   const type = input.type || 'invoice';
   const {
+    documentId,
     icv,
     uuid,
     issueDate,
@@ -177,7 +184,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
 
   // ── Profile & IDs ──
   parts.push(`  <cbc:ProfileID>reporting:1.0</cbc:ProfileID>`);
-  parts.push(`  <cbc:ID>${icv}</cbc:ID>`);
+  parts.push(`  <cbc:ID>${escapeXml(documentId)}</cbc:ID>`);
   parts.push(`  <cbc:UUID>${uuid}</cbc:UUID>`);
   parts.push(`  <cbc:IssueDate>${issueDate}</cbc:IssueDate>`);
   parts.push(`  <cbc:IssueTime>${issueTime}</cbc:IssueTime>`);

@@ -39,6 +39,12 @@ export class OrderResponse {
   @ApiProperty({ ...ApiInt64, example: 0 })
   discountHalalas!: number;
 
+  @ApiProperty({
+    description: 'ZATCA root cbc:ID — the business invoice number',
+    example: 'INV26-0001',
+  })
+  documentId!: string;
+
   // ── Standard invoice (ZATCA) buyer fields ───────────────────────────────────
 
   @ApiProperty({ description: 'Whether this order is a ZATCA standard invoice', example: false })

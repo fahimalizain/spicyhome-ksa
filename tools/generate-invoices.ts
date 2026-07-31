@@ -53,6 +53,7 @@ function generateDocument(
 ): string {
   const input: InvoiceXMLInput = {
     type,
+    documentId: String(icv),
     icv,
     uuid: crypto.randomUUID(),
     issueDate: '2025-07-22',

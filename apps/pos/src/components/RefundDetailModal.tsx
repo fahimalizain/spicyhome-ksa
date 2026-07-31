@@ -18,7 +18,7 @@ export function RefundDetailModal({ refund, onClose }: RefundDetailModalProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-white">Refund #{refund.id}</h3>
+          <h3 className="text-lg font-bold text-white">Refund {refund.documentId}</h3>
           <button
             onClick={onClose}
             className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"

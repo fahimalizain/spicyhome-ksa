@@ -143,7 +143,7 @@ export function OrdersPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-sm font-bold text-white">#{order.orderNo}</span>
+                    <span className="text-sm font-bold text-white">{order.documentId}</span>
                     <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${order.status}`}>
                       {STATUS_LABELS[order.status] || order.status}
                     </span>
@@ -176,7 +176,7 @@ export function OrdersPage() {
           {/* Sticky header */}
           <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-700/80 bg-gray-900">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold text-white">Order #{selectedOrder.orderNo}</h2>
+              <h2 className="text-lg font-bold text-white">Order {selectedOrder.documentId}</h2>
               <span
                 className={`px-2 py-1 rounded text-xs font-bold status-${selectedOrder.status}`}
               >

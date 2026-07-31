@@ -1666,6 +1666,11 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description ZATCA root cbc:ID — the business invoice number
+       * @example INV26-0001
+       */
+      documentId: string;
+      /**
        * Format: int64
        * @example 1700000000
        */
@@ -1878,6 +1883,11 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description ZATCA root cbc:ID — the business invoice number
+       * @example INV26-0001
+       */
+      documentId: string;
+      /**
        * @description Whether this order is a ZATCA standard invoice
        * @example false
        */
@@ -1934,6 +1944,11 @@ export interface components {
        * @example 1
        */
       orderNo: number;
+      /**
+       * @description ZATCA root cbc:ID — the business invoice number
+       * @example INV26-0001
+       */
+      documentId: string;
     };
     SyncOrderItemDto: {
       /**
@@ -2128,6 +2143,11 @@ export interface components {
       totalHalalas: number;
       /** @example Customer changed mind */
       reason: string | null;
+      /**
+       * @description Refund document ID
+       * @example REF26-0001
+       */
+      documentId: string;
       /**
        * Format: int64
        * @example 1700000000
