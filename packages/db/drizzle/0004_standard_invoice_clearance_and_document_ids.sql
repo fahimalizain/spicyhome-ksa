@@ -7,16 +7,20 @@ ALTER TABLE `order_refunds` ADD `document_id` text;--> statement-breakpoint
 ALTER TABLE `orders` ADD `is_standard_invoice` integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE `orders` ADD `zatca_buyer_details` text;--> statement-breakpoint
 ALTER TABLE `orders` ADD `document_id` text;--> statement-breakpoint
+ALTER TABLE `zatca_credit_notes` ADD `document_id` text;--> statement-breakpoint
 ALTER TABLE `zatca_credit_notes` ADD `attempt_no` integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `zatca_credit_notes` ADD `clearance_errors` text;--> statement-breakpoint
 ALTER TABLE `zatca_credit_notes` ADD `clearance_warnings` text;--> statement-breakpoint
 ALTER TABLE `zatca_credit_notes` ADD `http_status` integer;--> statement-breakpoint
+ALTER TABLE `zatca_invoices` ADD `document_id` text;--> statement-breakpoint
 ALTER TABLE `zatca_invoices` ADD `attempt_no` integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `zatca_invoices` ADD `clearance_errors` text;--> statement-breakpoint
 ALTER TABLE `zatca_invoices` ADD `clearance_warnings` text;--> statement-breakpoint
 ALTER TABLE `zatca_invoices` ADD `http_status` integer;--> statement-breakpoint
 CREATE UNIQUE INDEX `order_refunds_document_id_unique` ON `order_refunds` (`document_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `orders_document_id_unique` ON `orders` (`document_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_credit_notes_document_id_unique` ON `zatca_credit_notes` (`document_id`);--> statement-breakpoint
 CREATE INDEX `idx_zatca_credit_notes_refund_id` ON `zatca_credit_notes` (`refund_id`);--> statement-breakpoint
 CREATE INDEX `idx_zatca_credit_notes_order_id` ON `zatca_credit_notes` (`order_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `zatca_invoices_document_id_unique` ON `zatca_invoices` (`document_id`);--> statement-breakpoint
 CREATE INDEX `idx_zatca_invoices_order_id` ON `zatca_invoices` (`order_id`);

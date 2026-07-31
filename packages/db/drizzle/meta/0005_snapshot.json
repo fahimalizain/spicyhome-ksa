@@ -1,6 +1,6 @@
 {
-  "id": "03fb8cbb-9cb2-4446-8a9b-4f79db1dda03",
-  "prevId": "45958975-9493-4d9e-a76c-619b06ca9244",
+  "id": "e89184b4-e638-4f06-80b0-847c1c850ac0",
+  "prevId": "159a10cb-6e88-45aa-8f65-42b52cfac993",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -1829,6 +1829,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "invoice_hash": {
           "name": "invoice_hash",
           "type": "text",
@@ -1961,6 +1968,11 @@
           "columns": ["uuid"],
           "isUnique": true
         },
+        "zatca_credit_notes_document_id_unique": {
+          "name": "zatca_credit_notes_document_id_unique",
+          "columns": ["document_id"],
+          "isUnique": true
+        },
         "idx_zatca_credit_notes_refund_id": {
           "name": "idx_zatca_credit_notes_refund_id",
           "columns": ["refund_id"],
@@ -2039,6 +2051,13 @@
         },
         "uuid": {
           "name": "uuid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "document_id": {
+          "name": "document_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -2153,6 +2172,11 @@
         "zatca_invoices_uuid_unique": {
           "name": "zatca_invoices_uuid_unique",
           "columns": ["uuid"],
+          "isUnique": true
+        },
+        "zatca_invoices_document_id_unique": {
+          "name": "zatca_invoices_document_id_unique",
+          "columns": ["document_id"],
           "isUnique": true
         },
         "idx_zatca_invoices_order_id": {
