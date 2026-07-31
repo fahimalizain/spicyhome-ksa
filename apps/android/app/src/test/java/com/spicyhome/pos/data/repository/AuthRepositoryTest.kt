@@ -45,7 +45,9 @@ class AuthRepositoryTest {
         assertThat(result).isSameInstanceAs(loginCall)
         verify {
             authApi.authControllerLogin(match { dto ->
-                dto.username == "admin" && dto.pin == "1234"
+                dto.username == "admin" &&
+                    dto.pin == "1234" &&
+                    dto.clientType == LoginDto.ClientType.android
             })
         }
     }

@@ -51,7 +51,7 @@ beforeAll(async () => {
 
   const loginRes = await request(app.getHttpServer())
     .post('/auth/login')
-    .send({ username: 'admin', pin: '771133' });
+    .send({ username: 'admin', pin: '771133', clientType: 'pos' });
   jwtToken = loginRes.body.accessToken;
 });
 
@@ -64,7 +64,7 @@ describe('Auth (e2e)', () => {
   it('POST /auth/login works', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ username: 'admin', pin: '771133' })
+      .send({ username: 'admin', pin: '771133', clientType: 'pos' })
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
   });
@@ -72,8 +72,32 @@ describe('Auth (e2e)', () => {
   it('POST /auth/login wrong PIN returns 401', async () => {
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ username: 'admin', pin: '0000' })
+      .send({ username: 'admin', pin: '0000', clientType: 'pos' })
       .expect(401);
+  });
+
+  it('POST /auth/login missing clientType returns 400', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'admin', pin: '771133' })
+      .expect(400);
+  });
+
+  it('POST /auth/login android clientType with android_login=0 user returns 401', async () => {
+    // admin is seeded with android_login=0 (POS/back-office only)
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'admin', pin: '771133', clientType: 'android' })
+      .expect(401);
+  });
+
+  it('POST /auth/login android clientType with android_login=1 user works', async () => {
+    // waiter is seeded with android_login=1 (tablet floor user)
+    const res = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    expect(res.body.accessToken).toBeDefined();
   });
 
   it('GET /auth/roles with admin token returns roles', async () => {

@@ -24,6 +24,7 @@ import com.squareup.moshi.JsonClass
  *
  * @param username 
  * @param pin 
+ * @param clientType 
  */
 
 
@@ -33,10 +34,23 @@ data class LoginDto (
     val username: kotlin.String,
 
     @Json(name = "pin")
-    val pin: kotlin.String
+    val pin: kotlin.String,
+
+    @Json(name = "clientType")
+    val clientType: LoginDto.ClientType
 
 ) {
 
+    /**
+     * 
+     *
+     * Values: android,pos
+     */
+    @JsonClass(generateAdapter = false)
+    enum class ClientType(val value: kotlin.String) {
+        @Json(name = "android") android("android"),
+        @Json(name = "pos") pos("pos");
+    }
 
 }
 

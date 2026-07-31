@@ -92,7 +92,7 @@ describe('Sentry exception filter', () => {
   it('401 Unauthorized preserves correct status code', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ username: 'nonexistent', pin: '0000' })
+      .send({ username: 'nonexistent', pin: '0000', clientType: 'pos' })
       .expect(401);
     expect(res.body.statusCode).toBe(401);
   });

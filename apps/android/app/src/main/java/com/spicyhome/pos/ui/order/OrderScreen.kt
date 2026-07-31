@@ -530,14 +530,29 @@ private fun UnifiedCartPanel(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 itemsIndexed(state.cart.toList()) { index, cartItem ->
+                    val isSynced = cartItem.orderItemId != null
+                    // ADR 0004: open-order gates. New local lines (orderItemId
+                    // == null) stay fully editable; synced lines keep + and
+                    // notes when updateOrder is granted, − only above the
+                    // server floor, and are never deletable on the tablet.
+                    val canIncrease =
+                        !isOpenOrder || !isSynced || state.permissions.updateOrder
+                    val canDecrease =
+                        !isOpenOrder ||
+                            !isSynced ||
+                            (state.permissions.updateOrder &&
+                                cartItem.qty > serverFloorQty(cartItem, state.snapshotCart))
+                    val canDelete = !isOpenOrder || !isSynced
                     CartItemRow(
                         cartItem = cartItem,
                         onDecrease = { onDecrease(index, cartItem) },
                         onIncrease = { onIncrease(index, cartItem) },
                         onRemove = { onRemove(index, cartItem) },
                         onUpdateNotes = { notes -> onUpdateNotes(index, cartItem, notes) },
-                        canMutate = !isOpenOrder || (cartItem.orderItemId != null && state.permissions.updateOrder),
-                        canDelete = !isOpenOrder || (cartItem.orderItemId != null && state.permissions.deleteOrderItem),
+                        canDecrease = canDecrease,
+                        canIncrease = canIncrease,
+                        canDelete = canDelete,
+                        canEditNotes = canIncrease,
                     )
                 }
             }
@@ -665,8 +680,10 @@ private fun CartItemRow(
     onIncrease: () -> Unit,
     onRemove: () -> Unit,
     onUpdateNotes: (String) -> Unit,
-    canMutate: Boolean,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
     canDelete: Boolean,
+    canEditNotes: Boolean,
 ) {
     var showNotesDialog by remember { mutableStateOf(false) }
 
@@ -694,7 +711,7 @@ private fun CartItemRow(
                         fontSize = 11.sp,
                     )
                 }
-                if (canMutate) {
+                if (canEditNotes) {
                     TextButton(
                         onClick = { showNotesDialog = true },
                         modifier = Modifier.width(24.dp).height(24.dp),
@@ -719,26 +736,21 @@ private fun CartItemRow(
                 color = OnDarkSecondary,
             )
         }
-        if (canMutate) {
+        if (canDecrease) {
             TextButton(onClick = onDecrease, modifier = Modifier.width(36.dp)) {
                 Text("-", color = Accent, fontSize = 18.sp)
             }
-            Text(
-                text = "${cartItem.qty}",
-                color = OnDark,
-                fontSize = 15.sp,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
+        }
+        Text(
+            text = "${cartItem.qty}",
+            color = OnDark,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        if (canIncrease) {
             TextButton(onClick = onIncrease, modifier = Modifier.width(36.dp)) {
                 Text("+", color = Accent, fontSize = 18.sp)
             }
-        } else {
-            Text(
-                text = "×${cartItem.qty}",
-                color = OnDarkSecondary,
-                fontSize = 15.sp,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
         }
         if (canDelete) {
             TextButton(onClick = onRemove) {

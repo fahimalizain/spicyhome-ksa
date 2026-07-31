@@ -189,6 +189,20 @@ interface OrdersApi {
     fun ordersControllerReprintOrder(@Path("id") id: kotlin.Long, @Body reprintOrderDto: ReprintOrderDto): Call<PrintResponse>
 
     /**
+     * POST orders/{id}/refunds/{refundId}/print
+     * Reprint a specific refund receipt
+     * 
+     * Responses:
+     *  - 201: Print result
+     *
+     * @param id 
+     * @param refundId 
+     * @return [Call]<[PrintResponse]>
+     */
+    @POST("orders/{id}/refunds/{refundId}/print")
+    fun ordersControllerReprintRefundReceipt(@Path("id") id: kotlin.Long, @Path("refundId") refundId: kotlin.Long): Call<PrintResponse>
+
+    /**
      * POST orders/{id}/zatca-invoice/retry-clearance
      * Retry ZATCA clearance for an invoice in error status
      * 

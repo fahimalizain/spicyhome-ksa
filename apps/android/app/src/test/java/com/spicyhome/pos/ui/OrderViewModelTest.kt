@@ -1072,6 +1072,109 @@ class OrderViewModelTest {
         assertThat(state.error).contains("500")
     }
 
+    // --- ADR 0004: qty floor on synced lines ---
+
+    private fun hydrateOpenOrder(qty: Int): OrderViewModel {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = qty, totalHalalas = 1500L * qty, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+        return vm
+    }
+
+    @Test
+    fun `decrease below floor on synced line is no-op`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 2)
+        vm.decreaseQty(0)
+        assertThat(vm.uiState.value.cart).hasSize(1)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
+        assertThat(vm.uiState.value.isDirty).isFalse()
+    }
+
+    @Test
+    fun `decrease from local bump above floor stops at floor`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 2)
+        vm.increaseQty(0) // 3
+        vm.increaseQty(0) // 4
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(4)
+        vm.decreaseQty(0) // 3
+        vm.decreaseQty(0) // 2 (floor)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
+        vm.decreaseQty(0) // must not go below floor
+        assertThat(vm.uiState.value.cart).hasSize(1)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(2)
+    }
+
+    @Test
+    fun `decrease at qty 1 on synced line with floor 1 does not remove`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 1)
+        vm.decreaseQty(0)
+        assertThat(vm.uiState.value.cart).hasSize(1)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(1)
+    }
+
+    @Test
+    fun `remove on synced line is no-op`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 2)
+        vm.removeFromCart(0)
+        assertThat(vm.uiState.value.cart).hasSize(1)
+        assertThat(vm.uiState.value.cart[0].orderItemId).isEqualTo(200L)
+    }
+
+    @Test
+    fun `increase still works on synced lines`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 2)
+        vm.increaseQty(0)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(3)
+        assertThat(vm.uiState.value.isDirty).isTrue()
+    }
+
+    @Test
+    fun `remove and decrease still work on new local lines on open order`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+        val vm = createViewModel()
+        val order = createOrderResponse(1L, 100L, "open", emptyList())
+        vm.hydrateFromOrder(order)
+
+        // New local line (orderItemId == null)
+        vm.addToCart(menuItem)
+        vm.increaseQty(0) // qty 2
+        assertThat(vm.uiState.value.cart[0].orderItemId).isNull()
+
+        vm.decreaseQty(0) // qty 1
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(1)
+        vm.decreaseQty(0) // removes (qty was 1, orderItemId null)
+        assertThat(vm.uiState.value.cart).isEmpty()
+
+        vm.addToCart(menuItem)
+        vm.removeFromCart(0)
+        assertThat(vm.uiState.value.cart).isEmpty()
+    }
+
+    @Test
+    fun `serverFloorQty returns 0 for new local lines`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        val item = createItem(1, "A", 1000, 1500)
+        vm.addToCart(item)
+        assertThat(serverFloorQty(vm.uiState.value.cart[0], vm.uiState.value.snapshotCart)).isEqualTo(0)
+    }
+
+    @Test
+    fun `serverFloorQty returns snapshot qty for synced lines`() = runTest(testDispatcher) {
+        val vm = hydrateOpenOrder(qty = 3)
+        assertThat(serverFloorQty(vm.uiState.value.cart[0], vm.uiState.value.snapshotCart)).isEqualTo(3)
+    }
+
     // --- Helpers ---
 
     private fun stubMenuItems(items: List<ItemResponse>) {

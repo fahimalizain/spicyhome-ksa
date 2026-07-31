@@ -170,6 +170,18 @@ private fun cartEquals(a: List<CartItem>, b: List<CartItem>): Boolean {
     return true
 }
 
+/**
+ * ADR 0004: the qty floor for a cart line is the last server snapshot qty
+ * matched by orderItemId. New local lines (orderItemId == null) have no
+ * floor (0 — they may be reduced or removed until sent to kitchen).
+ * A synced line missing from the snapshot falls back to 0 (defensive; the
+ * snapshot always contains synced lines after hydrate).
+ */
+fun serverFloorQty(cartItem: CartItem, snapshot: List<CartItem>?): Int {
+    val orderItemId = cartItem.orderItemId ?: return 0
+    return snapshot?.firstOrNull { it.orderItemId == orderItemId }?.qty ?: 0
+}
+
 class OrderViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
@@ -392,6 +404,10 @@ class OrderViewModel(
     fun removeFromCart(index: Int) {
         val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
+            val item = cart[index]
+            // ADR 0004: lines that already exist on the server cannot be
+            // removed from the tablet (cashier-only).
+            if (item.orderItemId != null) return
             cart.removeAt(index)
         }
         recomputeDirty(cart)
@@ -409,7 +425,13 @@ class OrderViewModel(
         val cart = _uiState.value.cart.toMutableList()
         if (index in cart.indices) {
             val item = cart[index]
-            if (item.qty > 1) {
+            if (item.orderItemId != null) {
+                // ADR 0004: synced lines cannot go below the server floor
+                // and are never removed (even at qty 1 with floor 1).
+                val floor = serverFloorQty(item, _uiState.value.snapshotCart)
+                if (item.qty <= floor) return
+                cart[index] = item.copy(qty = item.qty - 1)
+            } else if (item.qty > 1) {
                 cart[index] = item.copy(qty = item.qty - 1)
             } else {
                 cart.removeAt(index)

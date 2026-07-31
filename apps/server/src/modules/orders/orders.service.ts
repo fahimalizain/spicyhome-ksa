@@ -222,6 +222,7 @@ export class OrdersService {
       }>;
     },
     userId: number,
+    clientType?: string,
   ) {
     const now = Math.floor(Date.now() / 1000);
 
@@ -280,6 +281,27 @@ export class OrdersService {
       for (const line of desiredLines) {
         if (line.orderItemId != null) {
           desiredIds.add(line.orderItemId);
+        }
+      }
+
+      // ADR 0004: Android cannot reduce qty below the current DB qty or
+      // remove server lines. Compare against the DB inside the transaction
+      // (after the concurrency check) and reject the ENTIRE sync — no
+      // partial apply. POS (or tokens without a clientType claim) keep
+      // full decrease/remove power.
+      if (clientType === 'android') {
+        for (const existing of existingItems) {
+          if (!desiredIds.has(existing.id)) {
+            throw new BadRequestException('Kitchen items can only be reduced at the cashier.');
+          }
+        }
+        for (const line of desiredLines) {
+          if (line.orderItemId != null) {
+            const oi = existingMap.get(line.orderItemId);
+            if (oi && line.qty < oi.qty) {
+              throw new BadRequestException('Kitchen items can only be reduced at the cashier.');
+            }
+          }
         }
       }
 

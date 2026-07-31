@@ -32,7 +32,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with username and PIN' })
   @ApiCreatedResponse({ description: 'JWT access token', type: LoginResponse })
   login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.username, dto.pin);
+    return this.authService.login(dto.username, dto.pin, dto.clientType);
   }
 
   @Public()

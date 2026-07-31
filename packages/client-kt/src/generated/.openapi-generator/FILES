@@ -166,5 +166,3 @@ src/main/kotlin/com/spicyhome/client/models/ZatcaInvoiceAttemptDto.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaInvoiceReissueDto.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaInvoiceStatusResponse.kt
 src/main/kotlin/com/spicyhome/client/models/ZatcaReissueResultDto.kt
-src/test/kotlin/com/spicyhome/client/models/ZatcaClearanceDetailDtoTest.kt
-src/test/kotlin/com/spicyhome/client/models/ZatcaReissueResultDtoTest.kt

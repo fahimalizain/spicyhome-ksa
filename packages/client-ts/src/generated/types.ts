@@ -458,6 +458,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/orders/{id}/refunds/{refundId}/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reprint a specific refund receipt */
+    post: operations['OrdersController_reprintRefundReceipt'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/orders/{id}/events': {
     parameters: {
       query?: never;
@@ -1046,8 +1063,13 @@ export interface components {
     LoginDto: {
       /** @example admin */
       username: string;
-      /** @example 1234 */
+      /** @example 771133 */
       pin: string;
+      /**
+       * @example pos
+       * @enum {string}
+       */
+      clientType: 'android' | 'pos';
     };
     LoginResponse: {
       /** @example eyJhbGciOiJIUzI1NiIs... */
@@ -1179,7 +1201,7 @@ export interface components {
        */
       androidLogin?: boolean;
       /**
-       * @description New PIN (4-6 digits)
+       * @description New PIN (1-6 digits)
        * @example 5678
        */
       pin?: string;
@@ -1613,6 +1635,7 @@ export interface components {
       connectionType?: 'tcp' | 'windows';
       /** @description Windows printer queue name. Required when connectionType is "windows". */
       windowsPrinterName?: string;
+      /** @description IP address or hostname. Required when connectionType is "tcp". Can be empty string for windows. */
       ip?: string;
       /** Format: int32 */
       port?: number;
@@ -3415,6 +3438,29 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['OrderRefundResponse'][];
+        };
+      };
+    };
+  };
+  OrdersController_reprintRefundReceipt: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        refundId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrintResponse'];
         };
       };
     };

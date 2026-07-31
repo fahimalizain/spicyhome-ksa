@@ -1,4 +1,4 @@
-import { IsString, MinLength, MaxLength } from 'class-validator';
+import { IsString, MinLength, MaxLength, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -12,4 +12,8 @@ export class LoginDto {
   @MinLength(1)
   @MaxLength(6)
   pin!: string;
+
+  @ApiProperty({ enum: ['android', 'pos'], example: 'pos' })
+  @IsIn(['android', 'pos'])
+  clientType!: 'android' | 'pos';
 }
