@@ -251,6 +251,9 @@ export const zatcaInvoices = sqliteTable(
       .notNull(),
     icv: integer('icv').unique().notNull(),
     uuid: text('uuid').unique().notNull(),
+    // Snapshot of orders.document_id at attempt time
+    // (stable even if the live order ID is later rotated on rejection).
+    documentId: text('document_id').notNull().unique(),
     invoiceHash: text('invoice_hash').notNull(),
     prevInvoiceHash: text('prev_invoice_hash').notNull(),
     xml: text('xml').notNull(),
@@ -295,6 +298,9 @@ export const zatcaCreditNotes = sqliteTable(
     relatedInvoiceUuid: text('related_invoice_uuid').notNull(),
     icv: integer('icv').notNull().unique(),
     uuid: text('uuid').notNull().unique(),
+    // Snapshot of order_refunds.document_id at attempt time
+    // (stable even if the live refund ID is later rotated on rejection).
+    documentId: text('document_id').notNull().unique(),
     invoiceHash: text('invoice_hash').notNull(),
     prevInvoiceHash: text('prev_invoice_hash').notNull(),
     xml: text('xml').notNull(),

@@ -321,6 +321,7 @@ export class ZatcaInvoiceService {
         orderId,
         icv,
         uuid: invUuid,
+        documentId: order.documentId,
         invoiceHash: finalInvoiceHash,
         prevInvoiceHash,
         xml: finalSignedXml,
@@ -501,6 +502,7 @@ export class ZatcaInvoiceService {
         relatedInvoiceUuid: originalInvoice.uuid,
         icv,
         uuid: invUuid,
+        documentId: refund.documentId,
         invoiceHash: finalInvoiceHash,
         prevInvoiceHash,
         xml: finalSignedXml,
@@ -603,35 +605,14 @@ export class ZatcaInvoiceService {
   /**
    * List all invoices (paginated).
    *
-   * Joins `orders` to project the current `documentId` (the order's live
-   * document ID — rotated on clearance rejection; historical attempt rows
-   * keep the old ID only inside their signed XML).
+   * `documentId` comes from the `zatca_invoices.document_id` column — a
+   * snapshot taken at attempt time. The live `orders.document_id` may be
+   * rotated on clearance rejection; historical rows keep the burned ID.
    */
   listInvoices(limit = 50, offset = 0): any[] {
     return this.db
-      .select({
-        id: zatcaInvoices.id,
-        orderId: zatcaInvoices.orderId,
-        icv: zatcaInvoices.icv,
-        uuid: zatcaInvoices.uuid,
-        invoiceHash: zatcaInvoices.invoiceHash,
-        prevInvoiceHash: zatcaInvoices.prevInvoiceHash,
-        xml: zatcaInvoices.xml,
-        qrTlv: zatcaInvoices.qrTlv,
-        status: zatcaInvoices.status,
-        attemptNo: zatcaInvoices.attemptNo,
-        clearanceErrors: zatcaInvoices.clearanceErrors,
-        clearanceWarnings: zatcaInvoices.clearanceWarnings,
-        httpStatus: zatcaInvoices.httpStatus,
-        reportedAt: zatcaInvoices.reportedAt,
-        createdAt: zatcaInvoices.createdAt,
-        updatedAt: zatcaInvoices.updatedAt,
-        createdBy: zatcaInvoices.createdBy,
-        updatedBy: zatcaInvoices.updatedBy,
-        documentId: orders.documentId,
-      })
+      .select()
       .from(zatcaInvoices)
-      .leftJoin(orders, eq(zatcaInvoices.orderId, orders.id))
       .orderBy(desc(zatcaInvoices.id))
       .limit(limit)
       .offset(offset)
@@ -641,73 +622,24 @@ export class ZatcaInvoiceService {
   /**
    * Get invoice by ID.
    *
-   * Joins `orders` to project the current `documentId` (see `listInvoices`).
+   * `documentId` comes from the `zatca_invoices.document_id` column (see
+   * `listInvoices`).
    */
   getById(id: number): any {
-    return this.db
-      .select({
-        id: zatcaInvoices.id,
-        orderId: zatcaInvoices.orderId,
-        icv: zatcaInvoices.icv,
-        uuid: zatcaInvoices.uuid,
-        invoiceHash: zatcaInvoices.invoiceHash,
-        prevInvoiceHash: zatcaInvoices.prevInvoiceHash,
-        xml: zatcaInvoices.xml,
-        qrTlv: zatcaInvoices.qrTlv,
-        status: zatcaInvoices.status,
-        attemptNo: zatcaInvoices.attemptNo,
-        clearanceErrors: zatcaInvoices.clearanceErrors,
-        clearanceWarnings: zatcaInvoices.clearanceWarnings,
-        httpStatus: zatcaInvoices.httpStatus,
-        reportedAt: zatcaInvoices.reportedAt,
-        createdAt: zatcaInvoices.createdAt,
-        updatedAt: zatcaInvoices.updatedAt,
-        createdBy: zatcaInvoices.createdBy,
-        updatedBy: zatcaInvoices.updatedBy,
-        documentId: orders.documentId,
-      })
-      .from(zatcaInvoices)
-      .leftJoin(orders, eq(zatcaInvoices.orderId, orders.id))
-      .where(eq(zatcaInvoices.id, id))
-      .get();
+    return this.db.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, id)).get();
   }
 
   /**
    * List all credit notes (paginated).
    *
-   * Joins `order_refunds` to project the current `documentId` (the refund's
-   * live document ID — rotated on clearance rejection).
+   * `documentId` comes from the `zatca_credit_notes.document_id` column — a
+   * snapshot taken at attempt time. The live `order_refunds.document_id` may
+   * be rotated on clearance rejection; historical rows keep the burned ID.
    */
   listCreditNotes(limit = 50, offset = 0): any[] {
     return this.db
-      .select({
-        id: zatcaCreditNotes.id,
-        orderId: zatcaCreditNotes.orderId,
-        refundId: zatcaCreditNotes.refundId,
-        relatedInvoiceUuid: zatcaCreditNotes.relatedInvoiceUuid,
-        icv: zatcaCreditNotes.icv,
-        uuid: zatcaCreditNotes.uuid,
-        invoiceHash: zatcaCreditNotes.invoiceHash,
-        prevInvoiceHash: zatcaCreditNotes.prevInvoiceHash,
-        xml: zatcaCreditNotes.xml,
-        qrTlv: zatcaCreditNotes.qrTlv,
-        status: zatcaCreditNotes.status,
-        attemptNo: zatcaCreditNotes.attemptNo,
-        clearanceErrors: zatcaCreditNotes.clearanceErrors,
-        clearanceWarnings: zatcaCreditNotes.clearanceWarnings,
-        httpStatus: zatcaCreditNotes.httpStatus,
-        reportedAt: zatcaCreditNotes.reportedAt,
-        totalHalalas: zatcaCreditNotes.totalHalalas,
-        vatHalalas: zatcaCreditNotes.vatHalalas,
-        reason: zatcaCreditNotes.reason,
-        createdAt: zatcaCreditNotes.createdAt,
-        updatedAt: zatcaCreditNotes.updatedAt,
-        createdBy: zatcaCreditNotes.createdBy,
-        updatedBy: zatcaCreditNotes.updatedBy,
-        documentId: orderRefunds.documentId,
-      })
+      .select()
       .from(zatcaCreditNotes)
-      .leftJoin(orderRefunds, eq(zatcaCreditNotes.refundId, orderRefunds.id))
       .orderBy(desc(zatcaCreditNotes.id))
       .limit(limit)
       .offset(offset)
@@ -717,40 +649,11 @@ export class ZatcaInvoiceService {
   /**
    * Get credit note by ID.
    *
-   * Joins `order_refunds` to project the current `documentId` (see `listCreditNotes`).
+   * `documentId` comes from the `zatca_credit_notes.document_id` column (see
+   * `listCreditNotes`).
    */
   getCreditNoteById(id: number): any | undefined {
-    return this.db
-      .select({
-        id: zatcaCreditNotes.id,
-        orderId: zatcaCreditNotes.orderId,
-        refundId: zatcaCreditNotes.refundId,
-        relatedInvoiceUuid: zatcaCreditNotes.relatedInvoiceUuid,
-        icv: zatcaCreditNotes.icv,
-        uuid: zatcaCreditNotes.uuid,
-        invoiceHash: zatcaCreditNotes.invoiceHash,
-        prevInvoiceHash: zatcaCreditNotes.prevInvoiceHash,
-        xml: zatcaCreditNotes.xml,
-        qrTlv: zatcaCreditNotes.qrTlv,
-        status: zatcaCreditNotes.status,
-        attemptNo: zatcaCreditNotes.attemptNo,
-        clearanceErrors: zatcaCreditNotes.clearanceErrors,
-        clearanceWarnings: zatcaCreditNotes.clearanceWarnings,
-        httpStatus: zatcaCreditNotes.httpStatus,
-        reportedAt: zatcaCreditNotes.reportedAt,
-        totalHalalas: zatcaCreditNotes.totalHalalas,
-        vatHalalas: zatcaCreditNotes.vatHalalas,
-        reason: zatcaCreditNotes.reason,
-        createdAt: zatcaCreditNotes.createdAt,
-        updatedAt: zatcaCreditNotes.updatedAt,
-        createdBy: zatcaCreditNotes.createdBy,
-        updatedBy: zatcaCreditNotes.updatedBy,
-        documentId: orderRefunds.documentId,
-      })
-      .from(zatcaCreditNotes)
-      .leftJoin(orderRefunds, eq(zatcaCreditNotes.refundId, orderRefunds.id))
-      .where(eq(zatcaCreditNotes.id, id))
-      .get();
+    return this.db.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, id)).get();
   }
 
   /**

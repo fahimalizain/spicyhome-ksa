@@ -86,7 +86,7 @@ export interface ZatcaInvoice {
   reportedAt: number | null;
   createdAt: number;
   updatedAt: number;
-  /** Current order document ID (orders.document_id); null only for orphan rows */
+  /** Snapshot of orders.document_id at attempt time (zatca_invoices.document_id column) */
   documentId: string | null;
 }
 
@@ -108,7 +108,7 @@ export interface ZatcaCreditNote {
   reason: string | null;
   createdAt: number;
   updatedAt: number;
-  /** Current refund document ID (order_refunds.document_id); null only for orphan rows */
+  /** Snapshot of order_refunds.document_id at attempt time (zatca_credit_notes.document_id column) */
   documentId: string | null;
 }
 

@@ -159,8 +159,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'QVJDVEVTVFRMVg=='; // base64 example
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'cleared', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-${orderSeq}', 'DOC-' || 'uuid-inv-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'cleared', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -177,8 +177,8 @@ describe('PrintJobService', () => {
       // Create a rejected invoice row — should NOT be used for QR
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJECTED_QR', 'rejected', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-${orderSeq}', 'DOC-' || 'uuid-inv-rej-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJECTED_QR', 'rejected', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -197,8 +197,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'SIGNED_QR_PAYLOAD';
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-signed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'signed', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-signed-${orderSeq}', 'DOC-' || 'uuid-inv-signed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'signed', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -214,8 +214,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'REPORTED_QR_PAYLOAD';
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-reported-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'reported', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-reported-${orderSeq}', 'DOC-' || 'uuid-inv-reported-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'reported', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -231,8 +231,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'FAILED_QR_PAYLOAD';
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-failed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'failed', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-failed-${orderSeq}', 'DOC-' || 'uuid-inv-failed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'failed', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -249,8 +249,8 @@ describe('PrintJobService', () => {
 
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-pending-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'PENDING_QR', 'pending', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-pending-${orderSeq}', 'DOC-' || 'uuid-inv-pending-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'PENDING_QR', 'pending', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -265,8 +265,8 @@ describe('PrintJobService', () => {
 
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-error-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'ERROR_QR', 'error', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-error-${orderSeq}', 'DOC-' || 'uuid-inv-error-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'ERROR_QR', 'error', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -284,16 +284,16 @@ describe('PrintJobService', () => {
       // Older rejected row (lower id)
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-old2-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJECTED_QR', 'rejected', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-old2-${orderSeq}', 'DOC-' || 'uuid-inv-rej-old2-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJECTED_QR', 'rejected', 1, ${now}, ${now})
       `);
 
       // Newer cleared row (higher id)
       icvSeq++;
       const clearedQr = 'CLEARED_QR_PAYLOAD';
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-cleared-new2-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${clearedQr}', 'cleared', 2, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-cleared-new2-${orderSeq}', 'DOC-' || 'uuid-inv-cleared-new2-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${clearedQr}', 'cleared', 2, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -309,15 +309,15 @@ describe('PrintJobService', () => {
       // Rejected row
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-xx-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJ_QR', 'rejected', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-rej-xx-${orderSeq}', 'DOC-' || 'uuid-inv-rej-xx-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'REJ_QR', 'rejected', 1, ${now}, ${now})
       `);
 
       // Error row
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-err-xx-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'ERR_QR', 'error', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-err-xx-${orderSeq}', 'DOC-' || 'uuid-inv-err-xx-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'ERR_QR', 'error', 1, ${now}, ${now})
       `);
 
       await printJobService.printReceipt(orderId);
@@ -333,8 +333,8 @@ describe('PrintJobService', () => {
       // Create a cleared invoice row with some QR (will be overridden)
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
-        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'DB_QR_VALUE', 'cleared', 1, ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, created_at, updated_at)
+        VALUES (${orderId}, ${icvSeq}, 'uuid-inv-${orderSeq}', 'DOC-' || 'uuid-inv-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'DB_QR_VALUE', 'cleared', 1, ${now}, ${now})
       `);
 
       const explicitPayload = 'EXPLICIT_QR_VALUE';
@@ -371,8 +371,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'Q05RUkRFVEVTVFRMVg=='; // base64 example
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'cleared', 1, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-${orderSeq}', 'DOC-' || 'uuid-cn-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'cleared', 1, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       await printJobService.printRefundReceipt(refundId);
@@ -402,8 +402,8 @@ describe('PrintJobService', () => {
       // Create a cleared credit note row with some QR (will be overridden)
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'DB_CN_QR_VALUE', 'cleared', 1, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-${orderSeq}', 'DOC-' || 'uuid-cn-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'DB_CN_QR_VALUE', 'cleared', 1, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       const explicitPayload = 'EXPLICIT_CN_QR_VALUE';
@@ -426,8 +426,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'CN_SIGNED_QR';
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-signed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'signed', 1, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-signed-${orderSeq}', 'DOC-' || 'uuid-cn-signed-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'signed', 1, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       await printJobService.printRefundReceipt(refundId);
@@ -444,8 +444,8 @@ describe('PrintJobService', () => {
       icvSeq++;
       const tlvPayload = 'CN_REPORTED_QR';
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-reported-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'reported', 1, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-reported-${orderSeq}', 'DOC-' || 'uuid-cn-reported-${orderSeq}', 'abcd', 'prevhash', '<xml/>', '${tlvPayload}', 'reported', 1, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       await printJobService.printRefundReceipt(refundId);
@@ -461,8 +461,8 @@ describe('PrintJobService', () => {
 
       icvSeq++;
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-rejected-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'CN_REJECTED_QR', 'rejected', 1, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, attempt_no, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId}, ${refundId}, 'uuid-inv-${orderSeq}', ${icvSeq}, 'uuid-cn-rejected-${orderSeq}', 'DOC-' || 'uuid-cn-rejected-${orderSeq}', 'abcd', 'prevhash', '<xml/>', 'CN_REJECTED_QR', 'rejected', 1, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       await printJobService.printRefundReceipt(refundId);
