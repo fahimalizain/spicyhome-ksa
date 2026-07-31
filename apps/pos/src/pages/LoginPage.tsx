@@ -93,6 +93,38 @@ export function LoginPage() {
     }
   }, [username, pin, navigate]);
 
+  // Physical keyboard support for the PIN pad: digits, backspace/delete,
+  // escape to clear, and enter to log in. Keys are ignored while typing the
+  // username in the free-text input so usernames containing digits work.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (loading) return;
+      if (document.activeElement === inputRef.current) return;
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleDigit(e.key);
+        return;
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClear();
+        return;
+      }
+      if ((e.key === 'Enter' || e.code === 'NumpadEnter') && canLogin()) {
+        e.preventDefault();
+        void handleLogin();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [loading, handleDigit, handleDelete, handleClear, handleLogin, canLogin]);
+
   return (
     <div className="h-full flex flex-col items-center justify-center bg-gray-900 px-4">
       <div className="w-full max-w-sm">
