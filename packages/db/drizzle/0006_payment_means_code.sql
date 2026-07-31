@@ -1,4 +1,5 @@
--- ZATCA Payment Means codes (UN/ECE 4461) — snapshot columns.
+-- ZATCA Payment Means type codes (BT-81, UNTDID 4461 subset 10|30|42|48|1 —
+-- see docs/zatca/ overview + BR-KSA-16) — snapshot columns.
 --
 -- payment_methods.zatca_payment_means_code is the catalog value; order_payments
 -- and order_refunds snapshot it at pay/refund time so invoices/credit notes

@@ -136,7 +136,7 @@ export function PaymentMethodsPage() {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">
-            ZATCA Payment Means Code (UN/ECE 4461)
+            ZATCA Payment Means Code (BT-81)
           </label>
           <select
             className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -150,6 +150,9 @@ export function PaymentMethodsPage() {
               </option>
             ))}
           </select>
+          <p className="text-xs text-gray-500 mt-1">
+            ZATCA BT-81 code for invoices: cash / card / bank transfer / other.
+          </p>
         </div>
         <button
           type="submit"
@@ -183,7 +186,7 @@ export function PaymentMethodsPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    ZATCA Payment Means Code
+                    ZATCA Payment Means Code (BT-81)
                   </label>
                   <select
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -199,9 +202,13 @@ export function PaymentMethodsPage() {
                       </option>
                     ))}
                   </select>
-                  {m.id === 'cash' && (
+                  {m.id === 'cash' ? (
                     <p className="text-xs text-amber-500 mt-1">
                       Cash is locked to code 10 (In cash).
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      ZATCA BT-81 code for invoices: cash / card / bank transfer / other.
                     </p>
                   )}
                 </div>

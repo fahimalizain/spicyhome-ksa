@@ -1,11 +1,24 @@
 /**
- * ZATCA-accepted UN/ECE 4461 Payment Means codes.
+ * ZATCA Payment Means type code — UBL `cac:PaymentMeans/cbc:PaymentMeansCode`
+ * (EN 16931 business term **BT-81**, "Payment means type code").
  *
- * The allow-list comes from the KSA schematron
- * (tools/zatca-sdk/Data/Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl),
- * which accepts codes `10`, `30`, `42`, `48`, `1` only. In particular codes
- * `54` / `55` (credit-transfer / card variants in the full UN/ECE registry)
- * are rejected by ZATCA validation and must never be emitted.
+ * Sources (all checked into the repo):
+ * - Data dictionary (`docs/zatca/20230519_EInvoice_Data_Dictionary vF.xlsx`,
+ *   BT-81): optional on all invoice profiles; resolution field **9.1** maps
+ *   "cash, credit/debit cards, bank transfer, credit, and/or others"; code
+ *   list is a "subset of UNTDID 4461". UBL/EN 16931 cardinality is `1..n`
+ *   (this codebase emits a single `cac:PaymentMeans` — see below).
+ * - XML Implementation Standard
+ *   (`docs/zatca/20230519_ZATCA_Electronic_Invoice_XML_Implementation_Standard_ vF.pdf`,
+ *   §11.2.5): payment means type code from a subset of UN/CEFACT 4461 D.16B.
+ *   **BR-KSA-16**: if BT-81 is present it must be one of the subset values.
+ * - Schematron (runtime enforcement):
+ *   `tools/zatca-sdk/Data/Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl`
+ *   accepts codes `10`, `30`, `42`, `48`, `1` only.
+ *
+ * Codes `54` (Credit card) and `55` (Debit card) exist in the full UN/ECE 4461
+ * registry but are **excluded** from ZATCA's subset — card payments must use
+ * `48` (Bank card), which is how the seeded `card`/`mada` methods are mapped.
  */
 export const ZATCA_PAYMENT_MEANS_CODES = ['10', '30', '42', '48', '1'] as const;
 
@@ -14,12 +27,16 @@ export type ZatcaPaymentMeansCode = (typeof ZATCA_PAYMENT_MEANS_CODES)[number];
 /** Fallback code used when no payment lines exist or a snapshot is invalid. */
 export const DEFAULT_ZATCA_PAYMENT_MEANS_CODE: ZatcaPaymentMeansCode = '10';
 
+/**
+ * Short admin-UI labels, tracking the resolution field 9.1 categories
+ * (cash / credit & debit cards / bank transfer / other).
+ */
 export const ZATCA_PAYMENT_MEANS_CODE_LABELS: Record<ZatcaPaymentMeansCode, string> = {
   '10': 'Cash',
-  '30': 'Credit transfer',
+  '30': 'Credit transfer (bank transfer)',
   '42': 'Payment to bank account',
-  '48': 'Bank card',
-  '1': 'Instrument not defined',
+  '48': 'Bank card (credit/debit)',
+  '1': 'Instrument not defined (other)',
 };
 
 export function isZatcaPaymentMeansCode(value: string): value is ZatcaPaymentMeansCode {
@@ -37,6 +54,10 @@ export interface PaymentMeansCodeLine {
 /**
  * Resolve the single `cbc:PaymentMeansCode` for a document from its payment
  * lines (v1 split-tender resolution: one PaymentMeans block only).
+ *
+ * BT-81 cardinality is `1..n` in UBL/EN 16931, so multiple `cac:PaymentMeans`
+ * blocks would be valid; v1 intentionally emits a single block for the
+ * dominant tender.
  *
  * Rules:
  * - No lines → default `10`.

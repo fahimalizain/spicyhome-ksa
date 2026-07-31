@@ -341,8 +341,8 @@ export const zatcaCreditNotes = sqliteTable(
 export const paymentMethods = sqliteTable('payment_methods', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
-  // Snapshot source for order_payments / order_refunds at pay/refund time.
-  // ZATCA UN/ECE 4461 code (allow-list: 10, 30, 42, 48, 1).
+  // Catalog value (ZATCA BT-81, UNTDID 4461 subset 10|30|42|48|1) — the live
+  // source that order_payments / order_refunds snapshot at pay/refund time.
   zatcaPaymentMeansCode: text('zatca_payment_means_code').notNull(),
   enabled: integer('enabled').notNull().default(1),
   sortOrder: integer('sort_order').notNull().default(0),

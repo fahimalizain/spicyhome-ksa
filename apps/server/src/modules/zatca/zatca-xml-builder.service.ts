@@ -95,8 +95,11 @@ export interface InvoiceXMLInput {
   /** Payment instruction note (KSA-10 reason for credit/debit notes) */
   paymentNote?: string;
   /**
-   * UN/ECE 4461 Payment Means code (ZATCA allow-list: 10, 30, 42, 48, 1).
-   * Defaults to '10' and any non-allow-listed value is coerced to '10'.
+   * Payment means type code (EN 16931 BT-81) emitted as
+   * `cac:PaymentMeans/cbc:PaymentMeansCode`. ZATCA allows only the UNTDID 4461
+   * subset `10 | 30 | 42 | 48 | 1` (BR-KSA-16, see
+   * packages/shared/src/zatca-payment-means.ts). Defaults to '10' and any
+   * non-allow-listed value is coerced to '10'.
    */
   paymentMeansCode?: string;
   /** default 'simplified' — existing callers unchanged */
