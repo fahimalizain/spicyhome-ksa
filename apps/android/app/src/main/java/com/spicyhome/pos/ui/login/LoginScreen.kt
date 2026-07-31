@@ -177,7 +177,7 @@ fun LoginScreen(
 
                 Button(
                     onClick = { viewModel.login() },
-                    enabled = !state.isLoading && state.username.isNotBlank() && state.pin.length >= 3,
+                    enabled = !state.isLoading && state.username.isNotBlank() && state.pin.length >= 1,
                     colors = ButtonDefaults.buttonColors(containerColor = Accent),
                     modifier = Modifier
                         .fillMaxWidth()

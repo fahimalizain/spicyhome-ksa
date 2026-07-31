@@ -1,8 +1,8 @@
 {
+  "id": "1a747925-f1eb-436a-ac03-2aaed037634b",
+  "prevId": "960bd4df-13db-452a-9f0f-abd4cad616b4",
   "version": "6",
   "dialect": "sqlite",
-  "id": "960bd4df-13db-452a-9f0f-abd4cad616b4",
-  "prevId": "e89184b4-e638-4f06-80b0-847c1c850ac0",
   "tables": {
     "day_openings": {
       "name": "day_openings",
@@ -648,6 +648,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "zatca_payment_means_code": {
+          "name": "zatca_payment_means_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "amount_halalas": {
           "name": "amount_halalas",
           "type": "integer",
@@ -847,6 +854,13 @@
         },
         "method_title": {
           "name": "method_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "zatca_payment_means_code": {
+          "name": "zatca_payment_means_code",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1188,6 +1202,13 @@
         },
         "title": {
           "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "zatca_payment_means_code": {
+          "name": "zatca_payment_means_code",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -2228,9 +2249,9 @@
   },
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}

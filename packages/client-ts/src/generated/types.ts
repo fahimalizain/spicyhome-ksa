@@ -1121,6 +1121,8 @@ export interface components {
       roleId: number;
       /** @example true */
       isActive: boolean;
+      /** @example true */
+      androidLogin: boolean;
       /**
        * Format: int64
        * @example 1700000000
@@ -1155,6 +1157,11 @@ export interface components {
        * @example 2
        */
       roleId: number;
+      /**
+       * @description Defaults to true (shown on Android login)
+       * @example true
+       */
+      androidLogin?: boolean;
     };
     UpdateUserDto: {
       /** @example Ahmed Ali */
@@ -1166,6 +1173,11 @@ export interface components {
       roleId?: number;
       /** @example false */
       isActive?: boolean;
+      /**
+       * @description Whether the user appears on Android login
+       * @example true
+       */
+      androidLogin?: boolean;
       /**
        * @description New PIN (4-6 digits)
        * @example 5678
@@ -2553,7 +2565,10 @@ export interface operations {
   };
   AuthController_listUsernames: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description When "android", only users with androidLogin=true are returned */
+        platform?: 'android';
+      };
       header?: never;
       path?: never;
       cookie?: never;

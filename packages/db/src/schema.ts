@@ -33,6 +33,7 @@ export const users = sqliteTable('users', {
     .references(() => userRoles.id)
     .notNull(),
   isActive: integer('is_active').notNull().default(1),
+  androidLogin: integer('android_login').notNull().default(1),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   createdBy: integer('created_by').references((): any => users.id),

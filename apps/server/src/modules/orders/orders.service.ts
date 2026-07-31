@@ -1300,6 +1300,71 @@ export class OrdersService {
 
   // ── Reprint helpers ──────────────────────────────────────────────────────────
 
+  /**
+   * Reprint a specific refund's receipt.
+   * Validates the order exists and the refund belongs to it, then reprints
+   * via printRefundReceipt (title REFUND) and writes enqueued/succeeded events
+   * tagged with refundId so the timeline can distinguish refund prints.
+   */
+  async reprintRefundReceipt(
+    orderId: number,
+    refundId: number,
+    userId: number,
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const now = Math.floor(Date.now() / 1000);
+    const errors: string[] = [];
+
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundException('Order not found');
+
+    const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
+    if (!refund) {
+      throw new NotFoundException(`Refund ${refundId} not found`);
+    }
+    if (refund.orderId !== orderId) {
+      throw new BadRequestException(`Refund ${refundId} does not belong to order ${orderId}`);
+    }
+
+    const receiptPrinter = this.printJobService.getReceiptPrinter();
+    if (!receiptPrinter) {
+      return { success: false, errors: ['No active receipt printer configured'] };
+    }
+
+    this.orderEvents.createEvent(
+      this.db,
+      orderId,
+      userId,
+      'receipt_print_enqueued',
+      {
+        printer: receiptPrinter.name,
+        printerId: receiptPrinter.id,
+        kickDrawer: false,
+        refundId,
+        totalHalalas: refund.totalHalalas,
+      },
+      now,
+    );
+
+    try {
+      await this.printJobService.printRefundReceipt(refundId, { kickDrawer: false });
+
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: receiptPrinter.name, printerId: receiptPrinter.id, refundId },
+        now,
+      );
+    } catch (err: any) {
+      const msg = `Refund receipt reprint: ${err.message}`;
+      this.logger.error(msg);
+      errors.push(msg);
+    }
+
+    return { success: errors.length === 0, errors };
+  }
+
   private async reprintReceipt(
     orderId: number,
     userId: number,

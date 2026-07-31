@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Get, Put, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -6,6 +6,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -37,9 +38,15 @@ export class AuthController {
   @Public()
   @Get('usernames')
   @ApiOperation({ summary: 'List active usernames for login dropdown' })
+  @ApiQuery({
+    name: 'platform',
+    required: false,
+    enum: ['android'],
+    description: 'When "android", only users with androidLogin=true are returned',
+  })
   @ApiOkResponse({ description: 'Active usernames', type: UsernamesResponse })
-  listUsernames() {
-    return this.authService.listUsernames();
+  listUsernames(@Query('platform') platform?: string) {
+    return this.authService.listUsernames(platform);
   }
 
   @Get('me')

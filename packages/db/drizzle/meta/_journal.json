@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "6",
+      "when": 1785500548883,
+      "tag": "0006_users_android_login",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
       "when": 1785500510414,
-      "tag": "0006_payment_means_code",
+      "tag": "0007_payment_means_code",
       "breakpoints": true
     }
   ]

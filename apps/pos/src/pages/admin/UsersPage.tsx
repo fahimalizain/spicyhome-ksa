@@ -8,7 +8,13 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ username: '', name: '', pin: '', roleId: 0 });
+  const [form, setForm] = useState({
+    username: '',
+    name: '',
+    pin: '',
+    roleId: 0,
+    androidLogin: true,
+  });
 
   useEffect(() => {
     loadData();
@@ -31,12 +37,18 @@ export function UsersPage() {
   }
 
   function resetForm() {
-    setForm({ username: '', name: '', pin: '', roleId: roles[0]?.id || 0 });
+    setForm({ username: '', name: '', pin: '', roleId: roles[0]?.id || 0, androidLogin: true });
     setEditId(null);
   }
 
   function editUser(u: UserResponse) {
-    setForm({ username: u.username, name: u.name, pin: '', roleId: u.roleId });
+    setForm({
+      username: u.username,
+      name: u.name,
+      pin: '',
+      roleId: u.roleId,
+      androidLogin: u.androidLogin ?? true,
+    });
     setEditId(u.id);
   }
 
@@ -45,7 +57,11 @@ export function UsersPage() {
     setError('');
     try {
       if (editId) {
-        const updateData: any = { name: form.name, roleId: form.roleId };
+        const updateData: any = {
+          name: form.name,
+          roleId: form.roleId,
+          androidLogin: form.androidLogin,
+        };
         if (form.pin) updateData.pin = form.pin;
         await client.auth.updateUser(editId, updateData);
       } else {
@@ -114,6 +130,17 @@ export function UsersPage() {
             </select>
           </div>
         </div>
+        <div className="flex items-end pb-1">
+          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-600 bg-gray-700 accent-brand-500"
+              checked={form.androidLogin}
+              onChange={(e) => setForm((f) => ({ ...f, androidLogin: e.target.checked }))}
+            />
+            Show on Android login
+          </label>
+        </div>
         <div className="flex gap-2">
           <button
             type="submit"
@@ -142,6 +169,9 @@ export function UsersPage() {
             <div>
               <span className="text-sm text-white">{u.name}</span>
               <span className="text-xs text-gray-500 ml-2">@{u.username}</span>
+              {u.androidLogin === false && (
+                <span className="text-xs text-gray-500 ml-2">(no Android)</span>
+              )}
             </div>
             <button
               onClick={() => editUser(u)}

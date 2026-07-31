@@ -260,30 +260,6 @@ export function OrdersPage() {
               </button>
             )}
 
-            {/* RefundPanel */}
-            {showRefund && selectedOrder.status === 'paid' && (
-              <div className="mt-3">
-                <RefundPanel
-                  order={selectedOrder}
-                  onClose={() => setShowRefund(false)}
-                  onRefunded={async () => {
-                    setShowRefund(false);
-                    try {
-                      const [updated, refundsResult] = await Promise.all([
-                        client.orders.get(selectedOrder.id),
-                        client.orders.getRefunds(selectedOrder.id),
-                      ]);
-                      setSelectedOrder(updated);
-                      setRefunds(refundsResult);
-                      loadOrders();
-                    } catch {
-                      // Refetch failed, keep current state
-                    }
-                  }}
-                />
-              </div>
-            )}
-
             {/* Refunds list */}
             {refunds.length > 0 && (
               <div className="mt-3">
@@ -341,6 +317,38 @@ export function OrdersPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Refund modal */}
+      {showRefund && selectedOrder && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setShowRefund(false)}
+        >
+          <div
+            className="bg-gray-900 rounded-xl p-4 w-96 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <RefundPanel
+              order={selectedOrder}
+              onClose={() => setShowRefund(false)}
+              onRefunded={async () => {
+                setShowRefund(false);
+                try {
+                  const [updated, refundsResult] = await Promise.all([
+                    client.orders.get(selectedOrder.id),
+                    client.orders.getRefunds(selectedOrder.id),
+                  ]);
+                  setSelectedOrder(updated);
+                  setRefunds(refundsResult);
+                  loadOrders();
+                } catch {
+                  // Refetch failed, keep current state
+                }
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
