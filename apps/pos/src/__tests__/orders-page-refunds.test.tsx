@@ -17,6 +17,7 @@ const mockGetRefunds = vi.fn();
 const mockGetEvents = vi.fn();
 const mockVerifyEvents = vi.fn();
 const mockReprint = vi.fn();
+const mockReprintRefund = vi.fn();
 
 const { mockRealtimeSubscribe, mockRealtimeOnReconnect, mockRealtimeOffReconnect } = vi.hoisted(
   () => ({
@@ -35,6 +36,7 @@ vi.mock('../api', () => ({
       getEvents: (...args: any[]) => mockGetEvents(...args),
       verifyEvents: (...args: any[]) => mockVerifyEvents(...args),
       reprint: (...args: any[]) => mockReprint(...args),
+      reprintRefund: (...args: any[]) => mockReprintRefund(...args),
       refund: vi.fn(),
     },
     paymentMethods: {
@@ -376,6 +378,66 @@ describe('OrdersPage — refunds list and modal', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Refund REF26-0001')).not.toBeInTheDocument();
+    });
+  });
+
+  it('opens RefundPanel in a fixed overlay modal when Refund button is clicked', async () => {
+    mockGetRefunds.mockResolvedValue([sampleRefund]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Refund panel must NOT be rendered inline before opening
+    expect(screen.queryByText('Refund for Order INV26-0042')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Refund'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // The panel should be inside a fixed inset-0 overlay (not the detail column)
+    const overlay = document.querySelector('.fixed.inset-0');
+    expect(overlay).not.toBeNull();
+    expect(overlay!.className).toContain('bg-black/60');
+  });
+
+  it('closes Refund modal when backdrop is clicked', async () => {
+    mockGetRefunds.mockResolvedValue([sampleRefund]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Refund'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Click the backdrop (the outer fixed inset-0 div)
+    const backdrop = document.querySelector('.fixed.inset-0');
+    if (backdrop) fireEvent.click(backdrop);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Refund for Order INV26-0042')).not.toBeInTheDocument();
     });
   });
 

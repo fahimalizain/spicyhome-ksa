@@ -27,6 +27,7 @@ import com.squareup.moshi.JsonClass
  * @param name 
  * @param roleId 
  * @param isActive 
+ * @param androidLogin 
  * @param createdAt 
  * @param updatedAt 
  * @param createdBy 
@@ -50,6 +51,9 @@ data class UserResponse (
 
     @Json(name = "isActive")
     val isActive: kotlin.Boolean,
+
+    @Json(name = "androidLogin")
+    val androidLogin: kotlin.Boolean,
 
     @Json(name = "createdAt")
     val createdAt: kotlin.Long,

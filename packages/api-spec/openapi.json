@@ -37,7 +37,20 @@
       "get": {
         "operationId": "AuthController_listUsernames",
         "summary": "List active usernames for login dropdown",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "platform",
+            "required": false,
+            "in": "query",
+            "description": "When \"android\", only users with androidLogin=true are returned",
+            "schema": {
+              "enum": [
+                "android"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Active usernames",
@@ -1423,6 +1436,52 @@
         ]
       }
     },
+    "/orders/{id}/refunds/{refundId}/print": {
+      "post": {
+        "operationId": "OrdersController_reprintRefundReceipt",
+        "summary": "Reprint a specific refund receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "refundId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Print result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders/{id}/events": {
       "get": {
         "operationId": "OrdersController_getOrderEvents",
@@ -2687,7 +2746,7 @@
           },
           "pin": {
             "type": "string",
-            "example": "1234"
+            "example": "771133"
           }
         },
         "required": [
@@ -2844,6 +2903,10 @@
             "type": "boolean",
             "example": true
           },
+          "androidLogin": {
+            "type": "boolean",
+            "example": true
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -2873,6 +2936,7 @@
           "name",
           "roleId",
           "isActive",
+          "androidLogin",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -2899,6 +2963,11 @@
             "format": "int64",
             "example": 2,
             "description": "role_id — 1 for admin, 2 for staff"
+          },
+          "androidLogin": {
+            "type": "boolean",
+            "example": true,
+            "description": "Defaults to true (shown on Android login)"
           }
         },
         "required": [
@@ -2924,10 +2993,15 @@
             "type": "boolean",
             "example": false
           },
+          "androidLogin": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the user appears on Android login"
+          },
           "pin": {
             "type": "string",
             "example": "5678",
-            "description": "New PIN (4-6 digits)"
+            "description": "New PIN (1-6 digits)"
           }
         }
       },

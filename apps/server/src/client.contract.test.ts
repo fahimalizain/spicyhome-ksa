@@ -68,7 +68,7 @@ describe('Client contract test', () => {
   let orderId: number;
 
   it('login succeeds with correct credentials', async () => {
-    const res = await client.auth.login({ username: 'admin', pin: '1234' });
+    const res = await client.auth.login({ username: 'admin', pin: '771133' });
     expect(res.accessToken).toBeDefined();
     expect(typeof res.accessToken).toBe('string');
     token = res.accessToken;

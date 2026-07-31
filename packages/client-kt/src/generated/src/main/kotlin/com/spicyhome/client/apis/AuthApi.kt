@@ -81,6 +81,14 @@ interface AuthApi {
     @GET("auth/roles")
     fun authControllerListRoles(): Call<kotlin.collections.List<RoleResponse>>
 
+
+    /**
+    * enum for parameter platform
+    */
+    enum class PlatformAuthControllerListUsernames(val value: kotlin.String) {
+        @Json(name = "android") android("android")
+    }
+
     /**
      * GET auth/usernames
      * List active usernames for login dropdown
@@ -88,10 +96,11 @@ interface AuthApi {
      * Responses:
      *  - 200: Active usernames
      *
+     * @param platform When \&quot;android\&quot;, only users with androidLogin&#x3D;true are returned (optional)
      * @return [Call]<[UsernamesResponse]>
      */
     @GET("auth/usernames")
-    fun authControllerListUsernames(): Call<UsernamesResponse>
+    fun authControllerListUsernames(@Query("platform") platform: PlatformAuthControllerListUsernames? = null): Call<UsernamesResponse>
 
     /**
      * GET auth/users

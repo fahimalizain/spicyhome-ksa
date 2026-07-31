@@ -26,6 +26,7 @@ import com.squareup.moshi.JsonClass
  * @param pin 
  * @param name 
  * @param roleId role_id — 1 for admin, 2 for staff
+ * @param androidLogin Defaults to true (shown on Android login)
  */
 
 
@@ -42,7 +43,11 @@ data class CreateUserDto (
 
     /* role_id — 1 for admin, 2 for staff */
     @Json(name = "roleId")
-    val roleId: kotlin.Long
+    val roleId: kotlin.Long,
+
+    /* Defaults to true (shown on Android login) */
+    @Json(name = "androidLogin")
+    val androidLogin: kotlin.Boolean? = null
 
 ) {
 

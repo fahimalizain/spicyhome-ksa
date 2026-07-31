@@ -43,6 +43,12 @@ class UpdateUserDtoTest : ShouldSpec() {
             //modelInstance.isActive shouldBe ("TODO")
         }
 
+        // to test the property `androidLogin` - Whether the user appears on Android login
+        should("test androidLogin") {
+            // uncomment below to test the property
+            //modelInstance.androidLogin shouldBe ("TODO")
+        }
+
         // to test the property `pin` - New PIN (4-6 digits)
         should("test pin") {
             // uncomment below to test the property

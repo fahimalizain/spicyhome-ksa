@@ -71,10 +71,11 @@ const catalog: CatalogDump = catalogJson;
  *   - admin: all permissions = 1
  *   - staff: create_order = 1, update_order = 1, rest = 0 (incl. pay_order)
  *
- * Admin user:
- *   - username: admin
- *   - PIN: 1234 (bcrypt-hashed)
- *   - role: admin
+ * Users:
+ *   - Admin (POS/back-office only): username admin, PIN 771133,
+ *     role admin, android_login = 0 (hidden from Android login)
+ *   - Cashier (tablet floor user): username cashier, name Cashier, PIN 1,
+ *     role staff, android_login = 1 (shown on Android login)
  *
  * Tables: T1 – T5
  *
@@ -90,7 +91,7 @@ export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): voi
   }
 
   seedRoles(effectiveSqlite);
-  seedAdminUser(effectiveSqlite);
+  seedUsers(effectiveSqlite);
   seedTables(effectiveSqlite);
   seedCategories(effectiveSqlite);
   seedItems(effectiveSqlite);
@@ -126,18 +127,36 @@ function seedRoles(sqlite: Database.Database): void {
   `);
 }
 
-function seedAdminUser(sqlite: Database.Database): void {
-  const existing = sqlite
+function seedUsers(sqlite: Database.Database): void {
+  const adminRole = sqlite.prepare(`SELECT id FROM user_roles WHERE name = 'admin'`).get() as
+    { id: number } | undefined;
+  const staffRole = sqlite.prepare(`SELECT id FROM user_roles WHERE name = 'staff'`).get() as
+    { id: number } | undefined;
+
+  if (!adminRole || !staffRole) {
+    throw new Error('Cannot seed users: admin/staff roles missing');
+  }
+
+  const insertUser = sqlite.prepare(`
+    INSERT INTO users (username, pin_hash, name, role_id, is_active, android_login, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, ?, ${now}, ${now})
+  `);
+
+  const adminExists = sqlite
     .prepare('SELECT COUNT(*) as cnt FROM users WHERE username = ?')
     .get('admin') as { cnt: number };
+  if (adminExists.cnt === 0) {
+    // Admin: POS/back-office only
+    insertUser.run('admin', hashSync('771133', 10), 'Administrator', adminRole.id, 0);
+  }
 
-  if (existing.cnt > 0) return;
-
-  const pinHash = hashSync('1234', 10);
-  sqlite.exec(`
-    INSERT INTO users (username, pin_hash, name, role_id, is_active, created_at, updated_at)
-    VALUES ('admin', '${pinHash}', 'Administrator', 1, 1, ${now}, ${now});
-  `);
+  const cashierExists = sqlite
+    .prepare('SELECT COUNT(*) as cnt FROM users WHERE username = ?')
+    .get('cashier') as { cnt: number };
+  if (cashierExists.cnt === 0) {
+    // Cashier: tablet floor user
+    insertUser.run('cashier', hashSync('1', 10), 'Cashier', staffRole.id, 1);
+  }
 }
 
 function seedTables(sqlite: Database.Database): void {

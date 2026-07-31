@@ -18,6 +18,7 @@ class AuthRepository(private val authApi: AuthApi) {
     }
 
     fun listUsernames(): Call<UsernamesResponse> {
-        return authApi.authControllerListUsernames()
+        // Only users with androidLogin=true are shown on the Android tablet login.
+        return authApi.authControllerListUsernames(AuthApi.PlatformAuthControllerListUsernames.android)
     }
 }

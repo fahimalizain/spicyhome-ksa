@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { compareSync } from 'bcryptjs';
 import { createTestDb, findMigrationsDir } from './migrate';
 import { seedRaw } from './seed';
 
@@ -51,19 +52,44 @@ describe('seed', () => {
     expect(staff.manage_settings).toBe(0);
   });
 
-  it('inserts admin user with hashed PIN', () => {
+  it('inserts admin user with hashed PIN and android_login = 0', () => {
     seedRaw(sqlite);
 
     const admin = sqlite.prepare('SELECT * FROM users WHERE username = ?').get('admin') as any;
+    const adminRole = sqlite
+      .prepare('SELECT id FROM user_roles WHERE name = ?')
+      .get('admin') as any;
 
     expect(admin).toBeDefined();
     expect(admin.name).toBe('Administrator');
-    expect(admin.role_id).toBe(1);
+    expect(admin.role_id).toBe(adminRole.id);
     expect(admin.is_active).toBe(1);
+    expect(admin.android_login).toBe(0);
 
-    // PIN hash should be bcrypt (starts with $2a$ or $2b$)
+    // PIN hash should be bcrypt of 771133 (starts with $2a$ or $2b$)
     expect(admin.pin_hash).toMatch(/^\$2[aby]\$/);
-    expect(admin.pin_hash).not.toBe('1234');
+    expect(admin.pin_hash).not.toBe('771133');
+    expect(compareSync('771133', admin.pin_hash)).toBe(true);
+  });
+
+  it('inserts cashier user with PIN 1, staff role, and android_login = 1', () => {
+    seedRaw(sqlite);
+
+    const cashier = sqlite.prepare('SELECT * FROM users WHERE username = ?').get('cashier') as any;
+    const staffRole = sqlite
+      .prepare('SELECT id FROM user_roles WHERE name = ?')
+      .get('staff') as any;
+
+    expect(cashier).toBeDefined();
+    expect(cashier.name).toBe('Cashier');
+    expect(cashier.role_id).toBe(staffRole.id);
+    expect(cashier.is_active).toBe(1);
+    expect(cashier.android_login).toBe(1);
+
+    // PIN hash should be bcrypt of 1 (starts with $2a$ or $2b$)
+    expect(cashier.pin_hash).toMatch(/^\$2[aby]\$/);
+    expect(cashier.pin_hash).not.toBe('1');
+    expect(compareSync('1', cashier.pin_hash)).toBe(true);
   });
 
   it('inserts 5 tables', () => {
@@ -203,6 +229,11 @@ describe('seed', () => {
       .prepare("SELECT COUNT(*) as cnt FROM users WHERE username = 'admin'")
       .get() as any;
     expect(admins.cnt).toBe(1);
+
+    const cashiers = sqlite
+      .prepare("SELECT COUNT(*) as cnt FROM users WHERE username = 'cashier'")
+      .get() as any;
+    expect(cashiers.cnt).toBe(1);
 
     const tables = sqlite.prepare('SELECT COUNT(*) as cnt FROM tables').get() as any;
     expect(tables.cnt).toBe(5);

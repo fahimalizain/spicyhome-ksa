@@ -21,8 +21,12 @@ Quick Start (flat — unzip and run)
    POS Desktop Shortcut (Chrome kiosk) below.
 5. Log in with:
      Username: admin
-     PIN: 1234
+     PIN: 771133
 6. Change your PIN immediately (Admin > Users).
+
+Android tablets log in with the seeded staff user:
+     Username: cashier
+     PIN: 1
 
 POS Desktop Shortcut (Chrome kiosk)
 -----------------------------------
