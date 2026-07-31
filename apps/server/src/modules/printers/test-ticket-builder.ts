@@ -2,6 +2,7 @@ import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterConfig, PrinterArabicConfig } from '@spicyhome/shared';
 import { encodeArabicText, encodeUtf8, encodeW1256, reverseBytes } from './arabic-encode';
+import { renderArabicLineFromLogical } from './arabic-raster';
 
 export interface TestTicketOptions {
   printerName: string;
@@ -191,6 +192,35 @@ export class TestTicketBuilder {
     eb.codePage(0); // restore PC437
     eb.blankLine();
 
+    // Probe 5: shaped + segment-aware bidi (charset path) + CP50
+    // Letters still do not join in charset mode, but reading order is
+    // correct and mixed runs ("5x ...", "... 1234") stay in place.
+    const shapedBidiConfig: PrinterArabicConfig = {
+      encoding: 'w1256',
+      codePage: 50,
+      visualRtl: true,
+      renderMode: 'charset',
+    };
+    eb.text('AR shaped+bidi W1256 + CP50:');
+    eb.codePage(50);
+    eb.rawLine(encodeArabicText(shapedBidiConfig, arPhrase1));
+    eb.rawLine(encodeArabicText(shapedBidiConfig, arPhrase2));
+    eb.rawLine(encodeArabicText(shapedBidiConfig, '5x ' + arPhrase1)); // 5x مرحبا
+    eb.rawLine(
+      encodeArabicText(shapedBidiConfig, '\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628: 1234'),
+    ); // رقم الطلب: 1234
+    eb.codePage(0); // restore PC437
+    eb.blankLine();
+
+    // Probe 6: raster Arabic (joined letterforms via GS v 0)
+    eb.text('AR RASTER (GS v 0, joined):');
+    eb.rawLine(encodeArabicText(shapedBidiConfig, arPhrase1)); // charset reference
+    this.rasterProbe(eb, arPhrase1);
+    this.rasterProbe(eb, arPhrase2);
+    this.rasterProbe(eb, '5x \u0634\u0648\u0631\u0628\u0629 \u0630\u0631\u0629');
+    this.rasterProbe(eb, '\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628: 1234');
+    eb.blankLine();
+
     eb.separator('-');
     eb.text('End of Arabic probes.');
     eb.text('Note which probe looked best.');
@@ -257,7 +287,8 @@ export class TestTicketBuilder {
     eb.text('7. ARABIC CONFIGURED SETTINGS');
     eb.bold(false);
     eb.text(
-      `encoding=${arabic.encoding} codePage=${arabic.codePage} visualRtl=${arabic.visualRtl}`,
+      `encoding=${arabic.encoding} codePage=${arabic.codePage} visualRtl=${arabic.visualRtl}` +
+        ` renderMode=${arabic.renderMode}`,
     );
     eb.separator('-');
 
@@ -265,7 +296,23 @@ export class TestTicketBuilder {
       eb.text('Arabic disabled (encoding=none).');
       eb.text('Configure in Admin > Printers after');
       eb.text('reviewing section 6 probes.');
+    } else if (arabic.renderMode === 'raster') {
+      // Raster mode: joined letterforms via GS v 0. Falls back to charset
+      // bytes per line when the glyph atlas is unavailable.
+      for (const s of ARABIC_SAMPLES) {
+        const bmp = renderArabicLineFromLogical(s, arabic, { maxWidthDots: 384 });
+        if (bmp) {
+          eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+          eb.blankLine();
+        } else {
+          const bytes = encodeArabicText(arabic, s);
+          if (bytes.length > 0) {
+            eb.rawLine(bytes);
+          }
+        }
+      }
     } else {
+      // Charset mode: shape + segment-bidi reorder, then code-page bytes.
       // Switch code page for the Arabic body when needed.
       // PC864 / W1256 always need a code page. UTF-8 only if codePage != 0.
       const needCP = arabic.encoding !== 'utf8' || arabic.codePage !== 0;
@@ -291,6 +338,28 @@ export class TestTicketBuilder {
     eb.text('Restore CP0.');
     eb.codePage(0);
     eb.blankLine();
+  }
+
+  // ── Raster probe helper ────────────────────────────────────────────────────
+
+  /**
+   * Print one Arabic line as a raster bit image. When the glyph atlas is
+   * unavailable, prints a fallback ASCII marker so the probe layout survives.
+   */
+  private rasterProbe(eb: EscPosBuilder, text: string): void {
+    const config: PrinterArabicConfig = {
+      encoding: 'w1256',
+      codePage: 50,
+      visualRtl: true,
+      renderMode: 'raster',
+    };
+    const bmp = renderArabicLineFromLogical(text, config, { maxWidthDots: 384 });
+    if (bmp) {
+      eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+      eb.blankLine();
+    } else {
+      eb.text('[raster atlas missing]');
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

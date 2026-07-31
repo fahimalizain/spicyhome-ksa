@@ -3,6 +3,7 @@ import { decomposeVat, halalasToSar } from '@spicyhome/shared';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterArabicConfig } from '@spicyhome/shared';
 import { encodeArabicText } from './arabic-encode';
+import { renderArabicLineFromLogical } from './arabic-raster';
 import { loadThermalLogo, type MonoBitmap } from './thermal-logo';
 
 export interface ReceiptOptions {
@@ -229,10 +230,25 @@ export class ReceiptBuilder {
   // ── Arabic line helpers ─────────────────────────────────────────────────────
 
   /**
-   * Write a full-width Arabic line: switch code page when the encoding needs
+   * Write a full-width Arabic line.
+   *
+   * renderMode 'raster': shape + visual order + rasterize to a monochrome
+   * bitmap, printed via GS v 0 (joined letterforms). Falls back to the
+   * charset path when the glyph atlas is unavailable.
+   *
+   * renderMode 'charset' (default): switch code page when the encoding needs
    * one, emit encoded bytes, then restore code page 0 for ASCII.
    */
   private writeArabicLine(eb: EscPosBuilder, text: string, arabic: PrinterArabicConfig): void {
+    if (arabic.renderMode === 'raster') {
+      const bmp = renderArabicLineFromLogical(text, arabic, { maxWidthDots: this.maxWidthDots() });
+      if (bmp) {
+        eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+        eb.blankLine();
+        return;
+      }
+      // Atlas missing — fall through to charset bytes.
+    }
     const bytes = encodeArabicText(arabic, text);
     if (bytes.length === 0) return;
     const needCP = this.needCodePage(arabic);
@@ -242,11 +258,25 @@ export class ReceiptBuilder {
   }
 
   /**
-   * Write an Arabic line centered on the paper width (byte-based padding —
-   * good enough for a short title line; column math for mixed RTL is avoided
-   * by design).
+   * Write an Arabic line centered on the paper width.
+   *
+   * raster mode centers the rendered bitmap (pad left) so the visual line is
+   * truly centered; charset mode uses byte-based padding — good enough for a
+   * short title line; column math for mixed RTL is avoided by design.
    */
   private writeArabicCentered(eb: EscPosBuilder, text: string, arabic: PrinterArabicConfig): void {
+    if (arabic.renderMode === 'raster') {
+      const bmp = renderArabicLineFromLogical(text, arabic, {
+        maxWidthDots: this.maxWidthDots(),
+        align: 'center',
+      });
+      if (bmp) {
+        eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+        eb.blankLine();
+        return;
+      }
+      // Atlas missing — fall through to charset bytes.
+    }
     const bytes = encodeArabicText(arabic, text);
     if (bytes.length === 0) return;
     const needCP = this.needCodePage(arabic);
@@ -269,6 +299,15 @@ export class ReceiptBuilder {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /**
+   * Raster line width in dots for the current paper width: font A is 12 dots
+   * per character column, so 42 chars ≈ 504 dots (80mm) and 32 chars = 384
+   * dots (58mm). Capped at 576 (max 80mm raster width at 203dpi).
+   */
+  private maxWidthDots(): number {
+    return Math.min(Math.max(this.width * 12, 1), 576);
+  }
 
   private resolveLogo(logo: ReceiptOptions['logo']): MonoBitmap | null {
     if (logo === false) return null;

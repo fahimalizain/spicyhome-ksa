@@ -26,6 +26,14 @@ export const printerArabicConfigSchema = z.object({
   codePage: z.number().int().min(0).max(255).default(0),
   /** Reverse glyph order for LTR thermal heads (visual RTL). */
   visualRtl: z.boolean().default(false),
+  /**
+   * How to render Arabic lines on receipt/refund prints:
+   * - `charset` — shaped + segment-bidi reordered bytes via ESC t code page
+   *   (letters do not join; correct reading order, isolated glyph forms)
+   * - `raster`  — shaped text rendered to a monochrome bitmap (GS v 0) so
+   *   Arabic letters join properly (requires the committed glyph atlas)
+   */
+  renderMode: z.enum(['charset', 'raster']).default('charset'),
 });
 
 export type PrinterArabicConfig = z.infer<typeof printerArabicConfigSchema>;
@@ -41,6 +49,7 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
     encoding: 'none',
     codePage: 0,
     visualRtl: false,
+    renderMode: 'charset',
   },
 };
 

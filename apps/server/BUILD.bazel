@@ -108,6 +108,19 @@ js_binary(
 )
 
 js_binary(
+    name = "arabic_probes",
+    data = [
+        ":lib",
+        ":node_modules/@spicyhome/shared",
+        "assets/arabic-glyph-atlas.json",
+    ],
+    entry_point = "src/modules/printers/arabic-probe-bins.js",
+    env = {
+        "TZ": "Asia/Riyadh",
+    },
+)
+
+js_binary(
     name = "openapi",
     data = [
         ":lib",
@@ -186,6 +199,7 @@ jest_test(
         "//packages/db:migrations",
         "assets/logo-thermal.png",
         "assets/logo-thermal-192.png",
+        "assets/arabic-glyph-atlas.json",
     ],
     node_modules = ":node_modules",
 )

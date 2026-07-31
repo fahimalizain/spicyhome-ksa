@@ -77,6 +77,7 @@ const printerRtl = {
       encoding: 'pc864' as const,
       codePage: 22,
       visualRtl: true,
+      renderMode: 'raster' as const,
     },
   },
 };
@@ -148,10 +149,10 @@ describe('PrintersPage — config', () => {
     });
   });
 
-  it('renders list printer with RTL badge', async () => {
+  it('renders list printer with RTL + raster badge', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('AR: pc864/22 RTL')).toBeInTheDocument();
+      expect(screen.getByText('AR: pc864/22 RTL raster')).toBeInTheDocument();
     });
   });
 
@@ -237,7 +238,44 @@ describe('PrintersPage — config', () => {
               encoding: 'pc864',
               codePage: 22,
               visualRtl: true,
+              renderMode: 'charset',
             },
+          },
+        }),
+      );
+    });
+  });
+
+  it('render mode select switches to raster and is sent on create', async () => {
+    const { container } = renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    const form = container.querySelector('form')!;
+    const nameInput = getByLabel(form, 'Name') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Raster Printer' } });
+
+    const ipInput = getByLabel(form, 'IP Address') as HTMLInputElement;
+    fireEvent.change(ipInput, { target: { value: '10.0.0.9' } });
+
+    const renderModeSelect = screen.getByTestId('render-mode-select');
+    expect(renderModeSelect).toHaveValue('charset');
+    fireEvent.change(renderModeSelect, { target: { value: 'raster' } });
+
+    fireEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Raster Printer',
+          config: {
+            arabic: expect.objectContaining({
+              encoding: 'none',
+              codePage: 0,
+              visualRtl: false,
+              renderMode: 'raster',
+            }),
           },
         }),
       );
@@ -309,10 +347,25 @@ describe('PrintersPage — config', () => {
               encoding: 'w1256',
               codePage: 50,
               visualRtl: false,
+              renderMode: 'charset',
             },
           },
         }),
       );
+    });
+  });
+
+  it('edit loads raster render mode into the form', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('AR: pc864/22 RTL raster')).toBeInTheDocument();
+    });
+
+    const editButtons = screen.getAllByText('Edit');
+    fireEvent.click(editButtons[2]); // RTL printer (id 3)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('render-mode-select')).toHaveValue('raster');
     });
   });
 

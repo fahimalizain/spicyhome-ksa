@@ -25,6 +25,7 @@ describe('printerConfigSchema', () => {
     expect(result.arabic.encoding).toBe('pc864');
     expect(result.arabic.codePage).toBe(22);
     expect(result.arabic.visualRtl).toBe(false);
+    expect(result.arabic.renderMode).toBe('charset');
   });
 
   it('partial config at root fills defaults', () => {
@@ -32,6 +33,7 @@ describe('printerConfigSchema', () => {
     expect(result.arabic.encoding).toBe('none');
     expect(result.arabic.codePage).toBe(0);
     expect(result.arabic.visualRtl).toBe(false);
+    expect(result.arabic.renderMode).toBe('charset');
   });
 
   it('parses a full valid config', () => {
@@ -40,6 +42,7 @@ describe('printerConfigSchema', () => {
         encoding: 'w1256',
         codePage: 50,
         visualRtl: true,
+        renderMode: 'raster',
       },
     };
     const result = printerConfigSchema.parse(config);
@@ -82,6 +85,14 @@ describe('printerConfigSchema', () => {
     expect(() =>
       printerConfigSchema.parse({
         arabic: { visualRtl: 'yes' },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects invalid renderMode', () => {
+    expect(() =>
+      printerConfigSchema.parse({
+        arabic: { renderMode: 'bitmap' },
       }),
     ).toThrow();
   });
@@ -162,12 +173,17 @@ describe('safeParsePrinterConfig', () => {
 
 describe('serializePrinterConfig', () => {
   it('round-trips: parse -> serialize -> parse', () => {
-    const input = { arabic: { encoding: 'pc864' as const, codePage: 22, visualRtl: false } };
+    const input = {
+      arabic: {
+        encoding: 'pc864' as const,
+        codePage: 22,
+        visualRtl: false,
+        renderMode: 'raster' as const,
+      },
+    };
     const serialized = serializePrinterConfig(input);
     const parsed = parsePrinterConfig(serialized);
-    expect(parsed).toEqual({
-      arabic: { encoding: 'pc864', codePage: 22, visualRtl: false },
-    });
+    expect(parsed).toEqual(input);
   });
 
   it('serialize defaults to canonical JSON', () => {
@@ -192,7 +208,7 @@ describe('serializePrinterConfig', () => {
 describe('DEFAULT_PRINTER_CONFIG', () => {
   it('matches defaults', () => {
     expect(DEFAULT_PRINTER_CONFIG).toEqual({
-      arabic: { encoding: 'none', codePage: 0, visualRtl: false },
+      arabic: { encoding: 'none', codePage: 0, visualRtl: false, renderMode: 'charset' },
     });
   });
 });

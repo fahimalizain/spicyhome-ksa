@@ -12,10 +12,11 @@ const CODE_PAGE_SUGGESTIONS: Record<ArabicEncoding, number> = {
 };
 
 function configSummary(config: PrinterConfig): string {
-  const { encoding, codePage, visualRtl } = config.arabic;
+  const { encoding, codePage, visualRtl, renderMode } = config.arabic;
   if (encoding === 'none') return 'AR: none';
   let summary = `AR: ${encoding}/${codePage}`;
   if (visualRtl) summary += ' RTL';
+  if (renderMode === 'raster') summary += ' raster';
   return summary;
 }
 
@@ -42,6 +43,7 @@ const emptyForm: PrinterForm = {
 };
 
 function printerToForm(p: PrinterResponse): PrinterForm {
+  const config = p.config || DEFAULT_PRINTER_CONFIG;
   return {
     name: p.name,
     connectionType: (p.connectionType as 'tcp' | 'windows') || 'tcp',
@@ -50,7 +52,14 @@ function printerToForm(p: PrinterResponse): PrinterForm {
     port: p.port,
     role: p.role as 'kitchen' | 'receipt',
     isActive: p.isActive,
-    config: p.config || DEFAULT_PRINTER_CONFIG,
+    config: {
+      arabic: {
+        encoding: config.arabic?.encoding ?? 'none',
+        codePage: config.arabic?.codePage ?? 0,
+        visualRtl: config.arabic?.visualRtl ?? false,
+        renderMode: config.arabic?.renderMode ?? 'charset',
+      },
+    },
   };
 }
 
@@ -262,7 +271,7 @@ export function PrintersPage() {
           <p className="text-xs text-gray-500 mb-3">
             From the Test print probes — pick the encoding/code page that looked correct.
           </p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Encoding</label>
               <select
@@ -325,7 +334,34 @@ export function PrintersPage() {
                 Reverse glyph order (visual RTL)
               </label>
             </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Arabic render mode</label>
+              <select
+                data-testid="render-mode-select"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                value={form.config.arabic.renderMode ?? 'charset'}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    config: {
+                      arabic: {
+                        ...f.config.arabic,
+                        renderMode: e.target.value as 'charset' | 'raster',
+                      },
+                    },
+                  }))
+                }
+              >
+                <option value="charset">charset — ESC t code page (letters do not join)</option>
+                <option value="raster">raster — bit image (joined Arabic)</option>
+              </select>
+            </div>
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Raster mode prints Arabic lines as GS v 0 bit images (true joined letterforms). Charset
+            mode uses the ESC t code page — correct order, isolated glyphs. Run the Test print with
+            the .bin probes to compare on hardware.
+          </p>
         </div>
 
         <div className="flex gap-2">
