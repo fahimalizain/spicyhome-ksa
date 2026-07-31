@@ -33,29 +33,15 @@
     {
       "idx": 4,
       "version": "6",
-      "when": 1785314339462,
-      "tag": "0004_add_standard_invoice_buyer_fields",
+      "when": 1785491668701,
+      "tag": "0004_standard_invoice_clearance_and_document_ids",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "6",
-      "when": 1785315647861,
-      "tag": "0005_add_standard_clearance_multi_attempt",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1785315660230,
-      "tag": "0006_add_standard_clearance_partial_unique",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1785422817598,
-      "tag": "0007_add_order_document_id",
+      "when": 1785491731030,
+      "tag": "0005_standard_clearance_partial_unique",
       "breakpoints": true
     }
   ]

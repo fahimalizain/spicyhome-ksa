@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 8 rows after apply', () => {
+    it('__drizzle_migrations has exactly 6 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(8);
+      expect(rows.cnt).toBe(6);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(8);
+      expect(after).toBe(6);
 
       sqlite.close();
     });

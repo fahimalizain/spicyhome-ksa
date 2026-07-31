@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "702c5983-a44c-4651-837d-103040a574bf",
+  "id": "45958975-9493-4d9e-a76c-619b06ca9244",
   "prevId": "3203724a-f67e-4bd9-aebe-f5b679507313",
   "tables": {
     "day_openings": {
@@ -880,6 +880,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -909,7 +916,13 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "order_refunds_document_id_unique": {
+          "name": "order_refunds_document_id_unique",
+          "columns": ["document_id"],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "order_refunds_order_id_orders_id_fk": {
           "name": "order_refunds_order_id_orders_id_fk",
@@ -1059,6 +1072,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1092,6 +1112,11 @@
         "orders_uuid_unique": {
           "name": "orders_uuid_unique",
           "columns": ["uuid"],
+          "isUnique": true
+        },
+        "orders_document_id_unique": {
+          "name": "orders_document_id_unique",
+          "columns": ["document_id"],
           "isUnique": true
         },
         "idx_orders_day_opening": {
@@ -1839,6 +1864,35 @@
           "notNull": true,
           "autoincrement": false
         },
+        "attempt_no": {
+          "name": "attempt_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "clearance_errors": {
+          "name": "clearance_errors",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "clearance_warnings": {
+          "name": "clearance_warnings",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "http_status": {
+          "name": "http_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "reported_at": {
           "name": "reported_at",
           "type": "integer",
@@ -1897,11 +1951,6 @@
         }
       },
       "indexes": {
-        "zatca_credit_notes_refund_id_unique": {
-          "name": "zatca_credit_notes_refund_id_unique",
-          "columns": ["refund_id"],
-          "isUnique": true
-        },
         "zatca_credit_notes_icv_unique": {
           "name": "zatca_credit_notes_icv_unique",
           "columns": ["icv"],
@@ -1911,6 +1960,16 @@
           "name": "zatca_credit_notes_uuid_unique",
           "columns": ["uuid"],
           "isUnique": true
+        },
+        "idx_zatca_credit_notes_refund_id": {
+          "name": "idx_zatca_credit_notes_refund_id",
+          "columns": ["refund_id"],
+          "isUnique": false
+        },
+        "idx_zatca_credit_notes_order_id": {
+          "name": "idx_zatca_credit_notes_order_id",
+          "columns": ["order_id"],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2020,6 +2079,35 @@
           "notNull": true,
           "autoincrement": false
         },
+        "attempt_no": {
+          "name": "attempt_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "clearance_errors": {
+          "name": "clearance_errors",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "clearance_warnings": {
+          "name": "clearance_warnings",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "http_status": {
+          "name": "http_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "reported_at": {
           "name": "reported_at",
           "type": "integer",
@@ -2057,11 +2145,6 @@
         }
       },
       "indexes": {
-        "zatca_invoices_order_id_unique": {
-          "name": "zatca_invoices_order_id_unique",
-          "columns": ["order_id"],
-          "isUnique": true
-        },
         "zatca_invoices_icv_unique": {
           "name": "zatca_invoices_icv_unique",
           "columns": ["icv"],
@@ -2071,6 +2154,11 @@
           "name": "zatca_invoices_uuid_unique",
           "columns": ["uuid"],
           "isUnique": true
+        },
+        "idx_zatca_invoices_order_id": {
+          "name": "idx_zatca_invoices_order_id",
+          "columns": ["order_id"],
+          "isUnique": false
         }
       },
       "foreignKeys": {

@@ -1,8 +1,8 @@
 {
+  "id": "03fb8cbb-9cb2-4446-8a9b-4f79db1dda03",
+  "prevId": "45958975-9493-4d9e-a76c-619b06ca9244",
   "version": "6",
   "dialect": "sqlite",
-  "id": "54eacdd4-6caf-4b11-8ce1-3cef8ba03e56",
-  "prevId": "702c5983-a44c-4651-837d-103040a574bf",
   "tables": {
     "day_openings": {
       "name": "day_openings",
@@ -126,38 +126,38 @@
         "day_openings_opened_by_users_id_fk": {
           "name": "day_openings_opened_by_users_id_fk",
           "tableFrom": "day_openings",
-          "tableTo": "users",
           "columnsFrom": ["opened_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "day_openings_closed_by_users_id_fk": {
           "name": "day_openings_closed_by_users_id_fk",
           "tableFrom": "day_openings",
-          "tableTo": "users",
           "columnsFrom": ["closed_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "day_openings_created_by_users_id_fk": {
           "name": "day_openings_created_by_users_id_fk",
           "tableFrom": "day_openings",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "day_openings_updated_by_users_id_fk": {
           "name": "day_openings_updated_by_users_id_fk",
           "tableFrom": "day_openings",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -237,29 +237,29 @@
         "item_categories_printer_id_printers_id_fk": {
           "name": "item_categories_printer_id_printers_id_fk",
           "tableFrom": "item_categories",
-          "tableTo": "printers",
           "columnsFrom": ["printer_id"],
+          "tableTo": "printers",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "item_categories_created_by_users_id_fk": {
           "name": "item_categories_created_by_users_id_fk",
           "tableFrom": "item_categories",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "item_categories_updated_by_users_id_fk": {
           "name": "item_categories_updated_by_users_id_fk",
           "tableFrom": "item_categories",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -361,29 +361,29 @@
         "items_category_id_item_categories_id_fk": {
           "name": "items_category_id_item_categories_id_fk",
           "tableFrom": "items",
-          "tableTo": "item_categories",
           "columnsFrom": ["category_id"],
+          "tableTo": "item_categories",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "items_created_by_users_id_fk": {
           "name": "items_created_by_users_id_fk",
           "tableFrom": "items",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "items_updated_by_users_id_fk": {
           "name": "items_updated_by_users_id_fk",
           "tableFrom": "items",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -461,20 +461,20 @@
         "order_events_order_id_orders_id_fk": {
           "name": "order_events_order_id_orders_id_fk",
           "tableFrom": "order_events",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_events_user_id_users_id_fk": {
           "name": "order_events_user_id_users_id_fk",
           "tableFrom": "order_events",
-          "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -580,38 +580,38 @@
         "order_items_order_id_orders_id_fk": {
           "name": "order_items_order_id_orders_id_fk",
           "tableFrom": "order_items",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "order_items_item_id_items_id_fk": {
           "name": "order_items_item_id_items_id_fk",
           "tableFrom": "order_items",
-          "tableTo": "items",
           "columnsFrom": ["item_id"],
+          "tableTo": "items",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_items_created_by_users_id_fk": {
           "name": "order_items_created_by_users_id_fk",
           "tableFrom": "order_items",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_items_updated_by_users_id_fk": {
           "name": "order_items_updated_by_users_id_fk",
           "tableFrom": "order_items",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -695,29 +695,29 @@
         "order_payments_order_id_orders_id_fk": {
           "name": "order_payments_order_id_orders_id_fk",
           "tableFrom": "order_payments",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_payments_method_id_payment_methods_id_fk": {
           "name": "order_payments_method_id_payment_methods_id_fk",
           "tableFrom": "order_payments",
-          "tableTo": "payment_methods",
           "columnsFrom": ["method_id"],
+          "tableTo": "payment_methods",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_payments_created_by_users_id_fk": {
           "name": "order_payments_created_by_users_id_fk",
           "tableFrom": "order_payments",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -795,20 +795,20 @@
         "order_refund_items_refund_id_order_refunds_id_fk": {
           "name": "order_refund_items_refund_id_order_refunds_id_fk",
           "tableFrom": "order_refund_items",
-          "tableTo": "order_refunds",
           "columnsFrom": ["refund_id"],
+          "tableTo": "order_refunds",
           "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "order_refund_items_order_item_id_order_items_id_fk": {
           "name": "order_refund_items_order_item_id_order_items_id_fk",
           "tableFrom": "order_refund_items",
-          "tableTo": "order_items",
           "columnsFrom": ["order_item_id"],
+          "tableTo": "order_items",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -880,6 +880,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -909,52 +916,58 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "order_refunds_document_id_unique": {
+          "name": "order_refunds_document_id_unique",
+          "columns": ["document_id"],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "order_refunds_order_id_orders_id_fk": {
           "name": "order_refunds_order_id_orders_id_fk",
           "tableFrom": "order_refunds",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_refunds_user_id_users_id_fk": {
           "name": "order_refunds_user_id_users_id_fk",
           "tableFrom": "order_refunds",
-          "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_refunds_method_id_payment_methods_id_fk": {
           "name": "order_refunds_method_id_payment_methods_id_fk",
           "tableFrom": "order_refunds",
-          "tableTo": "payment_methods",
           "columnsFrom": ["method_id"],
+          "tableTo": "payment_methods",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_refunds_created_by_users_id_fk": {
           "name": "order_refunds_created_by_users_id_fk",
           "tableFrom": "order_refunds",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "order_refunds_updated_by_users_id_fk": {
           "name": "order_refunds_updated_by_users_id_fk",
           "tableFrom": "order_refunds",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1059,6 +1072,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1094,6 +1114,11 @@
           "columns": ["uuid"],
           "isUnique": true
         },
+        "orders_document_id_unique": {
+          "name": "orders_document_id_unique",
+          "columns": ["document_id"],
+          "isUnique": true
+        },
         "idx_orders_day_opening": {
           "name": "idx_orders_day_opening",
           "columns": ["day_opening_id"],
@@ -1114,38 +1139,38 @@
         "orders_table_id_tables_id_fk": {
           "name": "orders_table_id_tables_id_fk",
           "tableFrom": "orders",
-          "tableTo": "tables",
           "columnsFrom": ["table_id"],
+          "tableTo": "tables",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "orders_day_opening_id_day_openings_id_fk": {
           "name": "orders_day_opening_id_day_openings_id_fk",
           "tableFrom": "orders",
-          "tableTo": "day_openings",
           "columnsFrom": ["day_opening_id"],
+          "tableTo": "day_openings",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "orders_created_by_users_id_fk": {
           "name": "orders_created_by_users_id_fk",
           "tableFrom": "orders",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "orders_updated_by_users_id_fk": {
           "name": "orders_updated_by_users_id_fk",
           "tableFrom": "orders",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1218,20 +1243,20 @@
         "payment_methods_created_by_users_id_fk": {
           "name": "payment_methods_created_by_users_id_fk",
           "tableFrom": "payment_methods",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "payment_methods_updated_by_users_id_fk": {
           "name": "payment_methods_updated_by_users_id_fk",
           "tableFrom": "payment_methods",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1347,20 +1372,20 @@
         "printers_created_by_users_id_fk": {
           "name": "printers_created_by_users_id_fk",
           "tableFrom": "printers",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "printers_updated_by_users_id_fk": {
           "name": "printers_updated_by_users_id_fk",
           "tableFrom": "printers",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1462,20 +1487,20 @@
         "tables_created_by_users_id_fk": {
           "name": "tables_created_by_users_id_fk",
           "tableFrom": "tables",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "tables_updated_by_users_id_fk": {
           "name": "tables_updated_by_users_id_fk",
           "tableFrom": "tables",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1626,20 +1651,20 @@
         "user_roles_created_by_users_id_fk": {
           "name": "user_roles_created_by_users_id_fk",
           "tableFrom": "user_roles",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "user_roles_updated_by_users_id_fk": {
           "name": "user_roles_updated_by_users_id_fk",
           "tableFrom": "user_roles",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1731,29 +1756,29 @@
         "users_role_id_user_roles_id_fk": {
           "name": "users_role_id_user_roles_id_fk",
           "tableFrom": "users",
-          "tableTo": "user_roles",
           "columnsFrom": ["role_id"],
+          "tableTo": "user_roles",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "users_created_by_users_id_fk": {
           "name": "users_created_by_users_id_fk",
           "tableFrom": "users",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "users_updated_by_users_id_fk": {
           "name": "users_updated_by_users_id_fk",
           "tableFrom": "users",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1951,38 +1976,38 @@
         "zatca_credit_notes_order_id_orders_id_fk": {
           "name": "zatca_credit_notes_order_id_orders_id_fk",
           "tableFrom": "zatca_credit_notes",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "zatca_credit_notes_refund_id_order_refunds_id_fk": {
           "name": "zatca_credit_notes_refund_id_order_refunds_id_fk",
           "tableFrom": "zatca_credit_notes",
-          "tableTo": "order_refunds",
           "columnsFrom": ["refund_id"],
+          "tableTo": "order_refunds",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "zatca_credit_notes_created_by_users_id_fk": {
           "name": "zatca_credit_notes_created_by_users_id_fk",
           "tableFrom": "zatca_credit_notes",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "zatca_credit_notes_updated_by_users_id_fk": {
           "name": "zatca_credit_notes_updated_by_users_id_fk",
           "tableFrom": "zatca_credit_notes",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2140,29 +2165,29 @@
         "zatca_invoices_order_id_orders_id_fk": {
           "name": "zatca_invoices_order_id_orders_id_fk",
           "tableFrom": "zatca_invoices",
-          "tableTo": "orders",
           "columnsFrom": ["order_id"],
+          "tableTo": "orders",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "zatca_invoices_created_by_users_id_fk": {
           "name": "zatca_invoices_created_by_users_id_fk",
           "tableFrom": "zatca_invoices",
-          "tableTo": "users",
           "columnsFrom": ["created_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "zatca_invoices_updated_by_users_id_fk": {
           "name": "zatca_invoices_updated_by_users_id_fk",
           "tableFrom": "zatca_invoices",
-          "tableTo": "users",
           "columnsFrom": ["updated_by"],
+          "tableTo": "users",
           "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2171,9 +2196,9 @@
   },
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}
