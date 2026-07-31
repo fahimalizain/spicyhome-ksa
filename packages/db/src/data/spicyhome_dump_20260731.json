@@ -4,9 +4,334 @@
     "extracted_at": "2026-07-31T14:21:33.531Z",
     "notes": [
       "All item rates are VAT-inclusive SAR (product assumption for seed).",
-      "DescriptionInOL is the Arabic display name."
+      "DescriptionInOL is the Arabic display name.",
+      "Tables extracted from SPICYHOME.dbo.Tables (40 rows, DineId=2, Branch=1).",
+      "Raw TableName 'T -  N' normalized to POS display name 'TN' (no spaces).",
+      "Floor-plan layout columns (x/y/height/width) omitted: POS has no floor-plan fields."
     ]
   },
+  "tables": [
+    {
+      "id": 167,
+      "name": "T1",
+      "name_raw": "T -  1",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 168,
+      "name": "T2",
+      "name_raw": "T -  2",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 169,
+      "name": "T3",
+      "name_raw": "T -  3",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 170,
+      "name": "T4",
+      "name_raw": "T -  4",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 171,
+      "name": "T5",
+      "name_raw": "T -  5",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 172,
+      "name": "T6",
+      "name_raw": "T -  6",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 173,
+      "name": "T7",
+      "name_raw": "T -  7",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 174,
+      "name": "T8",
+      "name_raw": "T -  8",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 175,
+      "name": "T9",
+      "name_raw": "T -  9",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 176,
+      "name": "T10",
+      "name_raw": "T -  10",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 177,
+      "name": "T11",
+      "name_raw": "T -  11",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 178,
+      "name": "T12",
+      "name_raw": "T -  12",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 179,
+      "name": "T13",
+      "name_raw": "T -  13",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 180,
+      "name": "T14",
+      "name_raw": "T -  14",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 181,
+      "name": "T15",
+      "name_raw": "T -  15",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 182,
+      "name": "T16",
+      "name_raw": "T -  16",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 183,
+      "name": "T17",
+      "name_raw": "T -  17",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 184,
+      "name": "T18",
+      "name_raw": "T -  18",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 185,
+      "name": "T19",
+      "name_raw": "T -  19",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 186,
+      "name": "T20",
+      "name_raw": "T -  20",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 187,
+      "name": "T21",
+      "name_raw": "T -  21",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 188,
+      "name": "T22",
+      "name_raw": "T -  22",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 189,
+      "name": "T23",
+      "name_raw": "T -  23",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 190,
+      "name": "T24",
+      "name_raw": "T -  24",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 191,
+      "name": "T25",
+      "name_raw": "T -  25",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 192,
+      "name": "T26",
+      "name_raw": "T -  26",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 193,
+      "name": "T27",
+      "name_raw": "T -  27",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 194,
+      "name": "T28",
+      "name_raw": "T -  28",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 195,
+      "name": "T29",
+      "name_raw": "T -  29",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 196,
+      "name": "T30",
+      "name_raw": "T -  30",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 197,
+      "name": "T31",
+      "name_raw": "T -  31",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 198,
+      "name": "T32",
+      "name_raw": "T -  32",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 199,
+      "name": "T33",
+      "name_raw": "T -  33",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 200,
+      "name": "T34",
+      "name_raw": "T -  34",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 201,
+      "name": "T35",
+      "name_raw": "T -  35",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 202,
+      "name": "T36",
+      "name_raw": "T -  36",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 203,
+      "name": "T37",
+      "name_raw": "T -  37",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 204,
+      "name": "T38",
+      "name_raw": "T -  38",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 205,
+      "name": "T39",
+      "name_raw": "T -  39",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    },
+    {
+      "id": 206,
+      "name": "T40",
+      "name_raw": "T -  40",
+      "dine_id": 2,
+      "branch": 1,
+      "inactive": false
+    }
+  ],
   "courses": [
     {
       "id": 1,

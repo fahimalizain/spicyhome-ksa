@@ -103,8 +103,10 @@ describe('Auth (e2e)', () => {
     expect(res.body.usernames).toBeDefined();
     expect(Array.isArray(res.body.usernames)).toBe(true);
     expect(res.body.usernames).toContain('admin');
-    // Seeded cashier (staff, android_login=1) is included without a platform filter
+    // Seeded cashier (staff, android_login=0) is still included without a platform filter
     expect(res.body.usernames).toContain('cashier');
+    // Seeded waiter (staff, android_login=1) is included without a platform filter
+    expect(res.body.usernames).toContain('waiter');
     // Response must not contain sensitive fields
     expect(res.body.usernames.every((u: string) => typeof u === 'string')).toBe(true);
     expect(Object.keys(res.body)).toEqual(['usernames']);
@@ -135,8 +137,10 @@ describe('Auth (e2e)', () => {
     expect(Array.isArray(res.body.usernames)).toBe(true);
     // admin is seeded with android_login=0 (POS/back-office only) — must be hidden
     expect(res.body.usernames).not.toContain('admin');
-    // cashier is seeded with android_login=1 — must be shown
-    expect(res.body.usernames).toContain('cashier');
+    // cashier is seeded with android_login=0 (POS only) — must be hidden
+    expect(res.body.usernames).not.toContain('cashier');
+    // waiter is seeded with android_login=1 (tablet floor user) — must be shown
+    expect(res.body.usernames).toContain('waiter');
     // inactive user must stay excluded even with android_login default 1
     expect(res.body.usernames).not.toContain('inactive_user');
   });

@@ -33,21 +33,23 @@ describe('seed', () => {
     expect(admin.delete_order_item).toBe(1);
     expect(admin.void_order).toBe(1);
     expect(admin.refund_order).toBe(1);
+    expect(admin.pay_order).toBe(1);
     expect(admin.manage_menu).toBe(1);
     expect(admin.manage_tables).toBe(1);
     expect(admin.manage_printers).toBe(1);
     expect(admin.manage_users).toBe(1);
     expect(admin.manage_settings).toBe(1);
 
-    // Staff has limited permissions
+    // Staff has all permissions except manage_tables, manage_users, manage_settings
     expect(staff.create_order).toBe(1);
     expect(staff.update_order).toBe(1);
-    expect(staff.delete_order_item).toBe(0);
-    expect(staff.void_order).toBe(0);
-    expect(staff.refund_order).toBe(0);
-    expect(staff.manage_menu).toBe(0);
+    expect(staff.delete_order_item).toBe(1);
+    expect(staff.void_order).toBe(1);
+    expect(staff.refund_order).toBe(1);
+    expect(staff.pay_order).toBe(1);
+    expect(staff.manage_menu).toBe(1);
     expect(staff.manage_tables).toBe(0);
-    expect(staff.manage_printers).toBe(0);
+    expect(staff.manage_printers).toBe(1);
     expect(staff.manage_users).toBe(0);
     expect(staff.manage_settings).toBe(0);
   });
@@ -72,7 +74,7 @@ describe('seed', () => {
     expect(compareSync('771133', admin.pin_hash)).toBe(true);
   });
 
-  it('inserts cashier user with PIN 1, staff role, and android_login = 1', () => {
+  it('inserts cashier user with PIN 1, staff role, and android_login = 0', () => {
     seedRaw(sqlite);
 
     const cashier = sqlite.prepare('SELECT * FROM users WHERE username = ?').get('cashier') as any;
@@ -84,7 +86,7 @@ describe('seed', () => {
     expect(cashier.name).toBe('Cashier');
     expect(cashier.role_id).toBe(staffRole.id);
     expect(cashier.is_active).toBe(1);
-    expect(cashier.android_login).toBe(1);
+    expect(cashier.android_login).toBe(0);
 
     // PIN hash should be bcrypt of 1 (starts with $2a$ or $2b$)
     expect(cashier.pin_hash).toMatch(/^\$2[aby]\$/);
@@ -92,16 +94,50 @@ describe('seed', () => {
     expect(compareSync('1', cashier.pin_hash)).toBe(true);
   });
 
-  it('inserts 5 tables', () => {
+  it('inserts waiter user with PIN 2, staff role, and android_login = 1', () => {
+    seedRaw(sqlite);
+
+    const waiter = sqlite.prepare('SELECT * FROM users WHERE username = ?').get('waiter') as any;
+    const staffRole = sqlite
+      .prepare('SELECT id FROM user_roles WHERE name = ?')
+      .get('staff') as any;
+
+    expect(waiter).toBeDefined();
+    expect(waiter.name).toBe('Waiter');
+    expect(waiter.role_id).toBe(staffRole.id);
+    expect(waiter.is_active).toBe(1);
+    expect(waiter.android_login).toBe(1);
+
+    // PIN hash should be bcrypt of 2 (starts with $2a$ or $2b$)
+    expect(waiter.pin_hash).toMatch(/^\$2[aby]\$/);
+    expect(waiter.pin_hash).not.toBe('2');
+    expect(compareSync('2', waiter.pin_hash)).toBe(true);
+  });
+
+  it('inserts 40 tables (T1 – T40 from RMS dump)', () => {
     seedRaw(sqlite);
 
     const tables = sqlite.prepare('SELECT * FROM tables ORDER BY sort_order').all() as any[];
-    expect(tables.length).toBe(5);
-    expect(tables.map((t: any) => t.name)).toEqual(['T1', 'T2', 'T3', 'T4', 'T5']);
+    expect(tables.length).toBe(40);
+
+    const expectedNames = Array.from({ length: 40 }, (_, i) => `T${i + 1}`);
+    expect(tables.map((t: any) => t.name)).toEqual(expectedNames);
+    expect(tables.map((t: any) => t.sort_order)).toEqual(
+      Array.from({ length: 40 }, (_, i) => i + 1),
+    );
+
     tables.forEach((t: any) => {
       expect(t.is_active).toBe(1);
       expect(t.created_by).toBe(1);
     });
+
+    // Spot-check first/last tables
+    const first = sqlite.prepare("SELECT * FROM tables WHERE name = 'T1'").get() as any;
+    const last = sqlite.prepare("SELECT * FROM tables WHERE name = 'T40'").get() as any;
+    expect(first).toBeDefined();
+    expect(first.sort_order).toBe(1);
+    expect(last).toBeDefined();
+    expect(last.sort_order).toBe(40);
   });
 
   it('inserts 7 categories (Courses only, Title Case)', () => {
@@ -237,8 +273,13 @@ describe('seed', () => {
       .get() as any;
     expect(cashiers.cnt).toBe(1);
 
+    const waiters = sqlite
+      .prepare("SELECT COUNT(*) as cnt FROM users WHERE username = 'waiter'")
+      .get() as any;
+    expect(waiters.cnt).toBe(1);
+
     const tables = sqlite.prepare('SELECT COUNT(*) as cnt FROM tables').get() as any;
-    expect(tables.cnt).toBe(5);
+    expect(tables.cnt).toBe(40);
 
     const categories = sqlite.prepare('SELECT COUNT(*) as cnt FROM item_categories').get() as any;
     expect(categories.cnt).toBe(7);
