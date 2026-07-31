@@ -32,6 +32,9 @@ export const client = new SpicyHomeClient({
   getToken: () => localStorage.getItem(TOKEN_KEY),
   onUnauthorized: () => {
     clearToken();
+    const path = window.location.pathname;
+    // Don't hard-navigate if already on login — would wipe in-page error state.
+    if (path === '/login' || path.endsWith('/login')) return;
     window.location.href = '/login';
   },
   onRequestComplete: addRequestBreadcrumb,

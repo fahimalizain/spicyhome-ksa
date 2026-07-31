@@ -221,7 +221,10 @@ async function request<T>(
 
   if (!response.ok) {
     if (response.status === 401 && config.onUnauthorized) {
-      config.onUnauthorized();
+      // POST /auth/login 401 means bad credentials — not an expired session.
+      if (!(method === 'POST' && path === '/auth/login')) {
+        config.onUnauthorized();
+      }
     }
     const errorBody = await response.text().catch(() => 'Unknown error');
     throw new Error(`HTTP ${response.status} ${response.statusText}: ${errorBody}`);
