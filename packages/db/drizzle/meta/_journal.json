@@ -43,6 +43,13 @@
       "when": 1785498300796,
       "tag": "0005_standard_clearance_partial_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785500548883,
+      "tag": "0006_users_android_login",
+      "breakpoints": true
     }
   ]
 }

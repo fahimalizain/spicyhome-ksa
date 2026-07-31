@@ -49,5 +49,11 @@ class CreateUserDtoTest : ShouldSpec() {
             //modelInstance.roleId shouldBe ("TODO")
         }
 
+        // to test the property `androidLogin` - Defaults to true (shown on Android login)
+        should("test androidLogin") {
+            // uncomment below to test the property
+            //modelInstance.androidLogin shouldBe ("TODO")
+        }
+
     }
 }

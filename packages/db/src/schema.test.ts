@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 6 rows after apply', () => {
+    it('__drizzle_migrations has exactly 7 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(6);
+      expect(rows.cnt).toBe(7);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(6);
+      expect(after).toBe(7);
 
       sqlite.close();
     });
@@ -127,6 +127,33 @@ describe('schema — invariants', () => {
         expect(row).not.toBeUndefined();
       });
     }
+  });
+
+  describe('users — android_login column', () => {
+    it('has android_login column with default 1', () => {
+      const info = sqlite.prepare('PRAGMA table_info(users)').all() as any[];
+      const col = info.find((c: any) => c.name === 'android_login');
+      expect(col).toBeDefined();
+      expect(col.notnull).toBe(1);
+      expect(col.dflt_value).toBe('1');
+    });
+
+    it('android_login defaults to 1 when omitted on insert', () => {
+      const now = Math.floor(Date.now() / 1000);
+      sqlite.exec(`
+        INSERT INTO user_roles (name, created_at, updated_at) VALUES ('android_default_role', ${now}, ${now});
+      `);
+      const roleId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO users (username, pin_hash, name, role_id, created_at, updated_at)
+        VALUES ('android_default_user', 'hash', 'Android Default', ${roleId}, ${now}, ${now})
+      `);
+      const row = sqlite
+        .prepare("SELECT android_login FROM users WHERE username = 'android_default_user'")
+        .get() as any;
+      expect(row.android_login).toBe(1);
+    });
   });
 
   describe('foreign keys', () => {

@@ -131,3 +131,57 @@ describe('SpicyHomeClient', () => {
     expect(dto.payments).toHaveLength(1);
   });
 });
+
+describe('SpicyHomeClient onUnauthorized', () => {
+  const originalFetch = globalThis.fetch;
+
+  function unauthorizedResponse(): {
+    ok: boolean;
+    status: number;
+    statusText: string;
+    text: () => Promise<string>;
+    clone: () => unknown;
+  } {
+    return {
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      text: async () => 'Invalid credentials',
+      clone: () => undefined,
+    };
+  }
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('does not call onUnauthorized on login 401', async () => {
+    const onUnauthorized = jest.fn();
+    globalThis.fetch = jest.fn().mockResolvedValue(unauthorizedResponse());
+
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => null,
+      onUnauthorized,
+    });
+
+    await expect(client.auth.login({ username: 'admin', pin: '0000' })).rejects.toThrow(
+      'HTTP 401 Unauthorized',
+    );
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('calls onUnauthorized on non-login 401', async () => {
+    const onUnauthorized = jest.fn();
+    globalThis.fetch = jest.fn().mockResolvedValue(unauthorizedResponse());
+
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => 'expired',
+      onUnauthorized,
+    });
+
+    await expect(client.auth.me()).rejects.toThrow('HTTP 401 Unauthorized');
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+});
