@@ -104,7 +104,7 @@ describe('seed', () => {
     });
   });
 
-  it('inserts 7 categories', () => {
+  it('inserts 7 categories (Courses only, Title Case)', () => {
     seedRaw(sqlite);
 
     const categories = sqlite
@@ -112,12 +112,12 @@ describe('seed', () => {
       .all() as any[];
     expect(categories.length).toBe(7);
     expect(categories.map((c: any) => c.name)).toEqual([
+      'Soup',
       'Starters',
-      'Tandoori & Grill',
-      'Curries',
-      'Biryani & Rice',
+      'Tandoori',
+      'Main Course',
+      'Rice & Noodles',
       'Breads',
-      'Beverages',
       'Desserts',
     ]);
     categories.forEach((c: any) => {
@@ -126,21 +126,82 @@ describe('seed', () => {
     });
   });
 
-  it('inserts 28 items across 7 categories', () => {
+  it('inserts all 204 RMS items (170 active, 34 inactive)', () => {
     seedRaw(sqlite);
 
     const items = sqlite
       .prepare('SELECT * FROM items ORDER BY category_id, sort_order')
       .all() as any[];
-    expect(items.length).toBe(28);
+    expect(items.length).toBe(204);
+
+    const active = items.filter((i: any) => i.is_active === 1);
+    const inactive = items.filter((i: any) => i.is_active === 0);
+    expect(active.length).toBe(170);
+    expect(inactive.length).toBe(34);
 
     items.forEach((i: any) => {
       expect(i.category_id).toBeGreaterThan(0);
-      expect(i.price_halalas).toBeGreaterThan(0);
+      expect(Number.isInteger(i.price_halalas)).toBe(true);
+      expect(i.price_halalas).toBeGreaterThanOrEqual(0); // 0 allowed for freebies
       expect(i.vat_rate_bp).toBe(1500);
-      expect(i.is_active).toBe(1);
-      expect(i.name_ar).toBeTruthy();
     });
+  });
+
+  it('spot-checks known RMS items (Prawn Soup, Chicken Biryani, freebies)', () => {
+    seedRaw(sqlite);
+
+    const getItem = (name: string): any =>
+      sqlite.prepare('SELECT * FROM items WHERE name = ?').get(name);
+
+    // Prawn Soup: rate 20 SAR -> 2000 halalas, Soup category, Arabic name intact
+    const prawnSoup = getItem('Prawn Soup');
+    expect(prawnSoup).toBeDefined();
+    expect(prawnSoup.price_halalas).toBe(2000);
+    expect(prawnSoup.is_active).toBe(1);
+    expect(prawnSoup.vat_rate_bp).toBe(1500);
+    expect(prawnSoup.name_ar).toBe('شوربة ربيان');
+    const prawnCategory = sqlite
+      .prepare('SELECT name FROM item_categories WHERE id = ?')
+      .get(prawnSoup.category_id) as any;
+    expect(prawnCategory.name).toBe('Soup');
+
+    // Chicken Biryani: dump rate is 40 SAR -> 4000 halalas
+    const chickenBiryani = getItem('Chicken Biryani');
+    expect(chickenBiryani).toBeDefined();
+    expect(chickenBiryani.price_halalas).toBe(4000);
+    expect(chickenBiryani.is_active).toBe(1);
+    const biryaniCategory = sqlite
+      .prepare('SELECT name FROM item_categories WHERE id = ?')
+      .get(chickenBiryani.category_id) as any;
+    expect(biryaniCategory.name).toBe('Rice & Noodles');
+
+    // Free Nan: rate 0 -> 0 halalas (dump marks it active)
+    const freeNan = getItem('Free Nan');
+    expect(freeNan).toBeDefined();
+    expect(freeNan.price_halalas).toBe(0);
+    expect(freeNan.is_active).toBe(1);
+
+    // An inactive item from the dump: Clear soup-Chicken (rate 12 SAR)
+    const clearSoupChicken = getItem('Clear soup-Chicken');
+    expect(clearSoupChicken).toBeDefined();
+    expect(clearSoupChicken.is_active).toBe(0);
+    expect(clearSoupChicken.price_halalas).toBe(1200);
+  });
+
+  it('stores empty Arabic names as NULL', () => {
+    seedRaw(sqlite);
+
+    const freeRoti = sqlite
+      .prepare("SELECT name_ar FROM items WHERE name = 'Free Roti'")
+      .get() as any;
+    expect(freeRoti).toBeDefined();
+    expect(freeRoti.name_ar).toBeNull();
+
+    const milkTea = sqlite
+      .prepare("SELECT name_ar FROM items WHERE name = 'Milk Tea'")
+      .get() as any;
+    expect(milkTea).toBeDefined();
+    expect(milkTea.name_ar).toBeNull();
   });
 
   it('inserts 3 payment methods (cash, card, mada)', () => {
@@ -181,7 +242,7 @@ describe('seed', () => {
     expect(categories.cnt).toBe(7);
 
     const items = sqlite.prepare('SELECT COUNT(*) as cnt FROM items').get() as any;
-    expect(items.cnt).toBe(28);
+    expect(items.cnt).toBe(204);
 
     const methods = sqlite.prepare('SELECT COUNT(*) as cnt FROM payment_methods').get() as any;
     expect(methods.cnt).toBe(3);

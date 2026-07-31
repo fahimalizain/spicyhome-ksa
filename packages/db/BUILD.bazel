@@ -9,7 +9,7 @@ npm_link_all_packages(name = "node_modules")
 ts_project(
     name = "lib",
     srcs = glob(
-        ["src/**/*.ts"],
+        ["src/**/*.ts", "src/**/*.json"],
         exclude = ["src/**/*.d.ts", "src/**/*.test.ts"],
     ),
     tsconfig = "tsconfig.json",
