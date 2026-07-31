@@ -340,4 +340,44 @@ describe('EscPosBuilder', () => {
       expect(str).toContain('Special');
     });
   });
+
+  describe('rasterBitImage', () => {
+    it('emits GS v 0 header with correct dimensions', () => {
+      const eb = new EscPosBuilder();
+      // 8×2: first row all black, second all white
+      const bits = new Uint8Array(16);
+      for (let i = 0; i < 8; i++) bits[i] = 1;
+      eb.rasterBitImage(8, 2, bits);
+      const buf = eb.getBuffer();
+      // GS v 0 m xL xH yL yH
+      expect(buf[0]).toBe(0x1d);
+      expect(buf[1]).toBe(0x76);
+      expect(buf[2]).toBe(0x30);
+      expect(buf[3]).toBe(0x00); // m = normal
+      expect(buf[4]).toBe(0x01); // xL = 1 byte/row
+      expect(buf[5]).toBe(0x00); // xH
+      expect(buf[6]).toBe(0x02); // yL = 2
+      expect(buf[7]).toBe(0x00); // yH
+      expect(buf[8]).toBe(0xff); // row 0 packed
+      expect(buf[9]).toBe(0x00); // row 1 packed
+      expect(buf.length).toBe(10);
+    });
+
+    it('pads width to multiple of 8', () => {
+      const eb = new EscPosBuilder();
+      const bits = new Uint8Array(5); // 5×1
+      bits[0] = 1;
+      bits[4] = 1;
+      eb.rasterBitImage(5, 1, bits);
+      const buf = eb.getBuffer();
+      expect(buf[4]).toBe(0x01); // still 1 byte/row
+      // bits: 1 0 0 0 1 0 0 0 → 0b10001000 = 0x88
+      expect(buf[8]).toBe(0x88);
+    });
+
+    it('throws when bits buffer is too short', () => {
+      const eb = new EscPosBuilder();
+      expect(() => eb.rasterBitImage(8, 8, new Uint8Array(10))).toThrow(/bits length/);
+    });
+  });
 });

@@ -90,8 +90,8 @@ beforeAll(async () => {
 
   // Seed: items
   sqlite.exec(`
-    INSERT INTO items (id, category_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
-    VALUES (1, ${burgerCategoryId}, 'Zinger Burger', 2300, 1500, 0, 1, ${now}, ${now});
+    INSERT INTO items (id, category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+    VALUES (1, ${burgerCategoryId}, 'Zinger Burger', '${'\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631'}', 2300, 1500, 0, 1, ${now}, ${now});
   `);
   zingerItemId = 1;
 
@@ -652,6 +652,91 @@ describe('Print Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);
+    });
+  });
+
+  describe('Arabic name snapshotting', () => {
+    it('addItem snapshots item_name_ar from the menu item onto order_items', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const syncRes = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+
+      expect(syncRes.body.items.length).toBe(1);
+      // زنجر برجر — Arabic name snapshotted from the menu item
+      expect(syncRes.body.items[0].itemNameAr).toBe(
+        '\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631',
+      );
+
+      // The DB row itself carries the snapshot
+      const row = (sqlite as any)
+        .prepare('SELECT item_name_ar FROM order_items WHERE order_id = ?')
+        .get(orderId);
+      expect(row.item_name_ar).toBe('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631');
+    });
+
+    it('refund snapshots item_name_ar onto order_refund_items', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const syncRes = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+      const orderItemId = syncRes.body.items[0].id;
+
+      // Pay the order (1 Zinger = 2300 halalas) so it can be refunded
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/pay`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ payments: [{ methodId: 'cash', amountHalalas: 2300 }] })
+        .expect(201);
+
+      // Refund the item
+      const refundRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          methodId: 'cash',
+          reason: 'Test refund',
+          items: [{ orderItemId, qty: 1 }],
+        })
+        .expect(201);
+
+      const refundId = refundRes.body.refundId;
+      const row = (sqlite as any)
+        .prepare('SELECT item_name_ar FROM order_refund_items WHERE refund_id = ?')
+        .get(refundId);
+      expect(row.item_name_ar).toBe('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631');
     });
   });
 

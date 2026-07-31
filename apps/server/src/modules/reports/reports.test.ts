@@ -108,6 +108,7 @@ describe('ReportsService', () => {
         order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
         item_id INTEGER REFERENCES items(id),
         item_name TEXT NOT NULL,
+        item_name_ar TEXT,
         unit_price_halalas INTEGER NOT NULL,
         vat_rate_bp INTEGER NOT NULL,
         qty INTEGER NOT NULL,

@@ -57,6 +57,13 @@
       "when": 1785500510414,
       "tag": "0007_payment_means_code",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785515304255,
+      "tag": "0008_order_item_name_ar",
+      "breakpoints": true
     }
   ]
 }

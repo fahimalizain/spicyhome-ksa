@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 8 rows after apply', () => {
+    it('__drizzle_migrations has exactly 9 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(8);
+      expect(rows.cnt).toBe(9);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(8);
+      expect(after).toBe(9);
 
       sqlite.close();
     });
@@ -879,6 +879,45 @@ describe('schema — invariants', () => {
           VALUES (${orderId}, ${refundId}, 'inv-uuid-zcn', 503, 'zcn-doc-uuid-2', 'CN-ZTCA-0001', 'hash2', '', '<xml/>', 'tlv', 'signed', 1150, 150, 'test', ${now}, ${now})
         `),
       ).toThrow();
+    });
+  });
+
+  describe('order items — Arabic name snapshot', () => {
+    it('has item_name_ar column on order_items (nullable)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(order_items)').all() as any[];
+      const col = info.find((c: any) => c.name === 'item_name_ar');
+      expect(col).toBeDefined();
+      expect(col.notnull).toBe(0); // nullable
+    });
+
+    it('has item_name_ar column on order_refund_items (nullable)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(order_refund_items)').all() as any[];
+      const col = info.find((c: any) => c.name === 'item_name_ar');
+      expect(col).toBeDefined();
+      expect(col.notnull).toBe(0); // nullable
+    });
+
+    it('order_items insert without item_name_ar still works (historical rows)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (900, 'uuid-item-name-ar', 'dine_in', ${doId}, 'open', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+          VALUES (${orderId}, 'Test Item', 1000, 1500, 1, 1000, ${now}, ${now})
+        `),
+      ).not.toThrow();
+
+      const row = sqlite
+        .prepare('SELECT item_name_ar FROM order_items WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(row.item_name_ar).toBeNull();
     });
   });
 });

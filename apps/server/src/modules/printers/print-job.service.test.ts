@@ -15,6 +15,7 @@ import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
 import { FakePrinterTransport } from './printer-transport';
 import { DRIZZLE } from '../database/database.module';
+import { encodePc864, encodeUtf8 } from './arabic-encode';
 
 describe('PrintJobService', () => {
   let sqlite: Database.Database;
@@ -106,6 +107,7 @@ describe('PrintJobService', () => {
     const uuid = `test-order-uuid-${orderSeq}`;
     const orderNo = 100 + orderSeq;
     const businessDate = `2024-07-${String(15 + orderSeq).padStart(2, '0')}`;
+    const documentId = `INV26-TEST-${orderSeq}`;
 
     sqlite.exec(`
       INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
@@ -117,11 +119,11 @@ describe('PrintJobService', () => {
       INSERT INTO orders (
         order_no, uuid, type, day_opening_id, status,
         subtotal_halalas, vat_halalas, total_halalas,
-        created_at, updated_at
+        document_id, created_at, updated_at
       ) VALUES (
         ${orderNo}, '${uuid}', 'dine_in', ${doId}, 'paid',
         10000, 1500, 11500,
-        ${now}, ${now}
+        '${documentId}', ${now}, ${now}
       )
     `);
     const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
@@ -135,9 +137,10 @@ describe('PrintJobService', () => {
   }
 
   function createRefundForOrder(orderId: number): number {
+    const refundDocumentId = `REF26-TEST-${orderSeq}`;
     sqlite.exec(`
-      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
-      VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test', ${now})
+      INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+      VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Test', '${refundDocumentId}', ${now})
     `);
     const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -149,9 +152,85 @@ describe('PrintJobService', () => {
     return refundId;
   }
 
+  function findSequence(buf: Buffer, seq: number[]): boolean {
+    const bufArray = Array.from(buf);
+    for (let i = 0; i <= bufArray.length - seq.length; i++) {
+      if (seq.every((b, j) => bufArray[i + j] === b)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ── printReceipt — QR fallback from zatca_invoices ─────────────────────
 
   describe('printReceipt', () => {
+    it('renders ZATCA-compliant receipt content (title, documentId, seller, totals)', async () => {
+      const orderId = createBasicOrder();
+      await printJobService.printReceipt(orderId);
+
+      expect(transport.sent.length).toBe(1);
+      const s = transport.sent[0].data.toString('ascii');
+      expect(s).toContain('SIMPLIFIED TAX INVOICE');
+      expect(s).toContain(`Invoice #: INV26-TEST-${orderSeq}`);
+      // seller fields from settings
+      expect(s).toContain('Test'); // seller_name
+      expect(s).toContain('Main St 1234'); // seller_street + seller_building
+      expect(s).toContain('Riyadh 12345'); // seller_city + seller_postal
+      expect(s).toContain('SA'); // seller_country
+      expect(s).toContain('Amount includes VAT');
+      expect(s).toContain('TOTAL (incl. VAT)');
+      expect(s).toContain('SAR');
+    });
+
+    it('encodes item_name_ar when receipt printer has Arabic encoding configured', async () => {
+      // Configure the receipt printer with PC864 Arabic
+      sqlite.exec(`
+        UPDATE printers SET config = '{"arabic":{"encoding":"pc864","codePage":22,"visualRtl":false}}' WHERE id = 1
+      `);
+      try {
+        const orderId = createBasicOrder();
+        // Snapshot an Arabic name on the order item (بند اختبار)
+        const itemNameAr = '\u0628\u0646\u062F \u0627\u062E\u062A\u0628\u0627\u0631';
+        sqlite.exec(`
+          UPDATE order_items SET item_name_ar = '${itemNameAr}' WHERE order_id = ${orderId}
+        `);
+
+        await printJobService.printReceipt(orderId);
+
+        expect(transport.sent.length).toBe(1);
+        const buf = transport.sent[0].data;
+        expect(findSequence(buf, encodePc864(`1x ${itemNameAr}`))).toBe(true);
+        expect(buf.toString('hex')).toContain('1b7416'); // ESC t 22 (PC864)
+      } finally {
+        sqlite.exec(`UPDATE printers SET config = '{}' WHERE id = 1`);
+      }
+    });
+
+    it('falls back to items.name_ar from menu catalog when snapshot is missing', async () => {
+      const orderId = createBasicOrder();
+      // Seed a menu item WITH an Arabic name, link the order item, snapshot NULL
+      sqlite.exec(`
+        INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
+        VALUES (101, 'Test Category', 0, 1, ${now}, ${now})
+      `);
+      sqlite.exec(`
+        INSERT INTO items (id, category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+        VALUES (101, 101, 'Burger', '${'برجر طازج'}', 11500, 1500, 0, 1, ${now}, ${now})
+      `);
+      sqlite.exec(`
+        UPDATE order_items SET item_id = 101, item_name_ar = NULL WHERE order_id = ${orderId}
+      `);
+
+      await printJobService.printReceipt(orderId);
+
+      expect(transport.sent.length).toBe(1);
+      const buf = transport.sent[0].data;
+      expect(
+        findSequence(buf, encodeUtf8('1x \u0628\u0631\u062C\u0631 \u0637\u0627\u0632\u062C')),
+      ).toBe(true);
+    });
+
     it('includes QR from a cleared zatca_invoices row when no explicit qrTlvPayload is provided', async () => {
       const orderId = createBasicOrder();
 
@@ -363,6 +442,22 @@ describe('PrintJobService', () => {
   // ── printRefundReceipt — QR fallback from zatca_credit_notes ──────────
 
   describe('printRefundReceipt', () => {
+    it('renders credit note content (title, documentId, original invoice, reason)', async () => {
+      const orderId = createBasicOrder();
+      const refundId = createRefundForOrder(orderId);
+
+      await printJobService.printRefundReceipt(refundId);
+
+      expect(transport.sent.length).toBe(1);
+      const s = transport.sent[0].data.toString('ascii');
+      expect(s).toContain('CREDIT NOTE');
+      expect(s).not.toContain('SIMPLIFIED TAX INVOICE');
+      expect(s).toContain(`Invoice #: REF26-TEST-${orderSeq}`);
+      expect(s).toContain(`Original Invoice: INV26-TEST-${orderSeq}`);
+      expect(s).toContain('Reason: Test');
+      expect(s).toContain('Amount includes VAT');
+    });
+
     it('includes QR from a cleared zatca_credit_notes row when no explicit qrTlvPayload is provided', async () => {
       const orderId = createBasicOrder();
       const refundId = createRefundForOrder(orderId);
