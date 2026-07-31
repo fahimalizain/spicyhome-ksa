@@ -10,4 +10,10 @@ export class CreateOrderResponse {
 
   @ApiProperty({ ...ApiInt64, example: 1 })
   orderNo!: number;
+
+  @ApiProperty({
+    description: 'ZATCA root cbc:ID — the business invoice number',
+    example: 'INV26-0001',
+  })
+  documentId!: string;
 }

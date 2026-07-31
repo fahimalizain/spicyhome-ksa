@@ -152,6 +152,10 @@ export class ZatcaReportingService implements OnModuleInit {
       }
 
       // Collect pending documents from both tables, ordered by ICV ascending.
+      // IMPORTANT: only `signed` and `failed` are polled — `cleared` (standard
+      // clearance) and `reported` (simplified reporting) are ignored.  This
+      // prevents standard invoices/credit notes from being re-submitted to the
+      // reporting API after they've already gone through clearance.
       const pendingDocs: ReportableDocument[] = [];
 
       // Pending invoices — fetch all, no limit
@@ -232,6 +236,12 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 
+    // Phase 6 guard: do not re-submit cleared or already-reported invoices
+    if (inv.status === 'cleared' || inv.status === 'reported') {
+      this.logger.warn(`Invoice ${invoiceId} is already ${inv.status} — skipping retry`);
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
     const doc: ReportableDocument = {
       id: inv.id,
       icv: inv.icv,
@@ -262,6 +272,12 @@ export class ZatcaReportingService implements OnModuleInit {
       .get();
 
     if (!cn) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    // Phase 6 guard: do not re-submit cleared or already-reported credit notes
+    if (cn.status === 'cleared' || cn.status === 'reported') {
+      this.logger.warn(`Credit note ${creditNoteId} is already ${cn.status} — skipping retry`);
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 

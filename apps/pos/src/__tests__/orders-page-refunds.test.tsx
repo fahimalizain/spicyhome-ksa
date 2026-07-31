@@ -78,6 +78,7 @@ vi.mock('../realtime', () => ({
 const paidOrder = {
   id: 1,
   orderNo: 42,
+  documentId: 'INV26-0042',
   uuid: 'u1',
   type: 'dine_in',
   tableId: null,
@@ -123,6 +124,7 @@ const paidOrder = {
 const orderSummary = {
   id: 1,
   orderNo: 42,
+  documentId: 'INV26-0042',
   uuid: 'u1',
   type: 'dine_in',
   tableId: null,
@@ -144,6 +146,7 @@ const sampleRefund: OrderRefundResponse = {
   userId: 1,
   methodId: 'cash',
   methodTitle: 'Cash',
+  documentId: 'REF26-0001',
   subtotalHalalas: 2000,
   vatHalalas: 300,
   totalHalalas: 2300,
@@ -165,6 +168,7 @@ const sampleRefund: OrderRefundResponse = {
 const openOrderSummary = {
   id: 2,
   orderNo: 55,
+  documentId: 'INV26-0055',
   uuid: 'u2',
   type: 'dine_in',
   tableId: null,
@@ -182,6 +186,7 @@ const openOrderSummary = {
 
 const openOrder = {
   ...openOrderSummary,
+  documentId: 'INV26-0055',
   items: [
     {
       id: 201,
@@ -227,14 +232,14 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
     // Click order to open detail
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Refunds section should NOT be visible
@@ -247,14 +252,14 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     // Wait for order detail to load
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Refunds section should be visible
@@ -276,10 +281,10 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
       expect(screen.getByText('Refunds')).toBeInTheDocument();
@@ -290,7 +295,7 @@ describe('OrdersPage — refunds list and modal', () => {
 
     // Modal should appear
     await waitFor(() => {
-      expect(screen.getByText('Refund #1')).toBeInTheDocument();
+      expect(screen.getByText('Refund REF26-0001')).toBeInTheDocument();
     });
 
     // Modal should show method
@@ -318,10 +323,10 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
       expect(screen.getByText('Refunds')).toBeInTheDocument();
@@ -331,7 +336,7 @@ describe('OrdersPage — refunds list and modal', () => {
     fireEvent.click(screen.getByText('23.00 SAR'));
 
     await waitFor(() => {
-      expect(screen.getByText('Refund #1')).toBeInTheDocument();
+      expect(screen.getByText('Refund REF26-0001')).toBeInTheDocument();
     });
 
     // Click close button (✕)
@@ -339,7 +344,7 @@ describe('OrdersPage — refunds list and modal', () => {
     fireEvent.click(closeBtn);
 
     await waitFor(() => {
-      expect(screen.queryByText('Refund #1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Refund REF26-0001')).not.toBeInTheDocument();
     });
   });
 
@@ -349,10 +354,10 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
       expect(screen.getByText('Refunds')).toBeInTheDocument();
@@ -362,7 +367,7 @@ describe('OrdersPage — refunds list and modal', () => {
     fireEvent.click(screen.getByText('23.00 SAR'));
 
     await waitFor(() => {
-      expect(screen.getByText('Refund #1')).toBeInTheDocument();
+      expect(screen.getByText('Refund REF26-0001')).toBeInTheDocument();
     });
 
     // Click backdrop (the outer fixed inset-0 div)
@@ -370,7 +375,7 @@ describe('OrdersPage — refunds list and modal', () => {
     if (backdrop) fireEvent.click(backdrop);
 
     await waitFor(() => {
-      expect(screen.queryByText('Refund #1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Refund REF26-0001')).not.toBeInTheDocument();
     });
   });
 
@@ -382,11 +387,13 @@ describe('OrdersPage — refunds list and modal', () => {
       ...orderSummary,
       id: 2,
       orderNo: 99,
+      documentId: 'INV26-0099',
     };
     const orderDetailNoRefunds = {
       ...paidOrder,
       id: 2,
       orderNo: 99,
+      documentId: 'INV26-0099',
     };
 
     mockList.mockResolvedValue([orderSummary, orderWithoutRefunds]);
@@ -396,21 +403,21 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
     // Click first order (has refunds)
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
       expect(screen.getByText('Refunds')).toBeInTheDocument();
     });
 
     // Click second order (no refunds)
-    fireEvent.click(screen.getByText('#99'));
+    fireEvent.click(screen.getByText('INV26-0099'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #99')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0099')).toBeInTheDocument();
     });
 
     // Refunds section should disappear
@@ -428,10 +435,10 @@ describe('OrdersPage — refunds list and modal', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
       expect(screen.getByText('Refunds')).toBeInTheDocument();
@@ -459,14 +466,14 @@ describe('OrdersPage — Open Order pinned footer', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#55')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0055')).toBeInTheDocument();
     });
 
     // Click open order to view detail
-    fireEvent.click(screen.getByText('#55'));
+    fireEvent.click(screen.getByText('INV26-0055'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #55')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0055')).toBeInTheDocument();
     });
 
     // Open Order button should be visible
@@ -481,10 +488,10 @@ describe('OrdersPage — Open Order pinned footer', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#55')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0055')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#55'));
+    fireEvent.click(screen.getByText('INV26-0055'));
 
     await waitFor(() => {
       expect(screen.getByText('Open Order')).toBeInTheDocument();
@@ -505,13 +512,13 @@ describe('OrdersPage — Open Order pinned footer', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#42'));
+    fireEvent.click(screen.getByText('INV26-0042'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Open Order button must NOT be visible
@@ -519,8 +526,20 @@ describe('OrdersPage — Open Order pinned footer', () => {
   });
 
   it('does not show Open Order button for voided orders', async () => {
-    const voidedSummary = { ...orderSummary, id: 3, orderNo: 99, status: 'voided' };
-    const voidedOrder = { ...paidOrder, id: 3, orderNo: 99, status: 'voided' };
+    const voidedSummary = {
+      ...orderSummary,
+      id: 3,
+      orderNo: 99,
+      documentId: 'INV26-0099',
+      status: 'voided',
+    };
+    const voidedOrder = {
+      ...paidOrder,
+      id: 3,
+      orderNo: 99,
+      documentId: 'INV26-0099',
+      status: 'voided',
+    };
 
     mockList.mockResolvedValue([voidedSummary]);
     mockGet.mockResolvedValue(voidedOrder);
@@ -529,21 +548,33 @@ describe('OrdersPage — Open Order pinned footer', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#99')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0099')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#99'));
+    fireEvent.click(screen.getByText('INV26-0099'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #99')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0099')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Open Order')).not.toBeInTheDocument();
   });
 
   it('does not show Open Order button for refunded orders', async () => {
-    const refundedSummary = { ...orderSummary, id: 4, orderNo: 77, status: 'refunded' };
-    const refundedOrder = { ...paidOrder, id: 4, orderNo: 77, status: 'refunded' };
+    const refundedSummary = {
+      ...orderSummary,
+      id: 4,
+      orderNo: 77,
+      documentId: 'INV26-0077',
+      status: 'refunded',
+    };
+    const refundedOrder = {
+      ...paidOrder,
+      id: 4,
+      orderNo: 77,
+      documentId: 'INV26-0077',
+      status: 'refunded',
+    };
 
     mockList.mockResolvedValue([refundedSummary]);
     mockGet.mockResolvedValue(refundedOrder);
@@ -552,13 +583,13 @@ describe('OrdersPage — Open Order pinned footer', () => {
     renderOrdersPage();
 
     await waitFor(() => {
-      expect(screen.getByText('#77')).toBeInTheDocument();
+      expect(screen.getByText('INV26-0077')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('#77'));
+    fireEvent.click(screen.getByText('INV26-0077'));
 
     await waitFor(() => {
-      expect(screen.getByText('Order #77')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0077')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Open Order')).not.toBeInTheDocument();

@@ -148,8 +148,8 @@ describe('ZatcaReportingService', () => {
     `);
 
     sqlite.exec(`
-      INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-      VALUES (${orderId}, ${suffix}, '${invUuid}', '${invHash}', '', '<Invoice>test</Invoice>', 'tlv', 'signed', ${now}, ${now})
+      INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+      VALUES (${orderId}, ${suffix}, '${invUuid}', 'DOC-' || '${invUuid}', '${invHash}', '', '<Invoice>test</Invoice>', 'tlv', 'signed', ${now}, ${now})
     `);
     const invoiceId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -187,8 +187,8 @@ describe('ZatcaReportingService', () => {
     const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
     sqlite.exec(`
-      INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-      VALUES (${orderId}, ${suffix}, '${invUuid}', '${invHash}', 'prev-hash', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+      INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+      VALUES (${orderId}, ${suffix}, '${invUuid}', 'DOC-' || '${invUuid}', '${invHash}', 'prev-hash', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
     `);
 
     sqlite.exec(`
@@ -204,8 +204,8 @@ describe('ZatcaReportingService', () => {
 
     const cnIcv = suffix + 100;
     sqlite.exec(`
-      INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
-      VALUES (${orderId}, ${refundId}, '${invUuid}', ${cnIcv}, '${cnUuid}', '${cnHash}', '${invHash}', '<CreditNote>test</CreditNote>', 'tlv', 'signed', NULL, 11500, 1500, 'Test refund', ${now}, ${now})
+      INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+      VALUES (${orderId}, ${refundId}, '${invUuid}', ${cnIcv}, '${cnUuid}', 'DOC-' || '${cnUuid}', '${cnHash}', '${invHash}', '<CreditNote>test</CreditNote>', 'tlv', 'signed', NULL, 11500, 1500, 'Test refund', ${now}, ${now})
     `);
     const creditNoteId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
@@ -553,8 +553,8 @@ describe('ZatcaReportingService', () => {
       `);
       const orderId3 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-        VALUES (${orderId3}, 3, 'uuid-icv-3', 'hash-icv-3', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId3}, 3, 'uuid-icv-3', 'DOC-' || 'uuid-icv-3', 'hash-icv-3', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
 
       // Order 2 → credit note icv=2 (needs a refund)
@@ -569,8 +569,8 @@ describe('ZatcaReportingService', () => {
       `);
       const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
-        VALUES (${orderId2}, ${refundId}, 'any-inv-uuid', 2, 'uuid-icv-2', 'hash-icv-2', '', '<CreditNote/>', 'tlv', 'signed', NULL, 11500, 1500, 'Test', ${now}, ${now})
+        INSERT INTO zatca_credit_notes (order_id, refund_id, related_invoice_uuid, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, reported_at, total_halalas, vat_halalas, reason, created_at, updated_at)
+        VALUES (${orderId2}, ${refundId}, 'any-inv-uuid', 2, 'uuid-icv-2', 'DOC-' || 'uuid-icv-2', 'hash-icv-2', '', '<CreditNote/>', 'tlv', 'signed', NULL, 11500, 1500, 'Test', ${now}, ${now})
       `);
 
       // Order 3 → invoice icv=1
@@ -580,8 +580,8 @@ describe('ZatcaReportingService', () => {
       `);
       const orderId1 = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
       sqlite.exec(`
-        INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-        VALUES (${orderId1}, 1, 'uuid-icv-1', 'hash-icv-1', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+        INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+        VALUES (${orderId1}, 1, 'uuid-icv-1', 'DOC-' || 'uuid-icv-1', 'hash-icv-1', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
       `);
 
       fakeHttp.responses.set('reporting', {
@@ -619,8 +619,8 @@ describe('ZatcaReportingService', () => {
         `);
         const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
         sqlite.exec(`
-          INSERT INTO zatca_invoices (order_id, icv, uuid, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
-          VALUES (${orderId}, ${i}, 'uuid-icv-${i}', 'hash-icv-${i}', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
+          INSERT INTO zatca_invoices (order_id, icv, uuid, document_id, invoice_hash, prev_invoice_hash, xml, qr_tlv, status, created_at, updated_at)
+          VALUES (${orderId}, ${i}, 'uuid-icv-${i}', 'DOC-' || 'uuid-icv-${i}', 'hash-icv-${i}', '', '<Invoice/>', 'tlv', 'signed', ${now}, ${now})
         `);
       }
 

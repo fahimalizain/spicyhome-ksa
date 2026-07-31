@@ -86,6 +86,7 @@ const sampleInvoice = {
   reportedAt: null,
   createdAt: 1700000000,
   updatedAt: 1700000000,
+  documentId: 'INV-TEST-001',
 };
 
 const sampleCreditNote = {
@@ -106,6 +107,7 @@ const sampleCreditNote = {
   reason: 'Customer refund',
   createdAt: 1700000100,
   updatedAt: 1700000100,
+  documentId: 'CN-TEST-001',
 };
 
 function renderZatcaPage() {
@@ -138,6 +140,10 @@ describe('ZatcaPage — documents list', () => {
       expect(screen.getByText('#1')).toBeInTheDocument();
       expect(screen.getByText('#3')).toBeInTheDocument();
     });
+
+    // documentId should be the primary label for each row
+    expect(screen.getByText('INV-TEST-001')).toBeInTheDocument();
+    expect(screen.getByText('CN-TEST-001')).toBeInTheDocument();
 
     // Type badges should be visible
     expect(screen.getByText('Invoice')).toBeInTheDocument();
@@ -180,8 +186,11 @@ describe('ZatcaPage — documents list', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Credit Note #3')).toBeInTheDocument();
+      expect(screen.getByText('Credit Note CN-TEST-001')).toBeInTheDocument();
     });
+
+    // Should show document ID (in the modal grid; also rendered in the list behind the overlay)
+    expect(screen.getAllByText('CN-TEST-001').length).toBeGreaterThan(0);
 
     // Should show refund id
     expect(screen.getByText('#5')).toBeInTheDocument();
@@ -213,8 +222,11 @@ describe('ZatcaPage — documents list', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Invoice #1')).toBeInTheDocument();
+      expect(screen.getByText('Invoice INV-TEST-001')).toBeInTheDocument();
     });
+
+    // Should show document ID in the modal grid
+    expect(screen.getAllByText('INV-TEST-001').length).toBeGreaterThan(0);
   });
 
   it('shows empty state when no documents exist', async () => {

@@ -60,6 +60,9 @@ export class OrderRefundResponse {
   @ApiProperty({ type: String, example: 'Customer changed mind', nullable: true })
   reason!: string | null;
 
+  @ApiProperty({ description: 'Refund document ID', example: 'REF26-0001' })
+  documentId!: string;
+
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 

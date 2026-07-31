@@ -95,6 +95,9 @@ describe('ReportsService', () => {
         vat_halalas INTEGER NOT NULL DEFAULT 0,
         total_halalas INTEGER NOT NULL DEFAULT 0,
         discount_halalas INTEGER NOT NULL DEFAULT 0,
+        is_standard_invoice INTEGER NOT NULL DEFAULT 0,
+        zatca_buyer_details TEXT,
+        document_id TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),
@@ -161,6 +164,7 @@ describe('ReportsService', () => {
         vat_halalas INTEGER NOT NULL,
         total_halalas INTEGER NOT NULL,
         reason TEXT,
+        document_id TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),
         updated_at INTEGER,
@@ -342,8 +346,8 @@ describe('ReportsService', () => {
         VALUES (2, 2, 'b', 'takeaway', ${day.id}, 'refunded', 1000, 150, 1150, ${now}, ${now}, 1);
         INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
         VALUES (2, 'card', 'Card', 1150, ${now});
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, created_at)
-        VALUES (2, 1, 'card', 'Card', 1000, 150, 1150, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+        VALUES (2, 1, 'card', 'Card', 1000, 150, 1150, 'REF26-TEST1', ${now});
       `);
 
       const report: any = await service.getXReport();
@@ -365,8 +369,8 @@ describe('ReportsService', () => {
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'refunded', 2000, 300, 2300, ${now}, ${now}, 1);
         INSERT INTO order_payments (order_id, method_id, method_title, amount_halalas, created_at)
         VALUES (1, 'cash', 'Cash', 2300, ${now});
-        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, created_at)
-        VALUES (1, 1, 'cash', 'Cash', 2000, 300, 2300, ${now});
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+        VALUES (1, 1, 'cash', 'Cash', 2000, 300, 2300, 'REF26-TEST2', ${now});
       `);
 
       // Install a receipt printer so printXReport works

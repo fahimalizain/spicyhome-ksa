@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useRefund, getRemainingQty } from '../hooks/useRefund';
+import { ZatcaClearanceModal } from './orders/ZatcaClearanceModal';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 import { ConfirmActionButton } from './ConfirmActionButton';
 
@@ -35,6 +36,10 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
   const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
   const [reason, setReason] = useState('');
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+
+  // Clearance state for standard invoice refunds
+  const [clearanceRefundId, setClearanceRefundId] = useState<number | null>(null);
+  const [clearanceTotalHalalas, setClearanceTotalHalalas] = useState<number>(0);
 
   // Load payment methods on mount
   useEffect(() => {
@@ -104,10 +109,22 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
       qty: r.refundQty,
     }));
 
-    const success = await refund(order.id, items, selectedMethodId, reason || undefined);
-    if (success) {
-      onRefunded();
+    const result = await refund(order.id, items, selectedMethodId, reason || undefined);
+    if (result.ok) {
+      // For standard invoices, show clearance modal instead of closing immediately
+      if (order.isStandardInvoice) {
+        setClearanceRefundId(result.refundId);
+        setClearanceTotalHalalas(refundTotalHalalas);
+      } else {
+        onRefunded();
+      }
     }
+  }
+
+  function handleClearanceDone() {
+    setClearanceRefundId(null);
+    setClearanceTotalHalalas(0);
+    onRefunded();
   }
 
   if (loadingRefunds || loadingMethods) {
@@ -118,10 +135,23 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
     );
   }
 
+  // ── If clearance is active (standard invoice refund), show overlay ───
+  if (clearanceRefundId !== null) {
+    return (
+      <ZatcaClearanceModal
+        documentType="credit_note"
+        orderId={order.id}
+        refundId={clearanceRefundId}
+        orderTotalHalalas={clearanceTotalHalalas}
+        onDone={handleClearanceDone}
+      />
+    );
+  }
+
   return (
     <div className="bg-gray-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-white">Refund for Order #{order.orderNo}</h3>
+        <h3 className="text-sm font-bold text-white">Refund for Order {order.documentId}</h3>
         <button
           onClick={onClose}
           className="touch-target w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"
@@ -129,6 +159,31 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
           ✕
         </button>
       </div>
+
+      {/* Standard invoice notice */}
+      {order.isStandardInvoice && (
+        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 mb-3">
+          <h4 className="text-sm font-bold text-amber-400 mb-1">Standard Tax Invoice</h4>
+          <p className="text-xs text-gray-300">
+            A ZATCA Standard Credit Note will be issued for this refund. Buyer details from the
+            original invoice will be used.
+          </p>
+          {(order.zatcaBuyerDetails?.name || order.zatcaBuyerDetails?.vatNumber) && (
+            <div className="mt-2 pt-2 border-t border-amber-700/30 text-xs text-gray-400 space-y-0.5">
+              {order.zatcaBuyerDetails?.name && (
+                <div>
+                  Buyer: <span className="text-gray-300">{order.zatcaBuyerDetails.name}</span>
+                </div>
+              )}
+              {order.zatcaBuyerDetails?.vatNumber && (
+                <div>
+                  VAT: <span className="text-gray-300">{order.zatcaBuyerDetails.vatNumber}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 mb-3">
         {rows.map((row) => {

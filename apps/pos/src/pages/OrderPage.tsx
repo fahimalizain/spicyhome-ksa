@@ -91,7 +91,7 @@ export function OrderPage() {
   const [currentOrder, setCurrentOrder] = useState<{
     id: number;
     status: string;
-    orderNo: number;
+    documentId: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -147,7 +147,7 @@ export function OrderPage() {
         .get(orderId)
         .then((order) => {
           cart.loadOrder(order);
-          setCurrentOrder({ id: order.id, status: order.status, orderNo: order.orderNo });
+          setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
         })
         .catch(() => {
           setError('Failed to load order');
@@ -326,7 +326,7 @@ export function OrderPage() {
         type: cart.orderType,
         tableId: cart.orderType === 'dine_in' ? cart.tableId || undefined : undefined,
       });
-      setCurrentOrder({ id: res.id, status: 'open', orderNo: res.orderNo });
+      setCurrentOrder({ id: res.id, status: 'open', documentId: res.documentId });
 
       // B6: Refetch to get real updatedAt before syncing (create response lacks updatedAt)
       const fetchedOrder = await client.orders.get(res.id);
@@ -702,7 +702,7 @@ export function OrderPage() {
         {/* Header — pinned */}
         <div className="shrink-0 px-3 pt-3 pb-2 border-b border-gray-700/80">
           <h2 className="text-sm font-semibold text-gray-300">
-            {currentOrder ? `Order #${currentOrder.orderNo}` : 'New Order'}
+            {currentOrder ? `Order ${currentOrder.documentId}` : 'New Order'}
             {currentOrder && (
               <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${currentOrder.status}`}>
                 {currentOrder.status}
@@ -917,7 +917,7 @@ export function OrderPage() {
                     <span>{t.name}</span>
                     {occupied && openOrder && (
                       <span className="block text-xs text-amber-500 mt-0.5">
-                        #{openOrder.orderNo}
+                        {openOrder.documentId}
                       </span>
                     )}
                   </button>
@@ -953,7 +953,7 @@ export function OrderPage() {
                       setCurrentOrder({
                         id: order.id,
                         status: order.status,
-                        orderNo: order.orderNo,
+                        documentId: order.documentId,
                       });
                     })
                     .catch(() => {});

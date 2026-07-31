@@ -19,6 +19,8 @@ import { AuditVerifyResponse } from './dto/audit-verify-response.dto';
 import { OrderEventResponse } from './dto/order-event-response.dto';
 import { OrderRefundResponse } from './dto/refund-response.dto';
 import { PrintResponse } from './dto/print-response.dto';
+import { ZatcaInvoiceStatusResponse } from './dto/zatca-invoice-status-response.dto';
+import { ZatcaInvoiceReissueDto } from './dto/zatca-invoice-reissue.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -134,5 +136,87 @@ export class OrdersController {
   @ApiOkResponse({ description: 'Chain verification result', type: AuditVerifyResponse })
   verifyOrderChain(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.verifyOrderChain(id);
+  }
+
+  // ── ZATCA Standard Invoice ──────────────────────────────────────────────────
+
+  @Get(':id/zatca-invoice')
+  @RequiresPermission('pay_order')
+  @ApiOperation({ summary: 'Get ZATCA invoice status for an order (clearance polling)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({
+    description: 'ZATCA invoice status with clearance attempts',
+    type: ZatcaInvoiceStatusResponse,
+  })
+  getZatcaInvoiceStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.getZatcaInvoiceStatus(id);
+  }
+
+  @Post(':id/zatca-invoice/retry-clearance')
+  @RequiresPermission('pay_order')
+  @ApiOperation({ summary: 'Retry ZATCA clearance for an invoice in error status' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Clearance result' })
+  retryZatcaClearance(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.ordersService.retryZatcaClearance(id, user.sub);
+  }
+
+  @Post(':id/zatca-invoice/reissue')
+  @RequiresPermission('pay_order')
+  @ApiOperation({ summary: 'Reissue a standard invoice after rejection (new attempt)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Reissue result' })
+  reissueZatcaInvoice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ZatcaInvoiceReissueDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.reissueZatcaInvoice(id, user.sub, dto.zatcaBuyerDetails as any);
+  }
+
+  // ── ZATCA Standard Credit Note (refund clearance) ─────────────────────────
+
+  @Get(':id/refunds/:refundId/zatca-credit-note')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Get ZATCA credit note status for a refund (clearance polling)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiOkResponse({
+    description: 'ZATCA credit note status with clearance attempts',
+    type: ZatcaInvoiceStatusResponse,
+  })
+  getZatcaCreditNoteStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+  ) {
+    return this.ordersService.getZatcaCreditNoteStatus(id, refundId);
+  }
+
+  @Post(':id/refunds/:refundId/zatca-credit-note/retry-clearance')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Retry ZATCA clearance for a credit note in error status' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Clearance result' })
+  retryZatcaCreditNoteClearance(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.retryZatcaCreditNoteClearance(id, refundId, user.sub);
+  }
+
+  @Post(':id/refunds/:refundId/zatca-credit-note/reissue')
+  @RequiresPermission('refund_order')
+  @ApiOperation({ summary: 'Reissue a credit note after rejection (new attempt)' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({ name: 'refundId', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Reissue result' })
+  reissueZatcaCreditNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('refundId', ParseIntPipe) refundId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.reissueZatcaCreditNote(id, refundId, user.sub);
   }
 }

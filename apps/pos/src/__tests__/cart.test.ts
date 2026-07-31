@@ -29,6 +29,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
   return {
     id: 1,
     orderNo: 42,
+    documentId: 'INV26-0042',
     uuid: 'test-uuid',
     type: 'dine_in',
     tableId: null,
@@ -38,6 +39,8 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     vatHalalas: 0,
     totalHalalas: 0,
     discountHalalas: 0,
+    isStandardInvoice: false,
+    zatcaBuyerDetails: null,
     createdAt: 1000,
     updatedAt: 1000,
     createdBy: null,

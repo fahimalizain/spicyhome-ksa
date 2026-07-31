@@ -136,6 +136,7 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     orderNo: 42,
+    documentId: 'INV26-0042',
     uuid: 'test-uuid',
     type: 'dine_in',
     tableId: null,
@@ -145,12 +146,15 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     vatHalalas: 600,
     totalHalalas: 4600,
     discountHalalas: 0,
+    isStandardInvoice: false,
+    zatcaBuyerDetails: null,
     createdAt: 1000,
     updatedAt: 5000,
     createdBy: null,
     updatedBy: null,
     items: [makeOrderItem()],
     events: [],
+    payments: [],
     ...overrides,
   };
 }
@@ -189,7 +193,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Click Fries in menu
@@ -230,7 +234,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Add Fries
@@ -271,7 +275,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Initial qty is 2
@@ -310,7 +314,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Clean — Pay/Void visible
@@ -332,7 +336,12 @@ describe('OrderPage — staged cart', () => {
 
   // ---- Test 5: Create Order uses create + getOrder + syncItems (B6) ----
   it('pre-order: Create Order calls create then getOrder then syncItems', async () => {
-    mockOrdersCreate.mockResolvedValue({ id: 10, orderNo: 42, uuid: 'test' });
+    mockOrdersCreate.mockResolvedValue({
+      id: 10,
+      orderNo: 42,
+      documentId: 'INV26-0042',
+      uuid: 'test',
+    });
     // B6: After creation, POS fetches the order to get real updatedAt
     mockOrdersGet.mockResolvedValue(makeOrder({ id: 10, orderNo: 42, updatedAt: 5000, items: [] }));
     mockOrdersSyncItems.mockResolvedValue(
@@ -422,7 +431,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Add Fries
@@ -446,7 +455,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Verify no syncItems called initially
@@ -468,7 +477,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Clean: New Order visible
@@ -494,7 +503,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // No dirty state — Pay and Void visible
@@ -527,7 +536,7 @@ describe('OrderPage — staged cart', () => {
     renderOrderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
     // Make a change to get dirty

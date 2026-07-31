@@ -10,6 +10,13 @@ import {
   applyNumpadKey,
   type PaymentMethod,
 } from './pay-modal-logic';
+import {
+  StandardInvoiceBuyerForm,
+  emptyStandardInvoiceBuyer,
+  validateStandardBuyer,
+  type ZatcaBuyerDetails,
+} from './StandardInvoiceBuyerForm';
+import { ZatcaClearanceModal } from './ZatcaClearanceModal';
 
 /**
  * Convert a SAR display string (e.g. "12.50") to integer halalas,
@@ -70,6 +77,16 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
   const [tenderedInput, setTenderedInput] = useState('');
   const [numpadInput, setNumpadInput] = useState('');
   const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>('method');
+
+  // Standard invoice state
+  const [isStandardInvoice, setIsStandardInvoice] = useState(false);
+  const [buyer, setBuyer] = useState<ZatcaBuyerDetails>(emptyStandardInvoiceBuyer());
+  const [buyerErrors, setBuyerErrors] = useState<Partial<Record<keyof ZatcaBuyerDetails, string>>>(
+    {},
+  );
+
+  // Clearance flow — set when standard invoice pay succeeds; triggers rendering ZatcaClearanceModal
+  const [clearanceActive, setClearanceActive] = useState(false);
 
   // Force numpadTarget to 'method' when tendered section is not relevant
   const isCashSelected = selectedMethodId === 'cash';
@@ -175,18 +192,45 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
       amounts,
       tenderedHalalas,
       numpadActive: false,
-    });
+    }) &&
+    (!isStandardInvoice || Object.keys(validateStandardBuyer(buyer)).length === 0);
 
   async function handlePay() {
+    // Validate buyer if standard invoice is enabled
+    if (isStandardInvoice) {
+      const fieldErrors = validateStandardBuyer(buyer);
+      if (Object.keys(fieldErrors).length > 0) {
+        setBuyerErrors(fieldErrors);
+        return;
+      }
+    }
+
     setSubmitting(true);
     setError('');
+    setBuyerErrors({});
+
     try {
       const payments = stripZeroPayments(amounts, isCashSelected ? tenderedHalalas : undefined);
-      await client.orders.pay(orderId, { payments });
-      onPaid();
+      const payload: any = { payments };
+
+      if (isStandardInvoice) {
+        payload.isStandardInvoice = true;
+        payload.zatcaBuyerDetails = buyer;
+      }
+
+      await client.orders.pay(orderId, payload);
+
+      if (isStandardInvoice) {
+        // Payment succeeded — delegate to clearance modal
+        setSubmitting(false);
+        setClearanceActive(true);
+      } else {
+        // Simplified — pay, print, close as before
+        onPaid();
+        onClose();
+      }
     } catch (e: any) {
       setError(e.message || 'Payment failed');
-    } finally {
       setSubmitting(false);
     }
   }
@@ -199,9 +243,27 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
     );
   }
 
+  // ── Clearance phase UI (after pay for standard invoice) ──────────────
+  if (clearanceActive) {
+    return (
+      <ZatcaClearanceModal
+        orderId={orderId}
+        orderTotalHalalas={orderTotalHalalas}
+        initialBuyer={buyer}
+        onDone={() => {
+          onPaid();
+          onClose();
+        }}
+      />
+    );
+  }
+
+  // ── Main payment form ─────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto">
+      <div
+        className={`bg-gray-900 rounded-xl p-4 max-h-[90vh] overflow-y-auto ${isStandardInvoice ? 'w-[520px]' : 'w-[420px]'}`}
+      >
         <h2 className="text-lg font-bold text-white mb-3">Payment</h2>
 
         {/* Order total */}
@@ -314,6 +376,41 @@ export function PayModal({ orderId, orderTotalHalalas, onPaid, onClose }: PayMod
         )}
 
         {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
+
+        {/* Standard Invoice toggle + buyer form */}
+        <div className="mb-3">
+          <label className="flex items-center gap-2 touch-target cursor-pointer py-1">
+            <input
+              type="checkbox"
+              checked={isStandardInvoice}
+              onChange={(e) => {
+                setIsStandardInvoice(e.target.checked);
+                if (!e.target.checked) {
+                  setBuyerErrors({});
+                }
+              }}
+              className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-brand-500 focus:ring-brand-500"
+            />
+            <span className="text-sm text-gray-300">Issue ZATCA Standard Invoice</span>
+          </label>
+
+          {isStandardInvoice && (
+            <div className="mt-3 border-t border-gray-700 pt-3">
+              <StandardInvoiceBuyerForm
+                value={buyer}
+                onChange={(next) => {
+                  setBuyer(next);
+                  // Clear individual field error on change
+                  if (buyerErrors) {
+                    setBuyerErrors({});
+                  }
+                }}
+                disabled={submitting}
+                errors={buyerErrors}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Pay / Cancel buttons */}
         <div className="flex gap-2">

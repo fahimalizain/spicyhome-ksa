@@ -6,7 +6,7 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -21,21 +21,22 @@ import {
   settings,
   items,
 } from '@spicyhome/db';
-import { decomposeVat } from '@spicyhome/shared';
+import {
+  decomposeVat,
+  parseZatcaBuyerDetails,
+  formatZatcaBuyerDetailsErrors,
+} from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
+import { mapBools } from '../../common/bool-mapper.helper';
 import { OrderEventsService } from './order-events.service';
 import { PrintJobService } from '../printers/print-job.service';
+import { DocumentIdService } from './document-id.allocator';
+import { ZatcaBuyerDetailsDto } from './dto/zatca-buyer-details.dto';
+import { ZatcaStandardInvoiceService } from '../zatca/zatca-standard-invoice.service';
 import type { PrinterRecord } from '../printers/printers.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  open: ['paid', 'voided'],
-  paid: ['refunded'],
-  voided: [],
-  refunded: [],
-};
 
 function recomputeOrderTotals(rows: Array<{ totalHalalas: number; vatRateBp: number }>): {
   subtotalHalalas: number;
@@ -73,6 +74,8 @@ export class OrdersService {
     private eventEmitter: EventEmitter2,
     private printJobService: PrintJobService,
     private orderEvents: OrderEventsService,
+    private documentIdService: DocumentIdService,
+    private zatcaStandardService: ZatcaStandardInvoiceService,
   ) {}
 
   async createOrder(dto: { type: string; tableId?: number }, userId: number) {
@@ -119,6 +122,7 @@ export class OrdersService {
       }
 
       const orderNo = this.getNextOrderNo(tx, now);
+      const documentId = this.documentIdService.allocateInvoiceDocumentId(tx);
 
       const insertResult = tx
         .insert(orders)
@@ -133,6 +137,7 @@ export class OrdersService {
           vatHalalas: 0,
           totalHalalas: 0,
           discountHalalas: 0,
+          documentId,
           ...createAuditFields(userId, now),
         })
         .run();
@@ -149,11 +154,12 @@ export class OrdersService {
           tableId: dto.tableId ?? null,
           orderNo,
           uuid: orderUuid,
+          documentId,
         },
         now,
       );
 
-      return { id: orderId, uuid: orderUuid, orderNo };
+      return { id: orderId, uuid: orderUuid, orderNo, documentId };
     });
 
     this.emitDomainEvent('order.created', result.id, userId);
@@ -507,13 +513,43 @@ export class OrdersService {
     return updatedOrder;
   }
 
+  private validateStandardInvoiceBuyer(dto: {
+    isStandardInvoice?: boolean;
+    zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+  }): Record<string, unknown> | null {
+    if (!dto.isStandardInvoice) return null;
+
+    if (!dto.zatcaBuyerDetails) {
+      throw new BadRequestException('zatcaBuyerDetails is required when isStandardInvoice is true');
+    }
+
+    const parsed = parseZatcaBuyerDetails(dto.zatcaBuyerDetails as unknown);
+    if (!parsed.success) {
+      const formatted = formatZatcaBuyerDetailsErrors(parsed.error);
+      throw new BadRequestException(
+        `Invalid buyer details: ${Object.entries(formatted)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('; ')}`,
+      );
+    }
+    return parsed.data as unknown as Record<string, unknown>;
+  }
+
   async payOrder(
     orderId: number,
     userId: number,
-    dto: { payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }> },
+    dto: {
+      payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }>;
+      isStandardInvoice?: boolean;
+      zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+    },
   ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
+
+    // Validate standard invoice buyer fields outside transaction
+    const validatedBuyer = this.validateStandardInvoiceBuyer(dto);
+    const isStandardInvoice = dto.isStandardInvoice === true;
 
     // Payment validation happens inside the transaction
     let hasCashPayment = false;
@@ -639,35 +675,43 @@ export class OrdersService {
           .run();
       }
 
-      // Update order status
-      tx.update(orders)
-        .set({ status: 'paid', ...updateAuditFields(userId, now) })
-        .where(eq(orders.id, orderId))
-        .run();
+      // Update order status (plus buyer fields if standard invoice)
+      const orderUpdate: Record<string, any> = {
+        status: 'paid',
+        ...updateAuditFields(userId, now),
+      };
+      if (isStandardInvoice) {
+        orderUpdate.isStandardInvoice = 1;
+        orderUpdate.zatcaBuyerDetails = JSON.stringify(validatedBuyer);
+      }
+      tx.update(orders).set(orderUpdate).where(eq(orders.id, orderId)).run();
 
-      // Write paid event with payment breakdown
-      this.orderEvents.createEvent(
-        tx,
-        orderId,
-        userId,
-        'paid',
-        {
-          fromStatus: 'open',
-          toStatus: 'paid',
-          payments: paymentRecords.map((pr) => ({
-            methodId: pr.methodId,
-            methodTitle: pr.methodTitle,
-            amountHalalas: pr.amountHalalas,
-            ...(pr.tenderedHalalas !== undefined
-              ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
-              : {}),
-          })),
-        },
-        now,
-      );
+      // Write paid event with payment breakdown (and standard invoice flag if applicable)
+      const paidPayload: Record<string, any> = {
+        fromStatus: 'open',
+        toStatus: 'paid',
+        payments: paymentRecords.map((pr) => ({
+          methodId: pr.methodId,
+          methodTitle: pr.methodTitle,
+          amountHalalas: pr.amountHalalas,
+          ...(pr.tenderedHalalas !== undefined
+            ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
+            : {}),
+        })),
+      };
+      if (isStandardInvoice) {
+        paidPayload.isStandardInvoice = true;
+        const buyer = validatedBuyer as Record<string, unknown>;
+        paidPayload.buyerVatNumber = buyer.vatNumber;
+        paidPayload.buyerName = buyer.name;
+      }
+
+      this.orderEvents.createEvent(tx, orderId, userId, 'paid', paidPayload, now);
 
       // Receipt print enqueued with conditional kickDrawer
-      if (receiptPrinter) {
+      // For standard invoices: do NOT enqueue receipt print here — deferred
+      // until ZATCA clearance succeeds (see onZatcaInvoiceCleared).
+      if (receiptPrinter && !isStandardInvoice) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -682,15 +726,163 @@ export class OrdersService {
           now,
         );
       }
+
+      // For standard invoices with cash payment: kick cash drawer immediately
+      // on pay (ops requirement). The tax receipt with QR prints later on
+      // clearance, with kickDrawer:false since we already kicked here.
+      if (isStandardInvoice && hasCashPayment && receiptPrinter) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'cash_drawer_kick_enqueued',
+          {
+            printer: receiptPrinter.name,
+            printerId: receiptPrinter.id,
+          },
+          now,
+        );
+      }
     });
 
-    // After transaction: non-blocking receipt print
-    if (receiptPrinter) {
+    // After transaction: non-blocking receipt print (simplified only)
+    if (receiptPrinter && !isStandardInvoice) {
       this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
     }
 
+    // For standard invoices: kick cash drawer immediately if needed
+    if (isStandardInvoice && hasCashPayment && receiptPrinter) {
+      this.kickCashDrawer(receiptPrinter, orderId, userId);
+    }
+
     this.emitDomainEvent('order.paid', orderId, userId);
-    return { success: true, status: 'paid' };
+    return {
+      success: true,
+      status: 'paid',
+      ...(isStandardInvoice ? { invoiceType: 'standard' } : { invoiceType: 'simplified' }),
+    };
+  }
+
+  /**
+   * Deferred receipt print — triggered when ZATCA clears a standard invoice.
+   * Prints the tax receipt with QR code and kickDrawer:false (cash drawer
+   * was already kicked on pay for cash payments).
+   */
+  @OnEvent('zatca.invoice.cleared')
+  async onZatcaInvoiceCleared(payload: {
+    orderId: number;
+    userId: number;
+    invoiceId: number;
+  }): Promise<void> {
+    try {
+      const receiptPrinter = this.printJobService.getReceiptPrinter();
+      if (!receiptPrinter) return;
+
+      // Drawer was already kicked on pay for standard cash — never kick here
+      const kickDrawer = false;
+
+      // Write receipt print enqueued + succeeded events
+      const now = Math.floor(Date.now() / 1000);
+      this.orderEvents.createEvent(
+        this.db,
+        payload.orderId,
+        payload.userId,
+        'receipt_print_enqueued',
+        {
+          printer: receiptPrinter.name,
+          printerId: receiptPrinter.id,
+          kickDrawer,
+        },
+        now,
+      );
+
+      await this.printJobService.printReceipt(payload.orderId, { kickDrawer });
+
+      this.orderEvents.createEvent(
+        this.db,
+        payload.orderId,
+        payload.userId,
+        'receipt_print_succeeded',
+        { printer: receiptPrinter.name, printerId: receiptPrinter.id },
+        now,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Deferred receipt print failed for order ${payload.orderId}: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Deferred credit note receipt print — triggered when ZATCA clears a
+   * standard credit note.
+   */
+  @OnEvent('zatca.credit_note.cleared')
+  async onZatcaCreditNoteCleared(payload: {
+    orderId: number;
+    userId: number;
+    creditNoteId: number;
+    refundId: number;
+  }): Promise<void> {
+    try {
+      const receiptPrinter = this.printJobService.getReceiptPrinter();
+      if (!receiptPrinter) return;
+
+      const now = Math.floor(Date.now() / 1000);
+      this.orderEvents.createEvent(
+        this.db,
+        payload.orderId,
+        payload.userId,
+        'receipt_print_enqueued',
+        {
+          printer: receiptPrinter.name,
+          printerId: receiptPrinter.id,
+          kickDrawer: false,
+        },
+        now,
+      );
+
+      await this.printJobService.printRefundReceipt(payload.refundId, { kickDrawer: false });
+
+      this.orderEvents.createEvent(
+        this.db,
+        payload.orderId,
+        payload.userId,
+        'receipt_print_succeeded',
+        { printer: receiptPrinter.name, printerId: receiptPrinter.id },
+        now,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Deferred credit note print failed for refund ${payload.refundId}: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Kick the cash drawer without printing a receipt.
+   * Used for standard invoice cash payments where the tax receipt is deferred.
+   */
+  private async kickCashDrawer(
+    printer: PrinterRecord,
+    orderId: number,
+    userId: number,
+  ): Promise<void> {
+    try {
+      await this.printJobService.kickDrawer(printer);
+
+      const now = Math.floor(Date.now() / 1000);
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: printer.name, printerId: printer.id },
+        now,
+      );
+    } catch (err: any) {
+      this.logger.error(`Cash drawer kick failed for order ${orderId}: ${err.message}`);
+    }
   }
 
   async voidOrder(orderId: number, userId: number) {
@@ -848,6 +1040,9 @@ export class OrdersService {
       const totalHalalas = lineTotals.reduce((a, b) => a + b, 0);
       refundTotalHalalas = totalHalalas;
 
+      // Allocate document_id for the refund
+      const refundDocumentId = this.documentIdService.allocateRefundDocumentId(tx);
+
       // Insert order_refunds
       const refundInsert = tx
         .insert(orderRefunds)
@@ -860,6 +1055,7 @@ export class OrdersService {
           vatHalalas,
           totalHalalas,
           reason: dto.reason ?? null,
+          documentId: refundDocumentId,
           ...createAuditFields(userId, now),
         })
         .run();
@@ -891,6 +1087,7 @@ export class OrdersService {
         'refund_issued',
         {
           refundId,
+          documentId: refundDocumentId,
           methodId: dto.methodId,
           methodTitle: pm.title,
           items: refundItems,
@@ -940,8 +1137,8 @@ export class OrdersService {
         );
       }
 
-      // Receipt print enqueued event
-      if (receiptPrinter) {
+      // Receipt print enqueued event — skip for standard orders (deferred print)
+      if (receiptPrinter && order.isStandardInvoice !== 1) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -959,7 +1156,7 @@ export class OrdersService {
     });
 
     // ── After transaction: non-blocking refund receipt print ───────────────────
-    if (receiptPrinter) {
+    if (receiptPrinter && order.isStandardInvoice !== 1) {
       this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId, isCashRefund);
     }
 
@@ -997,6 +1194,7 @@ export class OrdersService {
         vatHalalas: refund.vatHalalas,
         totalHalalas: refund.totalHalalas,
         reason: refund.reason,
+        documentId: refund.documentId,
         createdAt: refund.createdAt,
         items: rifItems.map((ri) => ({
           id: ri.id,
@@ -1179,26 +1377,160 @@ export class OrdersService {
       .where(eq(orderPayments.orderId, id))
       .orderBy(orderPayments.id)
       .all();
-    return {
-      ...order,
-      items: itemsList,
-      events: logs,
-      payments: payments.map((p) => ({
-        methodId: p.methodId,
-        methodTitle: p.methodTitle,
-        amountHalalas: p.amountHalalas,
-        tenderedHalalas: p.tenderedHalalas,
-        changeHalalas: p.changeHalalas,
-      })),
-    };
+    return mapBools(
+      {
+        ...order,
+        items: itemsList,
+        events: logs,
+        payments: payments.map((p) => ({
+          methodId: p.methodId,
+          methodTitle: p.methodTitle,
+          amountHalalas: p.amountHalalas,
+          tenderedHalalas: p.tenderedHalalas,
+          changeHalalas: p.changeHalalas,
+        })),
+        zatcaBuyerDetails: this.parseOrderBuyerDetails(order),
+        documentId: order.documentId,
+      },
+      ['isStandardInvoice'],
+    );
   }
 
   getOrderEvents(orderId: number): any[] {
     return this.orderEvents.getEvents(this.db, orderId);
   }
 
+  /**
+   * Parse zatca_buyer_details JSON string from a DB order row.
+   * Returns a parsed object on success, null for missing/corrupt data.
+   * Logs a warning on corrupt JSON (resilience — don't crash on bad data).
+   */
+  private parseOrderBuyerDetails(order: Record<string, any>): Record<string, unknown> | null {
+    const raw = order.zatcaBuyerDetails;
+    if (raw == null || raw === '') return null;
+    try {
+      const parsed = JSON.parse(raw);
+      // Validate shape but don't throw — return null on invalid data
+      const result = parseZatcaBuyerDetails(parsed);
+      if (result.success) {
+        return result.data as unknown as Record<string, unknown>;
+      }
+      this.logger.warn(
+        `Order ${order.id} has invalid zatca_buyer_details JSON shape, returning null. Errors: ${JSON.stringify(formatZatcaBuyerDetailsErrors(result.error))}`,
+      );
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   verifyOrderChain(orderId: number): any {
     const logs = this.orderEvents.getEvents(this.db, orderId);
     return this.orderEvents.verifyChain(orderId, logs);
+  }
+
+  // ── ZATCA Standard Invoice APIs ────────────────────────────────────────────
+
+  /**
+   * Get ZATCA invoice status for an order (for POS polling).
+   */
+  getZatcaInvoiceStatus(orderId: number) {
+    return this.zatcaStandardService.getInvoiceStatus(orderId);
+  }
+
+  /**
+   * Retry clearance for a standard invoice with error status.
+   * Maps precondition errors to BadRequestException so the HTTP layer returns 400.
+   */
+  async retryZatcaClearance(orderId: number, userId: number) {
+    try {
+      return await this.zatcaStandardService.retryClearance(orderId, userId);
+    } catch (e: any) {
+      if (e.message?.includes('Cannot retry') || e.message?.includes('No invoice found')) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Reissue a standard invoice after rejection.
+   * Maps precondition errors to BadRequestException so the HTTP layer returns 400.
+   */
+  async reissueZatcaInvoice(
+    orderId: number,
+    userId: number,
+    buyerDetails?: Record<string, unknown>,
+  ) {
+    try {
+      return await this.zatcaStandardService.reissue(orderId, userId, buyerDetails);
+    } catch (e: any) {
+      if (
+        e.message?.includes('Cannot reissue') ||
+        e.message?.includes('No invoice found') ||
+        e.message?.includes('Invalid buyer details')
+      ) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
+  }
+
+  // ── ZATCA Standard Credit Note APIs ────────────────────────────────────────
+
+  /**
+   * Validate that a refund belongs to the given order.
+   * Throws NotFoundException or BadRequestException if not.
+   */
+  private validateRefundBelongsToOrder(orderId: number, refundId: number): void {
+    const refund = this.db.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
+    if (!refund) {
+      throw new NotFoundException(`Refund ${refundId} not found`);
+    }
+    if (refund.orderId !== orderId) {
+      throw new BadRequestException(`Refund ${refundId} does not belong to order ${orderId}`);
+    }
+  }
+
+  /**
+   * Get ZATCA credit note status for a refund (for POS polling).
+   */
+  getZatcaCreditNoteStatus(orderId: number, refundId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    return this.zatcaStandardService.getCreditNoteStatus(orderId, refundId);
+  }
+
+  /**
+   * Retry clearance for a credit note with error status.
+   */
+  async retryZatcaCreditNoteClearance(orderId: number, refundId: number, userId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    try {
+      return await this.zatcaStandardService.retryCreditNoteClearance(orderId, refundId, userId);
+    } catch (e: any) {
+      if (e.message?.includes('Cannot retry') || e.message?.includes('No credit note found')) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Reissue a credit note after rejection (new attempt, new ICV).
+   */
+  async reissueZatcaCreditNote(orderId: number, refundId: number, userId: number) {
+    this.validateRefundBelongsToOrder(orderId, refundId);
+    try {
+      return await this.zatcaStandardService.reissueCreditNote(orderId, refundId, userId);
+    } catch (e: any) {
+      if (
+        e.message?.includes('Cannot reissue') ||
+        e.message?.includes('No credit note found') ||
+        e.message?.includes('already has a cleared credit note')
+      ) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
   }
 }

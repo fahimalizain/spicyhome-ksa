@@ -19,9 +19,10 @@ import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { ZatcaHttpService } from './zatca-http.service';
 import { generateKeyPair, buildCSR, toPem, getPublicKeyPem } from './zatca-crypto.service';
 import type { CsrExtensionParams } from './zatca-crypto.service';
-import { zatcaKey, slugifyOrgUnit } from '@spicyhome/shared';
-import type { ZATCAEnvironment, ZATCAInvoiceDocumentType } from '@spicyhome/shared';
+import { zatcaKey, slugifyOrgUnit, isStandardComplianceType } from '@spicyhome/shared';
+import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
 import { PrintersService } from '../printers/printers.service';
+import { extractMessage } from './zatca-clearance-classify';
 
 // ── Compliance Request ID helpers ────────────────────────────────────────────
 
@@ -445,7 +446,7 @@ export class ZatcaOnboardingService {
    */
   async runComplianceCheck(
     invoiceIdOrType: number | null,
-    documentType?: ZATCAInvoiceDocumentType,
+    documentType?: ZATCAComplianceDocumentType,
     debug = false,
   ): Promise<{
     success: boolean;
@@ -510,15 +511,28 @@ export class ZatcaOnboardingService {
       );
     } else if (documentType) {
       // Dynamically generate invoice for the given document type
-      const generated = await this.invoiceService.buildComplianceInvoice(documentType);
-      invoiceHash = generated.invoiceHash;
-      uuid = generated.uuid;
-      invoiceBase64 = Buffer.from(generated.signedXml).toString('base64');
+      const isStandard = isStandardComplianceType(documentType);
+
+      let signedXml: string;
+
+      if (isStandard) {
+        const generated = await this.invoiceService.buildComplianceStandardInvoice(documentType);
+        invoiceHash = generated.invoiceHash;
+        uuid = generated.uuid;
+        signedXml = generated.signedXml;
+      } else {
+        const generated = await this.invoiceService.buildComplianceInvoice(documentType);
+        invoiceHash = generated.invoiceHash;
+        uuid = generated.uuid;
+        signedXml = generated.signedXml;
+      }
+
+      invoiceBase64 = Buffer.from(signedXml).toString('base64');
       resultKey = documentType;
 
       if (debug) {
         debugData = {
-          signedXml: generated.signedXml,
+          signedXml,
           invoiceHash,
           uuid,
         };
@@ -544,12 +558,20 @@ export class ZatcaOnboardingService {
       `Compliance check POST ${url} hash=${invoiceHash?.slice(0, 20)}... uuid=${uuid} invoiceB64Len=${invoiceBase64.length} bodyLen=${body.length}`,
     );
 
+    const headers: Record<string, string> = {
+      'Accept-Version': 'V2',
+      'Accept-Language': 'en',
+    };
+
+    // Standard compliance documents require Clearance-Status: 1
+    // (matching the real-time clearance header for standard invoices)
+    if (documentType && isStandardComplianceType(documentType)) {
+      headers['Clearance-Status'] = '1';
+    }
+
     const response = await this.httpClient.post(url, {
       body,
-      headers: {
-        'Accept-Version': 'V2',
-        'Accept-Language': 'en',
-      },
+      headers,
       auth: {
         username: complianceCert,
         password: complianceSecret,
@@ -711,12 +733,4 @@ function isSubmittedBefore(body: string): boolean {
   } catch {
     return false;
   }
-}
-
-function extractMessage(item: unknown): string {
-  if (typeof item === 'string') return item;
-  if (item && typeof item === 'object' && 'message' in item) {
-    return String((item as { message: string }).message);
-  }
-  return JSON.stringify(item);
 }

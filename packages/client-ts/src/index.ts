@@ -51,5 +51,7 @@ export type {
   ZatcaInvoice,
   ZatcaCreditNote,
   ZatcaReportingResult,
+  ZatcaInvoiceAttempt,
+  ZatcaInvoiceStatusResponse,
 } from './client';
 export type { paths, components, operations } from './generated/types';

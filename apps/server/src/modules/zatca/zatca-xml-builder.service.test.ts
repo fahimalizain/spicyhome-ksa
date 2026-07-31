@@ -1,4 +1,9 @@
-import { buildUnsignedInvoiceXML, InvoiceXMLInput, SellerInfo } from './zatca-xml-builder.service';
+import {
+  buildUnsignedInvoiceXML,
+  InvoiceXMLInput,
+  SellerInfo,
+  BuyerInfo,
+} from './zatca-xml-builder.service';
 import { ZATCA_INITIAL_PIH } from '@spicyhome/shared';
 
 describe('UBL XML Builder', () => {
@@ -13,6 +18,7 @@ describe('UBL XML Builder', () => {
   };
 
   const baseInput: InvoiceXMLInput = {
+    documentId: 'INV-1',
     icv: 1,
     uuid: '550e8400-e29b-41d4-a716-446655440000',
     issueDate: '2024-01-15',
@@ -62,11 +68,14 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:ProfileID>reporting:1.0</cbc:ProfileID>');
   });
 
-  it('includes ICV as the invoice ID', () => {
-    const input = { ...baseInput, icv: 42 };
+  it('includes documentId as the root cbc:ID, not ICV', () => {
+    const input = { ...baseInput, documentId: 'DOC-42', icv: 42 };
     const xml = buildUnsignedInvoiceXML(input);
-    // The top-level cbc:ID (ICV) is 42
-    expect(xml).toMatch(/<cbc:ID>42<\/cbc:ID>/);
+    // The top-level cbc:ID is the documentId
+    expect(xml).toMatch(/<cbc:ID>DOC-42<\/cbc:ID>/);
+    // ICV is still in AdditionalDocumentReference
+    expect(xml).toContain('<cbc:ID>ICV</cbc:ID>');
+    expect(xml).toContain('<cbc:UUID>42</cbc:UUID>');
   });
 
   it('includes UUID', () => {
@@ -408,6 +417,99 @@ describe('UBL XML Builder', () => {
       const vat = taxIncl - taxExcl;
       expect(vat).toBeGreaterThan(0);
     }
+  });
+
+  // ── Standard invoice profile tests ────────────────────────────────────────
+
+  const sampleBuyer: BuyerInfo = {
+    name: 'Fatoora Samples LTD',
+    vatNumber: '399999999800003',
+    street: 'Salah Al-Din',
+    buildingNumber: '1111',
+    citySubdivision: 'Al-Murooj',
+    city: 'Riyadh',
+    postalCode: '12222',
+    country: 'SA',
+  };
+
+  const baseStandardInput: InvoiceXMLInput = {
+    ...baseInput,
+    invoiceProfile: 'standard',
+    buyer: sampleBuyer,
+  };
+
+  it('uses standard subtype 0100000 for standard invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cbc:InvoiceTypeCode name="0100000">388</cbc:InvoiceTypeCode>');
+    expect(xml).not.toContain('name="0200000"');
+  });
+
+  it('standard profile does not affect simplified default', () => {
+    // Simplified input without invoiceProfile should still use 0200000
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">388</cbc:InvoiceTypeCode>');
+  });
+
+  it('includes buyer PostalAddress in standard invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cac:AccountingCustomerParty>');
+    expect(xml).toContain('<cbc:StreetName>Salah Al-Din</cbc:StreetName>');
+    expect(xml).toContain('<cbc:BuildingNumber>1111</cbc:BuildingNumber>');
+    expect(xml).toContain('<cbc:CitySubdivisionName>Al-Murooj</cbc:CitySubdivisionName>');
+    expect(xml).toContain('<cbc:CityName>Riyadh</cbc:CityName>');
+    expect(xml).toContain('<cbc:PostalZone>12222</cbc:PostalZone>');
+  });
+
+  it('includes buyer VAT in standard invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cbc:CompanyID>399999999800003</cbc:CompanyID>');
+  });
+
+  it('includes buyer legal entity name in standard invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cbc:RegistrationName>Fatoora Samples LTD</cbc:RegistrationName>');
+  });
+
+  it('includes buyer country default SA', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cbc:IdentificationCode>SA</cbc:IdentificationCode>');
+  });
+
+  it('includes Delivery for standard invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    expect(xml).toContain('<cac:Delivery>');
+    expect(xml).toContain('<cbc:ActualDeliveryDate>2024-01-15</cbc:ActualDeliveryDate>');
+  });
+
+  it('does NOT include Delivery for simplified invoice', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).not.toContain('<cac:Delivery>');
+  });
+
+  it('simplified invoice still has empty customer party', () => {
+    const xml = buildUnsignedInvoiceXML(baseInput);
+    expect(xml).toContain('<cac:AccountingCustomerParty>');
+    // Empty customer party — the AccountingCustomerParty section should not
+    // have any child Party elements (the seller's AccountingSupplierParty
+    // has its own Party — we check the customer section is empty).
+    const customerStart = xml.indexOf('<cac:AccountingCustomerParty>');
+    const customerEnd =
+      xml.indexOf('</cac:AccountingCustomerParty>') + '</cac:AccountingCustomerParty>'.length;
+    const customerSection = xml.substring(customerStart, customerEnd);
+    expect(customerSection).not.toContain('<cac:Party>');
+  });
+
+  it('standard invoice has full buyer party in customer section', () => {
+    const xml = buildUnsignedInvoiceXML(baseStandardInput);
+    // AccountingCustomerParty should contain a Party with buyer details
+    const customerStart = xml.indexOf('<cac:AccountingCustomerParty>');
+    const customerEnd =
+      xml.indexOf('</cac:AccountingCustomerParty>') + '</cac:AccountingCustomerParty>'.length;
+    const customerSection = xml.substring(customerStart, customerEnd);
+    expect(customerSection).toContain('<cac:Party>');
+    expect(customerSection).toContain(
+      '<cbc:RegistrationName>Fatoora Samples LTD</cbc:RegistrationName>',
+    );
   });
 });
 

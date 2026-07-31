@@ -6,12 +6,18 @@ import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 const mockRefund = vi.fn();
 const mockGetRefunds = vi.fn();
 const mockListEnabled = vi.fn();
+const mockGetZatcaCreditNote = vi.fn();
+const mockRetryZatcaCreditNoteClearance = vi.fn();
+const mockReissueZatcaCreditNote = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
     orders: {
       refund: (...args: any[]) => mockRefund(...args),
       getRefunds: (...args: any[]) => mockGetRefunds(...args),
+      getZatcaCreditNote: (...args: any[]) => mockGetZatcaCreditNote(...args),
+      retryZatcaCreditNoteClearance: (...args: any[]) => mockRetryZatcaCreditNoteClearance(...args),
+      reissueZatcaCreditNote: (...args: any[]) => mockReissueZatcaCreditNote(...args),
     },
     paymentMethods: {
       listEnabled: (...args: any[]) => mockListEnabled(...args),
@@ -27,6 +33,7 @@ const defaultMethods = [
 const mockOrder: OrderResponse = {
   id: 1,
   orderNo: 42,
+  documentId: 'INV26-0042',
   uuid: 'test-uuid',
   type: 'dine_in',
   tableId: null,
@@ -36,6 +43,8 @@ const mockOrder: OrderResponse = {
   vatHalalas: 600,
   totalHalalas: 4600,
   discountHalalas: 0,
+  isStandardInvoice: false,
+  zatcaBuyerDetails: null,
   createdAt: 1700000000,
   updatedAt: 1700000000,
   createdBy: null,
@@ -78,11 +87,49 @@ const mockOrder: OrderResponse = {
 
 const emptyRefunds: OrderRefundResponse[] = [];
 
+const mockStandardOrder: OrderResponse = {
+  ...mockOrder,
+  id: 2,
+  orderNo: 43,
+  documentId: 'INV26-0043',
+  isStandardInvoice: true,
+  zatcaBuyerDetails: {
+    name: 'Abdullah Al-Otaibi Est.',
+    vatNumber: '300123456789012',
+    street: 'King Fahd Road',
+    buildingNumber: '7845',
+    citySubdivision: 'Al-Olaya',
+    city: 'Riyadh',
+    postalCode: '12271',
+    country: 'SA',
+  },
+};
+
 describe('RefundPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRefunds.mockResolvedValue(emptyRefunds);
     mockListEnabled.mockResolvedValue(defaultMethods);
+    mockGetZatcaCreditNote.mockResolvedValue({
+      invoiceType: 'standard',
+      current: {
+        id: 1,
+        attemptNo: 1,
+        status: 'pending',
+        icv: 1,
+        uuid: 'abc',
+        errors: [],
+        warnings: [],
+        httpStatus: null,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      attempts: [],
+      canRetryClearance: false,
+      canReissue: false,
+    });
+    mockRetryZatcaCreditNoteClearance.mockResolvedValue({});
+    mockReissueZatcaCreditNote.mockResolvedValue({});
   });
 
   it('renders order items with refund steppers', async () => {
@@ -90,7 +137,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Burger')).toBeInTheDocument();
@@ -107,7 +154,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Find the plus button for Burger (first item)
@@ -134,7 +181,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Initially no total shown
@@ -160,7 +207,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={onRefunded} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Select 1 Burger
@@ -222,7 +269,7 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={onRefunded} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     // Select 1 item
@@ -280,11 +327,107 @@ describe('RefundPanel', () => {
     render(<RefundPanel order={mockOrder} onClose={onClose} onRefunded={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Refund for Order #42')).toBeInTheDocument();
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('\u2715'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('renders standard invoice notice when order.isStandardInvoice is true', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0043')).toBeInTheDocument();
+    });
+
+    // Notice banner
+    expect(screen.getByText('Standard Tax Invoice')).toBeInTheDocument();
+    expect(
+      screen.getByText(/A ZATCA Standard Credit Note will be issued for this refund/),
+    ).toBeInTheDocument();
+
+    // Buyer read-only info
+    expect(screen.getByText('Abdullah Al-Otaibi Est.')).toBeInTheDocument();
+    expect(screen.getByText('300123456789012')).toBeInTheDocument();
+  });
+
+  it('does not render standard invoice notice when order.isStandardInvoice is false', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Standard Tax Invoice')).not.toBeInTheDocument();
+  });
+
+  it('shows ZatcaClearanceModal for standard invoice refunds', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(defaultMethods);
+    mockRefund.mockResolvedValue({ success: true, refundId: 10, status: 'refunded' });
+
+    render(<RefundPanel order={mockStandardOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0043')).toBeInTheDocument();
+    });
+
+    // Select 1 item
+    fireEvent.click(screen.getAllByText('+')[0]);
+
+    // Select Cash method
+    await waitFor(() => {
+      expect(screen.getByText('Cash')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Cash'));
+
+    // Setup fake timers for hold animation
+    let fakeNow = 0;
+    const origRaf = globalThis.requestAnimationFrame;
+    const origCancelRaf = globalThis.cancelAnimationFrame;
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => fakeNow);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      return setTimeout(() => {
+        fakeNow += 16;
+        cb(fakeNow);
+      }, 16) as unknown as number;
+    };
+    globalThis.cancelAnimationFrame = (id: number) => clearTimeout(id as unknown as NodeJS.Timeout);
+
+    // Arm: tap Process Refund
+    const btn = screen.getByRole('button', { name: 'Process Refund' });
+    fireEvent.pointerDown(btn, { pointerId: 1 });
+    fireEvent.pointerUp(btn, { pointerId: 1 });
+
+    // Hold: press on armed Confirm Refund
+    const armed = screen.getByRole('button', { name: 'Confirm Refund' });
+    fireEvent.pointerDown(armed, { pointerId: 1 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    // Restore real timers and cleanup stubs
+    vi.useRealTimers();
+    perfSpy.mockRestore();
+    globalThis.requestAnimationFrame = origRaf;
+    globalThis.cancelAnimationFrame = origCancelRaf;
+
+    // After successful refund, the clearance modal should appear
+    await waitFor(() => {
+      expect(screen.getByText('ZATCA Credit Note Clearance')).toBeInTheDocument();
+    });
+
+    // Should show clearing text
+    expect(screen.getByText('Clearing with ZATCA...')).toBeInTheDocument();
+
+    // Should poll getZatcaCreditNote
+    expect(mockGetZatcaCreditNote).toHaveBeenCalledWith(2, 10);
   });
 });
 
@@ -305,6 +448,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -335,6 +479,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 4600,
         vatHalalas: 600,
         totalHalalas: 4600,
@@ -365,6 +510,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'cash',
         methodTitle: 'Cash',
+        documentId: 'REF26-0001',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
@@ -388,6 +534,7 @@ describe('getRemainingQty', () => {
         userId: 1,
         methodId: 'card',
         methodTitle: 'Card',
+        documentId: 'REF26-0002',
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
