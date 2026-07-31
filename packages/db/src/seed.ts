@@ -2,12 +2,70 @@ import { hashSync } from 'bcryptjs';
 import type Database from 'better-sqlite3';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import catalogJson from './data/spicyhome_dump_20260731.json';
 
 const now = Math.floor(Date.now() / 1000);
 
+/** A course (POS category) from the RMS dump. */
+interface DumpCourse {
+  id: number;
+  name: string;
+  code: string;
+}
+
+/** A sub-course from the RMS dump; resolves items to their parent course. */
+interface DumpSubCourse {
+  id: number;
+  name: string;
+  code: string;
+  course_id: number;
+}
+
+/** A menu item from the RMS dump. */
+interface DumpItem {
+  item_id: number;
+  name: string;
+  name_ar: string;
+  code: string;
+  rate: number;
+  inactive: boolean;
+  sub_course_id: number;
+}
+
+/** Shape of packages/db/src/data/spicyhome_dump_20260731.json. */
+interface CatalogDump {
+  meta: Record<string, unknown>;
+  courses: DumpCourse[];
+  sub_courses: DumpSubCourse[];
+  items: DumpItem[];
+}
+
+/** The RMS catalog dump, typed explicitly. */
+const catalog: CatalogDump = catalogJson;
+
 /**
  * DEV SEED — inserts baseline roles, default admin user, tables,
- * categories, and menu items for an Indian restaurant.
+ * categories, and menu items from the real SpicyHome RMS catalog.
+ *
+ * Catalog source: RMS dump `spicyhome_dump_20260731.json` (MSSQL SPICYHOME
+ * backup SPICYHOME_20260731, extracted 2026-07-31).
+ *
+ * Category strategy (issue #99, option A — Course-only):
+ *   - POS categories are the 7 Courses only (SOUP, STARTERS, TANDOORI,
+ *     MAIN COURSE, RICE & NOODLES, BREADS, DESSERTS), display names
+ *     Title Case.
+ *   - SubCourse is NOT a POS category layer. It is only used to resolve
+ *     each item's parent Course via
+ *     item.sub_course_id -> sub_courses[].course_id -> courses[].
+ *
+ * Money:
+ *   - Dump rates are VAT-inclusive SAR (see dump meta notes); converted to
+ *     integer halalas with round-half-up: price_halalas = Math.round(rate * 100).
+ *   - vat_rate_bp = 1500 (15%) for every item.
+ *
+ * All 204 dump items are seeded — inactive ones get is_active = 0. Empty
+ * Arabic names are stored as NULL. Inserts use prepared statements, so
+ * Arabic names are never string-interpolated into SQL.
  *
  * Roles:
  *   - admin: all permissions = 1
@@ -19,11 +77,6 @@ const now = Math.floor(Date.now() / 1000);
  *   - role: admin
  *
  * Tables: T1 – T5
- *
- * Categories (7): Starters, Tandoori & Grill, Curries,
- *   Biryani & Rice, Breads, Beverages, Desserts
- *
- * Items: ~28 Indian restaurant dishes with name_ar and realistic SAR pricing.
  *
  * Idempotent: skips insert if rows already exist.
  */
@@ -42,6 +95,19 @@ export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): voi
   seedCategories(effectiveSqlite);
   seedItems(effectiveSqlite);
   seedPaymentMethods(effectiveSqlite);
+}
+
+/**
+ * Converts a course name to a Title Case display name:
+ * lowercases, then capitalizes each word (split on spaces). Non-letter
+ * characters such as `&` are preserved as-is (`RICE & NOODLES` -> `Rice & Noodles`).
+ */
+function toTitleCase(name: string): string {
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map((word) => (word.length > 0 ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(' ');
 }
 
 function seedRoles(sqlite: Database.Database): void {
@@ -102,22 +168,20 @@ function seedCategories(sqlite: Database.Database): void {
 
   if (existing.cnt > 0) return;
 
-  sqlite.exec(`
+  const insert = sqlite.prepare(`
     INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Starters', 1, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Tandoori & Grill', 2, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Curries', 3, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Biryani & Rice', 4, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Breads', 5, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Beverages', 6, NULL, 1, ${now}, ${now}, 1, 1);
-    INSERT INTO item_categories (name, sort_order, printer_id, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES ('Desserts', 7, NULL, 1, ${now}, ${now}, 1, 1);
+    VALUES (?, ?, NULL, 1, ?, ?, 1, 1)
   `);
+
+  const insertAll = sqlite.transaction(() => {
+    // sort_order = course id ascending (1..7)
+    const courses = [...catalog.courses].sort((a, b) => a.id - b.id);
+    for (const course of courses) {
+      insert.run(toTitleCase(course.name), course.id, now, now);
+    }
+  });
+
+  insertAll();
 }
 
 function seedItems(sqlite: Database.Database): void {
@@ -127,119 +191,77 @@ function seedItems(sqlite: Database.Database): void {
 
   if (existing.cnt > 0) return;
 
-  sqlite.exec(`
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Samosa (4 pcs)', 'سمبوسة (٤ قطع)', 1200, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Starters';
+  // Resolve item -> sub_course -> course. Missing links are data-integrity
+  // errors; fail the seed loudly instead of silently skipping items.
+  const subCourseToCourse = new Map<number, number>();
+  const courseIdSet = new Set(catalog.courses.map((c) => c.id));
+  for (const subCourse of catalog.sub_courses) {
+    if (!courseIdSet.has(subCourse.course_id)) {
+      throw new Error(
+        `Seed integrity: sub_course ${subCourse.id} (${subCourse.name}) references missing course ${subCourse.course_id}`,
+      );
+    }
+    subCourseToCourse.set(subCourse.id, subCourse.course_id);
+  }
 
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Onion Bhaji', 'باجي البصل', 1000, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Starters';
+  const categoryNameByCourseId = new Map(
+    catalog.courses.map((c) => [c.id, toTitleCase(c.name)] as const),
+  );
 
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Pani Puri', 'باني بوري', 1500, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Starters';
+  // Look up seeded category ids once by display name.
+  const categoryRows = sqlite.prepare('SELECT id, name FROM item_categories').all() as Array<{
+    id: number;
+    name: string;
+  }>;
+  const categoryIdByName = new Map(categoryRows.map((row) => [row.name, row.id]));
 
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Chicken Tikka', 'تشكن تكا', 1800, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Starters';
+  // Stable ordering: item_id ascending; per-category sort_order 1..N.
+  const items = [...catalog.items].sort((a, b) => a.item_id - b.item_id);
 
+  // Prepared statement: Arabic names are bound as parameters, never
+  // interpolated into SQL.
+  const insert = sqlite.prepare(`
     INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Seekh Kebab', 'سيك كباب', 2000, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Tandoori & Grill';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Tandoori Chicken (Half)', 'دجاج تندوري (نصف)', 2200, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Tandoori & Grill';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Tandoori Chicken (Full)', 'دجاج تندوري (كامل)', 3800, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Tandoori & Grill';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Chicken Malai Tikka', 'تشكن مالاي تكا', 2400, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Tandoori & Grill';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Butter Chicken', 'دجاج بالزبدة', 2400, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Curries';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Chicken Tikka Masala', 'تشكن تكا ماسالا', 2700, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Curries';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Dal Makhani', 'دال ماخاني', 1800, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Curries';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Palak Paneer', 'بالك بانير', 2000, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Curries';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Lamb Rogan Josh', 'لحم روجان جوش', 3200, 1500, 5, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Curries';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Chicken Biryani', 'برياني الدجاج', 2200, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Biryani & Rice';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Mutton Biryani', 'برياني اللحم', 2800, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Biryani & Rice';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Veg Biryani', 'برياني الخضار', 1800, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Biryani & Rice';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Jeera Rice', 'أرز بالكمون', 1000, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Biryani & Rice';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Butter Naan', 'نان بالزبدة', 400, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Breads';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Garlic Naan', 'نان بالثوم', 500, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Breads';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Tandoori Roti', 'روتي التندور', 300, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Breads';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Laccha Paratha', 'لاتشا باراثا', 500, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Breads';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Mango Lassi', 'لاسي المانجو', 1200, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Beverages';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Sweet Lassi', 'لاسي الحلو', 1000, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Beverages';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Masala Chai', 'شاي ماسالا', 600, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Beverages';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Fresh Lime Soda', 'صودا الليمون الطازج', 800, 1500, 4, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Beverages';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Gulab Jamun (2 pcs)', 'جولاب جامون (قطعتين)', 1200, 1500, 1, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Desserts';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Rasmalai', 'راس ملائي', 1500, 1500, 2, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Desserts';
-
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    SELECT c.id, 'Kheer', 'خير (أرز بالحليب)', 1000, 1500, 3, 1, ${now}, ${now}, 1, 1
-    FROM item_categories c WHERE c.name = 'Desserts';
+    VALUES (?, ?, ?, ?, 1500, ?, ?, ?, ?, 1, 1)
   `);
+
+  const insertAll = sqlite.transaction(() => {
+    const sortOrderByCategory = new Map<number, number>();
+
+    for (const item of items) {
+      const courseId = subCourseToCourse.get(item.sub_course_id);
+      if (courseId === undefined) {
+        throw new Error(
+          `Seed integrity: item ${item.item_id} (${item.name}) references missing sub_course ${item.sub_course_id}`,
+        );
+      }
+
+      const categoryName = categoryNameByCourseId.get(courseId);
+      if (categoryName === undefined) {
+        throw new Error(
+          `Seed integrity: item ${item.item_id} (${item.name}) resolves to missing course ${courseId}`,
+        );
+      }
+
+      const categoryId = categoryIdByName.get(categoryName);
+      if (categoryId === undefined) {
+        throw new Error(
+          `Seed integrity: category '${categoryName}' was not seeded for course ${courseId}`,
+        );
+      }
+
+      const sortOrder = (sortOrderByCategory.get(categoryId) ?? 0) + 1;
+      sortOrderByCategory.set(categoryId, sortOrder);
+
+      const nameAr = item.name_ar.trim() === '' ? null : item.name_ar;
+      const priceHalalas = Math.round(item.rate * 100);
+      const isActive = item.inactive ? 0 : 1;
+
+      insert.run(categoryId, item.name, nameAr, priceHalalas, sortOrder, isActive, now, now);
+    }
+  });
+
+  insertAll();
 }
 
 function findSqlite(
