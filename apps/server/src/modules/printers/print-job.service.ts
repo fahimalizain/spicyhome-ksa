@@ -11,7 +11,7 @@ import {
   zatcaInvoices,
   zatcaCreditNotes,
 } from '@spicyhome/db';
-import { PrinterRole } from '@spicyhome/shared';
+import { PrinterRole, safeParsePrinterConfig } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService, PrinterRecord } from './printers.service';
 import { PrinterUnreachableError } from './printer-transport';
@@ -92,8 +92,14 @@ export class PrintJobService {
       throw new Error('No active receipt printer configured');
     }
 
-    const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+    // Seller block — same settings keys as the ZATCA XML.
+    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
     const vatNumber = this.printersService.getSetting('vat_number', '');
+    const sellerStreet = this.printersService.getSetting('seller_street', '');
+    const sellerBuilding = this.printersService.getSetting('seller_building', '');
+    const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
+    const sellerPostal = this.printersService.getSetting('seller_postal', '');
+    const sellerCountry = this.printersService.getSetting('seller_country', 'SA');
 
     let tableName: string | undefined;
     if (order.tableId) {
@@ -101,10 +107,19 @@ export class PrintJobService {
       tableName = tbl?.name;
     }
 
+    // Arabic name fallback for historical rows that predate the snapshot:
+    // batch-load items.name_ar once for order items that have item_id set.
+    const nameArFallback = this.loadItemNameArFallback(
+      oiRows.filter((oi) => !oi.itemNameAr && oi.itemId != null).map((oi) => oi.itemId as number),
+    );
+
     const receiptItems: ReceiptItem[] = oiRows.map((oi) => ({
       qty: oi.qty,
       name: oi.itemName,
+      nameAr: oi.itemNameAr ?? (oi.itemId != null ? (nameArFallback.get(oi.itemId) ?? null) : null),
+      unitPriceHalalas: oi.unitPriceHalalas,
       totalHalalas: oi.totalHalalas,
+      vatRateBp: oi.vatRateBp,
     }));
 
     // Load QR from a printable zatca_invoices row if not provided by caller.
@@ -131,16 +146,26 @@ export class PrintJobService {
     }
 
     const receipt = this.receiptBuilder.build({
-      restaurantName,
-      vatNumber,
+      documentKind: 'simplified_invoice',
+      // Prefer the ZATCA IRN; fall back to the internal reference as last resort.
+      documentId: order.documentId?.length ? order.documentId : `Order-${order.orderNo}`,
       orderNo: order.orderNo,
       createdAt: order.createdAt,
+      sellerName,
+      vatNumber,
+      sellerStreet,
+      sellerBuilding,
+      sellerCity,
+      sellerPostal,
+      sellerCountry,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableName,
       items: receiptItems,
       subtotalHalalas: order.subtotalHalalas,
       vatHalalas: order.vatHalalas,
       totalHalalas: order.totalHalalas,
+      vatRateBp: this.sharedVatRateBp(oiRows.map((oi) => oi.vatRateBp)),
+      arabic: safeParsePrinterConfig(receiptPrinter.config).arabic,
       kickDrawer: opts?.kickDrawer ?? false,
       qrTlvPayload,
     });
@@ -174,8 +199,14 @@ export class PrintJobService {
       throw new Error('No active receipt printer configured');
     }
 
-    const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+    // Seller block — same settings keys as the ZATCA XML.
+    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
     const vatNumber = this.printersService.getSetting('vat_number', '');
+    const sellerStreet = this.printersService.getSetting('seller_street', '');
+    const sellerBuilding = this.printersService.getSetting('seller_building', '');
+    const sellerCity = this.printersService.getSetting('seller_city', 'Riyadh');
+    const sellerPostal = this.printersService.getSetting('seller_postal', '');
+    const sellerCountry = this.printersService.getSetting('seller_country', 'SA');
 
     let tableName: string | undefined;
     if (order.tableId) {
@@ -183,10 +214,30 @@ export class PrintJobService {
       tableName = tbl?.name;
     }
 
+    // Arabic name fallback: refund rows predating the snapshot fall back to
+    // the snapshotted order_items.item_name_ar via order_item_id.
+    const missingOrderItemIds = rifRows
+      .filter((ri) => !ri.itemNameAr && ri.orderItemId != null)
+      .map((ri) => ri.orderItemId as number);
+    const oiNameArFallback = new Map<number, string | null>();
+    if (missingOrderItemIds.length > 0) {
+      const oiRows = this.db
+        .select({ id: orderItems.id, itemNameAr: orderItems.itemNameAr })
+        .from(orderItems)
+        .where(inArray(orderItems.id, missingOrderItemIds))
+        .all();
+      for (const oi of oiRows) oiNameArFallback.set(oi.id, oi.itemNameAr);
+    }
+
     const receiptItems: ReceiptItem[] = rifRows.map((ri) => ({
       qty: ri.qty,
       name: ri.itemName,
+      nameAr:
+        ri.itemNameAr ??
+        (ri.orderItemId != null ? (oiNameArFallback.get(ri.orderItemId) ?? null) : null),
+      unitPriceHalalas: ri.unitPriceHalalas,
       totalHalalas: ri.totalHalalas,
+      vatRateBp: ri.vatRateBp,
     }));
 
     // Load QR from a printable zatca_credit_notes row if not provided by caller.
@@ -213,18 +264,27 @@ export class PrintJobService {
     }
 
     const receipt = this.receiptBuilder.build({
-      title: 'REFUND',
-      restaurantName,
-      vatNumber,
+      documentKind: 'credit_note',
+      documentId: refund.documentId?.length ? refund.documentId : `Refund-${refund.id}`,
+      originalDocumentId: order.documentId?.length ? order.documentId : undefined,
+      reason: refund.reason ?? undefined,
       orderNo: order.orderNo,
       createdAt: refund.createdAt,
+      sellerName,
+      vatNumber,
+      sellerStreet,
+      sellerBuilding,
+      sellerCity,
+      sellerPostal,
+      sellerCountry,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableName,
       items: receiptItems,
       subtotalHalalas: refund.subtotalHalalas,
       vatHalalas: refund.vatHalalas,
       totalHalalas: refund.totalHalalas,
-      footer: `Refund processed — Original order #: ${order.orderNo}`,
+      vatRateBp: this.sharedVatRateBp(rifRows.map((ri) => ri.vatRateBp)),
+      arabic: safeParsePrinterConfig(receiptPrinter.config).arabic,
       kickDrawer: opts?.kickDrawer ?? false,
       qrTlvPayload,
     });
@@ -430,5 +490,31 @@ export class PrintJobService {
     const eb = new EscPosBuilder();
     eb.cashDrawerKick();
     await this.printersService.sendBuffer(p, eb.getBuffer());
+  }
+
+  /**
+   * Batch-load items.name_ar for order items without a name_ar snapshot.
+   * Returns a map of itemId → Arabic name (null when the menu item has none).
+   */
+  private loadItemNameArFallback(itemIds: number[]): Map<number, string | null> {
+    const result = new Map<number, string | null>();
+    if (itemIds.length === 0) return result;
+    const rows = this.db
+      .select({ id: items.id, nameAr: items.nameAr })
+      .from(items)
+      .where(inArray(items.id, itemIds))
+      .all();
+    for (const row of rows) result.set(row.id, row.nameAr);
+    return result;
+  }
+
+  /**
+   * VAT rate in basis points when every line shares the same rate (so the
+   * receipt can show "VAT (15.0%)"), otherwise undefined ("VAT" only).
+   */
+  private sharedVatRateBp(rateBps: number[]): number | undefined {
+    if (rateBps.length === 0) return undefined;
+    const first = rateBps[0];
+    return rateBps.every((r) => r === first) ? first : undefined;
   }
 }

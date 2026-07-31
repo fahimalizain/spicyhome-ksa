@@ -203,7 +203,7 @@ describe('Order Refunds', () => {
       const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
       expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
       const receiptStr = receiptPrints[receiptPrints.length - 1].data.toString('ascii');
-      expect(receiptStr).toContain('REFUND');
+      expect(receiptStr).toContain('CREDIT NOTE');
 
       // Verify events were written
       const eventsRes = await request(app.getHttpServer())
@@ -569,7 +569,7 @@ describe('Order Refunds', () => {
       const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
       expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
       const str = receiptPrints[receiptPrints.length - 1].data.toString('ascii');
-      expect(str).toContain('REFUND');
+      expect(str).toContain('CREDIT NOTE');
 
       // Events: the reprint's enqueued + succeeded events carry refundId
       const eventsRes = await request(app.getHttpServer())

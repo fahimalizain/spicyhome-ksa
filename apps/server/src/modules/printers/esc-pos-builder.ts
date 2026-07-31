@@ -188,6 +188,44 @@ export class EscPosBuilder {
     return this;
   }
 
+  /**
+   * GS v 0 — print raster bit image (normal density).
+   * `bits`: row-major, 1 = black ink. Width is padded to a multiple of 8.
+   */
+  rasterBitImage(width: number, height: number, bits: Uint8Array): this {
+    if (width <= 0 || height <= 0) return this;
+    if (bits.length < width * height) {
+      throw new Error(
+        `rasterBitImage: bits length ${bits.length} < width*height ${width * height}`,
+      );
+    }
+
+    const paddedW = Math.ceil(width / 8) * 8;
+    const bytesPerRow = paddedW / 8;
+    const xL = bytesPerRow & 0xff;
+    const xH = (bytesPerRow >> 8) & 0xff;
+    const yL = height & 0xff;
+    const yH = (height >> 8) & 0xff;
+
+    // GS v 0 m xL xH yL yH
+    this.cmd([GS, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+
+    for (let y = 0; y < height; y++) {
+      for (let bx = 0; bx < bytesPerRow; bx++) {
+        let byte = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const x = bx * 8 + bit;
+          if (x < width && bits[y * width + x]) {
+            byte |= 0x80 >> bit;
+          }
+        }
+        this.buf.push(byte);
+      }
+    }
+
+    return this;
+  }
+
   getBuffer(): Buffer {
     return Buffer.from(this.buf);
   }
