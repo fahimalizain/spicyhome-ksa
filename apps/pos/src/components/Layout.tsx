@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clearToken, getMe, getToken } from '../api';
 import { realtime } from '../realtime';
 import type { MeResponse } from '@spicyhome/client-ts';
@@ -57,21 +57,94 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
         <Link to="/tables" className="text-sm text-gray-300 hover:text-white touch-target">
           Tables
         </Link>
-        {me?.manageMenu && (
-          <Link to="/admin" className="text-sm text-gray-300 hover:text-white touch-target">
-            Admin
-          </Link>
-        )}
       </div>
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-400">{me?.name || ''}</span>
-        <button
-          onClick={onLogout}
-          className="text-sm text-gray-400 hover:text-red-400 touch-target px-3"
-        >
-          Logout
-        </button>
-      </div>
+      <UserMenu me={me} onLogout={onLogout} />
     </nav>
+  );
+}
+
+function UserMenu({ me, onLogout }: { me: MeResponse | null; onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+
+    function onMouseDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onMouseDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onMouseDown);
+    };
+  }, [open]);
+
+  function closeMenu() {
+    setOpen(false);
+  }
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="text-sm text-gray-300 hover:text-white touch-target gap-1 px-3"
+      >
+        {me?.name || ''}
+        <span aria-hidden="true" className="text-xs">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-1 min-w-[10rem] rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-lg z-50"
+        >
+          {me?.manageMenu && (
+            <Link
+              to="/admin"
+              role="menuitem"
+              onClick={closeMenu}
+              className="touch-target !justify-start w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+            >
+              Admin
+            </Link>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              window.location.reload();
+            }}
+            className="touch-target !justify-start w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              onLogout();
+            }}
+            className="touch-target !justify-start w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
