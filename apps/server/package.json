@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/server",
-  "version": "202607.31.1",
+  "version": "202608.01.0",
   "private": true,
   "type": "commonjs",
   "main": "src/main.ts",
