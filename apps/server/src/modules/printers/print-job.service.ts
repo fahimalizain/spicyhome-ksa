@@ -56,6 +56,10 @@ export class PrintJobService {
   /**
    * Return the kitchen printer for a given menu item.
    * Uses the item's category printer if configured and active, otherwise the default kitchen printer.
+   *
+   * TEMPORARY: category routing is currently unused — all active kitchen
+   * printers receive the full ticket (fan-out) instead. Kept implemented for
+   * a fast revert; do NOT call from active print paths.
    */
   getKitchenPrinterForItem(itemId: number): PrinterRecord | null {
     const item = this.db.select().from(items).where(eq(items.id, itemId)).get();
@@ -74,6 +78,14 @@ export class PrintJobService {
 
     // Fallback to default kitchen printer
     return this.printersService.getActiveByRole(PrinterRole.KITCHEN);
+  }
+
+  /**
+   * TEMPORARY: list all active kitchen printers (fan-out targets).
+   * Every send-to-kitchen prints the full ticket to each of them.
+   */
+  listActiveKitchenPrinters(): PrinterRecord[] {
+    return this.printersService.listActiveByRole(PrinterRole.KITCHEN);
   }
 
   /**
@@ -379,7 +391,12 @@ export class PrintJobService {
   }
 
   /**
-   * Print kitchen deltas (specific items with specific quantities) to the correct kitchen printer.
+   * Print kitchen deltas (specific items with specific quantities) to ALL
+   * active kitchen printers.
+   *
+   * TEMPORARY: fan-out to every active kitchen printer — one full ticket
+   * (built from ALL deltas, notes included) is sent to each target.
+   * Category routing (`getKitchenPrinterForItem`) is left in place but unused.
    * Does NOT write audit events — the caller handles that.
    */
   async printKitchenDeltas(
@@ -396,72 +413,46 @@ export class PrintJobService {
       tableName = tbl?.name;
     }
 
-    // Group deltas by printer
-    const printerGroups = new Map<
-      number,
-      {
-        printer: PrinterRecord;
-        items: Array<{
-          orderItemId: number;
-          printedQty: number;
-          itemName: string;
-          notes?: string | null;
-        }>;
-      }
-    >();
+    // TEMPORARY: fan-out targets — every active kitchen printer gets the
+    // same full ticket. No kitchen printers → nothing to print.
+    const targets = this.printersService.listActiveByRole(PrinterRole.KITCHEN);
+    if (targets.length === 0) return { printed: [], errors: [] };
 
+    // Load notes for each delta's order item (same as the old per-group path)
+    const notesById = new Map<number, string | null>();
     for (const d of deltas) {
-      // Resolve printer by looking up the order item's source item
+      if (notesById.has(d.orderItemId)) continue;
       const oi = this.db.select().from(orderItems).where(eq(orderItems.id, d.orderItemId)).get();
-
-      let printer: PrinterRecord | null = null;
-      if (oi?.itemId) {
-        printer = this.getKitchenPrinterForItem(oi.itemId);
-      }
-      if (!printer) {
-        printer = this.printersService.getActiveByRole(PrinterRole.KITCHEN);
-      }
-
-      if (!printer) {
-        // No kitchen printer at all, skip
-        continue;
-      }
-
-      let group = printerGroups.get(printer.id);
-      if (!group) {
-        group = { printer, items: [] };
-        printerGroups.set(printer.id, group);
-      }
-      group.items.push({ ...d, notes: oi?.notes });
+      notesById.set(d.orderItemId, oi?.notes ?? null);
     }
+
+    const ticketItems: KitchenTicketItem[] = deltas.map((d) => ({
+      qty: d.printedQty,
+      name: d.itemName,
+      notes: notesById.get(d.orderItemId) ?? null,
+    }));
+
+    const ticket = this.kitchenTicketBuilder.build({
+      orderNo: order.orderNo,
+      createdAt: order.createdAt,
+      orderType: order.type as 'dine_in' | 'takeaway',
+      tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+      items: ticketItems,
+    });
 
     const printed: PrinterRecord[] = [];
     const errors: string[] = [];
 
-    for (const [, group] of printerGroups) {
-      const ticketItems: KitchenTicketItem[] = group.items.map((d) => ({
-        qty: d.printedQty,
-        name: d.itemName,
-        notes: d.notes,
-      }));
-
-      const ticket = this.kitchenTicketBuilder.build({
-        orderNo: order.orderNo,
-        createdAt: order.createdAt,
-        orderType: order.type as 'dine_in' | 'takeaway',
-        tableName,
-        deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
-        deliveryExternalRef: order.deliveryExternalRef ?? undefined,
-        items: ticketItems,
-      });
-
+    for (const printer of targets) {
       try {
-        await this.printersService.sendBuffer(group.printer, ticket);
-        printed.push(group.printer);
+        await this.printersService.sendBuffer(printer, ticket);
+        printed.push(printer);
       } catch (err: any) {
         const msg = err instanceof PrinterUnreachableError ? err.message : err.message;
-        errors.push(`${group.printer.name}: ${msg}`);
-        this.logger.error(`Failed printing kitchen ticket to ${group.printer.name}: ${msg}`);
+        errors.push(`${printer.name}: ${msg}`);
+        this.logger.error(`Failed printing kitchen ticket to ${printer.name}: ${msg}`);
       }
     }
 
@@ -469,7 +460,12 @@ export class PrintJobService {
   }
 
   /**
-   * Print full kitchen tickets for an order (all items or filtered by orderItemIds).
+   * Print full kitchen tickets for an order (all items or filtered by orderItemIds)
+   * to ALL active kitchen printers.
+   *
+   * TEMPORARY: fan-out to every active kitchen printer — one full ticket is
+   * sent to each target (same behavior as printKitchenDeltas, for consistency).
+   * Category routing (`getKitchenPrinterForItem`) is left in place but unused.
    * Used for reprints. Does NOT write audit events — the caller handles that.
    */
   async printKitchenTickets(
@@ -492,60 +488,38 @@ export class PrintJobService {
       tableName = tbl?.name;
     }
 
-    // Group items by kitchen printer
-    const printerGroups = new Map<
-      number,
-      {
-        printer: PrinterRecord;
-        items: Array<{ qty: number; name: string; notes?: string | null }>;
-      }
-    >();
+    // TEMPORARY: fan-out targets — every active kitchen printer gets the
+    // same full ticket. No kitchen printers → nothing to print.
+    const targets = this.printersService.listActiveByRole(PrinterRole.KITCHEN);
+    if (targets.length === 0) return { printed: [], errors: [] };
 
-    for (const oi of oiRows) {
-      let printer: PrinterRecord | null = null;
-      if (oi.itemId) {
-        printer = this.getKitchenPrinterForItem(oi.itemId);
-      }
-      if (!printer) {
-        printer = this.printersService.getActiveByRole(PrinterRole.KITCHEN);
-      }
-      if (!printer) continue;
+    const ticketItems: KitchenTicketItem[] = oiRows.map((oi) => ({
+      qty: oi.qty,
+      name: oi.itemName,
+      notes: oi.notes,
+    }));
 
-      let group = printerGroups.get(printer.id);
-      if (!group) {
-        group = { printer, items: [] };
-        printerGroups.set(printer.id, group);
-      }
-      group.items.push({ qty: oi.qty, name: oi.itemName, notes: oi.notes });
-    }
+    const ticket = this.kitchenTicketBuilder.build({
+      orderNo: order.orderNo,
+      createdAt: order.createdAt,
+      orderType: order.type as 'dine_in' | 'takeaway',
+      tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+      items: ticketItems,
+    });
 
     const printed: PrinterRecord[] = [];
     const errors: string[] = [];
 
-    for (const [, group] of printerGroups) {
-      const ticketItems: KitchenTicketItem[] = group.items.map((i) => ({
-        qty: i.qty,
-        name: i.name,
-        notes: i.notes,
-      }));
-
-      const ticket = this.kitchenTicketBuilder.build({
-        orderNo: order.orderNo,
-        createdAt: order.createdAt,
-        orderType: order.type as 'dine_in' | 'takeaway',
-        tableName,
-        deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
-        deliveryExternalRef: order.deliveryExternalRef ?? undefined,
-        items: ticketItems,
-      });
-
+    for (const printer of targets) {
       try {
-        await this.printersService.sendBuffer(group.printer, ticket);
-        printed.push(group.printer);
+        await this.printersService.sendBuffer(printer, ticket);
+        printed.push(printer);
       } catch (err: any) {
         const msg = err instanceof PrinterUnreachableError ? err.message : err.message;
-        errors.push(`${group.printer.name}: ${msg}`);
-        this.logger.error(`Failed printing kitchen ticket to ${group.printer.name}: ${msg}`);
+        errors.push(`${printer.name}: ${msg}`);
+        this.logger.error(`Failed printing kitchen ticket to ${printer.name}: ${msg}`);
       }
     }
 

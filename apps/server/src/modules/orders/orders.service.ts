@@ -1133,16 +1133,23 @@ export class OrdersService {
    * enqueues/runs kitchen prints. It computes, per order item with `qty > 0`,
    * the delta between the current qty and the ledger's printed total
    * (`getPrintedQty`: legacy `kitchenPrintedQty` on item events +
-   * `items[].printedQty` on `kitchen_print_enqueued` events), groups the
-   * deltas by kitchen printer, and inside a transaction:
+   * `items[].printedQty` on `kitchen_print_enqueued` events), and inside a
+   * transaction:
    *
    * - bumps `orders.updated_at` (so the POS can detect the change)
-   * - writes one `kitchen_print_enqueued` event per printer
-   *   (`{ printer, printerId, items: [{ orderItemId, itemName, printedQty }] }`)
+   * - writes ONE `kitchen_print_enqueued` event per send
+   *   (`{ items: [{ orderItemId, itemName, printedQty }], printers: [{ printerId, printer }], printer }`)
+   *   — qty lives ONLY in top-level `items` (counted once by `getPrintedQty`);
+   *   `printers[]` is fan-out audit metadata and `printer` is the timeline label
    * - does NOT write fake `item_updated` events
    *
-   * After the transaction: non-blocking `runKitchenPrint` per printer
-   * (→ `kitchen_print_succeeded`) and emits `order.updated`.
+   * TEMPORARY: fan-out to ALL active kitchen printers. Every send prints the
+   * FULL unsent delta ticket to each active kitchen printer; category-based
+   * routing (`getKitchenPrinterForItem`) is left in place but unused.
+   *
+   * After the transaction: non-blocking `runKitchenPrint` (→
+   * `kitchen_print_succeeded` per printer that actually printed) and emits
+   * `order.updated`.
    *
    * No deltas at all (or no kitchen printer configured) → 200 no-op: no
    * events, no print, no `updated_at` bump, no domain event. The response is
@@ -1161,10 +1168,11 @@ export class OrdersService {
       throw new BadRequestException('Order is not open');
     }
 
-    // Printer groups hoisted from the transaction for the post-commit prints.
-    let groups: Array<{
-      printer: PrinterRecord;
-      items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+    // Deltas hoisted from the transaction for the post-commit fan-out print.
+    let deltas: Array<{
+      orderItemId: number;
+      itemName: string;
+      printedQty: number;
     }> = [];
 
     const anySent = this.db.transaction((tx: any) => {
@@ -1176,9 +1184,8 @@ export class OrdersService {
       const itemRows = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
 
       // Differential math vs the immutable ledger — only unsent qty prints
-      const deltas: Array<{
+      const computed: Array<{
         orderItemId: number;
-        itemId: number;
         itemName: string;
         printedQty: number;
       }> = [];
@@ -1187,9 +1194,8 @@ export class OrdersService {
         const previousPrinted = this.orderEvents.getPrintedQty(tx, oi.id);
         const delta = oi.qty - previousPrinted;
         if (delta > 0) {
-          deltas.push({
+          computed.push({
             orderItemId: oi.id,
-            itemId: oi.itemId,
             itemName: oi.itemName,
             printedQty: delta,
           });
@@ -1197,34 +1203,12 @@ export class OrdersService {
       }
 
       // No deltas → 200 no-op (no events, no print)
-      if (deltas.length === 0) return false;
+      if (computed.length === 0) return false;
 
-      // Group deltas by kitchen printer via existing menu-item routing
-      const byPrinter = new Map<
-        string,
-        {
-          printer: PrinterRecord;
-          items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
-        }
-      >();
-      for (const d of deltas) {
-        const printer = this.printJobService.getKitchenPrinterForItem(d.itemId);
-        if (!printer) continue;
-        const key = printer.name;
-        let entry = byPrinter.get(key);
-        if (!entry) {
-          entry = { printer, items: [] };
-          byPrinter.set(key, entry);
-        }
-        entry.items.push({
-          orderItemId: d.orderItemId,
-          itemName: d.itemName,
-          printedQty: d.printedQty,
-        });
-      }
-
-      // Deltas exist but no kitchen printer configured → nothing to enqueue
-      if (byPrinter.size === 0) return false;
+      // TEMPORARY: fan-out — resolve ALL active kitchen printers; the full
+      // unsent ticket goes to each of them (category routing unused here).
+      const kitchenPrinters = this.printJobService.listActiveKitchenPrinters();
+      if (kitchenPrinters.length === 0) return false;
 
       // Bump order audit fields so concurrent terminals (POS) see the change
       tx.update(orders)
@@ -1232,32 +1216,30 @@ export class OrdersService {
         .where(eq(orders.id, orderId))
         .run();
 
-      // One kitchen_print_enqueued per printer (same payload shape as the
-      // pre-ADR syncItems path — getPrintedQty feeds off these)
-      for (const [, entry] of byPrinter) {
-        this.orderEvents.createEvent(
-          tx,
-          orderId,
-          userId,
-          'kitchen_print_enqueued',
-          {
-            printer: entry.printer.name,
-            printerId: entry.printer.id,
-            items: entry.items,
-          },
-          now,
-        );
-      }
+      // ONE kitchen_print_enqueued per send. Top-level items carry the ledger
+      // claim (counted once by getPrintedQty — same reader as before);
+      // printers[] + printer describe the fan-out targets for audit/timeline.
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        'kitchen_print_enqueued',
+        {
+          items: computed,
+          printers: kitchenPrinters.map((p) => ({ printerId: p.id, printer: p.name })),
+          printer: kitchenPrinters.map((p) => p.name).join(', ') || 'all kitchen',
+        },
+        now,
+      );
 
-      groups = [...byPrinter.values()];
+      deltas = computed;
       return true;
     });
 
-    // After transaction: non-blocking kitchen prints — one ticket per printer
+    // After transaction: non-blocking kitchen print — one call prints the
+    // full deltas to every active kitchen printer
     if (anySent) {
-      for (const entry of groups) {
-        this.runKitchenPrint(orderId, entry.printer, entry.items, userId);
-      }
+      this.runKitchenPrint(orderId, deltas, userId);
       this.emitDomainEvent('order.updated', orderId, userId);
     }
 
@@ -2168,9 +2150,13 @@ export class OrdersService {
 
   // ── Non-blocking print helpers ───────────────────────────────────────────────
 
+  /**
+   * Non-blocking kitchen print. Physical routing happens inside
+   * `printKitchenDeltas` (TEMPORARY: fan-out to all active kitchen printers);
+   * one `kitchen_print_succeeded` is written per printer that actually printed.
+   */
   private async runKitchenPrint(
     orderId: number,
-    printer: PrinterRecord,
     deltas: Array<{ orderItemId: number; printedQty: number; itemName: string }>,
     userId: number,
   ): Promise<void> {

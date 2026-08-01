@@ -443,6 +443,61 @@ describe('OrderEventTimeline', () => {
     expect(screen.queryByText('\u26a0')).not.toBeInTheDocument();
   });
 
+  it('renders kitchen_print_enqueued with the fan-out printers list (TEMPORARY)', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'kitchen_print_enqueued',
+        payload: JSON.stringify({
+          items: [{ orderItemId: 1, itemName: 'Zinger Burger', printedQty: 2 }],
+          printers: [
+            { printerId: 2, printer: 'Kitchen' },
+            { printerId: 3, printer: 'Cold Station' },
+          ],
+          printer: 'Kitchen, Cold Station',
+        }),
+      }),
+      makeEvent({
+        id: 2,
+        eventIdx: 2,
+        type: 'kitchen_print_succeeded',
+        payload: JSON.stringify({ printer: 'Cold Station', printerId: 3 }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Kitchen Print Queued')).toBeInTheDocument();
+    // printers[] wins over the legacy single-printer string
+    expect(
+      screen.getByText('Kitchen Print Queued. Printer: Kitchen, Cold Station'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Kitchen Print OK. Printer: Cold Station')).toBeInTheDocument();
+  });
+
+  it('falls back to the legacy printer string when printers[] is absent', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'kitchen_print_enqueued',
+        payload: JSON.stringify({ printer: 'Kitchen', printerId: 2 }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Kitchen Print Queued')).toBeInTheDocument();
+    expect(screen.getByText('Kitchen Print Queued. Printer: Kitchen')).toBeInTheDocument();
+  });
+
   it('renders delivery_partner_changed with titles, refs and reset count', async () => {
     mockGetEvents.mockResolvedValue([
       makeEvent({

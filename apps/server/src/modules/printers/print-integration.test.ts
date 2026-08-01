@@ -162,8 +162,8 @@ describe('Print Integration', () => {
       }
     }
   });
-  describe('explicit send-to-kitchen routing (ADR 0006)', () => {
-    it('routes items to the correct kitchen printers by category on send-to-kitchen', async () => {
+  describe('explicit send-to-kitchen fan-out (TEMPORARY: all active kitchen printers)', () => {
+    it('sends the same full ticket to every active kitchen printer on send-to-kitchen', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
         .post('/orders')
@@ -204,21 +204,40 @@ describe('Print Integration', () => {
       // Non-blocking: give kitchen print a moment to process
       await new Promise((r) => setTimeout(r, 300));
 
-      // Should have printed to 2 different kitchen printers
-      const kitchenPrinters = transport.sent.filter((s) => s.ip !== '192.168.1.50'); // exclude receipt
-      expect(kitchenPrinters.length).toBeGreaterThanOrEqual(2);
+      // TEMPORARY fan-out: BOTH kitchen printers (Kitchen .51 + Cold Station
+      // .52) receive the SAME full ticket; the receipt printer (.50) never
+      // receives kitchen tickets
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50'); // exclude receipt
+      expect(kitchenPrints).toHaveLength(2);
 
-      // Verify kitchen ticket content for burger
-      const burgerPrint = kitchenPrinters.find((s) =>
-        s.data.toString('ascii').includes('Zinger Burger'),
+      for (const print of kitchenPrints) {
+        const str = print.data.toString('ascii');
+        expect(str).toContain('Zinger Burger');
+        expect(str).toContain('2 Zinger Burger');
+        expect(str).toContain('Pepsi');
+        expect(str).toContain(`ORDER #${orderRes.body.orderNo}`);
+      }
+
+      // Exactly ONE kitchen_print_enqueued per send: items cover both lines,
+      // printers[] lists both fan-out targets
+      const orderRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const enqueued = orderRes2.body.events.filter(
+        (e: any) => e.type === 'kitchen_print_enqueued',
       );
-      expect(burgerPrint).toBeDefined();
-      expect(burgerPrint!.data.toString('ascii')).toContain('2 Zinger Burger');
-      expect(burgerPrint!.data.toString('ascii')).toContain(`ORDER #${orderRes.body.orderNo}`);
-
-      // Verify kitchen ticket content for pepsi
-      const pepsiPrint = kitchenPrinters.find((s) => s.data.toString('ascii').includes('Pepsi'));
-      expect(pepsiPrint).toBeDefined();
+      expect(enqueued).toHaveLength(1);
+      const payload = JSON.parse(enqueued[0].payload);
+      expect(payload.items).toHaveLength(2);
+      expect(payload.items.map((i: any) => i.itemName).sort()).toEqual(['Pepsi', 'Zinger Burger']);
+      expect(payload.printers).toHaveLength(2);
+      expect(payload.printers.map((pr: any) => pr.printer).sort()).toEqual([
+        'Cold Station',
+        'Kitchen',
+      ]);
+      expect(payload.printer).toContain('Kitchen');
+      expect(payload.printer).toContain('Cold Station');
     });
 
     it('item sync succeeds even when kitchen printer is unreachable', async () => {
@@ -281,7 +300,7 @@ describe('Print Integration', () => {
         })
         .expect(200);
 
-      // Kitchen printer will fail — the request itself must still return 200
+      // One kitchen printer will fail — the request itself must still return 200
       transport.nextError = new Error('Connection refused');
       transport.sent = [];
 
@@ -290,7 +309,9 @@ describe('Print Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
-      // No kitchen_print_succeeded event (print failed), but enqueued exists
+      // Enqueued is written; kitchen_print_succeeded only for printers that
+      // actually printed (the first fan-out target consumes nextError and fails,
+      // the other kitchen printer succeeds)
       await new Promise((r) => setTimeout(r, 200));
       const orderRes2 = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
@@ -298,7 +319,12 @@ describe('Print Integration', () => {
         .expect(200);
       const types = orderRes2.body.events.map((e: any) => e.type);
       expect(types).toContain('kitchen_print_enqueued');
-      expect(types).not.toContain('kitchen_print_succeeded');
+      const succeeded = orderRes2.body.events
+        .filter((e: any) => e.type === 'kitchen_print_succeeded')
+        .map((e: any) => (typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload));
+      expect(succeeded.length).toBeGreaterThanOrEqual(1);
+      // The printer that consumed the error must NOT report success
+      expect(succeeded.every((p: any) => p.printer !== 'Kitchen')).toBe(true);
     });
   });
 

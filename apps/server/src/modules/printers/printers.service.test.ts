@@ -418,4 +418,23 @@ describe('PrintersService — config CRUD', () => {
 
     expect(printer.port).toBe(9300);
   });
+
+  // ── listActiveByRole (TEMPORARY kitchen fan-out) ─────────────────────────────
+
+  it('listActiveByRole returns all active printers for a role, excluding inactive ones', () => {
+    service.create({ name: 'Kitchen A', ip: '192.168.1.11', role: 'kitchen' }, userId);
+    service.create({ name: 'Kitchen B', ip: '192.168.1.12', role: 'kitchen' }, userId);
+    service.create(
+      { name: 'Kitchen Off', ip: '192.168.1.13', role: 'kitchen', isActive: false },
+      userId,
+    );
+    service.create({ name: 'Counter', ip: '192.168.1.50', role: 'receipt' }, userId);
+
+    const kitchen = service.listActiveByRole('kitchen');
+    expect(kitchen.map((p) => p.name).sort()).toEqual(['Kitchen A', 'Kitchen B']);
+  });
+
+  it('listActiveByRole returns an empty array when no active printer matches', () => {
+    expect(service.listActiveByRole('kitchen')).toEqual([]);
+  });
 });
