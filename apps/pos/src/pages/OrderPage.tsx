@@ -1780,6 +1780,7 @@ export function OrderPage() {
           orderId={currentOrder.id}
           orderTotalHalalas={serverTotals.totalHalalas}
           outstandingHalalas={outstandingHalalas}
+          deliveryPartnerId={cart.deliveryPartnerId}
           onAdded={handlePaymentAdded}
           onClose={() => setShowAddPaymentModal(false)}
         />

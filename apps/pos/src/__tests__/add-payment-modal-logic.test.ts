@@ -4,10 +4,12 @@ import {
   buildAddPaymentDraft,
   calcCashChange,
   canConfirmAddPayment,
+  filterMethodsForOrder,
   sarDisplayToHalalas,
   signedAmountHalalas,
   tenderedToHalalas,
   type AddPaymentDraft,
+  type PaymentMethod,
 } from '../components/orders/add-payment-modal-logic';
 
 describe('sarDisplayToHalalas', () => {
@@ -176,6 +178,46 @@ describe('calcCashChange', () => {
 
   it('negative when tendered < amount', () => {
     expect(calcCashChange(5000, 3000)).toBe(-2000);
+  });
+});
+
+describe('filterMethodsForOrder (ADR 0007)', () => {
+  const methods: PaymentMethod[] = [
+    { id: 'cash', title: 'Cash', isDeliveryPartner: false },
+    { id: 'card', title: 'Card', isDeliveryPartner: false },
+    { id: 'hungerstation', title: 'HungerStation', isDeliveryPartner: true },
+    { id: 'keeta', title: 'Keeta', isDeliveryPartner: true },
+  ];
+
+  it('partner order: only the partner-owned method with the matching id remains', () => {
+    expect(filterMethodsForOrder(methods, 'hungerstation')).toEqual([
+      { id: 'hungerstation', title: 'HungerStation', isDeliveryPartner: true },
+    ]);
+  });
+
+  it('partner order: a different partner method is not shown', () => {
+    expect(filterMethodsForOrder(methods, 'keeta')).toEqual([
+      { id: 'keeta', title: 'Keeta', isDeliveryPartner: true },
+    ]);
+  });
+
+  it('partner order: partner method missing from enabled list → empty (nothing payable)', () => {
+    const withoutPartnerMethod = methods.filter((m) => m.id !== 'hungerstation');
+    expect(filterMethodsForOrder(withoutPartnerMethod, 'hungerstation')).toEqual([]);
+  });
+
+  it('no partner: partner-owned methods are hidden, normal methods kept', () => {
+    expect(filterMethodsForOrder(methods, null)).toEqual([
+      { id: 'cash', title: 'Cash', isDeliveryPartner: false },
+      { id: 'card', title: 'Card', isDeliveryPartner: false },
+    ]);
+  });
+
+  it('no partner: methods without the isDeliveryPartner flag default to non-partner', () => {
+    // Legacy fixtures (no flag) must stay visible for orders without a partner.
+    expect(filterMethodsForOrder([{ id: 'cash', title: 'Cash' }], null)).toEqual([
+      { id: 'cash', title: 'Cash' },
+    ]);
   });
 });
 
