@@ -21,6 +21,8 @@ const EVENT_LABELS: Record<string, string> = {
   refund_issued: 'Refund Issued',
   refunded: 'Fully Refunded',
   type_changed: 'Type / Table Changed',
+  zatca_clearance_rejected: 'ZATCA Clearance Rejected',
+  zatca_clearance_approved: 'ZATCA Clearance Approved',
 };
 
 function parsePayload(raw: string): Record<string, unknown> {
@@ -71,6 +73,22 @@ function formatPayload(event: OrderEventResponse): string {
       const fromTable = p.fromTableId != null ? `#${p.fromTableId}` : '—';
       const toTable = p.toTableId != null ? `#${p.toTableId}` : '—';
       return `${label}. ${p.fromType || '?'} → ${p.toType || '?'} (table ${fromTable} → ${toTable})`;
+    }
+    case 'zatca_clearance_approved': {
+      const doc = (p.documentId || p.cbcId || '?') as string;
+      const kind = p.documentKind === 'credit_note' ? 'Credit note' : 'Invoice';
+      return `${kind} ${doc} cleared (ICV ${p.icv ?? '?'})`;
+    }
+    case 'zatca_clearance_rejected': {
+      const doc = (p.documentId || p.cbcId || '?') as string;
+      const kind = p.documentKind === 'credit_note' ? 'Credit note' : 'Invoice';
+      let text = `${kind} ${doc} rejected (ICV ${p.icv ?? '?'})`;
+      const errors = Array.isArray(p.errors) ? (p.errors as string[]) : [];
+      const firstError = errors.find((e) => typeof e === 'string' && e.length > 0);
+      if (firstError && firstError.length <= 60) {
+        text += ` — ${firstError}`;
+      }
+      return text;
     }
     default:
       return label;

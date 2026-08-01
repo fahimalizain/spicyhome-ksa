@@ -1792,4 +1792,234 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(payload.cbcId.length).toBeGreaterThan(0);
     });
   });
+
+  describe('zatca_clearance_approved order_events', () => {
+    // Helper to count zatca_clearance_approved events for an order
+    function getApprovedEventsCount(orderId: number): number {
+      const row = sqlite
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM order_events WHERE order_id = $oid AND type = 'zatca_clearance_approved'",
+        )
+        .get({ oid: orderId }) as any;
+      return row.cnt;
+    }
+
+    function getApprovedEvents(orderId: number): any[] {
+      return sqlite
+        .prepare(
+          "SELECT * FROM order_events WHERE order_id = $oid AND type = 'zatca_clearance_approved' ORDER BY event_idx",
+        )
+        .all({ oid: orderId });
+    }
+
+    function getRejectedEventsCount(orderId: number): number {
+      const row = sqlite
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM order_events WHERE order_id = $oid AND type = 'zatca_clearance_rejected'",
+        )
+        .get({ oid: orderId }) as any;
+      return row.cnt;
+    }
+
+    it('writes approved event on invoice first-attempt CLEARED with full payload', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+
+      const result = await standardService.createStandardInvoice(orderId, 1);
+      expect(result.status).toBe('cleared');
+
+      // Exactly one approved event, no rejected event
+      expect(getApprovedEventsCount(orderId)).toBe(1);
+      expect(getRejectedEventsCount(orderId)).toBe(0);
+
+      const payload = JSON.parse(getApprovedEvents(orderId)[0].payload);
+      expect(payload.documentKind).toBe('invoice');
+      expect(payload.zatcaRecordId).toBe(result.id);
+      expect(payload.attemptNo).toBe(1);
+      expect(payload.icv).toBe(result.icv);
+      expect(payload.uuid).toBe(result.uuid);
+      expect(payload.orderId).toBe(orderId);
+      expect(payload.httpStatus).toBe(200);
+      // document_id is NOT rotated on cleared — the approved documentId is
+      // the order's original document_id.
+      const order = sqlite
+        .prepare('SELECT document_id FROM orders WHERE id = ?')
+        .get(orderId) as any;
+      expect(payload.documentId).toBe(order.document_id);
+      expect(payload.cbcId).toBe(order.document_id);
+      expect(Array.isArray(payload.warnings)).toBe(true);
+    });
+
+    it('HTTP 500 → error writes NO approved event; retry CLEARED writes one with same ICV/UUID', async () => {
+      const orderId = createStandardOrder();
+
+      // First attempt: 500 → error
+      fakeHttp.responses.set('clearance', {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ errors: ['Internal server error'] }),
+      });
+
+      const first = await standardService.createStandardInvoice(orderId, 1);
+      expect(first.status).toBe('error');
+
+      // No approved event for error status
+      expect(getApprovedEventsCount(orderId)).toBe(0);
+
+      // Retry with success — same ICV/UUID
+      fakeHttp.requests = [];
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice>retry_cleared</Invoice>').toString('base64'),
+        }),
+      });
+
+      const retried = await standardService.retryClearance(orderId, 1);
+      expect(retried.status).toBe('cleared');
+      expect(retried.icv).toBe(first.icv);
+      expect(retried.uuid).toBe(first.uuid);
+
+      // Exactly one approved event on retry, with the retried payload
+      const events = getApprovedEvents(orderId);
+      expect(events.length).toBe(1);
+      const payload = JSON.parse(events[0].payload);
+      expect(payload.documentKind).toBe('invoice');
+      expect(payload.zatcaRecordId).toBe(first.id);
+      expect(payload.attemptNo).toBe(first.attemptNo);
+      expect(payload.icv).toBe(first.icv);
+      expect(payload.uuid).toBe(first.uuid);
+    });
+
+    it('credit note first-attempt CLEARED writes approved event with documentKind credit_note and refundId', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote/>').toString('base64'),
+        }),
+      });
+
+      const result = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(result.status).toBe('cleared');
+
+      // invoice approved + credit note approved
+      const events = getApprovedEvents(orderId);
+      expect(events.length).toBe(2);
+
+      const cnPayload = JSON.parse(
+        events.find((e) => JSON.parse(e.payload).documentKind === 'credit_note').payload,
+      );
+      expect(cnPayload.documentKind).toBe('credit_note');
+      expect(cnPayload.refundId).toBe(refundId);
+      expect(cnPayload.orderId).toBe(orderId);
+      expect(cnPayload.zatcaRecordId).toBe(result.id);
+      expect(cnPayload.attemptNo).toBe(1);
+      expect(cnPayload.icv).toBe(result.icv);
+      expect(cnPayload.uuid).toBe(result.uuid);
+      // Credit note document_id is NOT rotated on cleared — the approved
+      // documentId is the refund's original document_id.
+      const refund = sqlite
+        .prepare('SELECT document_id FROM order_refunds WHERE id = ?')
+        .get(refundId) as any;
+      expect(cnPayload.documentId).toBe(refund.document_id);
+      expect(cnPayload.cbcId).toBe(refund.document_id);
+    });
+
+    it('credit note retry after error CLEARED writes one approved event with same ICV/UUID', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+
+      // Credit note first attempt: network error → error
+      fakeHttp.nextError = new Error('Connection refused');
+      const first = await standardService.createStandardCreditNote(orderId, refundId, 1);
+      expect(first.status).toBe('error');
+
+      // Only the invoice approved event exists — no approved for the error
+      expect(getApprovedEventsCount(orderId)).toBe(1);
+
+      // Retry with success — same ICV/UUID
+      fakeHttp.requests = [];
+      fakeHttp.nextError = null;
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<CreditNote>retry_cleared</CreditNote>').toString('base64'),
+        }),
+      });
+
+      const retried = await standardService.retryCreditNoteClearance(orderId, refundId, 1);
+      expect(retried.status).toBe('cleared');
+      expect(retried.icv).toBe(first.icv);
+      expect(retried.uuid).toBe(first.uuid);
+
+      const events = getApprovedEvents(orderId);
+      expect(events.length).toBe(2);
+      const cnPayload = JSON.parse(events[1].payload);
+      expect(cnPayload.documentKind).toBe('credit_note');
+      expect(cnPayload.refundId).toBe(refundId);
+      expect(cnPayload.zatcaRecordId).toBe(first.id);
+      expect(cnPayload.attemptNo).toBe(first.attemptNo);
+      expect(cnPayload.icv).toBe(first.icv);
+      expect(cnPayload.uuid).toBe(first.uuid);
+    });
+
+    it('rejection writes NO approved event (rejected only)', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: { errorMessages: ['Invalid invoice structure'] },
+        }),
+      });
+
+      const result = await standardService.createStandardInvoice(orderId, 1);
+      expect(result.status).toBe('rejected');
+
+      expect(getApprovedEventsCount(orderId)).toBe(0);
+      expect(getRejectedEventsCount(orderId)).toBe(1);
+    });
+  });
 });
