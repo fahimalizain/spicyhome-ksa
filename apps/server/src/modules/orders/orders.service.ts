@@ -7,11 +7,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { eq, and, inArray, desc, gte, lt } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte, lt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
   orderItems,
+  orderEvents,
   orderRefunds,
   orderRefundItems,
   orderPayments,
@@ -2559,7 +2560,77 @@ export class OrdersService {
     }
 
     const rows: any[] = query.orderBy(desc(orders.id)).all();
-    return this.attachDeliveryPartnerTitles(rows);
+    return this.attachKitchenQtyTotals(this.attachDeliveryPartnerTitles(rows));
+  }
+
+  /**
+   * Attach `kitchenPrintedQty` and `itemQtyTotal` to order rows (ADR 0006) —
+   * batched so a large list costs O(orders + items + events) queries, not
+   * one `getPrintedQty` scan per item.
+   *
+   * - `itemQtyTotal`: `SUM(order_items.qty)` over current items (0 if none).
+   * - `kitchenPrintedQty`: per current item, the same precedence as
+   *   `getPrintedQty` (enqueued events authoritative per item, else legacy
+   *   item-event `kitchenPrintedQty`), summed across items. Printed qty for
+   *   removed items is ignored because those rows are no longer current.
+   */
+  private attachKitchenQtyTotals(rows: any[]): any[] {
+    if (rows.length === 0) return rows;
+
+    const orderIds = rows.map((r) => r.id);
+
+    const itemsByOrder = new Map<number, Array<{ id: number; qty: number }>>();
+    const itemRows: Array<{ id: number; orderId: number; qty: number }> = this.db
+      .select({ id: orderItems.id, orderId: orderItems.orderId, qty: orderItems.qty })
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds))
+      .all();
+    for (const item of itemRows) {
+      const list = itemsByOrder.get(item.orderId) ?? [];
+      list.push({ id: item.id, qty: item.qty });
+      itemsByOrder.set(item.orderId, list);
+    }
+
+    const eventsByOrder = new Map<number, Array<{ type: string; payload: string }>>();
+    const eventRows: Array<{ orderId: number; type: string; payload: string }> = this.db
+      .select({
+        orderId: orderEvents.orderId,
+        type: orderEvents.type,
+        payload: orderEvents.payload,
+      })
+      .from(orderEvents)
+      .where(
+        and(
+          inArray(orderEvents.orderId, orderIds),
+          sql`${orderEvents.type} IN ('item_added', 'item_updated', 'kitchen_print_enqueued')`,
+        ),
+      )
+      .all();
+    for (const event of eventRows) {
+      const list = eventsByOrder.get(event.orderId) ?? [];
+      list.push({ type: event.type, payload: event.payload });
+      eventsByOrder.set(event.orderId, list);
+    }
+
+    const qtyByOrder = new Map<number, { kitchenPrintedQty: number; itemQtyTotal: number }>();
+    for (const orderId of orderIds) {
+      const orderItemsList = itemsByOrder.get(orderId) ?? [];
+      const itemQtyTotal = orderItemsList.reduce((sum, item) => sum + item.qty, 0);
+      const printed = this.orderEvents.sumPrintedQtyByOrderItemId(
+        eventsByOrder.get(orderId) ?? [],
+        orderItemsList.map((item) => item.id),
+      );
+      let kitchenPrintedQty = 0;
+      for (const item of orderItemsList) {
+        kitchenPrintedQty += printed.get(item.id) ?? 0;
+      }
+      qtyByOrder.set(orderId, { kitchenPrintedQty, itemQtyTotal });
+    }
+
+    return rows.map((r) => ({
+      ...r,
+      ...(qtyByOrder.get(r.id) ?? { kitchenPrintedQty: 0, itemQtyTotal: 0 }),
+    }));
   }
 
   /**

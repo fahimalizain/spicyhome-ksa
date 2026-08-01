@@ -3414,6 +3414,160 @@ describe('listOrders — date / user / multi-status filters', () => {
   });
 });
 
+describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+    createdIds.push(orderId);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  async function syncItems(orderId: number, updatedAt: number, items: any[]) {
+    return request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+  }
+
+  async function sendToKitchen(orderId: number) {
+    return request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+  }
+
+  /** Fetch the single summary row for `orderId` from GET /orders. */
+  async function summaryFor(orderId: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const row = res.body.find((o: any) => o.id === orderId);
+    expect(row).toBeDefined();
+    return row;
+  }
+
+  it('empty open order → kitchenPrintedQty 0 / itemQtyTotal 0', async () => {
+    const { orderId } = await createOpenOrder();
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(0);
+  });
+
+  it('order with items never sent to kitchen → kitchenPrintedQty 0, itemQtyTotal sums qtys', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 }, // Zinger Burger
+      { itemId: 2, qty: 3 }, // Pepsi
+    ]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(5);
+  });
+
+  it('order after send-to-kitchen → printed matches total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 },
+      { itemId: 2, qty: 3 },
+    ]);
+    await sendToKitchen(orderId);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('unsent delta (qty increased after send) → printed < total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 2 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 2
+    await sendToKitchen(orderId);
+
+    // Qty up to 5 via sync — sync itself never prints (ADR 0006)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 5 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(2);
+  });
+
+  it('qty decreased after print → printed exceeds total, both still reported', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5
+    await sendToKitchen(orderId);
+
+    // Qty down to 2 via sync (no print for decreases)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 2 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(2);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('multiple sends accumulate printed qty; fields present on paid rows too', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5, then bump to 8 and send the 3 delta → 8 printed total
+    await sendToKitchen(orderId);
+    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 8 }]);
+    await sendToKitchen(orderId);
+    expect(sync2.body.items[0].qty).toBe(8);
+
+    // Pay + submit so the row is no longer open — fields must still exist.
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 2300 * 8 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.status).toBe('paid');
+    expect(summary.itemQtyTotal).toBe(8);
+    expect(summary.kitchenPrintedQty).toBe(8);
+  });
+});
+
 describe('Delivery partner payment restriction — POST /orders/:id/payments (ADR 0007)', () => {
   // Partner catalog + their owned payment methods (1:1, shared slug
   // namespace). OR IGNORE: the partner PATCH describe above seeds the partner
