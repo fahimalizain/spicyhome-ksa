@@ -3,6 +3,7 @@ import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
 import { useRefund, getRemainingQty } from '../hooks/useRefund';
 import { ZatcaClearanceModal } from './orders/ZatcaClearanceModal';
+import { filterMethodsForOrder } from './orders/add-payment-modal-logic';
 import type { OrderResponse, OrderRefundResponse } from '@spicyhome/client-ts';
 import { ConfirmActionButton } from './ConfirmActionButton';
 
@@ -11,6 +12,11 @@ interface PaymentMethod {
   title: string;
   enabled: boolean;
   sortOrder: number;
+  /**
+   * Derived server flag (ADR 0007): true when this method is owned by a
+   * delivery partner (its id exists in delivery_partners).
+   */
+  isDeliveryPartner?: boolean;
 }
 
 interface RefundPanelProps {
@@ -47,7 +53,18 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
     client.paymentMethods
       .listEnabled()
       .then((res: PaymentMethod[]) => {
-        if (!cancelled) setMethods(res);
+        if (!cancelled) {
+          // ADR 0007: restrict the visible methods the same way the pay modal
+          // does — a partner order may only refund through its own method, and
+          // partner-owned methods never appear on walk-in orders. The filter
+          // only removes elements (never strips props), so the result keeps
+          // the enabled/sortOrder fields of the API shape.
+          const visible = filterMethodsForOrder(
+            res,
+            order.deliveryPartnerId ?? null,
+          ) as PaymentMethod[];
+          setMethods(visible);
+        }
       })
       .catch(() => {
         // If methods fail to load, proceed but user won't be able to refund
@@ -58,7 +75,7 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [order.deliveryPartnerId]);
 
   // Load refund history on mount
   useEffect(() => {
