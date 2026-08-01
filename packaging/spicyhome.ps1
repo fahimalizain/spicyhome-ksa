@@ -1086,6 +1086,7 @@ function Install-NssmService {
   Write-Log "  App: $nodeExe"
   Write-Log "  Params: $mainJs"
   Write-Log "  Directory: $appDir"
+  Write-Log "  Priority: ABOVE_NORMAL_PRIORITY_CLASS"
 
   # Do NOT wrap paths in extra quotes - call operator passes each element as one argv.
   $code = Invoke-Nssm $NssmExe "install" @($ServiceName, $nodeExe)
@@ -1103,7 +1104,8 @@ function Install-NssmService {
     @("AppRotateBytes", "10485760"),
     @("DisplayName", "SpicyHome POS"),
     @("Description", "SpicyHome POS server"),
-    @("Start", "SERVICE_AUTO_START")
+    @("Start", "SERVICE_AUTO_START"),
+    @("AppPriority", "ABOVE_NORMAL_PRIORITY_CLASS")
   )
   foreach ($pair in $sets) {
     $code = Invoke-Nssm $NssmExe "set" @($ServiceName, $pair[0], $pair[1])

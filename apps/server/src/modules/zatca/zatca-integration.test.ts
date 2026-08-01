@@ -11,6 +11,8 @@ import request from 'supertest';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
+import { zatcaKey } from '@spicyhome/shared';
+import * as forge from 'node-forge';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../../modules/database/database.module';
 import { FakePrinterTransport } from '../../modules/printers/printer-transport';
@@ -18,6 +20,7 @@ import { PrintersService } from '../../modules/printers/printers.service';
 import { FakeZatcaHttpClient, ZatcaHttpService } from '../../modules/zatca/zatca-http.service';
 import { ZatcaReportingService } from '../../modules/zatca/zatca-reporting.service';
 import { ZatcaInvoiceService } from '../../modules/zatca/zatca-invoice.service';
+import { generateKeyPair } from './zatca-crypto.service';
 
 describe('ZATCA Integration', () => {
   let app: INestApplication;
@@ -666,6 +669,171 @@ describe('ZATCA Integration', () => {
     });
   });
 
+  describe('QR on first auto-print (status signed)', () => {
+    // Standalone resilience: when this suite runs in isolation (e.g. via
+    // --testNamePattern), the onboarding tests that provision the ZATCA keys
+    // are skipped — the awaited `order.paid` handler would then fail to sign.
+    // Seed the keys the same way zatca-invoice.service.test.ts does. In a
+    // full-suite run onboarding already stored real keys — leave them alone.
+    beforeAll(() => {
+      const invoiceService = app.get(ZatcaInvoiceService);
+      const ps = app.get(PrintersService);
+      const env = 'simulation' as const;
+      const orgUnit = 'SpicyHome POS';
+      if (ps.getSetting(zatcaKey(env, orgUnit, 'private_key_encrypted'), '')) return;
+
+      const keyPair = generateKeyPair();
+      invoiceService.storePrivateKey(
+        keyPair.privateKeyHex,
+        'spicyhome-zatca-secret-change-me',
+        env,
+        orgUnit,
+      );
+      ps.setSetting(zatcaKey(env, orgUnit, 'public_key'), keyPair.publicKeyHex);
+      ps.setSetting(zatcaKey(env, orgUnit, 'compliance_cert'), createTestZatcaCert());
+    });
+
+    // Regression: submitOrder awaits `order.paid` (emitAsync) BEFORE the
+    // fire-and-forget receipt print, so the first auto-print finds the
+    // zatca_invoices row with status `signed` and embeds the QR TLV — the
+    // QR must NOT wait for reporting to succeed (`reported`).
+    it('simplified submit prints the QR TLV on the first receipt while the invoice is still signed', async () => {
+      // Clear transport log so we only look at prints from THIS flow
+      transport.sent = [];
+
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 1 }],
+        })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 2300 })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(201);
+
+      // The awaited event handler must have created the invoice BEFORE the
+      // HTTP response — status `signed` (reporting must NOT have run yet).
+      const inv = sqlite
+        .prepare('SELECT status, qr_tlv FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(inv).toBeTruthy();
+      expect(inv.status).toBe('signed');
+      expect(inv.qr_tlv).toBeTruthy();
+
+      // Receipt print is fire-and-forget — let it settle
+      await new Promise((r) => setTimeout(r, 200));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const buf = receiptPrints[receiptPrints.length - 1].data;
+      // QR TLV payload is stored as raw ASCII bytes in the ESC/POS buffer
+      expect(buf.toString('ascii')).toContain(inv.qr_tlv);
+      // ESC/POS QR print command: GS ( k ... 1 Q 0 → hex ...31 51 30
+      expect(buf.toString('hex')).toContain('315130');
+    });
+
+    it('simplified refund prints the credit note QR TLV on the first refund receipt while the credit note is still signed', async () => {
+      // Build a paid simplified order first (creates the original invoice)
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      const syncRes = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: 1, qty: 2 }],
+        })
+        .expect(200);
+      const orderItemId = syncRes.body.items[0].id;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 4600 })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(201);
+
+      const inv = sqlite
+        .prepare('SELECT id, status FROM zatca_invoices WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(inv).toBeTruthy();
+      expect(inv.status).toBe('signed');
+
+      // Let the submit receipt print settle, then clear the log so the
+      // refund print is the only one observed below
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Partial refund (1 of 2 qty) — keeps the order paid
+      const refundRes = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/refund`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          items: [{ orderItemId, qty: 1 }],
+          reason: 'QR first print regression',
+          methodId: 'cash',
+        })
+        .expect(201);
+      const refundId = refundRes.body.refundId;
+
+      // The awaited event handler must have created the credit note BEFORE
+      // the HTTP response — status `signed` (reporting must NOT have run yet).
+      const cn = sqlite
+        .prepare('SELECT status, qr_tlv FROM zatca_credit_notes WHERE refund_id = ?')
+        .get(refundId) as any;
+      expect(cn).toBeTruthy();
+      expect(cn.status).toBe('signed');
+      expect(cn.qr_tlv).toBeTruthy();
+
+      // Refund receipt print is fire-and-forget — let it settle
+      await new Promise((r) => setTimeout(r, 200));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const buf = receiptPrints[receiptPrints.length - 1].data;
+      expect(buf.toString('ascii')).toContain(cn.qr_tlv);
+      expect(buf.toString('hex')).toContain('315130');
+    });
+  });
+
   describe('Reporting', () => {
     it('retry reports pending invoices', async () => {
       fakeHttp.responses.set('reporting', {
@@ -1143,6 +1311,40 @@ describe('ZATCA Integration', () => {
 //   - Length >= 65536:         4 bytes (0x83, ...)
 //
 // This matches the BerTlvBuilder.fillLength() algorithm used by the ZATCA SDK.
+
+/**
+ * Generate a self-signed X.509 test certificate, double-base64-encoded the
+ * same way ZATCA stores binarySecurityToken (base64(base64(cert_body))).
+ * Used to seed ZATCA keys when the QR-first-print suite runs standalone.
+ */
+function createTestZatcaCert(): string {
+  const rsaKeys = forge.pki.rsa.generateKeyPair(2048);
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = rsaKeys.publicKey;
+  cert.serialNumber = '01';
+  cert.validity.notBefore = new Date();
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+
+  const attrs = [
+    { name: 'commonName', value: 'Test Cert' },
+    { name: 'organizationName', value: 'SpicyHome Test' },
+    { name: 'countryName', value: 'SA' },
+  ];
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.sign(rsaKeys.privateKey, forge.md.sha256.create());
+
+  const pem = forge.pki.certificateToPem(cert);
+  // Extract the base64 body between BEGIN/END markers
+  const lines = pem
+    .split('\n')
+    .map((l: string) => l.trim())
+    .filter((l: string) => l && !l.startsWith('-----'));
+  const certBodyB64 = lines.join('');
+
+  return Buffer.from(certBodyB64, 'utf-8').toString('base64');
+}
 
 function readBERLength(buffer: Buffer, offset: number): { length: number; bytesRead: number } {
   const first = buffer[offset];

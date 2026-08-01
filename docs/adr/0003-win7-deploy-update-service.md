@@ -224,6 +224,15 @@ environment is refreshed from the active release's `server.env`. This ensures
 all configuration (paths, port, version, and optional Sentry keys) stays in
 sync with the running release without manual NSSM commands.
 
+### Service process priority (NSSM)
+
+The NSSM service sets `AppPriority` to `ABOVE_NORMAL_PRIORITY_CLASS` so the
+Node server gets a modest CPU scheduling boost on dedicated POS machines.
+`ABOVE_NORMAL` is the product default — `HIGH` and `REALTIME` are deliberately
+not used. The value is hardcoded in `Install-NssmService` (no config field or
+CLI flag), and install, update, and rollback all re-apply it via
+`Install-NssmService`.
+
 ### Health check
 
 ```powershell
