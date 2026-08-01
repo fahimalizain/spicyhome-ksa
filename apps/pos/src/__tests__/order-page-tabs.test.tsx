@@ -14,6 +14,7 @@ const mockOrdersSendToKitchen = vi.fn();
 const mockOrdersAddPayment = vi.fn();
 const mockOrdersSubmit = vi.fn();
 const mockOrdersReprint = vi.fn();
+const mockOrdersGetZatcaInvoice = vi.fn();
 const mockPaymentMethodsListEnabled = vi.fn();
 const mockGetMe = vi.fn();
 
@@ -67,7 +68,7 @@ vi.mock('../api', () => ({
       getEvents: vi.fn(),
       verifyEvents: vi.fn(),
       reprint: (...args: any[]) => mockOrdersReprint(...args),
-      getZatcaInvoice: vi.fn(),
+      getZatcaInvoice: (...args: any[]) => mockOrdersGetZatcaInvoice(...args),
       retryZatcaClearance: vi.fn(),
       reissueZatcaInvoice: vi.fn(),
     },
@@ -622,7 +623,7 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
   });
 
-  it('summary tab: standard invoice toggle reveals the buyer form', async () => {
+  it('summary tab: standard invoice toggle opens the buyer details modal', async () => {
     mockGetReturns(
       makeOrder({
         payments: [makePayment()],
@@ -640,13 +641,239 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
     });
-    expect(screen.queryByText('Buyer Name')).not.toBeInTheDocument();
+    // No inline form before checking
+    expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Issue ZATCA Standard Invoice'));
 
+    // The modal opens (not an inline expand) with the buyer form + OSK dock
     await waitFor(() => {
-      expect(screen.getByText('Buyer Name')).toBeInTheDocument();
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
     });
+    expect(screen.getByText('Buyer Name')).toBeInTheDocument();
+    expect(screen.getByTestId('osk-dock')).toBeInTheDocument();
+  });
+
+  it('summary tab: standard invoice modal — Cancel with empty buyer closes and unchecks', async () => {
+    mockGetReturns(
+      makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
+    });
+
+    const toggle = screen.getByLabelText('Issue ZATCA Standard Invoice');
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+    });
+    // Empty/invalid buyer → the toggle is un-checked so no incomplete
+    // standard invoice can be left armed
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByText('Edit buyer details')).not.toBeInTheDocument();
+  });
+
+  it('summary tab: standard invoice modal — valid buyer + Done keeps checked and Submit sends standard payload', async () => {
+    const validBuyer = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+    mockGetReturns(
+      makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+    mockOrdersSubmit.mockResolvedValue({ success: true, status: 'paid' });
+    mockOrdersGetZatcaInvoice.mockResolvedValue({
+      invoiceType: 'standard',
+      current: {
+        id: 1,
+        attemptNo: 1,
+        status: 'pending',
+        icv: 1,
+        uuid: 'abc',
+        errors: [],
+        warnings: [],
+        httpStatus: null,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      attempts: [],
+      canRetryClearance: false,
+      canReissue: false,
+    });
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
+    });
+
+    const toggle = screen.getByLabelText('Issue ZATCA Standard Invoice');
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Company / Legal Name'), {
+      target: { value: validBuyer.name },
+    });
+    fireEvent.change(screen.getByPlaceholderText('300123456789012'), {
+      target: { value: validBuyer.vatNumber },
+    });
+    fireEvent.change(screen.getByPlaceholderText('King Fahd Road'), {
+      target: { value: validBuyer.street },
+    });
+    fireEvent.change(screen.getByPlaceholderText('7845'), {
+      target: { value: validBuyer.buildingNumber },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Al-Olaya'), {
+      target: { value: validBuyer.citySubdivision },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Riyadh'), {
+      target: { value: validBuyer.city },
+    });
+    fireEvent.change(screen.getByPlaceholderText('12271'), {
+      target: { value: validBuyer.postalCode },
+    });
+    fireEvent.change(screen.getByPlaceholderText('SA'), {
+      target: { value: validBuyer.country },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    // Modal closes, toggle stays checked, compact status shows the buyer
+    await waitFor(() => {
+      expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+    });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(`Buyer: ${validBuyer.name}`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 5000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: validBuyer,
+      });
+    });
+  });
+
+  it('summary tab: standard invoice modal — Cancel from editing keeps the previously saved valid buyer', async () => {
+    const savedBuyer = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+    mockGetReturns(
+      makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
+    });
+
+    const toggle = screen.getByLabelText('Issue ZATCA Standard Invoice');
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Company / Legal Name'), {
+      target: { value: savedBuyer.name },
+    });
+    fireEvent.change(screen.getByPlaceholderText('300123456789012'), {
+      target: { value: savedBuyer.vatNumber },
+    });
+    fireEvent.change(screen.getByPlaceholderText('King Fahd Road'), {
+      target: { value: savedBuyer.street },
+    });
+    fireEvent.change(screen.getByPlaceholderText('7845'), {
+      target: { value: savedBuyer.buildingNumber },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Al-Olaya'), {
+      target: { value: savedBuyer.citySubdivision },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Riyadh'), {
+      target: { value: savedBuyer.city },
+    });
+    fireEvent.change(screen.getByPlaceholderText('12271'), {
+      target: { value: savedBuyer.postalCode },
+    });
+    fireEvent.change(screen.getByPlaceholderText('SA'), {
+      target: { value: savedBuyer.country },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+    });
+
+    // Re-open via "Edit buyer details" — the draft is seeded with saved data
+    fireEvent.click(screen.getByRole('button', { name: 'Edit buyer details' }));
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText('Company / Legal Name')).toHaveValue(savedBuyer.name);
+
+    // Edit the draft, then Cancel — the draft change must not clobber the
+    // committed buyer on the parent
+    fireEvent.change(screen.getByPlaceholderText('Company / Legal Name'), {
+      target: { value: 'Changed Co.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+    });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(`Buyer: ${savedBuyer.name}`)).toBeInTheDocument();
   });
 
   // ---- Print Open Receipt (non-ZATCA guest slip) ----

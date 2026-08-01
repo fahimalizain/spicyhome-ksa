@@ -10,8 +10,8 @@ import { AddPaymentModal } from '../components/orders/AddPaymentModal';
 import { OskDock } from '../components/on-screen-keyboard/OskDock';
 import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
+import { StandardInvoiceBuyerModal } from '../components/orders/StandardInvoiceBuyerModal';
 import {
-  StandardInvoiceBuyerForm,
   emptyStandardInvoiceBuyer,
   validateStandardBuyer,
   type ZatcaBuyerDetails,
@@ -169,6 +169,7 @@ export function OrderPage() {
   const [buyerErrors, setBuyerErrors] = useState<Partial<Record<keyof ZatcaBuyerDetails, string>>>(
     {},
   );
+  const [showStandardInvoiceModal, setShowStandardInvoiceModal] = useState(false);
   const [showClearance, setShowClearance] = useState(false);
 
   const [itemSearch, setItemSearch] = useState('');
@@ -452,6 +453,7 @@ export function OrderPage() {
     setIsStandardInvoice(false);
     setBuyer(emptyStandardInvoiceBuyer());
     setBuyerErrors({});
+    setShowStandardInvoiceModal(false);
     setShowClearance(false);
     setPrintingOpenReceipt(false);
     setOpenReceiptMessage('');
@@ -629,6 +631,8 @@ export function OrderPage() {
       const fieldErrors = validateStandardBuyer(buyer);
       if (Object.keys(fieldErrors).length > 0) {
         setBuyerErrors(fieldErrors);
+        // Re-open the modal so the cashier can fix the buyer details.
+        setShowStandardInvoiceModal(true);
         return;
       }
     }
@@ -1607,7 +1611,7 @@ export function OrderPage() {
                 </div>
               </div>
 
-              {/* Standard invoice toggle + buyer form (open orders only) */}
+              {/* Standard invoice toggle + buyer details modal (open orders only) */}
               {openOrder && (
                 <div className="mb-3">
                   <label className="flex items-center gap-2 touch-target cursor-pointer py-1">
@@ -1615,9 +1619,13 @@ export function OrderPage() {
                       type="checkbox"
                       checked={isStandardInvoice}
                       onChange={(e) => {
-                        setIsStandardInvoice(e.target.checked);
-                        if (!e.target.checked) {
+                        if (e.target.checked) {
+                          setIsStandardInvoice(true);
+                          setShowStandardInvoiceModal(true);
+                        } else {
+                          setIsStandardInvoice(false);
                           setBuyerErrors({});
+                          setShowStandardInvoiceModal(false);
                         }
                       }}
                       className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-brand-500 focus:ring-brand-500"
@@ -1626,19 +1634,18 @@ export function OrderPage() {
                   </label>
 
                   {isStandardInvoice && (
-                    <div className="mt-2 border-t border-gray-700 pt-3">
-                      <StandardInvoiceBuyerForm
-                        value={buyer}
-                        onChange={(next) => {
-                          setBuyer(next);
-                          // Clear individual field error on change
-                          if (buyerErrors) {
-                            setBuyerErrors({});
-                          }
-                        }}
+                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-gray-700 pt-2">
+                      <span className="text-sm text-gray-400 truncate">
+                        {buyer.name.trim() ? `Buyer: ${buyer.name}` : 'Buyer details required'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowStandardInvoiceModal(true)}
                         disabled={submittingOrder}
-                        errors={buyerErrors}
-                      />
+                        className="shrink-0 touch-target bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg px-3 py-2 text-xs text-gray-300"
+                      >
+                        Edit buyer details
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2002,6 +2009,31 @@ export function OrderPage() {
           deliveryPartnerId={cart.deliveryPartnerId}
           onAdded={handlePaymentAdded}
           onClose={() => setShowAddPaymentModal(false)}
+        />
+      )}
+
+      {/* Standard invoice buyer details modal (Summary tab) */}
+      {showStandardInvoiceModal && (
+        <StandardInvoiceBuyerModal
+          initialBuyer={buyer}
+          initialErrors={buyerErrors}
+          disabled={submittingOrder}
+          onSave={(next) => {
+            setBuyer(next);
+            setBuyerErrors({});
+            setIsStandardInvoice(true);
+            setShowStandardInvoiceModal(false);
+          }}
+          onCancel={() => {
+            setShowStandardInvoiceModal(false);
+            // Uncheck only when the committed buyer is still invalid — staff
+            // must not leave a checked-but-incomplete standard invoice.
+            const errs = validateStandardBuyer(buyer);
+            if (Object.keys(errs).length > 0) {
+              setIsStandardInvoice(false);
+              setBuyerErrors({});
+            }
+          }}
         />
       )}
 
