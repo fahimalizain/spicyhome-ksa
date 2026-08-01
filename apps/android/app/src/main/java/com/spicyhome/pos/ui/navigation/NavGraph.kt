@@ -2,6 +2,8 @@ package com.spicyhome.pos.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -13,6 +15,7 @@ import com.spicyhome.pos.SpicyHomeApp
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.SessionManager
 import com.spicyhome.pos.data.api.ApiClientProvider
+import com.spicyhome.pos.update.UpdateUiState
 import com.spicyhome.pos.ui.day.DayNotOpenScreen
 import com.spicyhome.pos.ui.day.DayNotOpenViewModel
 import com.spicyhome.pos.ui.login.LoginScreen
@@ -70,6 +73,7 @@ fun NavGraph(
 
         composable(NavRoutes.LOGIN) {
             val vm: LoginViewModel = viewModel(factory = LoginViewModel.Factory(preferencesManager, apiClientProvider))
+            val updateState by app.updateManager.uiState.collectAsState()
             LoginScreen(
                 viewModel = vm,
                 onLoginSuccess = {
@@ -81,7 +85,9 @@ fun NavGraph(
                     navController.navigate(NavRoutes.SETUP) {
                         popUpTo(0) { inclusive = true }
                     }
-                }
+                },
+                onCheckForUpdate = { app.updateManager.checkForUpdate(force = true) },
+                isCheckingUpdate = updateState is UpdateUiState.Checking,
             )
         }
 

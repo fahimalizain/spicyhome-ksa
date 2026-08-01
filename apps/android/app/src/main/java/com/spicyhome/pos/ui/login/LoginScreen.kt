@@ -28,6 +28,8 @@ fun LoginScreen(
     viewModel: LoginViewModel,
     onLoginSuccess: () -> Unit,
     onLogout: () -> Unit,
+    onCheckForUpdate: () -> Unit = {},
+    isCheckingUpdate: Boolean = false,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -202,6 +204,18 @@ fun LoginScreen(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(
+                    onClick = onCheckForUpdate,
+                    enabled = !isCheckingUpdate,
+                ) {
+                    Text(
+                        text = if (isCheckingUpdate) "Checking for updates..." else "Check for updates",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = "v${BuildConfig.VERSION_NAME}",

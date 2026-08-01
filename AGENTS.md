@@ -169,3 +169,12 @@ pnpm package:win7   # runs packaging/build-package.sh
 Produces `dist/spicyhome-pos-win7.zip` — portable Node.js v18.20.4 (win-x64) +
 compiled server JS + SPA dist + startup scripts. The generated server
 `package.json` uses the version from the `VERSION` file.
+
+## Android distribution signing
+
+Production Android APKs are signed with a stable distribution keystore so
+side-load upgrades install in place. The release workflow requires the
+`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` /
+`ANDROID_KEY_PASSWORD` GitHub secrets and fails without them. Keystore, versionCode
+formula, migration: `docs/android/apk-signing.md`. Never commit keystores or
+passwords; generate with `scripts/android/generate-distribution-keystore.sh`.

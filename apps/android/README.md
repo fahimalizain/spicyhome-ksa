@@ -1,5 +1,14 @@
 # SpicyHome POS — Android Tablet App
 
+## Signing & releases
+
+Production APKs are signed with a stable **distribution keystore** so
+side-load upgrades install in place. See
+[`docs/android/apk-signing.md`](../../docs/android/apk-signing.md) for the
+keystore, GitHub secrets, versionCode formula, one-time migration, and
+verification commands. Without a keystore, builds produce debug-signed APKs
+(dev only — never ship those).
+
 ## Build path: Gradle (with Bazel wrapper)
 
 Jetpack Compose under `rules_kotlin`/`rules_android` is fragile (requires compose
