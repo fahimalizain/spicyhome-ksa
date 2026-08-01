@@ -4246,19 +4246,19 @@
             "example": 0
           },
           "deliveryPartnerId": {
-            "type": "object",
+            "type": "string",
             "example": "hungerstation",
             "nullable": true,
             "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
           },
           "deliveryPartnerTitle": {
-            "type": "object",
+            "type": "string",
             "example": "HungerStation",
             "nullable": true,
             "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
           },
           "deliveryExternalRef": {
-            "type": "object",
+            "type": "string",
             "example": "HS-883129",
             "nullable": true,
             "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
@@ -4622,19 +4622,19 @@
             "example": 0
           },
           "deliveryPartnerId": {
-            "type": "object",
+            "type": "string",
             "example": "hungerstation",
             "nullable": true,
             "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
           },
           "deliveryPartnerTitle": {
-            "type": "object",
+            "type": "string",
             "example": "HungerStation",
             "nullable": true,
             "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
           },
           "deliveryExternalRef": {
-            "type": "object",
+            "type": "string",
             "example": "HS-883129",
             "nullable": true,
             "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
@@ -4764,13 +4764,13 @@
             "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
           },
           "deliveryPartnerId": {
-            "type": "object",
+            "type": "string",
             "example": "hungerstation",
             "nullable": true,
             "description": "Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner."
           },
           "deliveryExternalRef": {
-            "type": "object",
+            "type": "string",
             "example": "HS-883129",
             "nullable": true,
             "description": "Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent."

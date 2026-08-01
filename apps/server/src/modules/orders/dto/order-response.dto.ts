@@ -42,6 +42,7 @@ export class OrderResponse {
   // ── Delivery partner (ADR 0007) ────────────────────────────────────────────
 
   @ApiProperty({
+    type: String,
     example: 'hungerstation',
     nullable: true,
     description:
@@ -50,6 +51,7 @@ export class OrderResponse {
   deliveryPartnerId!: string | null;
 
   @ApiProperty({
+    type: String,
     example: 'HungerStation',
     nullable: true,
     description: 'Delivery partner title (joined from delivery_partners when a partner is set).',
@@ -57,6 +59,7 @@ export class OrderResponse {
   deliveryPartnerTitle!: string | null;
 
   @ApiProperty({
+    type: String,
     example: 'HS-883129',
     nullable: true,
     description:

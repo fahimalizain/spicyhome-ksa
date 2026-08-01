@@ -21,6 +21,8 @@ const EVENT_LABELS: Record<string, string> = {
   refund_issued: 'Refund Issued',
   refunded: 'Fully Refunded',
   type_changed: 'Type / Table Changed',
+  delivery_partner_changed: 'Delivery Partner Changed',
+  item_price_reset: 'Item Price Reset',
   zatca_clearance_rejected: 'ZATCA Clearance Rejected',
   zatca_clearance_approved: 'ZATCA Clearance Approved',
 };
@@ -73,6 +75,27 @@ function formatPayload(event: OrderEventResponse): string {
       const fromTable = p.fromTableId != null ? `#${p.fromTableId}` : '—';
       const toTable = p.toTableId != null ? `#${p.toTableId}` : '—';
       return `${label}. ${p.fromType || '?'} → ${p.toType || '?'} (table ${fromTable} → ${toTable})`;
+    }
+    case 'delivery_partner_changed': {
+      const from = p.fromPartnerTitle || 'None';
+      const to = p.toPartnerTitle || 'None';
+      let text = `${label}. ${from} → ${to}`;
+      if (p.fromExternalRef || p.toExternalRef) {
+        text += ` · Ref ${p.fromExternalRef || '—'} → ${p.toExternalRef || '—'}`;
+      }
+      if (typeof p.resetItemCount === 'number' && p.resetItemCount > 0) {
+        text += ` · ${p.resetItemCount} price${p.resetItemCount === 1 ? '' : 's'} reset`;
+      }
+      return text;
+    }
+    case 'item_price_reset': {
+      const reason =
+        p.reason === 'type_changed_to_dine_in'
+          ? 'order type changed to dine-in'
+          : 'partner cleared';
+      return `${label}: ${halalasToSar(Number(p.fromUnitPriceHalalas) || 0)} → ${halalasToSar(
+        Number(p.toUnitPriceHalalas) || 0,
+      )} SAR (${reason})`;
     }
     case 'zatca_clearance_approved': {
       const doc = (p.documentId || p.cbcId || '?') as string;

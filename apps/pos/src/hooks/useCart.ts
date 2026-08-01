@@ -16,6 +16,12 @@ export interface CartState {
   items: CartItem[];
   orderType: 'dine_in' | 'takeaway';
   tableId: number | null;
+  /** Delivery partner slug (ADR 0007). Null for dine-in / walk-in takeaway. */
+  deliveryPartnerId: string | null;
+  /** Delivery partner title for display (hydrated from the server). */
+  deliveryPartnerTitle: string | null;
+  /** Delivery app's order number for reconciliation (only with a partner). */
+  deliveryExternalRef: string | null;
   /** Server snapshot items (null = no order loaded yet). */
   snapshotItems: CartItem[] | null;
   /** Server updatedAt when last hydrated. */
@@ -28,12 +34,25 @@ type CartAction =
   | { type: 'UPDATE_QTY'; itemId: number; qty: number }
   | { type: 'UPDATE_NOTES'; itemId: number; notes: string }
   | { type: 'SET_ORDER_TYPE'; orderType: 'dine_in' | 'takeaway'; tableId: number | null }
+  /**
+   * ADR 0007: set/clear the delivery partner staging (pre-create only).
+   * Fields may be omitted to keep the current value.
+   */
+  | {
+      type: 'SET_DELIVERY_PARTNER';
+      deliveryPartnerId?: string | null;
+      deliveryPartnerTitle?: string | null;
+      deliveryExternalRef?: string | null;
+    }
   | { type: 'CLEAR' }
   | {
       type: 'LOAD_ORDER';
       items: CartItem[];
       orderType: 'dine_in' | 'takeaway';
       tableId: number | null;
+      deliveryPartnerId: string | null;
+      deliveryPartnerTitle: string | null;
+      deliveryExternalRef: string | null;
       snapshotUpdatedAt: number;
     }
   | { type: 'MARK_CLEAN' };
@@ -122,13 +141,38 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         ),
       };
     case 'SET_ORDER_TYPE':
-      return { ...state, orderType: action.orderType, tableId: action.tableId };
+      return {
+        ...state,
+        orderType: action.orderType,
+        tableId: action.tableId,
+        // A partner only exists on takeaway (ADR 0007) — switching the
+        // pre-create cart to dine_in clears the staged partner/ref.
+        ...(action.orderType === 'dine_in'
+          ? { deliveryPartnerId: null, deliveryPartnerTitle: null, deliveryExternalRef: null }
+          : {}),
+      };
+    case 'SET_DELIVERY_PARTNER':
+      return {
+        ...state,
+        ...(action.deliveryPartnerId !== undefined
+          ? { deliveryPartnerId: action.deliveryPartnerId }
+          : {}),
+        ...(action.deliveryPartnerTitle !== undefined
+          ? { deliveryPartnerTitle: action.deliveryPartnerTitle }
+          : {}),
+        ...(action.deliveryExternalRef !== undefined
+          ? { deliveryExternalRef: action.deliveryExternalRef }
+          : {}),
+      };
     case 'CLEAR':
       return {
         ...state,
         items: [],
         snapshotItems: null,
         snapshotUpdatedAt: null,
+        deliveryPartnerId: null,
+        deliveryPartnerTitle: null,
+        deliveryExternalRef: null,
       };
     case 'LOAD_ORDER':
       return {
@@ -136,6 +180,9 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         items: action.items,
         orderType: action.orderType,
         tableId: action.tableId,
+        deliveryPartnerId: action.deliveryPartnerId,
+        deliveryPartnerTitle: action.deliveryPartnerTitle,
+        deliveryExternalRef: action.deliveryExternalRef,
         snapshotItems: action.items,
         snapshotUpdatedAt: action.snapshotUpdatedAt,
       };
@@ -176,6 +223,9 @@ const initialCart: CartState = {
   items: [],
   orderType: 'dine_in',
   tableId: null,
+  deliveryPartnerId: null,
+  deliveryPartnerTitle: null,
+  deliveryExternalRef: null,
   snapshotItems: null,
   snapshotUpdatedAt: null,
 };
@@ -213,6 +263,31 @@ export function useCart() {
     dispatch({ type: 'SET_ORDER_TYPE', orderType, tableId });
   }, []);
 
+  /**
+   * Stage a delivery partner selection on a pre-create cart (ADR 0007).
+   * Existing open orders go through PATCH /orders/:id/partner instead.
+   */
+  const setDeliveryPartner = useCallback(
+    (
+      deliveryPartnerId: string | null,
+      deliveryPartnerTitle: string | null,
+      deliveryExternalRef: string | null,
+    ) => {
+      dispatch({
+        type: 'SET_DELIVERY_PARTNER',
+        deliveryPartnerId,
+        deliveryPartnerTitle,
+        deliveryExternalRef,
+      });
+    },
+    [],
+  );
+
+  /** Stage only the external ref on a pre-create cart (partner already set). */
+  const setDeliveryExternalRef = useCallback((deliveryExternalRef: string | null) => {
+    dispatch({ type: 'SET_DELIVERY_PARTNER', deliveryExternalRef });
+  }, []);
+
   const clear = useCallback(() => {
     dispatch({ type: 'CLEAR' });
   }, []);
@@ -232,6 +307,9 @@ export function useCart() {
       items,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableId: order.tableId,
+      deliveryPartnerId: order.deliveryPartnerId ?? null,
+      deliveryPartnerTitle: order.deliveryPartnerTitle ?? null,
+      deliveryExternalRef: order.deliveryExternalRef ?? null,
       snapshotUpdatedAt: order.updatedAt,
     });
   }, []);
@@ -245,6 +323,9 @@ export function useCart() {
     items: state.items,
     orderType: state.orderType,
     tableId: state.tableId,
+    deliveryPartnerId: state.deliveryPartnerId,
+    deliveryPartnerTitle: state.deliveryPartnerTitle,
+    deliveryExternalRef: state.deliveryExternalRef,
     totals,
     isDirty,
     /** Last known server updatedAt, or null if no order is loaded. */
@@ -254,6 +335,8 @@ export function useCart() {
     updateQty,
     updateNotes,
     setOrderType,
+    setDeliveryPartner,
+    setDeliveryExternalRef,
     clear,
     loadOrder,
     /** Reset isDirty by accepting the current cart as new snapshot. */
@@ -268,6 +351,9 @@ export function useCart() {
           items: state.snapshotItems,
           orderType: state.orderType,
           tableId: state.tableId,
+          deliveryPartnerId: state.deliveryPartnerId,
+          deliveryPartnerTitle: state.deliveryPartnerTitle,
+          deliveryExternalRef: state.deliveryExternalRef,
           snapshotUpdatedAt: state.snapshotUpdatedAt ?? 0,
         });
       }

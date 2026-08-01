@@ -1814,17 +1814,17 @@ export interface components {
        * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
        * @example hungerstation
        */
-      deliveryPartnerId: Record<string, never> | null;
+      deliveryPartnerId: string | null;
       /**
        * @description Delivery partner title (joined from delivery_partners when a partner is set).
        * @example HungerStation
        */
-      deliveryPartnerTitle: Record<string, never> | null;
+      deliveryPartnerTitle: string | null;
       /**
        * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
        * @example HS-883129
        */
-      deliveryExternalRef: Record<string, never> | null;
+      deliveryExternalRef: string | null;
       /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
@@ -2063,17 +2063,17 @@ export interface components {
        * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
        * @example hungerstation
        */
-      deliveryPartnerId: Record<string, never> | null;
+      deliveryPartnerId: string | null;
       /**
        * @description Delivery partner title (joined from delivery_partners when a partner is set).
        * @example HungerStation
        */
-      deliveryPartnerTitle: Record<string, never> | null;
+      deliveryPartnerTitle: string | null;
       /**
        * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
        * @example HS-883129
        */
-      deliveryExternalRef: Record<string, never> | null;
+      deliveryExternalRef: string | null;
       /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
@@ -2140,12 +2140,12 @@ export interface components {
        * @description Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner.
        * @example hungerstation
        */
-      deliveryPartnerId?: Record<string, never> | null;
+      deliveryPartnerId?: string | null;
       /**
        * @description Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent.
        * @example HS-883129
        */
-      deliveryExternalRef?: Record<string, never> | null;
+      deliveryExternalRef?: string | null;
     };
     CreateOrderDto: {
       /**

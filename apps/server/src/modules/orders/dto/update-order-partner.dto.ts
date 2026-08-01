@@ -22,6 +22,7 @@ export class UpdateOrderPartnerDto {
   baseUpdatedAt!: number;
 
   @ApiPropertyOptional({
+    type: String,
     example: 'hungerstation',
     nullable: true,
     description:
@@ -32,6 +33,7 @@ export class UpdateOrderPartnerDto {
   deliveryPartnerId?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     example: 'HS-883129',
     nullable: true,
     description:
