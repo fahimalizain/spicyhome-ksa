@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
@@ -2506,7 +2506,7 @@ export class OrdersService {
     if (filters?.status) {
       query = query.where(eq(orders.status, filters.status)) as any;
     }
-    const rows: any[] = query.orderBy(orders.id).all();
+    const rows: any[] = query.orderBy(desc(orders.id)).all();
     return this.attachDeliveryPartnerTitles(rows);
   }
 

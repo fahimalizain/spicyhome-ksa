@@ -3108,6 +3108,74 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   });
 });
 
+describe('listOrders — GET /orders returns newest first (DESC by orders.id)', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    createdIds.push(res.body.id);
+    return res.body;
+  }
+
+  it('returns orders strictly descending by id (newest first)', async () => {
+    const first = await createOrder({ type: 'takeaway' });
+    const second = await createOrder({ type: 'takeaway' });
+    const third = await createOrder({ type: 'takeaway' });
+
+    // Sanity: ids are distinct and increasing as created
+    expect(second.id).toBeGreaterThan(first.id);
+    expect(third.id).toBeGreaterThan(second.id);
+
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    // The three orders just created sit on top, newest id first
+    expect(ids[0]).toBe(third.id);
+    expect(ids[1]).toBe(second.id);
+    expect(ids[2]).toBe(first.id);
+
+    // Whole list is strictly descending
+    for (let i = 1; i < ids.length; i++) {
+      expect(ids[i - 1]).toBeGreaterThan(ids[i]);
+    }
+  });
+
+  it('status filter still returns newest-first', async () => {
+    const a = await createOrder({ type: 'takeaway' });
+    const b = await createOrder({ type: 'takeaway' });
+
+    const res = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const openIds: number[] = res.body.map((o: any) => o.id);
+
+    expect(openIds[0]).toBe(b.id);
+    expect(openIds[1]).toBe(a.id);
+  });
+});
+
 describe('Delivery partner payment restriction — POST /orders/:id/payments (ADR 0007)', () => {
   // Partner catalog + their owned payment methods (1:1, shared slug
   // namespace). OR IGNORE: the partner PATCH describe above seeds the partner
