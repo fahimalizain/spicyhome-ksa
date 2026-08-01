@@ -198,7 +198,7 @@ export class OrdersService {
     // syncItems).
     let anyMutation = false;
 
-    const updatedOrder = this.db.transaction((tx: any) => {
+    this.db.transaction((tx: any) => {
       // Load order; 404 if missing
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
@@ -286,7 +286,9 @@ export class OrdersService {
     if (anyMutation) {
       this.emitDomainEvent('order.updated', orderId, userId);
     }
-    return mapBools(updatedOrder, ['isStandardInvoice']);
+    // Reuse getOrder's mapping so the response always matches OrderResponse:
+    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+    return this.getOrder(orderId);
   }
 
   private emitDomainEvent(
@@ -371,7 +373,7 @@ export class OrdersService {
     // Track whether any mutation (remove/update/insert) occurred
     let anyMutation = false;
 
-    const updatedOrder = this.db.transaction((tx: any) => {
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
       if (order.status !== 'open') throw new BadRequestException('Order is not open');
@@ -656,7 +658,9 @@ export class OrdersService {
     if (anyMutation) {
       this.emitDomainEvent('order.updated', orderId, userId);
     }
-    return updatedOrder;
+    // Reuse getOrder's mapping so the response always matches OrderResponse:
+    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+    return this.getOrder(orderId);
   }
 
   private validateStandardInvoiceBuyer(dto: {

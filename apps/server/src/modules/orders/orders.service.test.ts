@@ -1737,6 +1737,11 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     expect(res.body.updatedAt).toBeGreaterThan(before.updatedAt);
     expect(res.body.updatedBy).not.toBeNull();
 
+    // OrderResponse contract: boolean isStandardInvoice + payments array
+    expect(typeof res.body.isStandardInvoice).toBe('boolean');
+    expect(res.body.isStandardInvoice).toBe(false);
+    expect(Array.isArray(res.body.payments)).toBe(true);
+
     // Persisted in DB
     const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
     expect(dbOrder.type).toBe('dine_in');
@@ -2007,6 +2012,15 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Totals correct (2×2300 + 1×575 = 5175)
     expect(syncRes.body.totalHalalas).toBe(5175);
+
+    // Android/Moshi contract: isStandardInvoice must be a real JSON boolean,
+    // never the SQLite integer 0/1
+    expect(typeof syncRes.body.isStandardInvoice).toBe('boolean');
+    expect(syncRes.body.isStandardInvoice).toBe(false);
+
+    // OrderResponse shape: payments always present as an array (empty for open orders)
+    expect(Array.isArray(syncRes.body.payments)).toBe(true);
+    expect(syncRes.body.payments).toHaveLength(0);
 
     // item_added events
     const events = syncRes.body.events;
