@@ -95,10 +95,10 @@ describe('Layout TopBar', () => {
   it('renders left nav links and hides Admin/Logout when the menu is closed', () => {
     renderLayout();
 
-    expect(screen.getByRole('link', { name: 'Order' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Day' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Active' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Orders' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tables' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Day' })).toBeInTheDocument();
 
     // Admin is not a left-nav link even with manageMenu — it lives in the user menu.
     expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();

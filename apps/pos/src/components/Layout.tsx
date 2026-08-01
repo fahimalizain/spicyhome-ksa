@@ -46,16 +46,16 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
           <img src="/logo.svg" alt="SpicyHome" className="h-12 w-12 object-contain" />
         </Link>
         <Link to="/" className="text-sm text-gray-300 hover:text-white touch-target">
-          Order
-        </Link>
-        <Link to="/day" className="text-sm text-gray-300 hover:text-white touch-target">
-          Day
+          Active
         </Link>
         <Link to="/orders" className="text-sm text-gray-300 hover:text-white touch-target">
           Orders
         </Link>
         <Link to="/tables" className="text-sm text-gray-300 hover:text-white touch-target">
           Tables
+        </Link>
+        <Link to="/day" className="text-sm text-gray-300 hover:text-white touch-target">
+          Day
         </Link>
       </div>
       <UserMenu me={me} onLogout={onLogout} />
