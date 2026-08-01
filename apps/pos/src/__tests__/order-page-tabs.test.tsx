@@ -516,6 +516,21 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
 
   // ---- Print Open Receipt (non-ZATCA guest slip) ----
 
+  it('summary tab: Print Open Receipt sits beside Void Order on a clean open order', async () => {
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    expect(screen.getByRole('button', { name: 'Print Open Receipt' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Void Order' })).toBeInTheDocument();
+  });
+
   it('summary tab: Print Open Receipt prints via reprint(open_receipt) and confirms', async () => {
     mockGetReturns(makeOrder());
     mockOrdersReprint.mockResolvedValue({ success: true, errors: [] });
