@@ -186,13 +186,71 @@ describe('KitchenTicketBuilder', () => {
     expect(text).toContain('NOTES: ' + 'N'.repeat(35)); // 42 - len("NOTES: ")
   });
 
-  it('renders items with big qty and name', () => {
+  it('renders items as numbered blocks with name, Qty and optional Notes', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');
 
-    expect(str).toContain('2 Zinger Burger');
-    expect(str).toContain('1 Pepsi');
-    expect(str).toContain('3 Fries');
+    // Numbered name line, indented Qty line, optional indented Notes line
+    expect(str).toContain('1. Zinger Burger');
+    expect(str).toContain('    Qty: 2x');
+    expect(str).toContain('2. Pepsi');
+    expect(str).toContain('    Qty: 1x');
+    expect(str).toContain('    Notes: no ice');
+    expect(str).toContain('3. Fries');
+    expect(str).toContain('    Qty: 3x');
+
+    // No old "qty name" single-line format, no old "  * notes" format
+    expect(str).not.toContain('2 Zinger Burger');
+    expect(str).not.toContain('* no ice');
+
+    // Item names are double-height only (GS ! 0x10), one step below the full
+    // double size (GS ! 0x11) used for the document id and TABLE lines.
+    const hex = buf.toString('hex');
+    const itemHex = Buffer.from('1. Zinger Burger', 'ascii').toString('hex');
+    const idx = hex.indexOf(itemHex);
+    expect(idx).not.toBe(-1);
+    // Byte order before item text: bold on (1b4501), then double height on (1d2110).
+    expect(hex.slice(idx - 6, idx)).toBe('1d2110'); // double height on
+    expect(hex.slice(idx - 6, idx)).not.toBe('1d2111'); // NOT full double size
+    expect(hex.slice(idx - 12, idx - 6)).toBe('1b4501'); // bold on
+
+    // Second item name line follows the same pattern (after off/reset + blank line).
+    const pepsiHex = Buffer.from('2. Pepsi', 'ascii').toString('hex');
+    const idxPepsi = hex.indexOf(pepsiHex);
+    expect(idxPepsi).not.toBe(-1);
+    expect(hex.slice(idxPepsi - 6, idxPepsi)).toBe('1d2110');
+  });
+
+  it('adds a blank line between item blocks', () => {
+    const buf = builder.build(baseOpts);
+    const str = buf.toString('ascii');
+    const countLf = (s: string) => (s.match(/\n/g) || []).length;
+
+    // Item without notes: name LF + Qty LF + blank line LF (blank separates
+    // item blocks).
+    const noNotesBlock = str.slice(
+      str.indexOf('1. Zinger Burger') + '1. Zinger Burger'.length,
+      str.indexOf('2. Pepsi'),
+    );
+    expect(countLf(noNotesBlock)).toBe(3);
+
+    // Item with notes: name LF + Qty LF + Notes LF + blank line LF — no blank
+    // line between Qty and Notes (notes stay attached to their item).
+    const qtyToNotes = str.slice(str.indexOf('Qty: 1x'), str.indexOf('Notes: no ice'));
+    expect(countLf(qtyToNotes)).toBe(1);
+
+    const notesBlock = str.slice(
+      str.indexOf('2. Pepsi') + '2. Pepsi'.length,
+      str.indexOf('3. Fries'),
+    );
+    expect(countLf(notesBlock)).toBe(4);
+
+    // Blank line after the last item block before the bottom separator as well.
+    const beforeSep = str.slice(
+      str.indexOf('3. Fries') + '3. Fries'.length,
+      str.lastIndexOf('===='),
+    );
+    expect(countLf(beforeSep)).toBe(3);
   });
 
   it('renders item notes highlighted with underline', () => {
@@ -207,7 +265,7 @@ describe('KitchenTicketBuilder', () => {
     expect(hex).toContain(ulOff);
 
     const str = buf.toString('ascii');
-    expect(str).toContain('* no ice');
+    expect(str).toContain('    Notes: no ice');
   });
 
   it('does not show notes for items without notes', () => {
@@ -215,7 +273,10 @@ describe('KitchenTicketBuilder', () => {
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
 
-    expect(str).not.toContain('*');
+    expect(str).not.toContain('Notes:');
+    // Single plain item still renders its numbered name + Qty block
+    expect(str).toContain('1. Plain Item');
+    expect(str).toContain('    Qty: 1x');
   });
 
   it('does not include prices', () => {
@@ -248,9 +309,10 @@ describe('KitchenTicketBuilder', () => {
 
     // The full longName should NOT appear in the output (should be truncated)
     expect(str).not.toContain(longName);
-    // But the first part should appear (qty + space + truncated name)
+    // But the first part should appear: "1. " prefix + truncated name start,
+    // capped at the paper width (42 chars total).
     const text = str.replace(/[\x00-\x1f\x7f-\xff]/g, '');
-    expect(text).toContain('1 A'); // "1 " followed by the truncated name start
+    expect(text).toContain('1. ' + 'A'.repeat(39)); // 42 - len("1. ")
   });
 
   it('renders order notes and item notes together on the same ticket', () => {
@@ -258,7 +320,7 @@ describe('KitchenTicketBuilder', () => {
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
     expect(str).toContain('NOTES: Call on arrival');
-    expect(str).toContain('* no ice');
+    expect(str).toContain('    Notes: no ice');
   });
 
   it('handles empty items list', () => {
