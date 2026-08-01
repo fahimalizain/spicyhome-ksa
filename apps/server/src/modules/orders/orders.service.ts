@@ -407,7 +407,7 @@ export class OrdersService {
         }
       }
 
-      // ADR 0004: Android cannot reduce qty below the current DB qty or
+      // ADR 0005: Android cannot reduce qty below the current DB qty or
       // remove server lines. Compare against the DB inside the transaction
       // (after the concurrency check) and reject the ENTIRE sync — no
       // partial apply. POS (or tokens without a clientType claim) keep

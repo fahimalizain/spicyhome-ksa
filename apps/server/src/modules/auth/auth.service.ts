@@ -68,7 +68,7 @@ export class AuthService {
     const valid = compareSync(pin, user.pinHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    // ADR 0004: Android logins require users.android_login = 1. Use the same
+    // ADR 0005: Android logins require users.android_login = 1. Use the same
     // generic message as bad credentials to avoid user enumeration.
     if (clientType === 'android' && user.androidLogin !== 1) {
       throw new UnauthorizedException('Invalid credentials');

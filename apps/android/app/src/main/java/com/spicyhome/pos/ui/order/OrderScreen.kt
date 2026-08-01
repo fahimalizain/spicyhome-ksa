@@ -531,7 +531,7 @@ private fun UnifiedCartPanel(
             ) {
                 itemsIndexed(state.cart.toList()) { index, cartItem ->
                     val isSynced = cartItem.orderItemId != null
-                    // ADR 0004: open-order gates. New local lines (orderItemId
+                    // ADR 0005: open-order gates. New local lines (orderItemId
                     // == null) stay fully editable; synced lines keep + and
                     // notes when updateOrder is granted, − only above the
                     // server floor, and are never deletable on the tablet.

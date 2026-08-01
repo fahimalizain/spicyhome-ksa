@@ -1072,7 +1072,7 @@ class OrderViewModelTest {
         assertThat(state.error).contains("500")
     }
 
-    // --- ADR 0004: qty floor on synced lines ---
+    // --- ADR 0005: qty floor on synced lines ---
 
     private fun hydrateOpenOrder(qty: Int): OrderViewModel {
         val menuItem = createItem(10, "Burger", 1500, 1500)

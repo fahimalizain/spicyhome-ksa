@@ -1,4 +1,4 @@
-# ADR 0004 — Android Qty Floor & Client Type
+# ADR 0005 — Android Qty Floor & Client Type
 
 Date: 2026-08-01
 Status: Accepted

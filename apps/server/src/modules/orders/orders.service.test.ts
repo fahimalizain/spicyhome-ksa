@@ -2540,7 +2540,7 @@ describe('syncItems (bulk cart sync)', () => {
     expect(updateEvents.length).toBe(0);
   });
 
-  // --- ADR 0004: Android qty floor + clientType enforcement ---
+  // --- ADR 0005: Android qty floor + clientType enforcement ---
 
   async function createOpenOrderWithToken(token: string): Promise<{
     orderId: number;
