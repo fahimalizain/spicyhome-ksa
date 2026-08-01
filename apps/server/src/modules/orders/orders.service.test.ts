@@ -4338,9 +4338,12 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
     const enq1 = enqueuedPayloads(res1.body);
     expect(enq1).toHaveLength(1);
-    expect(enq1[0].printer).toBe('Kitchen');
-    expect(enq1[0].printerId).toBe(2);
+    // TEMPORARY fan-out payload: items hold the ledger claim (counted once),
+    // printers[] lists the targets, printer is the timeline label. This test
+    // DB seeds a single kitchen printer: id 2 named 'Kitchen'.
     expect(enq1[0].items).toEqual([{ orderItemId, itemName: 'Zinger Burger', printedQty: 5 }]);
+    expect(enq1[0].printers).toEqual([{ printerId: 2, printer: 'Kitchen' }]);
+    expect(enq1[0].printer).toBe('Kitchen');
 
     // updatedAt bumped so the POS can detect the send
     expect(res1.body.updatedAt).toBeGreaterThanOrEqual(updatedAtAfterSync);

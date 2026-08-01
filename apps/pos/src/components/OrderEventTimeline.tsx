@@ -54,7 +54,18 @@ function formatPayload(event: OrderEventResponse): string {
     }
     case 'item_removed':
       return `${p.itemName || '?'} removed (was ×${p.oldQty ?? '?'})`;
-    case 'kitchen_print_enqueued':
+    case 'kitchen_print_enqueued': {
+      // Fan-out payload (TEMPORARY): printers[] lists every target; fall back
+      // to the legacy single-printer `printer` string for historical events.
+      const fanout = Array.isArray(p.printers)
+        ? (p.printers as Array<Record<string, unknown>>)
+        : [];
+      const names = fanout
+        .map((pr) => (typeof pr?.printer === 'string' ? pr.printer : ''))
+        .filter((n) => n.length > 0);
+      const printerLabel = names.length > 0 ? names.join(', ') : (p.printer as string) || '?';
+      return `${label}. Printer: ${printerLabel}`;
+    }
     case 'kitchen_print_succeeded':
     case 'receipt_print_enqueued':
     case 'receipt_print_succeeded':

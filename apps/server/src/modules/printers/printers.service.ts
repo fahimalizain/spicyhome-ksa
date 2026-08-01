@@ -182,6 +182,20 @@ export class PrintersService {
     return null;
   }
 
+  /**
+   * List ALL active printers for a role (empty array when none).
+   * Used for the temporary kitchen fan-out: every active kitchen printer
+   * receives the full ticket instead of category-based routing.
+   */
+  listActiveByRole(role: string): PrinterRecord[] {
+    const results = this.db
+      .select()
+      .from(printers)
+      .where(eq(printers.role, role))
+      .all() as PrinterRecord[];
+    return results.filter((p) => p.isActive === 1);
+  }
+
   /** Get active printer by printer_id — used for category kitchen routing. */
   getByPrinterId(printerId: number): PrinterRecord | null {
     const p = this.db.select().from(printers).where(eq(printers.id, printerId)).get() as

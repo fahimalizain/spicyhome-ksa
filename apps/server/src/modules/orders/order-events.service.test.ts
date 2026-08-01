@@ -535,6 +535,37 @@ describe('OrderEventsService', () => {
       expect(service.getPrintedQty(txn, 5)).toBe(8);
     });
 
+    it('fan-out enqueue (TEMPORARY): printers[] metadata does not double-count items', () => {
+      insertOrder(1);
+      const txn = db;
+
+      // One kitchen_print_enqueued per send: qty lives ONLY in top-level
+      // items; printers[] lists the fan-out targets (audit/timeline metadata).
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            items: [{ orderItemId: 5, itemName: 'Zinger Burger', printedQty: 5 }],
+            printers: [
+              { printerId: 2, printer: 'Kitchen' },
+              { printerId: 3, printer: 'Cold Station' },
+            ],
+            printer: 'Kitchen, Cold Station',
+          }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      // Counted exactly once despite the two printer targets
+      expect(service.getPrintedQty(txn, 5)).toBe(5);
+    });
+
     it('falls back to item kitchenPrintedQty when no enqueued event mentions the item', () => {
       insertOrder(1);
       const txn = db;
