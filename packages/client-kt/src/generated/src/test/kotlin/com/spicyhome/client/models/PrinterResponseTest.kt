@@ -19,6 +19,7 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.models.PrinterResponse
+import com.spicyhome.client.models.PrinterConfigDto
 
 class PrinterResponseTest : ShouldSpec() {
     init {
@@ -37,6 +38,12 @@ class PrinterResponseTest : ShouldSpec() {
             //modelInstance.name shouldBe ("TODO")
         }
 
+        // to test the property `connectionType`
+        should("test connectionType") {
+            // uncomment below to test the property
+            //modelInstance.connectionType shouldBe ("TODO")
+        }
+
         // to test the property `ip`
         should("test ip") {
             // uncomment below to test the property
@@ -53,6 +60,12 @@ class PrinterResponseTest : ShouldSpec() {
         should("test role") {
             // uncomment below to test the property
             //modelInstance.role shouldBe ("TODO")
+        }
+
+        // to test the property `config`
+        should("test config") {
+            // uncomment below to test the property
+            //modelInstance.config shouldBe ("TODO")
         }
 
         // to test the property `isActive`
@@ -83,6 +96,12 @@ class PrinterResponseTest : ShouldSpec() {
         should("test updatedBy") {
             // uncomment below to test the property
             //modelInstance.updatedBy shouldBe ("TODO")
+        }
+
+        // to test the property `windowsPrinterName`
+        should("test windowsPrinterName") {
+            // uncomment below to test the property
+            //modelInstance.windowsPrinterName shouldBe ("TODO")
         }
 
     }

@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 9 rows after apply', () => {
+    it('__drizzle_migrations has exactly 10 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(9);
+      expect(rows.cnt).toBe(10);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(9);
+      expect(after).toBe(10);
 
       sqlite.close();
     });
@@ -558,7 +558,7 @@ describe('schema — invariants', () => {
       expect(mada.zatca_payment_means_code).toBe('48');
     });
 
-    it('order_payments (order_id, method_id) is unique', () => {
+    it('order_payments allows multiple rows per (order_id, method_id)', () => {
       const now = Math.floor(Date.now() / 1000);
       const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
 
@@ -574,18 +574,59 @@ describe('schema — invariants', () => {
       `);
       const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
-      sqlite.exec(`
-        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
-        VALUES (${orderId}, 'cash', 'Cash', '10', 500, ${now})
-      `);
-
-      // Second payment for same order + method should fail (unique index)
+      // First payment line
       expect(() =>
         sqlite.exec(`
           INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
-          VALUES (${orderId}, 'cash', 'Cash', '10', 500, ${now})
+          VALUES (${orderId}, 'cash', 'Cash', '10', 600, ${now})
         `),
-      ).toThrow();
+      ).not.toThrow();
+
+      // Second payment for same order + method must succeed (ADR 0006:
+      // append-only ledger with corrections — no unique on (order_id, method_id))
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+          VALUES (${orderId}, 'cash', 'Cash', '10', -100, ${now})
+        `),
+      ).not.toThrow();
+
+      const rows = sqlite
+        .prepare('SELECT amount_halalas FROM order_payments WHERE order_id = ? ORDER BY id')
+        .all(orderId) as any[];
+      expect(rows).toHaveLength(2);
+      expect(rows[0].amount_halalas).toBe(600);
+      expect(rows[1].amount_halalas).toBe(-100);
+    });
+
+    it('order_payments allows negative amount_halalas (correction lines)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      const pmCard = sqlite
+        .prepare("SELECT id FROM payment_methods WHERE id = 'card'")
+        .get() as any;
+      expect(pmCard).toBeDefined();
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
+        VALUES (502, 'uuid-op-negative', 'dine_in', ${doId}, 'paid', 1000, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Negative amount is a balancing/correction line (ADR 0006) — no CHECK
+      // constraint blocks it; SQLite integers are signed.
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+          VALUES (${orderId}, 'card', 'Card', '48', -250, ${now})
+        `),
+      ).not.toThrow();
+
+      const row = sqlite
+        .prepare('SELECT amount_halalas FROM order_payments WHERE order_id = ?')
+        .get(orderId) as any;
+      expect(row.amount_halalas).toBe(-250);
     });
 
     it('order_payments FK to payment_methods is enforced', () => {

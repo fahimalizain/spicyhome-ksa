@@ -37,6 +37,11 @@ beforeAll(async () => {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.init();
 
+  // Listen explicitly ONCE so supertest reuses a stable port instead of
+  // re-listening (listen(0)) on every request, which races and can send
+  // requests to stale listeners in full-suite runs.
+  await app.listen(0);
+
   // Inject fake transport
   transport = new FakePrinterTransport();
   const ps = app.get(PrintersService);
@@ -150,13 +155,17 @@ describe('Order Refunds', () => {
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
-    // Pay the order
+    // Finalize: append cash payment, then submit (ADR 0006)
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
+      .post(`/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'cash', amountHalalas: fetched.body.totalHalalas }],
-      })
+      .send({ methodId: 'cash', amountHalalas: fetched.body.totalHalalas })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(201);
 
     // Wait for receipt print
@@ -676,7 +685,27 @@ describe('Order Refunds', () => {
   });
 });
 
-describe('Pay with payment methods', () => {
+describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
+  // Append one or more payment lines, then submit (the only open → paid path).
+  async function payViaPaymentsAndSubmit(
+    orderId: number,
+    payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }>,
+    submitDto: Record<string, unknown> = {},
+  ) {
+    for (const p of payments) {
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send(p)
+        .expect(201);
+    }
+    return request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(submitDto)
+      .expect(201);
+  }
+
   async function createOpenOrderWithItems(): Promise<{
     orderId: number;
     totalHalalas: number;
@@ -729,41 +758,182 @@ describe('Pay with payment methods', () => {
     }
   }
 
-  it('rejects missing body (400)', async () => {
+  it('rejects submit without any payments (outstanding ≠ 0, 400)', async () => {
     const { orderId } = await createOpenOrderWithItems();
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
+    expect(res.body.message).toContain('does not equal order total');
     await voidOrder(orderId);
   });
 
-  it('rejects empty payments array (400)', async () => {
-    const { orderId } = await createOpenOrderWithItems();
+  it('rejects submit with outstanding ≠ 0 (underpay and overpay, 400)', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    // Underpay: 100 halalas short
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
+      .post(`/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ payments: [] })
+      .send({ methodId: 'cash', amountHalalas: totalHalalas - 100 })
+      .expect(201);
+    const underRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(400);
+    expect(underRes.body.message).toContain('does not equal order total');
+    expect(underRes.body.message).toContain('Outstanding 100 halalas');
+
+    // Balance it, then overpay: still rejected — outstanding must be EXACTLY 0
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 200 })
+      .expect(201);
+    const overRes = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+    expect(overRes.body.message).toContain('Outstanding -100 halalas');
+
+    // Fix the overpay with a negative correction, then submit succeeds
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: -100 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+  });
+
+  it('rejects submit with a negative method net (400)', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    // total 4600: cash 4650 + card −50 → overall sum = total, but the card
+    // method nets negative → submit must reject (ADR 0006 precondition 6)
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: totalHalalas + 50 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'card', amountHalalas: -50 })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+    expect(res.body.message).toContain('"card" nets negative (-50 halalas)');
+
+    // Order stays open
+    const stillOpen = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(stillOpen.body.status).toBe('open');
+
     await voidOrder(orderId);
   });
+
+  it('rejects submit with 0 items (400)', async () => {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+    expect(res.body.message).toContain('without items');
+  });
+
+  it('rejects submit on a non-open (paid) order (400)', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    await payViaPaymentsAndSubmit(orderId, [{ methodId: 'cash', amountHalalas: totalHalalas }]);
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+    expect(res.body.message).toContain("Cannot submit order in 'paid' status");
+  });
+
+  it('stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    // Capture updatedAt BEFORE the payment append (append bumps updated_at)
+    const before = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    // Ensure updated_at ticks past the captured value before the append
+    await new Promise((r) => setTimeout(r, 1500));
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: totalHalalas })
+      .expect(201);
+
+    const after = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    // Stale baseUpdatedAt → 409 with the standard conflict shape
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: before.body.updatedAt })
+      .expect(409);
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(after.body.updatedAt);
+
+    // Order stays open; with the fresh updatedAt the submit succeeds
+    const stillOpen = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(stillOpen.body.status).toBe('open');
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: after.body.updatedAt })
+      .expect(201);
+  }, 10000);
 
   it('pays cash-only exact and creates order_payments row', async () => {
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     transport.sent = [];
-    const payRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
-      })
-      .expect(201);
+    const payRes = await payViaPaymentsAndSubmit(orderId, [
+      { methodId: 'cash', amountHalalas: totalHalalas },
+    ]);
 
     expect(payRes.body.status).toBe('paid');
+    expect(payRes.body.invoiceType).toBe('simplified');
 
-    // Verify order_payments row exists
+    // Verify order_payments row exists (created by the append, not submit)
     const payments = db
       .select()
       .from(schema.orderPayments)
@@ -788,6 +958,8 @@ describe('Pay with payment methods', () => {
       typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
     expect(paidPayload.payments).toBeDefined();
     expect(paidPayload.payments[0].methodId).toBe('cash');
+    // paid event carries the full raw ledger + netted per-method breakdown
+    expect(paidPayload.netPayments).toEqual([{ methodId: 'cash', amountHalalas: totalHalalas }]);
 
     const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
     expect(enqueuedEvent).toBeDefined();
@@ -802,13 +974,9 @@ describe('Pay with payment methods', () => {
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     transport.sent = [];
-    const payRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'card', amountHalalas: totalHalalas }],
-      })
-      .expect(201);
+    const payRes = await payViaPaymentsAndSubmit(orderId, [
+      { methodId: 'card', amountHalalas: totalHalalas },
+    ]);
 
     expect(payRes.body.status).toBe('paid');
 
@@ -839,22 +1007,16 @@ describe('Pay with payment methods', () => {
     expect(enqueuedPayload.kickDrawer).toBe(false);
   });
 
-  it('pays split card+cash with correct sum and two order_payments rows', async () => {
+  it('pays split card+cash via two appended lines and submits', async () => {
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     const cardAmount = 2300;
     const cashAmount = totalHalalas - cardAmount;
 
-    const payRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [
-          { methodId: 'card', amountHalalas: cardAmount },
-          { methodId: 'cash', amountHalalas: cashAmount, tenderedHalalas: cashAmount + 500 },
-        ],
-      })
-      .expect(201);
+    const payRes = await payViaPaymentsAndSubmit(orderId, [
+      { methodId: 'card', amountHalalas: cardAmount },
+      { methodId: 'cash', amountHalalas: cashAmount, tenderedHalalas: cashAmount + 500 },
+    ]);
 
     expect(payRes.body.status).toBe('paid');
 
@@ -876,136 +1038,12 @@ describe('Pay with payment methods', () => {
     expect(cashPayment.changeHalalas).toBe(500);
   });
 
-  it('rejects sum not equal to order total', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'cash', amountHalalas: totalHalalas + 100 }],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects unknown methodId', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'bitcoin', amountHalalas: totalHalalas }],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects disabled method at pay time', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    // Disable mada
-    db.update(schema.paymentMethods)
-      .set({ enabled: 0 })
-      .where(eq(schema.paymentMethods.id, 'mada'))
-      .run();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'mada', amountHalalas: totalHalalas }],
-      })
-      .expect(400);
-
-    // Re-enable for other tests
-    db.update(schema.paymentMethods)
-      .set({ enabled: 1 })
-      .where(eq(schema.paymentMethods.id, 'mada'))
-      .run();
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects duplicate methodId', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [
-          { methodId: 'cash', amountHalalas: Math.floor(totalHalalas / 2) },
-          { methodId: 'cash', amountHalalas: Math.ceil(totalHalalas / 2) },
-        ],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects amountHalalas <= 0', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [
-          { methodId: 'cash', amountHalalas: 0 },
-          { methodId: 'card', amountHalalas: totalHalalas },
-        ],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects non-cash with tenderedHalalas', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [
-          { methodId: 'card', amountHalalas: totalHalalas, tenderedHalalas: totalHalalas },
-        ],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
-  it('rejects cash tendered < amount', async () => {
-    const { orderId, totalHalalas } = await createOpenOrderWithItems();
-
-    await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [
-          { methodId: 'cash', amountHalalas: totalHalalas, tenderedHalalas: totalHalalas - 1 },
-        ],
-      })
-      .expect(400);
-
-    await voidOrder(orderId);
-  });
-
   it('cash tendered omitted defaults tendered = amount, change = 0', async () => {
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
-    const payRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send({
-        payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
-      })
-      .expect(201);
+    const payRes = await payViaPaymentsAndSubmit(orderId, [
+      { methodId: 'cash', amountHalalas: totalHalalas },
+    ]);
 
     expect(payRes.body.status).toBe('paid');
 
@@ -1024,13 +1062,7 @@ describe('Pay with payment methods', () => {
     it('paid order returns payments with method title and amount', async () => {
       const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/pay`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .send({
-          payments: [{ methodId: 'card', amountHalalas: totalHalalas }],
-        })
-        .expect(201);
+      await payViaPaymentsAndSubmit(orderId, [{ methodId: 'card', amountHalalas: totalHalalas }]);
 
       const res = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
@@ -1039,6 +1071,8 @@ describe('Pay with payment methods', () => {
 
       expect(res.body.payments).toBeDefined();
       expect(res.body.payments).toHaveLength(1);
+      expect(res.body.payments[0].id).toBeGreaterThan(0);
+      expect(res.body.payments[0].createdAt).toBeGreaterThan(0);
       expect(res.body.payments[0].methodId).toBe('card');
       expect(res.body.payments[0].methodTitle).toBe('Card');
       expect(res.body.payments[0].amountHalalas).toBe(totalHalalas);
@@ -1052,16 +1086,10 @@ describe('Pay with payment methods', () => {
       const cardAmount = 2300;
       const cashAmount = totalHalalas - cardAmount;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/pay`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .send({
-          payments: [
-            { methodId: 'card', amountHalalas: cardAmount },
-            { methodId: 'cash', amountHalalas: cashAmount },
-          ],
-        })
-        .expect(201);
+      await payViaPaymentsAndSubmit(orderId, [
+        { methodId: 'card', amountHalalas: cardAmount },
+        { methodId: 'cash', amountHalalas: cashAmount },
+      ]);
 
       const res = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
@@ -1069,9 +1097,12 @@ describe('Pay with payment methods', () => {
         .expect(200);
 
       expect(res.body.payments).toHaveLength(2);
+      expect(res.body.payments[0].id).toBeGreaterThan(0);
+      expect(res.body.payments[0].createdAt).toBeGreaterThan(0);
       expect(res.body.payments[0].methodId).toBe('card');
       expect(res.body.payments[0].methodTitle).toBe('Card');
       expect(res.body.payments[0].amountHalalas).toBe(cardAmount);
+      expect(res.body.payments[1].id).toBeGreaterThan(res.body.payments[0].id);
       expect(res.body.payments[1].methodId).toBe('cash');
       expect(res.body.payments[1].methodTitle).toBe('Cash');
       expect(res.body.payments[1].amountHalalas).toBe(cashAmount);
@@ -1095,13 +1126,7 @@ describe('Pay with payment methods', () => {
     it('refunded order still shows original payments', async () => {
       const { orderId, totalHalalas, items } = await createOpenOrderWithItems();
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/pay`)
-        .set('Authorization', `Bearer ${jwtToken}`)
-        .send({
-          payments: [{ methodId: 'cash', amountHalalas: totalHalalas }],
-        })
-        .expect(201);
+      await payViaPaymentsAndSubmit(orderId, [{ methodId: 'cash', amountHalalas: totalHalalas }]);
 
       // Fully refund all items
       const refundItems = items.map((i: any) => ({
@@ -1129,7 +1154,7 @@ describe('Pay with payment methods', () => {
   });
 
   describe('Standard invoice buyer fields', () => {
-    async function createOpenOrderWithItemsAndPay(payOverrides?: Partial<any>): Promise<{
+    async function createOpenOrderWithItemsAndSubmit(submitOverrides?: Partial<any>): Promise<{
       orderId: number;
       res: any;
     }> {
@@ -1162,21 +1187,23 @@ describe('Pay with payment methods', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
-      const payBody: any = {
-        payments: [{ methodId: 'cash', amountHalalas: fetched.body.totalHalalas }],
-        ...(payOverrides || {}),
-      };
+      // Append the cash payment, then submit with the given body
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: fetched.body.totalHalalas })
+        .expect(201);
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/pay`)
+        .post(`/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send(payBody);
+        .send(submitOverrides || {});
 
       return { orderId, res };
     }
 
-    it('pay without standard fields keeps is_standard_invoice=0, buyers null', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+    it('submit without standard fields keeps is_standard_invoice=0, buyers null', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit();
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('paid');
 
@@ -1200,8 +1227,8 @@ describe('Pay with payment methods', () => {
       country: 'SA',
     };
 
-    it('pay with isStandardInvoice:true and full buyer → persisted correctly', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+    it('submit with isStandardInvoice:true and full buyer → persisted correctly', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1227,7 +1254,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true defaults country to SA when omitted', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           name: 'Test Co.',
@@ -1251,7 +1278,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true missing name → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           ...FULL_BUYER,
@@ -1263,7 +1290,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true missing vatNumber → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           ...FULL_BUYER,
@@ -1275,7 +1302,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true with invalid VAT format → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           ...FULL_BUYER,
@@ -1287,7 +1314,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true with VAT containing letters → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           ...FULL_BUYER,
@@ -1299,7 +1326,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true with invalid country code → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: {
           ...FULL_BUYER,
@@ -1310,8 +1337,8 @@ describe('Pay with payment methods', () => {
       expect(res.status).toBe(400);
     });
 
-    it('pay event includes isStandardInvoice flag and buyer summary when standard', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+    it('submit paid event includes isStandardInvoice flag and buyer summary when standard', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1332,8 +1359,8 @@ describe('Pay with payment methods', () => {
       expect(paidPayload.buyerName).toBe('Abdullah Al-Otaibi Est.');
     });
 
-    it('pay event does NOT include isStandardInvoice flag when not standard', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+    it('submit paid event does NOT include isStandardInvoice flag when not standard', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit();
 
       expect(res.status).toBe(201);
 
@@ -1352,7 +1379,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:true missing zatcaBuyerDetails → 400', async () => {
-      const { res } = await createOpenOrderWithItemsAndPay({
+      const { res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
       });
 
@@ -1360,7 +1387,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('isStandardInvoice:false ignores zatcaBuyerDetails entirely', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: false,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1376,8 +1403,8 @@ describe('Pay with payment methods', () => {
       expect(orderRes.body.zatcaBuyerDetails).toBeNull();
     });
 
-    it('standard pay does not enqueue receipt print immediately', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+    it('standard submit does not enqueue receipt print immediately', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1403,8 +1430,8 @@ describe('Pay with payment methods', () => {
       expect(paidPayload.isStandardInvoice).toBe(true);
     });
 
-    it('GET /orders/:id/zatca-invoice returns invoiceType standard after standard pay', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+    it('GET /orders/:id/zatca-invoice returns invoiceType standard after standard submit', async () => {
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1420,7 +1447,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('POST /orders/:id/zatca-invoice/reissue with no prior invoice returns 400', async () => {
-      const { orderId } = await createOpenOrderWithItemsAndPay({
+      const { orderId } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1436,7 +1463,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('POST /orders/:id/zatca-invoice/retry-clearance with no prior invoice returns 400', async () => {
-      const { orderId } = await createOpenOrderWithItemsAndPay({
+      const { orderId } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1450,7 +1477,7 @@ describe('Pay with payment methods', () => {
     });
 
     it('simple (non-standard) order gets invoiceType simplified from zatca-invoice', async () => {
-      const { orderId, res } = await createOpenOrderWithItemsAndPay();
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit();
 
       expect(res.status).toBe(201);
 
@@ -1464,7 +1491,7 @@ describe('Pay with payment methods', () => {
 
     it('standard invoice refund defers receipt print until credit note clearance', async () => {
       // 1. Create a standard paid order
-      const { orderId, res } = await createOpenOrderWithItemsAndPay({
+      const { orderId, res } = await createOpenOrderWithItemsAndSubmit({
         isStandardInvoice: true,
         zatcaBuyerDetails: FULL_BUYER,
       });
@@ -1528,6 +1555,368 @@ describe('Pay with payment methods', () => {
       const typesAfter = eventsAfter.body.map((e: any) => e.type);
       expect(typesAfter).toContain('receipt_print_enqueued');
       expect(typesAfter).toContain('receipt_print_succeeded');
+    });
+  });
+});
+
+describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => {
+  // Open order with 2× Zinger Burger (total 4600 halalas), status stays open
+  async function createOpenOrderWithItems(): Promise<{
+    orderId: number;
+    totalHalalas: number;
+  }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: 1, qty: 2 }],
+      })
+      .expect(200);
+
+    const fetched = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, totalHalalas: fetched.body.totalHalalas };
+  }
+
+  function paymentSum(orderId: number): number {
+    const rows = db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.orderId, orderId))
+      .all();
+    return rows.reduce((s: number, r: any) => s + r.amountHalalas, 0);
+  }
+
+  it('happy path: cash payment appends a line, status stays open, payment_added event, no paid event', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: totalHalalas })
+      .expect(201);
+
+    // Status unchanged
+    expect(res.body.status).toBe('open');
+
+    // Payments array: one line with full shape (id + createdAt included)
+    expect(res.body.payments).toHaveLength(1);
+    const p = res.body.payments[0];
+    expect(p.id).toBeGreaterThan(0);
+    expect(p.methodId).toBe('cash');
+    expect(p.methodTitle).toBe('Cash');
+    expect(p.zatcaPaymentMeansCode).toBe('10');
+    expect(p.amountHalalas).toBe(totalHalalas);
+    expect(p.tenderedHalalas).toBe(totalHalalas);
+    expect(p.changeHalalas).toBe(0);
+    expect(p.createdAt).toBeGreaterThan(0);
+
+    // DB row persisted
+    expect(paymentSum(orderId)).toBe(totalHalalas);
+
+    // Events: payment_added present, paid absent
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const types = eventsRes.body.map((e: any) => e.type);
+    expect(types).toContain('payment_added');
+    expect(types).not.toContain('paid');
+
+    const added = eventsRes.body.find((e: any) => e.type === 'payment_added');
+    const payload = typeof added.payload === 'string' ? JSON.parse(added.payload) : added.payload;
+    expect(payload.paymentId).toBe(p.id);
+    expect(payload.methodId).toBe('cash');
+    expect(payload.methodTitle).toBe('Cash');
+    expect(payload.zatcaPaymentMeansCode).toBe('10');
+    expect(payload.amountHalalas).toBe(totalHalalas);
+    expect(payload.tenderedHalalas).toBe(totalHalalas);
+    expect(payload.changeHalalas).toBe(0);
+
+    // updated_at bumped (audit fields)
+    expect(res.body.updatedBy).toBe(1);
+  });
+
+  it('negative correction after overpay: pay 100 then −20 → net 80', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100 })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: -20 })
+      .expect(201);
+
+    expect(res.body.status).toBe('open');
+    expect(res.body.payments).toHaveLength(2);
+    expect(paymentSum(orderId)).toBe(80);
+
+    // Negative cash line: no tendered/change in DB or event payload
+    const neg = res.body.payments[1];
+    expect(neg.amountHalalas).toBe(-20);
+    expect(neg.tenderedHalalas).toBeNull();
+    expect(neg.changeHalalas).toBeNull();
+
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const addedEvents = eventsRes.body.filter((e: any) => e.type === 'payment_added');
+    expect(addedEvents).toHaveLength(2);
+    const negPayload = JSON.parse(addedEvents[1].payload);
+    expect(negPayload.amountHalalas).toBe(-20);
+    expect(negPayload.tenderedHalalas).toBeUndefined();
+    expect(negPayload.changeHalalas).toBeUndefined();
+  });
+
+  it('rejects amount 0 (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 0 })
+      .expect(400);
+
+    expect(res.body.message).toBeDefined();
+    expect(paymentSum(orderId)).toBe(0);
+  });
+
+  it('rejects a line that would push the net sum negative (first line −50)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: -50 })
+      .expect(400);
+
+    // Nothing persisted
+    expect(paymentSum(orderId)).toBe(0);
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(eventsRes.body.some((e: any) => e.type === 'payment_added')).toBe(false);
+  });
+
+  it('rejects payment on an empty order (no items) (400)', async () => {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100 })
+      .expect(400);
+
+    expect(res.body.message).toContain('without items');
+  });
+
+  it('rejects payment on a non-open order (400)', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    // Finalize via payments + submit (status becomes paid)
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100 })
+      .expect(400);
+  });
+
+  it('rejects unknown payment method (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'bitcoin', amountHalalas: 100 })
+      .expect(400);
+  });
+
+  it('rejects disabled payment method (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    db.update(schema.paymentMethods)
+      .set({ enabled: 0 })
+      .where(eq(schema.paymentMethods.id, 'mada'))
+      .run();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'mada', amountHalalas: 100 })
+      .expect(400);
+
+    db.update(schema.paymentMethods)
+      .set({ enabled: 1 })
+      .where(eq(schema.paymentMethods.id, 'mada'))
+      .run();
+  });
+
+  it('rejects tendered on non-cash method (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'card', amountHalalas: 100, tenderedHalalas: 100 })
+      .expect(400);
+  });
+
+  it('rejects tendered on negative cash line (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: -20, tenderedHalalas: 20 })
+      .expect(400);
+  });
+
+  it('rejects cash tendered < amount (400)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100, tenderedHalalas: 99 })
+      .expect(400);
+  });
+
+  it('multiple lines with the same method are allowed (two cash rows)', async () => {
+    const { orderId } = await createOpenOrderWithItems();
+
+    const res1 = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 1000 })
+      .expect(201);
+    expect(res1.body.payments).toHaveLength(1);
+
+    const res2 = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 1000 })
+      .expect(201);
+
+    expect(res2.body.payments).toHaveLength(2);
+    const cashLines = res2.body.payments.filter((p: any) => p.methodId === 'cash');
+    expect(cashLines).toHaveLength(2);
+    expect(paymentSum(orderId)).toBe(2000);
+    expect(res2.body.status).toBe('open');
+  });
+
+  it('temporary overpay is allowed while open (sum > total)', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: totalHalalas + 400 })
+      .expect(201);
+
+    expect(res.body.status).toBe('open');
+    expect(paymentSum(orderId)).toBe(totalHalalas + 400);
+  });
+
+  describe('void net-zero guard (ADR 0006)', () => {
+    it('void with no payments still works', async () => {
+      const { orderId } = await createOpenOrderWithItems();
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(201);
+
+      expect(res.body.status).toBe('voided');
+    });
+
+    it('void after payments that net to 0 (+100 then −100) works', async () => {
+      const { orderId } = await createOpenOrderWithItems();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 100 })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: -100 })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(201);
+
+      expect(res.body.status).toBe('voided');
+    });
+
+    it('void with net payments ≠ 0 returns 400 with guidance', async () => {
+      const { orderId } = await createOpenOrderWithItems();
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 100 })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(400);
+
+      expect(res.body.message).toContain('net 100 halalas');
+      expect(res.body.message).toContain('balancing payment lines');
+
+      // Order still open — balance it so it can be voided
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: -100 })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(201);
     });
   });
 });
@@ -1844,7 +2233,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     const { id } = await createOrder({ type: 'takeaway' });
     const before = await getOrder(id);
 
-    // Add an item so the order has a total to pay
+    // Add an item so the order has a total to pay, then finalize via submit
     const syncRes = await request(app.getHttpServer())
       .put(`/orders/${id}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -1852,9 +2241,14 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
       .expect(200);
 
     await request(app.getHttpServer())
-      .post(`/orders/${id}/pay`)
+      .post(`/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ payments: [{ methodId: 'cash', amountHalalas: syncRes.body.totalHalalas }] })
+      .send({ methodId: 'cash', amountHalalas: syncRes.body.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(201);
 
     const paidOrder = await getOrder(id);
@@ -2026,10 +2420,18 @@ describe('syncItems (bulk cart sync)', () => {
     const events = syncRes.body.events;
     const addEvents = events.filter((e: any) => e.type === 'item_added');
     expect(addEvents).toHaveLength(2);
+
+    // ADR 0006: item_added records kitchenPrintedQty 0 and sync never
+    // kitchen-prints (no kitchen_print_enqueued events)
+    for (const evt of addEvents) {
+      const p = typeof evt.payload === 'string' ? JSON.parse(evt.payload) : evt.payload;
+      expect(p.kitchenPrintedQty).toBe(0);
+    }
+    expect(events.filter((e: any) => e.type === 'kitchen_print_enqueued').length).toBe(0);
   });
 
-  // --- Test 2: Update qty up → item_updated + kitchen delta ---
-  it('increases qty: item_updated event, kitchen delta print', async () => {
+  // --- Test 2: Update qty up → item_updated, kitchenPrintedQty 0, NO print (ADR 0006) ---
+  it('increases qty: item_updated event with kitchenPrintedQty 0, no kitchen print', async () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     // First sync: add 2 burgers
@@ -2048,7 +2450,7 @@ describe('syncItems (bulk cart sync)', () => {
     await new Promise((r) => setTimeout(r, 200));
     transport.sent = [];
 
-    // Second sync: increase to 5 (delta = 3 printed)
+    // Second sync: increase to 5 — must NOT print anything
     const res2 = await request(app.getHttpServer())
       .put(`/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -2063,14 +2465,24 @@ describe('syncItems (bulk cart sync)', () => {
     const updateEvents = events.filter((e: any) => e.type === 'item_updated');
     expect(updateEvents.length).toBeGreaterThanOrEqual(1);
 
+    // ADR 0006: item mutations always record kitchenPrintedQty 0
+    const updatePayload =
+      typeof updateEvents[updateEvents.length - 1].payload === 'string'
+        ? JSON.parse(updateEvents[updateEvents.length - 1].payload)
+        : updateEvents[updateEvents.length - 1].payload;
+    expect(updatePayload.kitchenPrintedQty).toBe(0);
+    expect(updatePayload.newQty).toBe(5);
+
+    // No kitchen_print_enqueued events from sync
+    expect(events.filter((e: any) => e.type === 'kitchen_print_enqueued').length).toBe(0);
+
     await new Promise((r) => setTimeout(r, 200));
 
-    // Kitchen print should contain delta (3)
+    // No kitchen print should have been sent
     const kitchenPrints = transport.sent.filter(
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
-    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+    expect(kitchenPrints.length).toBe(0);
   });
 
   // --- Test 3: Qty down → saved; kitchenPrintedQty 0; no print ---
@@ -2144,13 +2556,10 @@ describe('syncItems (bulk cart sync)', () => {
 
     expect(res2.body.items[0].notes).toBe('no onions');
 
-    // No new kitchen_print_enqueued events for notes-only (count unchanged from first sync)
-    const res1KitchenCount = res1.body.events.filter(
-      (e: any) => e.type === 'kitchen_print_enqueued',
-    ).length;
+    // ADR 0006: sync never writes kitchen_print_enqueued events
     const events = res2.body.events;
     const kitchenEnqEvents = events.filter((e: any) => e.type === 'kitchen_print_enqueued');
-    expect(kitchenEnqEvents.length).toBe(res1KitchenCount);
+    expect(kitchenEnqEvents.length).toBe(0);
     const updateEvents = events.filter((e: any) => e.type === 'item_updated');
     expect(updateEvents.length).toBeGreaterThanOrEqual(1);
 
@@ -2242,11 +2651,16 @@ describe('syncItems (bulk cart sync)', () => {
       })
       .expect(200);
 
-    // Pay the order
+    // Finalize via payments + submit
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
+      .post(`/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ payments: [{ methodId: 'cash', amountHalalas: res.body.totalHalalas }] })
+      .send({ methodId: 'cash', amountHalalas: res.body.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(201);
 
     const newUpdatedAt = res.body.updatedAt;
@@ -2304,16 +2718,14 @@ describe('syncItems (bulk cart sync)', () => {
       .expect(400);
   });
 
-  // --- Test 11: Multi-station kitchen batch → one ticket per printer ---
-  it('multi-item multi-printer single sync: one ticket per printer', async () => {
+  // --- Test 11: Multi-item sync → items persist, NO kitchen print (ADR 0006) ---
+  it('multi-item single sync: items persisted, no kitchen print enqueued', async () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     // Use items 1 (Zinger, cat 1 → Kitchen printer 2) and 2 (Pepsi, cat 1 → same printer).
-    // For a true multi-printer test, see print-integration.test.ts which has
-    // separate categories with distinct printers seeded from scratch.
     transport.sent = [];
 
-    await request(app.getHttpServer())
+    const syncRes = await request(app.getHttpServer())
       .put(`/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
@@ -2325,22 +2737,26 @@ describe('syncItems (bulk cart sync)', () => {
       })
       .expect(200);
 
+    expect(syncRes.body.items).toHaveLength(2);
+
     await new Promise((r) => setTimeout(r, 300));
 
-    // Both items route to Kitchen printer (same category), so at least 1 kitchen print
+    // ADR 0006: no kitchen prints from sync
     const kitchenPrints = transport.sent.filter((s: any) => s.ip !== '192.168.1.50');
-    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+    expect(kitchenPrints.length).toBe(0);
 
-    // Verify kitchen_print_enqueued event exists
-    const orderRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .expect(200);
-
-    const events = orderRes.body.events;
+    // No kitchen_print_enqueued events from sync
+    const events = syncRes.body.events;
     const enqEvents = events.filter((e: any) => e.type === 'kitchen_print_enqueued');
-    // At least one kitchen_print_enqueued event
-    expect(enqEvents.length).toBeGreaterThanOrEqual(1);
+    expect(enqEvents.length).toBe(0);
+
+    // item_added events still carry kitchenPrintedQty 0
+    const addEvents = events.filter((e: any) => e.type === 'item_added');
+    expect(addEvents).toHaveLength(2);
+    for (const evt of addEvents) {
+      const p = typeof evt.payload === 'string' ? JSON.parse(evt.payload) : evt.payload;
+      expect(p.kitchenPrintedQty).toBe(0);
+    }
   });
 
   // --- Test 12: Unchanged lines do not emit item_updated ---
@@ -2803,5 +3219,229 @@ describe('syncItems (bulk cart sync)', () => {
 
     expect(res2.body.items).toHaveLength(1);
     expect(res2.body.items[0].qty).toBe(1);
+  });
+});
+
+describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
+  const zingerItemId = 1;
+
+  async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  async function syncItems(orderId: number, updatedAt: number, items: any[]) {
+    return request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+  }
+
+  async function sendToKitchen(orderId: number) {
+    return request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+  }
+
+  function enqueuedPayloads(order: any): any[] {
+    return order.events
+      .filter((e: any) => e.type === 'kitchen_print_enqueued')
+      .map((e: any) => (typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload));
+  }
+
+  it('first send prints full unsent qty; second send is a 200 no-op with no new events', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const syncRes = await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 5 }]);
+    const orderItemId = syncRes.body.items[0].id;
+    const updatedAtAfterSync = syncRes.body.updatedAt;
+
+    transport.sent = [];
+
+    // First send: delta = 5 (nothing printed yet)
+    const res1 = await sendToKitchen(orderId);
+
+    const enq1 = enqueuedPayloads(res1.body);
+    expect(enq1).toHaveLength(1);
+    expect(enq1[0].printer).toBe('Kitchen');
+    expect(enq1[0].printerId).toBe(2);
+    expect(enq1[0].items).toEqual([{ orderItemId, itemName: 'Zinger Burger', printedQty: 5 }]);
+
+    // updatedAt bumped so the POS can detect the send
+    expect(res1.body.updatedAt).toBeGreaterThanOrEqual(updatedAtAfterSync);
+
+    // Kitchen ticket actually printed (non-blocking)
+    await new Promise((r) => setTimeout(r, 200));
+    const kitchenPrints = transport.sent.filter(
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+    );
+    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('5 Zinger Burger');
+
+    // Second send with no changes → 200 no-op, no new enqueued events
+    const res2 = await sendToKitchen(orderId);
+    expect(enqueuedPayloads(res2.body)).toHaveLength(1);
+    // updatedAt unchanged by the no-op
+    expect(res2.body.updatedAt).toBe(res1.body.updatedAt);
+    expect(res2.body.items).toHaveLength(1);
+    expect(res2.body.items[0].qty).toBe(5);
+  });
+
+  it('sends only the unsent delta after a qty increase via sync', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // First send: 5 printed
+    await sendToKitchen(orderId);
+
+    // Qty up to 8 via sync — sync itself never prints (ADR 0006)
+    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 8 }]);
+    expect(sync2.body.items[0].qty).toBe(8);
+    expect(enqueuedPayloads(sync2.body)).toHaveLength(1); // still only the first send
+
+    transport.sent = [];
+
+    // Second send: only delta 3 (8 − 5 printed)
+    const res2 = await sendToKitchen(orderId);
+    const enq = enqueuedPayloads(res2.body);
+    expect(enq).toHaveLength(2);
+    expect(enq[enq.length - 1].items).toEqual([
+      { orderItemId, itemName: 'Zinger Burger', printedQty: 3 },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 200));
+    const kitchenPrints = transport.sent.filter(
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+    );
+    expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+  });
+
+  it('qty decrease: send does not print negative; printed total stays high', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5
+    await sendToKitchen(orderId);
+
+    // Qty down to 2 via sync (no print)
+    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 2 }]);
+    expect(sync2.body.items[0].qty).toBe(2);
+
+    transport.sent = [];
+
+    // Send: no deltas (printed 5 ≥ qty 2) → no new events, no prints
+    const res2 = await sendToKitchen(orderId);
+    expect(enqueuedPayloads(res2.body)).toHaveLength(1);
+
+    await new Promise((r) => setTimeout(r, 200));
+    expect(transport.sent.filter((s: any) => s.ip !== '192.168.1.50').length).toBe(0);
+  });
+
+  it('send-to-kitchen on a non-open order returns 400', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 1 }]);
+
+    // Finalize via payments + submit (1 Zinger = 2300 halalas)
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 2300 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('send-to-kitchen on a missing order returns 404', async () => {
+    await request(app.getHttpServer())
+      .post('/orders/999999/send-to-kitchen')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(404);
+  });
+
+  it('send-to-kitchen is gated by update_order (same permission as syncItems, ADR 0006)', async () => {
+    // waiter is seeded with android_login=1 and holds update_order (it can
+    // call syncItems). ADR 0006 introduces no new permission — send-to-kitchen
+    // reuses update_order; the Android app just has no UI button for it.
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 1 }]);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .expect(200);
+  });
+
+  it('android syncItems still works and never kitchen-prints (regression)', async () => {
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .expect(200);
+
+    transport.sent = [];
+
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].qty).toBe(2);
+
+    // No kitchen_print_enqueued events, item_added carries kitchenPrintedQty 0
+    expect(res.body.events.filter((e: any) => e.type === 'kitchen_print_enqueued').length).toBe(0);
+    const addedEvent = res.body.events.find((e: any) => e.type === 'item_added');
+    const addedPayload =
+      typeof addedEvent.payload === 'string' ? JSON.parse(addedEvent.payload) : addedEvent.payload;
+    expect(addedPayload.kitchenPrintedQty).toBe(0);
+
+    // No kitchen prints at all
+    await new Promise((r) => setTimeout(r, 200));
+    expect(transport.sent.filter((s: any) => s.ip !== '192.168.1.50').length).toBe(0);
   });
 });

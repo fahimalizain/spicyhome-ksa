@@ -44,6 +44,24 @@ class OrderRefundResponseTest : ShouldSpec() {
             //modelInstance.userId shouldBe ("TODO")
         }
 
+        // to test the property `methodId` - Payment method slug used for this refund
+        should("test methodId") {
+            // uncomment below to test the property
+            //modelInstance.methodId shouldBe ("TODO")
+        }
+
+        // to test the property `methodTitle` - Payment method title snapshot at refund time
+        should("test methodTitle") {
+            // uncomment below to test the property
+            //modelInstance.methodTitle shouldBe ("TODO")
+        }
+
+        // to test the property `zatcaPaymentMeansCode` - ZATCA UN/ECE 4461 Payment Means code snapshot at refund time
+        should("test zatcaPaymentMeansCode") {
+            // uncomment below to test the property
+            //modelInstance.zatcaPaymentMeansCode shouldBe ("TODO")
+        }
+
         // to test the property `subtotalHalalas`
         should("test subtotalHalalas") {
             // uncomment below to test the property
@@ -66,6 +84,12 @@ class OrderRefundResponseTest : ShouldSpec() {
         should("test reason") {
             // uncomment below to test the property
             //modelInstance.reason shouldBe ("TODO")
+        }
+
+        // to test the property `documentId` - Refund document ID
+        should("test documentId") {
+            // uncomment below to test the property
+            //modelInstance.documentId shouldBe ("TODO")
         }
 
         // to test the property `createdAt`

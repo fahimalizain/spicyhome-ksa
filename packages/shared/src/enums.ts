@@ -38,6 +38,7 @@ export const AuditAction = {
   ITEM_UPDATED: 'item_updated',
   ITEM_REMOVED: 'item_removed',
   PAID: 'paid',
+  PAYMENT_ADDED: 'payment_added',
   VOIDED: 'voided',
   REFUNDED: 'refunded',
   REFUND_ISSUED: 'refund_issued',

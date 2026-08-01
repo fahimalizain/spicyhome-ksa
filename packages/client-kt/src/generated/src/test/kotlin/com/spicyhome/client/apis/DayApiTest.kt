@@ -21,6 +21,7 @@ import io.kotlintest.specs.ShouldSpec
 import com.spicyhome.client.apis.DayApi
 import com.spicyhome.client.models.CloseDayDto
 import com.spicyhome.client.models.CloseDayResponse
+import com.spicyhome.client.models.CurrentDayResponse
 import com.spicyhome.client.models.DayOpeningResponse
 import com.spicyhome.client.models.OpenDayDto
 
@@ -40,7 +41,8 @@ class DayApiTest : ShouldSpec() {
         // to test businessDayControllerGetCurrent
         should("test businessDayControllerGetCurrent") {
             // uncomment below to test businessDayControllerGetCurrent
-            //apiInstance.businessDayControllerGetCurrent()
+            //val result : CurrentDayResponse = apiInstance.businessDayControllerGetCurrent()
+            //result shouldBe ("TODO")
         }
 
         // to test businessDayControllerGetDay

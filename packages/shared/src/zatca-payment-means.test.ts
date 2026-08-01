@@ -5,6 +5,7 @@ import {
   DEFAULT_ZATCA_PAYMENT_MEANS_CODE,
   isZatcaPaymentMeansCode,
   MAX_INSTRUCTION_NOTE_LENGTH,
+  netPaymentMeansLines,
   ZATCA_PAYMENT_MEANS_CODE_LABELS,
   ZATCA_PAYMENT_MEANS_CODES,
 } from './zatca-payment-means';
@@ -129,6 +130,74 @@ describe('buildInvoicePaymentMeans', () => {
       { methodId: 'cash', methodTitle: '   ', amountHalalas: 5000, zatcaPaymentMeansCode: '10' },
     ]);
     expect(result[0].instructionNote).toBe('cash | 50.00 SAR');
+  });
+});
+
+describe('netPaymentMeansLines / multi-line netting (ADR 0006)', () => {
+  it('nets two cash lines +100 / −20 into one means with 80', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 100, zatcaPaymentMeansCode: '10' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: -20, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result).toEqual([{ code: '10', instructionNote: 'Cash | 0.80 SAR' }]);
+  });
+
+  it('keeps one block per method for cash + card', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 100, zatcaPaymentMeansCode: '10' },
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 50, zatcaPaymentMeansCode: '48' },
+    ]);
+    expect(result).toEqual([
+      { code: '48', instructionNote: 'Card | 0.50 SAR' },
+      { code: '10', instructionNote: 'Cash | 1.00 SAR' },
+    ]);
+  });
+
+  it('drops a method whose lines net to exactly zero (+100 / −100)', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 100, zatcaPaymentMeansCode: '10' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: -100, zatcaPaymentMeansCode: '10' },
+    ]);
+    // All lines netted away — the XML builder falls back to a single 10 block
+    expect(result).toEqual([]);
+  });
+
+  it('drops negative nets (should never reach the invoice; submit rejects them)', () => {
+    const result = buildInvoicePaymentMeans([
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: -50, zatcaPaymentMeansCode: '48' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 100, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result).toEqual([{ code: '10', instructionNote: 'Cash | 1.00 SAR' }]);
+  });
+
+  it('keeps the snapshot fields of the latest line per method', () => {
+    const result = buildInvoicePaymentMeans([
+      {
+        methodId: 'cash',
+        methodTitle: 'Cash (old title)',
+        amountHalalas: 100,
+        zatcaPaymentMeansCode: '10',
+      },
+      {
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: -20,
+        zatcaPaymentMeansCode: '10',
+      },
+    ]);
+    expect(result[0].instructionNote).toBe('Cash | 0.80 SAR');
+  });
+
+  it('netPaymentMeansLines is a pure helper sorted by methodId ASC', () => {
+    const result = netPaymentMeansLines([
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: -20, zatcaPaymentMeansCode: '10' },
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 50, zatcaPaymentMeansCode: '48' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 100, zatcaPaymentMeansCode: '10' },
+    ]);
+    expect(result).toEqual([
+      { methodId: 'card', methodTitle: 'Card', amountHalalas: 50, zatcaPaymentMeansCode: '48' },
+      { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 80, zatcaPaymentMeansCode: '10' },
+    ]);
   });
 });
 

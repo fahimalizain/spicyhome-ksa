@@ -43,5 +43,11 @@ class PrinterArabicConfigDtoTest : ShouldSpec() {
             //modelInstance.visualRtl shouldBe ("TODO")
         }
 
+        // to test the property `renderMode` - How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas)
+        should("test renderMode") {
+            // uncomment below to test the property
+            //modelInstance.renderMode shouldBe ("TODO")
+        }
+
     }
 }

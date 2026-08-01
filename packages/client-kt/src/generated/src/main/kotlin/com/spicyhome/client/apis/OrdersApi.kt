@@ -6,6 +6,7 @@ import retrofit2.Call
 import okhttp3.RequestBody
 import com.squareup.moshi.Json
 
+import com.spicyhome.client.models.AddOrderPaymentDto
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
@@ -14,17 +15,32 @@ import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.PayOrderDto
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
+import com.spicyhome.client.models.SubmitOrderDto
 import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.UpdateOrderMetaDto
 import com.spicyhome.client.models.ZatcaInvoiceReissueDto
 import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
 import com.spicyhome.client.models.ZatcaReissueResultDto
 
 interface OrdersApi {
+    /**
+     * POST orders/{id}/payments
+     * Append one payment line to an open order (status stays open)
+     * 
+     * Responses:
+     *  - 201: Order with the appended payment line
+     *
+     * @param id 
+     * @param addOrderPaymentDto 
+     * @return [Call]<[OrderResponse]>
+     */
+    @POST("orders/{id}/payments")
+    fun ordersControllerAddOrderPayment(@Path("id") id: kotlin.Long, @Body addOrderPaymentDto: AddOrderPaymentDto): Call<OrderResponse>
+
     /**
      * POST orders
      * Create a new order
@@ -117,20 +133,6 @@ interface OrdersApi {
      */
     @GET("orders")
     fun ordersControllerListOrders(@Query("status") status: kotlin.String, @Query("date") date: kotlin.String): Call<kotlin.collections.List<OrderSummaryResponse>>
-
-    /**
-     * POST orders/{id}/pay
-     * Mark order as paid with payment methods (open → paid)
-     * 
-     * Responses:
-     *  - 201: Order paid
-     *
-     * @param id 
-     * @param payOrderDto 
-     * @return [Call]<[StatusResponse]>
-     */
-    @POST("orders/{id}/pay")
-    fun ordersControllerPayOrder(@Path("id") id: kotlin.Long, @Body payOrderDto: PayOrderDto): Call<StatusResponse>
 
     /**
      * POST orders/{id}/refund
@@ -230,6 +232,33 @@ interface OrdersApi {
     fun ordersControllerRetryZatcaCreditNoteClearance(@Path("id") id: kotlin.Long, @Path("refundId") refundId: kotlin.Long): Call<ZatcaReissueResultDto>
 
     /**
+     * POST orders/{id}/send-to-kitchen
+     * Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent)
+     * 
+     * Responses:
+     *  - 200: Order with items and events
+     *
+     * @param id 
+     * @return [Call]<[OrderResponse]>
+     */
+    @POST("orders/{id}/send-to-kitchen")
+    fun ordersControllerSendToKitchen(@Path("id") id: kotlin.Long): Call<OrderResponse>
+
+    /**
+     * POST orders/{id}/submit
+     * Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt
+     * 
+     * Responses:
+     *  - 201: Order paid
+     *
+     * @param id 
+     * @param submitOrderDto 
+     * @return [Call]<[StatusResponse]>
+     */
+    @POST("orders/{id}/submit")
+    fun ordersControllerSubmitOrder(@Path("id") id: kotlin.Long, @Body submitOrderDto: SubmitOrderDto): Call<StatusResponse>
+
+    /**
      * PUT orders/{orderId}/items/sync
      * Bulk sync cart items (add, update, remove) for an open order
      * 
@@ -242,6 +271,20 @@ interface OrdersApi {
      */
     @PUT("orders/{orderId}/items/sync")
     fun ordersControllerSyncItems(@Path("orderId") orderId: kotlin.Long, @Body syncOrderItemsDto: SyncOrderItemsDto): Call<OrderResponse>
+
+    /**
+     * PATCH orders/{id}
+     * Update open order type and/or table
+     * 
+     * Responses:
+     *  - 200: Updated order with items and events
+     *
+     * @param id 
+     * @param updateOrderMetaDto 
+     * @return [Call]<[OrderResponse]>
+     */
+    @PATCH("orders/{id}")
+    fun ordersControllerUpdateOrderMeta(@Path("id") id: kotlin.Long, @Body updateOrderMetaDto: UpdateOrderMetaDto): Call<OrderResponse>
 
     /**
      * GET orders/{id}/events/verify

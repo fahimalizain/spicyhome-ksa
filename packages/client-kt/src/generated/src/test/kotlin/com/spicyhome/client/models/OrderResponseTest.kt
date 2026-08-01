@@ -22,6 +22,7 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderPaymentResponse
+import com.spicyhome.client.models.ZatcaBuyerDetailsDto
 
 class OrderResponseTest : ShouldSpec() {
     init {
@@ -94,6 +95,18 @@ class OrderResponseTest : ShouldSpec() {
             //modelInstance.discountHalalas shouldBe ("TODO")
         }
 
+        // to test the property `documentId` - ZATCA root cbc:ID — the business invoice number
+        should("test documentId") {
+            // uncomment below to test the property
+            //modelInstance.documentId shouldBe ("TODO")
+        }
+
+        // to test the property `isStandardInvoice` - Whether this order is a ZATCA standard invoice
+        should("test isStandardInvoice") {
+            // uncomment below to test the property
+            //modelInstance.isStandardInvoice shouldBe ("TODO")
+        }
+
         // to test the property `createdAt`
         should("test createdAt") {
             // uncomment below to test the property
@@ -134,6 +147,12 @@ class OrderResponseTest : ShouldSpec() {
         should("test payments") {
             // uncomment below to test the property
             //modelInstance.payments shouldBe ("TODO")
+        }
+
+        // to test the property `zatcaBuyerDetails` - ZATCA standard invoice buyer details (JSON)
+        should("test zatcaBuyerDetails") {
+            // uncomment below to test the property
+            //modelInstance.zatcaBuyerDetails shouldBe ("TODO")
         }
 
     }

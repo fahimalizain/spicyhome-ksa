@@ -18,12 +18,12 @@ package com.spicyhome.client.models
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
-import com.spicyhome.client.models.PaymentLineDto
+import com.spicyhome.client.models.AddOrderPaymentDto
 
-class PaymentLineDtoTest : ShouldSpec() {
+class AddOrderPaymentDtoTest : ShouldSpec() {
     init {
-        // uncomment below to create an instance of PaymentLineDto
-        //val modelInstance = PaymentLineDto()
+        // uncomment below to create an instance of AddOrderPaymentDto
+        //val modelInstance = AddOrderPaymentDto()
 
         // to test the property `methodId` - Payment method slug
         should("test methodId") {
@@ -31,13 +31,13 @@ class PaymentLineDtoTest : ShouldSpec() {
             //modelInstance.methodId shouldBe ("TODO")
         }
 
-        // to test the property `amountHalalas` - Amount in halalas
+        // to test the property `amountHalalas` - Amount in halalas. Signed integer: positive lines are payments, negative lines are corrections. Zero is rejected.
         should("test amountHalalas") {
             // uncomment below to test the property
             //modelInstance.amountHalalas shouldBe ("TODO")
         }
 
-        // to test the property `tenderedHalalas` - Cash tendered amount in halalas (cash only)
+        // to test the property `tenderedHalalas` - Cash tendered amount in halalas (positive cash lines only)
         should("test tenderedHalalas") {
             // uncomment below to test the property
             //modelInstance.tenderedHalalas shouldBe ("TODO")

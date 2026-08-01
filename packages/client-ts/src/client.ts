@@ -16,8 +16,8 @@ export type UpdateTableDto = Schemas['UpdateTableDto'];
 export type CreatePrinterDto = Schemas['CreatePrinterDto'];
 export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
-export type PayOrderDto = Schemas['PayOrderDto'];
-export type PaymentLineDto = Schemas['PaymentLineDto'];
+export type SubmitOrderDto = Schemas['SubmitOrderDto'];
+export type AddOrderPaymentDto = Schemas['AddOrderPaymentDto'];
 
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
@@ -29,6 +29,7 @@ export type OrderRefundResponse = Schemas['OrderRefundResponse'];
 export type RefundItemDto = Schemas['RefundItemDto'];
 export type RefundItemResponse = Schemas['RefundItemResponse'];
 export type OrderEventResponse = Schemas['OrderEventResponse'];
+export type OrderPaymentResponse = Schemas['OrderPaymentResponse'];
 export type PrintResponse = Schemas['PrintResponse'];
 export type ReprintOrderDto = Schemas['ReprintOrderDto'];
 
@@ -320,11 +321,23 @@ export class SpicyHomeClient {
     syncItems: (orderId: number, dto: SyncOrderItemsDto) =>
       request<OrderResponse>(this.config, 'PUT', `/orders/${orderId}/items/sync`, dto),
 
+    /**
+     * Explicit differential kitchen print (ADR 0006). Prints only unsent item
+     * quantities; 200 no-op (with the current order) when nothing is unsent.
+     */
+    sendToKitchen: (orderId: number) =>
+      request<OrderResponse>(this.config, 'POST', `/orders/${orderId}/send-to-kitchen`),
+
     update: (orderId: number, dto: UpdateOrderMetaDto) =>
       request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}`, dto),
 
-    pay: (orderId: number, dto: PayOrderDto) =>
-      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),
+    /** Append ONE payment line to an open order (ADR 0006 — status stays open). */
+    addPayment: (orderId: number, dto: AddOrderPaymentDto) =>
+      request<OrderResponse>(this.config, 'POST', `/orders/${orderId}/payments`, dto),
+
+    /** Finalize an open order (ADR 0006 — the only open → paid path). */
+    submit: (orderId: number, dto?: SubmitOrderDto) =>
+      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/submit`, dto),
 
     void: (orderId: number) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`),

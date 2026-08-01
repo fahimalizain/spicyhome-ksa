@@ -213,17 +213,6 @@ describe('OrderEventsService', () => {
   });
 
   describe('getPrintedQty', () => {
-    function insertOrderItem(id: number, orderId: number) {
-      sqlite
-        .prepare(
-          `
-        INSERT INTO order_items (id, order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
-        VALUES (?, ?, 'Test Item', 1000, 1500, 1, 1000, 1000, 1000)
-      `,
-        )
-        .run(id, orderId);
-    }
-
     it('returns 0 when there are no events', () => {
       const txn = db;
       expect(service.getPrintedQty(txn, 1)).toBe(0);
@@ -393,6 +382,273 @@ describe('OrderEventsService', () => {
         .run();
 
       // Should not throw
+      expect(service.getPrintedQty(txn, 5)).toBe(0);
+    });
+
+    it('sums printedQty from kitchen_print_enqueued items (ADR 0006)', () => {
+      insertOrder(1);
+      const txn = db;
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [
+              { orderItemId: 5, itemName: 'Zinger Burger', printedQty: 5 },
+              { orderItemId: 6, itemName: 'Pepsi', printedQty: 2 },
+            ],
+          }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 5, itemName: 'Zinger Burger', printedQty: 3 }],
+          }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
+
+      // Only item 5's printedQty from both enqueued events is counted
+      expect(service.getPrintedQty(txn, 5)).toBe(8);
+      expect(service.getPrintedQty(txn, 6)).toBe(2);
+    });
+
+    it('legacy double-write: enqueued is authoritative, does not double-count', () => {
+      insertOrder(1);
+      const txn = db;
+
+      // Pre-ADR auto-print era: a single kitchen send wrote BOTH an item
+      // event with kitchenPrintedQty AND a kitchen_print_enqueued with the
+      // same printedQty in the same transaction.
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 5, itemName: 'Zinger Burger', printedQty: 5 }],
+          }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1000,
+        })
+        .run();
+
+      // 5 (enqueued) — NOT 5 + 5 = 10. Enqueued wins over legacy item qty.
+      expect(service.getPrintedQty(txn, 5)).toBe(5);
+    });
+
+    it('enqueued-only (new ADR path): item events carry 0, multiple sends sum', () => {
+      insertOrder(1);
+      const txn = db;
+
+      // ADR 0006: item mutations never kitchen-print, kitchenPrintedQty is 0
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 0 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 5, itemName: 'Zinger Burger', printedQty: 5 }],
+          }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 3,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 5, itemName: 'Zinger Burger', printedQty: 3 }],
+          }),
+          prevHash: 'dummy2',
+          hash: 'dummy3',
+          createdAt: 1002,
+        })
+        .run();
+
+      // 5 + 3 = 8 from enqueued events (item kitchenPrintedQty 0 ignored)
+      expect(service.getPrintedQty(txn, 5)).toBe(8);
+    });
+
+    it('falls back to item kitchenPrintedQty when no enqueued event mentions the item', () => {
+      insertOrder(1);
+      const txn = db;
+
+      // Printer-less legacy claim or pure item-only history: only item
+      // events exist, no kitchen_print_enqueued for this item.
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'item_added',
+          payload: JSON.stringify({ orderItemId: 5, kitchenPrintedQty: 5 }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      // An enqueued event exists for a DIFFERENT item — must not switch
+      // this item to the enqueued source.
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 2,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 99, itemName: 'Pepsi', printedQty: 7 }],
+          }),
+          prevHash: 'dummy1',
+          hash: 'dummy2',
+          createdAt: 1001,
+        })
+        .run();
+
+      expect(service.getPrintedQty(txn, 5)).toBe(5);
+      expect(service.getPrintedQty(txn, 99)).toBe(7);
+    });
+
+    it('treats kitchen_print_enqueued without a matching orderItemId as 0', () => {
+      insertOrder(1);
+      const txn = db;
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 99, itemName: 'Pepsi', printedQty: 7 }],
+          }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      // No matching orderItemId → 0; the other item still counts its own
+      expect(service.getPrintedQty(txn, 5)).toBe(0);
+      expect(service.getPrintedQty(txn, 99)).toBe(7);
+    });
+
+    it('ignores malformed items arrays in kitchen_print_enqueued payloads', () => {
+      insertOrder(1);
+      const txn = db;
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'kitchen_print_enqueued',
+          payload: JSON.stringify({ printer: 'Kitchen', printerId: 2, items: 'not-an-array' }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
+      expect(service.getPrintedQty(txn, 5)).toBe(0);
+    });
+
+    it('does not count kitchen_print_succeeded events', () => {
+      insertOrder(1);
+      const txn = db;
+
+      txn
+        .insert(orderEvents)
+        .values({
+          orderId: 1,
+          eventIdx: 1,
+          userId: 1,
+          type: 'kitchen_print_succeeded',
+          payload: JSON.stringify({
+            printer: 'Kitchen',
+            printerId: 2,
+            items: [{ orderItemId: 5, printedQty: 999 }],
+          }),
+          prevHash: '',
+          hash: 'dummy1',
+          createdAt: 1000,
+        })
+        .run();
+
       expect(service.getPrintedQty(txn, 5)).toBe(0);
     });
   });

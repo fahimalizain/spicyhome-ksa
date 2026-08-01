@@ -47,6 +47,7 @@ describe('ZATCA Integration', () => {
     app = moduleFixture.createNestApplication();
     app.useWebSocketAdapter(new WsAdapter(app));
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+    await app.listen(0);
     await app.init();
 
     // Stop reporting worker during tests
@@ -209,9 +210,15 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/pay`)
+        .post(`/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
-        .send({ payments: [{ methodId: 'cash', amountHalalas: 4600 }] })
+        .send({ methodId: 'cash', amountHalalas: 4600 })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
         .expect(201);
 
       await new Promise((r) => setTimeout(r, 500));
@@ -626,9 +633,15 @@ describe('ZATCA Integration', () => {
           .expect(200);
 
         await request(app.getHttpServer())
-          .post(`/orders/${orderId}/pay`)
+          .post(`/orders/${orderId}/payments`)
           .set('Authorization', `Bearer ${jwtToken}`)
-          .send({ payments: [{ methodId: 'cash', amountHalalas: 2300 }] })
+          .send({ methodId: 'cash', amountHalalas: 2300 })
+          .expect(201);
+
+        await request(app.getHttpServer())
+          .post(`/orders/${orderId}/submit`)
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({})
           .expect(201);
 
         await new Promise((r) => setTimeout(r, 200));

@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS `idx_order_payments_order_method`;

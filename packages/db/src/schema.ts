@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
 
@@ -356,30 +356,31 @@ export const paymentMethods = sqliteTable('payment_methods', {
 });
 
 // ── order_payments ─────────────────────────────────────────────────────────────
+//
+// Append-only payment ledger (ADR 0006). Multiple rows per (order, method) are
+// allowed — corrections are new lines, and amount_halalas is a signed integer
+// (negatives allowed for balancing/correction lines). No CHECK constraint here:
+// server-side rules enforce amountHalalas != 0 and SUM(all amounts) >= 0.
 
-export const orderPayments = sqliteTable(
-  'order_payments',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    orderId: integer('order_id')
-      .references(() => orders.id)
-      .notNull(),
-    methodId: text('method_id')
-      .references(() => paymentMethods.id)
-      .notNull(),
-    methodTitle: text('method_title').notNull(),
-    // Snapshot of payment_methods.zatca_payment_means_code at pay time.
-    zatcaPaymentMeansCode: text('zatca_payment_means_code').notNull(),
-    amountHalalas: integer('amount_halalas').notNull(),
-    tenderedHalalas: integer('tendered_halalas'),
-    changeHalalas: integer('change_halalas'),
-    createdAt: integer('created_at').notNull(),
-    createdBy: integer('created_by').references((): any => users.id),
-  },
-  (t) => ({
-    uniqueOrderMethod: uniqueIndex('idx_order_payments_order_method').on(t.orderId, t.methodId),
-  }),
-);
+export const orderPayments = sqliteTable('order_payments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderId: integer('order_id')
+    .references(() => orders.id)
+    .notNull(),
+  methodId: text('method_id')
+    .references(() => paymentMethods.id)
+    .notNull(),
+  methodTitle: text('method_title').notNull(),
+  // Snapshot of payment_methods.zatca_payment_means_code at pay time.
+  zatcaPaymentMeansCode: text('zatca_payment_means_code').notNull(),
+  // Signed integer halalas: positive lines are payments, negative lines are
+  // corrections (ADR 0006). SQLite integers already allow negatives.
+  amountHalalas: integer('amount_halalas').notNull(),
+  tenderedHalalas: integer('tendered_halalas'),
+  changeHalalas: integer('change_halalas'),
+  createdAt: integer('created_at').notNull(),
+  createdBy: integer('created_by').references((): any => users.id),
+});
 
 // ── settings ───────────────────────────────────────────────────────────────────
 

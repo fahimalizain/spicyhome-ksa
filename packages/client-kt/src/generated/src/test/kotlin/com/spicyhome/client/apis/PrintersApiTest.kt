@@ -24,6 +24,7 @@ import com.spicyhome.client.models.PrinterResponse
 import com.spicyhome.client.models.PrinterStatusResponse
 import com.spicyhome.client.models.SuccessResponse
 import com.spicyhome.client.models.UpdatePrinterDto
+import com.spicyhome.client.models.WindowsPrinterQueuesResponse
 
 class PrintersApiTest : ShouldSpec() {
     init {
@@ -58,6 +59,13 @@ class PrintersApiTest : ShouldSpec() {
         should("test printersControllerList") {
             // uncomment below to test printersControllerList
             //val result : kotlin.collections.List<PrinterResponse> = apiInstance.printersControllerList()
+            //result shouldBe ("TODO")
+        }
+
+        // to test printersControllerListWindowsQueues
+        should("test printersControllerListWindowsQueues") {
+            // uncomment below to test printersControllerListWindowsQueues
+            //val result : WindowsPrinterQueuesResponse = apiInstance.printersControllerListWindowsQueues()
             //result shouldBe ("TODO")
         }
 

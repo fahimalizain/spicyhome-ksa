@@ -32,6 +32,12 @@ class CreateRefundDtoTest : ShouldSpec() {
             //modelInstance.items shouldBe ("TODO")
         }
 
+        // to test the property `methodId` - Payment method slug for this refund
+        should("test methodId") {
+            // uncomment below to test the property
+            //modelInstance.methodId shouldBe ("TODO")
+        }
+
         // to test the property `reason`
         should("test reason") {
             // uncomment below to test the property

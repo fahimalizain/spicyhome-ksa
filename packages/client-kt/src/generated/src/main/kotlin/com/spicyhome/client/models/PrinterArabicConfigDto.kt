@@ -25,6 +25,7 @@ import com.squareup.moshi.JsonClass
  * @param encoding How to encode Arabic Unicode -> bytes before send
  * @param codePage ESC t n code-page index (0-255). Vendor-specific.
  * @param visualRtl Reverse glyph order for LTR thermal heads (visual RTL)
+ * @param renderMode How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas)
  */
 
 
@@ -40,7 +41,11 @@ data class PrinterArabicConfigDto (
 
     /* Reverse glyph order for LTR thermal heads (visual RTL) */
     @Json(name = "visualRtl")
-    val visualRtl: kotlin.Boolean
+    val visualRtl: kotlin.Boolean,
+
+    /* How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas) */
+    @Json(name = "renderMode")
+    val renderMode: PrinterArabicConfigDto.RenderMode
 
 ) {
 
@@ -55,6 +60,16 @@ data class PrinterArabicConfigDto (
         @Json(name = "utf8") utf8("utf8"),
         @Json(name = "pc864") pc864("pc864"),
         @Json(name = "w1256") w1256("w1256");
+    }
+    /**
+     * How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas)
+     *
+     * Values: charset,raster
+     */
+    @JsonClass(generateAdapter = false)
+    enum class RenderMode(val value: kotlin.String) {
+        @Json(name = "charset") charset("charset"),
+        @Json(name = "raster") raster("raster");
     }
 
 }

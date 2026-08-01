@@ -731,8 +731,10 @@ export class ZatcaStandardInvoiceService {
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
-    // Build one cac:PaymentMeans block per payment line (BT-81 1..n),
-    // sorted by methodId; empty fallback handled by the XML builder.
+    // One cac:PaymentMeans block per NETTED payment method (BT-81 1..n) —
+    // multi-line/correction payments are summed per methodId inside
+    // buildInvoicePaymentMeans; zero/negative nets are dropped. Sorted by
+    // methodId; empty fallback handled by the XML builder.
     const paymentRows = this.db
       .select()
       .from(orderPayments)

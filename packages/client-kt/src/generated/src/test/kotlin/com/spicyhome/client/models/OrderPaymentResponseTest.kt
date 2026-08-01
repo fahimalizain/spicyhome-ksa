@@ -25,6 +25,12 @@ class OrderPaymentResponseTest : ShouldSpec() {
         // uncomment below to create an instance of OrderPaymentResponse
         //val modelInstance = OrderPaymentResponse()
 
+        // to test the property `id` - Payment line id
+        should("test id") {
+            // uncomment below to test the property
+            //modelInstance.id shouldBe ("TODO")
+        }
+
         // to test the property `methodId` - Payment method slug
         should("test methodId") {
             // uncomment below to test the property
@@ -35,6 +41,12 @@ class OrderPaymentResponseTest : ShouldSpec() {
         should("test methodTitle") {
             // uncomment below to test the property
             //modelInstance.methodTitle shouldBe ("TODO")
+        }
+
+        // to test the property `zatcaPaymentMeansCode` - ZATCA UN/ECE 4461 Payment Means code snapshot at pay time
+        should("test zatcaPaymentMeansCode") {
+            // uncomment below to test the property
+            //modelInstance.zatcaPaymentMeansCode shouldBe ("TODO")
         }
 
         // to test the property `amountHalalas` - Amount paid in halalas
@@ -53,6 +65,12 @@ class OrderPaymentResponseTest : ShouldSpec() {
         should("test changeHalalas") {
             // uncomment below to test the property
             //modelInstance.changeHalalas shouldBe ("TODO")
+        }
+
+        // to test the property `createdAt` - Payment line creation time
+        should("test createdAt") {
+            // uncomment below to test the property
+            //modelInstance.createdAt shouldBe ("TODO")
         }
 
     }

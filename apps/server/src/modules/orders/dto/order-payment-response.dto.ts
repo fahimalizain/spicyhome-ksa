@@ -2,6 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ApiInt64 } from '../../../common/api-property-helpers';
 
 export class OrderPaymentResponse {
+  @ApiProperty({ ...ApiInt64, example: 1, description: 'Payment line id' })
+  id!: number;
+
   @ApiProperty({ example: 'card', description: 'Payment method slug' })
   methodId!: string;
 
@@ -32,4 +35,7 @@ export class OrderPaymentResponse {
     nullable: true,
   })
   changeHalalas!: number | null;
+
+  @ApiProperty({ ...ApiInt64, example: 1700000000, description: 'Payment line creation time' })
+  createdAt!: number;
 }

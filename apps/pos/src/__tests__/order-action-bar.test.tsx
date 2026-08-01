@@ -94,6 +94,16 @@ describe('OrderActionBar', () => {
     });
   });
 
+  describe('className prop', () => {
+    it('applies className to the root element', () => {
+      mockGetMe.mockReturnValue(makeMe());
+      const { container } = render(
+        <OrderActionBar orderId={1} status="paid" className="flex-1 min-w-0" />,
+      );
+      expect(container.firstChild).toHaveClass('flex-1', 'min-w-0');
+    });
+  });
+
   describe('reprint API calls', () => {
     it('calls reprint with receipt target', async () => {
       mockGetMe.mockReturnValue(makeMe());

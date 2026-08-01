@@ -68,6 +68,7 @@ All URIs are relative to *http://localhost*
 | *MenuApi* | [**menuControllerListItems**](docs/MenuApi.md#menucontrollerlistitems) | **GET** menu/items | List all items, optionally filtered by category |
 | *MenuApi* | [**menuControllerUpdateCategory**](docs/MenuApi.md#menucontrollerupdatecategory) | **PUT** menu/categories/{id} | Update a category |
 | *MenuApi* | [**menuControllerUpdateItem**](docs/MenuApi.md#menucontrollerupdateitem) | **PUT** menu/items/{id} | Update an item |
+| *OrdersApi* | [**ordersControllerAddOrderPayment**](docs/OrdersApi.md#orderscontrolleraddorderpayment) | **POST** orders/{id}/payments | Append one payment line to an open order (status stays open) |
 | *OrdersApi* | [**ordersControllerCreateOrder**](docs/OrdersApi.md#orderscontrollercreateorder) | **POST** orders | Create a new order |
 | *OrdersApi* | [**ordersControllerGetOrder**](docs/OrdersApi.md#orderscontrollergetorder) | **GET** orders/{id} | Get order by ID with items and events |
 | *OrdersApi* | [**ordersControllerGetOrderEvents**](docs/OrdersApi.md#orderscontrollergetorderevents) | **GET** orders/{id}/events | Get the complete event chain for an order |
@@ -75,7 +76,6 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerGetZatcaCreditNoteStatus**](docs/OrdersApi.md#orderscontrollergetzatcacreditnotestatus) | **GET** orders/{id}/refunds/{refundId}/zatca-credit-note | Get ZATCA credit note status for a refund (clearance polling) |
 | *OrdersApi* | [**ordersControllerGetZatcaInvoiceStatus**](docs/OrdersApi.md#orderscontrollergetzatcainvoicestatus) | **GET** orders/{id}/zatca-invoice | Get ZATCA invoice status for an order (clearance polling) |
 | *OrdersApi* | [**ordersControllerListOrders**](docs/OrdersApi.md#orderscontrollerlistorders) | **GET** orders | List orders with optional filters |
-| *OrdersApi* | [**ordersControllerPayOrder**](docs/OrdersApi.md#orderscontrollerpayorder) | **POST** orders/{id}/pay | Mark order as paid with payment methods (open → paid) |
 | *OrdersApi* | [**ordersControllerRefundOrder**](docs/OrdersApi.md#orderscontrollerrefundorder) | **POST** orders/{id}/refund | Refund items on a paid order |
 | *OrdersApi* | [**ordersControllerReissueZatcaCreditNote**](docs/OrdersApi.md#orderscontrollerreissuezatcacreditnote) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/reissue | Reissue a credit note after rejection (new attempt) |
 | *OrdersApi* | [**ordersControllerReissueZatcaInvoice**](docs/OrdersApi.md#orderscontrollerreissuezatcainvoice) | **POST** orders/{id}/zatca-invoice/reissue | Reissue a standard invoice after rejection (new attempt) |
@@ -83,7 +83,10 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerReprintRefundReceipt**](docs/OrdersApi.md#orderscontrollerreprintrefundreceipt) | **POST** orders/{id}/refunds/{refundId}/print | Reprint a specific refund receipt |
 | *OrdersApi* | [**ordersControllerRetryZatcaClearance**](docs/OrdersApi.md#orderscontrollerretryzatcaclearance) | **POST** orders/{id}/zatca-invoice/retry-clearance | Retry ZATCA clearance for an invoice in error status |
 | *OrdersApi* | [**ordersControllerRetryZatcaCreditNoteClearance**](docs/OrdersApi.md#orderscontrollerretryzatcacreditnoteclearance) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance | Retry ZATCA clearance for a credit note in error status |
+| *OrdersApi* | [**ordersControllerSendToKitchen**](docs/OrdersApi.md#orderscontrollersendtokitchen) | **POST** orders/{id}/send-to-kitchen | Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent) |
+| *OrdersApi* | [**ordersControllerSubmitOrder**](docs/OrdersApi.md#orderscontrollersubmitorder) | **POST** orders/{id}/submit | Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt |
 | *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
+| *OrdersApi* | [**ordersControllerUpdateOrderMeta**](docs/OrdersApi.md#orderscontrollerupdateordermeta) | **PATCH** orders/{id} | Update open order type and/or table |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
 | *PaymentMethodsApi* | [**paymentMethodsControllerCreate**](docs/PaymentMethodsApi.md#paymentmethodscontrollercreate) | **POST** payment-methods | Create a payment method |
@@ -126,6 +129,7 @@ All URIs are relative to *http://localhost*
 <a id="documentation-for-models"></a>
 ## Documentation for Models
 
+ - [com.spicyhome.client.models.AddOrderPaymentDto](docs/AddOrderPaymentDto.md)
  - [com.spicyhome.client.models.AuditVerifyResponse](docs/AuditVerifyResponse.md)
  - [com.spicyhome.client.models.CategoryResponse](docs/CategoryResponse.md)
  - [com.spicyhome.client.models.CloseDayDto](docs/CloseDayDto.md)
@@ -153,8 +157,6 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.OrderRefundResponse](docs/OrderRefundResponse.md)
  - [com.spicyhome.client.models.OrderResponse](docs/OrderResponse.md)
  - [com.spicyhome.client.models.OrderSummaryResponse](docs/OrderSummaryResponse.md)
- - [com.spicyhome.client.models.PayOrderDto](docs/PayOrderDto.md)
- - [com.spicyhome.client.models.PaymentLineDto](docs/PaymentLineDto.md)
  - [com.spicyhome.client.models.PaymentMethodResponse](docs/PaymentMethodResponse.md)
  - [com.spicyhome.client.models.PrintResponse](docs/PrintResponse.md)
  - [com.spicyhome.client.models.PrinterArabicConfigDto](docs/PrinterArabicConfigDto.md)
@@ -169,12 +171,14 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.SetSettingDto](docs/SetSettingDto.md)
  - [com.spicyhome.client.models.SettingResponse](docs/SettingResponse.md)
  - [com.spicyhome.client.models.StatusResponse](docs/StatusResponse.md)
+ - [com.spicyhome.client.models.SubmitOrderDto](docs/SubmitOrderDto.md)
  - [com.spicyhome.client.models.SuccessResponse](docs/SuccessResponse.md)
  - [com.spicyhome.client.models.SyncOrderItemDto](docs/SyncOrderItemDto.md)
  - [com.spicyhome.client.models.SyncOrderItemsDto](docs/SyncOrderItemsDto.md)
  - [com.spicyhome.client.models.TableResponse](docs/TableResponse.md)
  - [com.spicyhome.client.models.UpdateCategoryDto](docs/UpdateCategoryDto.md)
  - [com.spicyhome.client.models.UpdateItemDto](docs/UpdateItemDto.md)
+ - [com.spicyhome.client.models.UpdateOrderMetaDto](docs/UpdateOrderMetaDto.md)
  - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
