@@ -12,6 +12,7 @@ export function AdminPage() {
     { path: '/admin/users', label: 'Users', show: me?.manageUsers },
     { path: '/admin/zatca', label: 'ZATCA', show: me?.manageSettings },
     { path: '/admin/payment-methods', label: 'Payment Methods', show: me?.manageSettings },
+    { path: '/admin/delivery-partners', label: 'Delivery Partners', show: me?.manageSettings },
   ];
 
   return (

@@ -18,6 +18,8 @@ export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type SubmitOrderDto = Schemas['SubmitOrderDto'];
 export type AddOrderPaymentDto = Schemas['AddOrderPaymentDto'];
+export type CreateDeliveryPartnerDto = Schemas['CreateDeliveryPartnerDto'];
+export type UpdateDeliveryPartnerDto = Schemas['UpdateDeliveryPartnerDto'];
 
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
@@ -50,6 +52,7 @@ export type TableResponse = Schemas['TableResponse'];
 export type PrinterResponse = Schemas['PrinterResponse'];
 export type PrinterStatusResponse = Schemas['PrinterStatusResponse'];
 export type WindowsPrinterQueuesResponse = Schemas['WindowsPrinterQueuesResponse'];
+export type DeliveryPartnerResponse = Schemas['DeliveryPartnerResponse'];
 
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
@@ -459,6 +462,19 @@ export class SpicyHomeClient {
         zatcaPaymentMeansCode?: string;
       },
     ) => request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
+  };
+
+  deliveryPartners = {
+    list: () => request<DeliveryPartnerResponse[]>(this.config, 'GET', '/delivery-partners'),
+
+    listEnabled: () =>
+      request<DeliveryPartnerResponse[]>(this.config, 'GET', '/delivery-partners/enabled'),
+
+    create: (dto: CreateDeliveryPartnerDto) =>
+      request<DeliveryPartnerResponse>(this.config, 'POST', '/delivery-partners', dto),
+
+    update: (id: string, dto: Partial<UpdateDeliveryPartnerDto>) =>
+      request<DeliveryPartnerResponse>(this.config, 'PATCH', `/delivery-partners/${id}`, dto),
   };
 
   reports = {
