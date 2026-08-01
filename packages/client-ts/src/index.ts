@@ -9,6 +9,7 @@ export type {
   CreateUserDto,
   UpdateUserDto,
   UserResponse,
+  UserOptionResponse,
   CreateRoleDto,
   UpdateRoleDto,
   RoleResponse,

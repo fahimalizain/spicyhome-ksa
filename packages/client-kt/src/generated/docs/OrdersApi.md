@@ -312,17 +312,19 @@ List orders with optional filters
 val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
-val status : kotlin.String = status_example // kotlin.String | 
-val date : kotlin.String = date_example // kotlin.String | 
+val status : kotlin.String = status_example // kotlin.String | Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter.
+val date : kotlin.String = date_example // kotlin.String | YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter.
+val userId : kotlin.Long = 789 // kotlin.Long | Filter by orders.created_by (user id). Omit → no user filter.
 
-val result : kotlin.collections.List<OrderSummaryResponse> = webService.ordersControllerListOrders(status, date)
+val result : kotlin.collections.List<OrderSummaryResponse> = webService.ordersControllerListOrders(status, date, userId)
 ```
 
 ### Parameters
-| **status** | **kotlin.String**|  | |
+| **status** | **kotlin.String**| Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter. | [optional] |
+| **date** | **kotlin.String**| YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter. | [optional] |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **date** | **kotlin.String**|  | |
+| **userId** | **kotlin.Long**| Filter by orders.created_by (user id). Omit → no user filter. | [optional] |
 
 ### Return type
 

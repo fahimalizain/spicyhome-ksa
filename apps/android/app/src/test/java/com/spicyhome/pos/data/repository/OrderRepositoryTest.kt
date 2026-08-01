@@ -190,20 +190,31 @@ class OrderRepositoryTest {
 
     @Test
     fun `listOrders with filters`() {
-        every { ordersApi.ordersControllerListOrders(any(), any()) } returns listOrdersCall
+        every { ordersApi.ordersControllerListOrders(any(), any(), any()) } returns listOrdersCall
 
-        repository.listOrders("open", "2024-01-15")
+        repository.listOrders("open,paid", "2024-01-15", 3L)
 
-        verify { ordersApi.ordersControllerListOrders("open", "2024-01-15") }
+        verify { ordersApi.ordersControllerListOrders("open,paid", "2024-01-15", 3L) }
     }
 
     @Test
-    fun `listOrders without filters`() {
-        every { ordersApi.ordersControllerListOrders(any(), any()) } returns listOrdersCall
+    fun `listOrders without filters passes nulls (params omitted)`() {
+        every { ordersApi.ordersControllerListOrders(any(), any(), any()) } returns listOrdersCall
 
         repository.listOrders()
 
-        verify { ordersApi.ordersControllerListOrders("", "") }
+        verify { ordersApi.ordersControllerListOrders(null, null, null) }
+    }
+
+    @Test
+    fun `listOrders with partial filters passes only the set ones`() {
+        every { ordersApi.ordersControllerListOrders(any(), any(), any()) } returns listOrdersCall
+
+        repository.listOrders(status = null, date = "2024-01-15", userId = null)
+        verify { ordersApi.ordersControllerListOrders(null, "2024-01-15", null) }
+
+        repository.listOrders(status = "open", date = null, userId = null)
+        verify { ordersApi.ordersControllerListOrders("open", null, null) }
     }
 
     @Test

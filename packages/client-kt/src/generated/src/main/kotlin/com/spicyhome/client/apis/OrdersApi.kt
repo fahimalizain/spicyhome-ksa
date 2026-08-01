@@ -129,12 +129,13 @@ interface OrdersApi {
      * Responses:
      *  - 200: List of orders
      *
-     * @param status 
-     * @param date 
+     * @param status Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter. (optional)
+     * @param date YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter. (optional)
+     * @param userId Filter by orders.created_by (user id). Omit → no user filter. (optional)
      * @return [Call]<[kotlin.collections.List<OrderSummaryResponse>]>
      */
     @GET("orders")
-    fun ordersControllerListOrders(@Query("status") status: kotlin.String, @Query("date") date: kotlin.String): Call<kotlin.collections.List<OrderSummaryResponse>>
+    fun ordersControllerListOrders(@Query("status") status: kotlin.String? = null, @Query("date") date: kotlin.String? = null, @Query("userId") userId: kotlin.Long? = null): Call<kotlin.collections.List<OrderSummaryResponse>>
 
     /**
      * POST orders/{id}/refund

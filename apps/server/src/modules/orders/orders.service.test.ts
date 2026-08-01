@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
+import { todayInRiyadh, riyadhCalendarDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -3173,6 +3174,243 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
 
     expect(openIds[0]).toBe(b.id);
     expect(openIds[1]).toBe(a.id);
+  });
+});
+
+describe('listOrders — date / user / multi-status filters', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    createdIds.push(res.body.id);
+    return res.body;
+  }
+
+  it('date filter returns only orders created that Riyadh calendar day (neighbors excluded)', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+
+    const yesterdayOrder = await createOrder({ type: 'takeaway' });
+    const todayOrder = await createOrder({ type: 'takeaway' });
+    const tomorrowOrder = await createOrder({ type: 'takeaway' });
+
+    // Yesterday 12:00 / today 12:00 / tomorrow 12:00 Asia/Riyadh.
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix - 86400 + 12 * 3600, yesterdayOrder.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 12 * 3600, todayOrder.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.endUnix + 12 * 3600, tomorrowOrder.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(todayOrder.id);
+    expect(ids).not.toContain(yesterdayOrder.id);
+    expect(ids).not.toContain(tomorrowOrder.id);
+  });
+
+  it('date filter keeps newest-first (DESC by id) within the day', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+
+    const first = await createOrder({ type: 'takeaway' });
+    const second = await createOrder({ type: 'takeaway' });
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 10 * 3600, first.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 14 * 3600, second.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+    const filtered = ids.filter((id) => id === first.id || id === second.id);
+
+    expect(filtered).toEqual([second.id, first.id]);
+  });
+
+  it('rejects invalid date format with 400', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?date=2026-13-99')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/orders?date=not-a-date')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('status multi: open,paid returns both; single open still works', async () => {
+    const openOrder = await createOrder({ type: 'takeaway' });
+    const paidOrder = await createOrder({ type: 'takeaway' });
+    sqlite.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(paidOrder.id);
+
+    const multi = await request(app.getHttpServer())
+      .get('/orders?status=open,paid')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const multiIds: number[] = multi.body.map((o: any) => o.id);
+    expect(multiIds).toContain(openOrder.id);
+    expect(multiIds).toContain(paidOrder.id);
+
+    const single = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const singleIds: number[] = single.body.map((o: any) => o.id);
+    expect(singleIds).toContain(openOrder.id);
+    expect(singleIds).not.toContain(paidOrder.id);
+  });
+
+  it('status rejects unknown tokens with 400 (single and mixed)', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?status=bogus')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/orders?status=open,bogus')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('userId filter filters by created_by', async () => {
+    const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
+      id: number;
+    };
+    const adminId = admin.id;
+    // A real seeded user that is NOT admin (seed guarantees cashier exists).
+    const cashier = sqlite.prepare("SELECT id FROM users WHERE username = 'cashier'").get() as {
+      id: number;
+    };
+    const otherUserId = cashier.id;
+
+    const adminOrder = await createOrder({ type: 'takeaway' });
+    const otherOrder = await createOrder({ type: 'takeaway' });
+    sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, otherOrder.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(adminOrder.id);
+    expect(ids).not.toContain(otherOrder.id);
+
+    const cashierRes = await request(app.getHttpServer())
+      .get(`/orders?userId=${otherUserId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const cashierIds: number[] = cashierRes.body.map((o: any) => o.id);
+    expect(cashierIds).toContain(otherOrder.id);
+    expect(cashierIds).not.toContain(adminOrder.id);
+  });
+
+  it('userId rejects non-integer values with 400', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?userId=abc')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('combined filters (date + status + userId) and still DESC by id', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
+      id: number;
+    };
+    const adminId = admin.id;
+    // A real seeded user that is NOT admin (seed guarantees cashier exists).
+    const cashier = sqlite.prepare("SELECT id FROM users WHERE username = 'cashier'").get() as {
+      id: number;
+    };
+    const otherUserId = cashier.id;
+
+    // today + open + admin
+    const a = await createOrder({ type: 'takeaway' });
+    // today + paid + admin (fails status filter)
+    const b = await createOrder({ type: 'takeaway' });
+    // today + open + other user (fails user filter)
+    const c = await createOrder({ type: 'takeaway' });
+    // yesterday + open + admin (fails date filter)
+    const d = await createOrder({ type: 'takeaway' });
+
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 9 * 3600, a.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 10 * 3600, b.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 11 * 3600, c.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix - 3600, d.id);
+    sqlite.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(b.id);
+    sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, c.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+    expect(ids).not.toContain(c.id);
+    expect(ids).not.toContain(d.id);
+
+    // A second matching order (newer id) must sort first — combined DESC.
+    const a2 = await createOrder({ type: 'takeaway' });
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 12 * 3600, a2.id);
+    const res2 = await request(app.getHttpServer())
+      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids2: number[] = res2.body.map((o: any) => o.id);
+    const filtered2 = ids2.filter((id) => id === a.id || id === a2.id);
+    expect(filtered2).toEqual([a2.id, a.id]);
+  });
+
+  it('omitting all filters still returns the full list newest-first (no regression)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+    for (let i = 1; i < ids.length; i++) {
+      expect(ids[i - 1]).toBeGreaterThan(ids[i]);
+    }
   });
 });
 

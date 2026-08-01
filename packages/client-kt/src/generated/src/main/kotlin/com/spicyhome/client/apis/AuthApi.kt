@@ -14,6 +14,7 @@ import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
+import com.spicyhome.client.models.UserOptionResponse
 import com.spicyhome.client.models.UserResponse
 import com.spicyhome.client.models.UsernamesResponse
 
@@ -68,6 +69,18 @@ interface AuthApi {
      */
     @GET("auth/users/{id}")
     fun authControllerGetUser(@Path("id") id: kotlin.Long): Call<UserResponse>
+
+    /**
+     * GET auth/active-users
+     * List active users (id, username, name) for filter dropdowns — no manage_users required
+     * 
+     * Responses:
+     *  - 200: List of active users
+     *
+     * @return [Call]<[kotlin.collections.List<UserOptionResponse>]>
+     */
+    @GET("auth/active-users")
+    fun authControllerListActiveUsers(): Call<kotlin.collections.List<UserOptionResponse>>
 
     /**
      * GET auth/roles

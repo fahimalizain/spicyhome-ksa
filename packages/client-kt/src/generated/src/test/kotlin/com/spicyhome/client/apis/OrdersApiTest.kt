@@ -107,9 +107,10 @@ class OrdersApiTest : ShouldSpec() {
         // to test ordersControllerListOrders
         should("test ordersControllerListOrders") {
             // uncomment below to test ordersControllerListOrders
-            //val status : kotlin.String = status_example // kotlin.String | 
-            //val date : kotlin.String = date_example // kotlin.String | 
-            //val result : kotlin.collections.List<OrderSummaryResponse> = apiInstance.ordersControllerListOrders(status, date)
+            //val status : kotlin.String = status_example // kotlin.String | Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter.
+            //val date : kotlin.String = date_example // kotlin.String | YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter.
+            //val userId : kotlin.Long = 789 // kotlin.Long | Filter by orders.created_by (user id). Omit → no user filter.
+            //val result : kotlin.collections.List<OrderSummaryResponse> = apiInstance.ordersControllerListOrders(status, date, userId)
             //result shouldBe ("TODO")
         }
 

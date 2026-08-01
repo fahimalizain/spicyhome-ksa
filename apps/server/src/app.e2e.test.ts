@@ -196,6 +196,54 @@ describe('Auth (e2e)', () => {
   });
 });
 
+describe('Auth active-users (e2e)', () => {
+  it('401 without a token', async () => {
+    await request(app.getHttpServer()).get('/auth/active-users').expect(401);
+  });
+
+  it('200 with a staff token (no manage_users) and returns only active users with the right shape', async () => {
+    // cashier has the seeded staff role (manage_users = 0).
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'cashier', pin: '1', clientType: 'pos' })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .get('/auth/active-users')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200);
+    expect(Array.isArray(res.body)).toBe(true);
+
+    const usernames: string[] = res.body.map((u: any) => u.username);
+    expect(usernames).toContain('admin');
+    expect(usernames).toContain('cashier');
+    // inactive_user was created by an earlier test with is_active = 0
+    expect(usernames).not.toContain('inactive_user');
+
+    for (const u of res.body) {
+      expect(Object.keys(u).sort()).toEqual(['id', 'name', 'username']);
+      expect(typeof u.id).toBe('number');
+      expect(typeof u.username).toBe('string');
+      expect(typeof u.name).toBe('string');
+    }
+  });
+
+  it('200 with an admin token as well', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/active-users')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('invalid token → 401', async () => {
+    await request(app.getHttpServer())
+      .get('/auth/active-users')
+      .set('Authorization', 'Bearer not-a-jwt')
+      .expect(401);
+  });
+});
+
 describe('Business Day (e2e)', () => {
   it('POST /day/open opens a business day', async () => {
     const res = await request(app.getHttpServer())
