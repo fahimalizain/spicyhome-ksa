@@ -66,6 +66,7 @@ describe('Client contract test', () => {
   let categoryId: number;
   let subcategoryId: number;
   let itemId: number;
+  let otherCategoryId: number;
   let orderId: number;
 
   it('login succeeds with correct credentials', async () => {
@@ -216,6 +217,36 @@ describe('Client contract test', () => {
     expect(res.id).toBe(itemId);
     expect(res.priceHalalas).toBe(2300);
     expect(res.subcategoryId).toBe(subcategoryId);
+  });
+
+  it('creates a second category for reparenting tests', async () => {
+    const res: any = await client.menu.createCategory({
+      name: 'Pizza',
+      sortOrder: 1,
+      isActive: true,
+    });
+    expect(res.id).toBeDefined();
+    otherCategoryId = res.id;
+  });
+
+  it('updateItem with only categoryId keeps the category derived from the subcategory', async () => {
+    const res: any = await client.menu.updateItem(itemId, {
+      categoryId: otherCategoryId,
+    });
+    // categoryId alone must be ignored — never written directly.
+    expect(res.categoryId).toBe(categoryId);
+    expect(res.subcategoryId).toBe(subcategoryId);
+  });
+
+  it('updateSubcategory reparent cascades the new parent onto items', async () => {
+    const sub: any = await client.menu.updateSubcategory(subcategoryId, {
+      categoryId: otherCategoryId,
+    });
+    expect(sub.categoryId).toBe(otherCategoryId);
+    const item: any = await client.menu.getItem(itemId);
+    // Denormalized items.category_id must follow the subcategory's parent.
+    expect(item.categoryId).toBe(otherCategoryId);
+    expect(item.subcategoryId).toBe(subcategoryId);
   });
 
   it('opens a business day', async () => {

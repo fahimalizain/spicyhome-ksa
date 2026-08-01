@@ -135,6 +135,17 @@ export class MenuService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(itemSubcategories).set(updates).where(eq(itemSubcategories.id, id)).run();
+
+    // Cascade the denormalized parent onto items referencing this subcategory
+    // when the parent actually changed.
+    if (dto.categoryId !== undefined && dto.categoryId !== sub.categoryId) {
+      this.db
+        .update(items)
+        .set({ categoryId: dto.categoryId, ...updateAuditFields(userId) })
+        .where(eq(items.subcategoryId, id))
+        .run();
+    }
+
     return mapBools(
       this.db.select().from(itemSubcategories).where(eq(itemSubcategories.id, id)).get()!,
       ['isActive'],
@@ -193,10 +204,8 @@ export class MenuService {
       const sub = this.requireSubcategory(dto.subcategoryId, 'update item');
       updates.subcategoryId = dto.subcategoryId;
       updates.categoryId = sub.categoryId;
-    } else if (dto.categoryId !== undefined) {
-      // Legacy path: category only, keep the item's subcategory.
-      updates.categoryId = dto.categoryId;
     }
+    // categoryId without subcategoryId is ignored: category is always derived from subcategoryId.
     if (dto.name !== undefined) updates.name = dto.name;
     if (dto.nameAr !== undefined) updates.nameAr = dto.nameAr;
     if (dto.priceHalalas !== undefined) updates.priceHalalas = dto.priceHalalas;
