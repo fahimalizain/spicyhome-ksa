@@ -40,6 +40,7 @@ export type ReprintOrderDto = Schemas['ReprintOrderDto'];
 export type LoginResponse = Schemas['LoginResponse'];
 export type MeResponse = Schemas['MeResponse'];
 export type UserResponse = Schemas['UserResponse'];
+export type UserOptionResponse = Schemas['UserOptionResponse'];
 export type UsernamesResponse = Schemas['UsernamesResponse'];
 export type RoleResponse = Schemas['RoleResponse'];
 export type CategoryResponse = Schemas['CategoryResponse'];
@@ -271,6 +272,12 @@ export class SpicyHomeClient {
 
     listUsers: () => request<UserResponse[]>(this.config, 'GET', '/auth/users'),
 
+    /**
+     * Minimal `{ id, username, name }` list of active users for filter
+     * dropdowns. Requires authentication but **no** `manage_users` permission.
+     */
+    listActiveUsers: () => request<UserOptionResponse[]>(this.config, 'GET', '/auth/active-users'),
+
     getUser: (id: number) => request<UserResponse>(this.config, 'GET', `/auth/users/${id}`),
 
     createUser: (dto: CreateUserDto) =>
@@ -315,8 +322,31 @@ export class SpicyHomeClient {
   };
 
   orders = {
-    list: (status?: string, date?: string) =>
-      request<OrderSummaryResponse[]>(this.config, 'GET', '/orders', undefined, { status, date }),
+    /**
+     * List orders with optional filters.
+     *
+     * Backward-compatible: `list('open')` and `list('open', '2026-07-27')`
+     * keep working. For the full filter set pass an object:
+     * `list({ status: 'open,paid', date: '2026-07-27', userId: 3 })`.
+     * Omitted fields are not sent → no filter on that dimension.
+     */
+    list: (
+      statusOrFilters?: string | { status?: string; date?: string; userId?: number },
+      date?: string,
+    ) => {
+      if (typeof statusOrFilters === 'object' && statusOrFilters !== null) {
+        const { status, date: dateFilter, userId } = statusOrFilters;
+        return request<OrderSummaryResponse[]>(this.config, 'GET', '/orders', undefined, {
+          status,
+          date: dateFilter,
+          userId: userId !== undefined ? String(userId) : undefined,
+        });
+      }
+      return request<OrderSummaryResponse[]>(this.config, 'GET', '/orders', undefined, {
+        status: statusOrFilters,
+        date,
+      });
+    },
 
     get: (id: number) => request<OrderResponse>(this.config, 'GET', `/orders/${id}`),
 

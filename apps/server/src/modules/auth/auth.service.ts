@@ -137,6 +137,21 @@ export class AuthService {
       .map((r) => mapBools(r, USER_BOOL_FIELDS));
   }
 
+  /**
+   * Minimal `{ id, username, name }` list of **active** users only, sorted by
+   * name then username. Used by filter dropdowns (Orders list) — unlike
+   * `listUsers`, this endpoint requires no `manage_users` permission and
+   * exposes no PII beyond the dropdown label fields.
+   */
+  listActiveUsers(): { id: number; username: string; name: string }[] {
+    return this.db
+      .select({ id: users.id, username: users.username, name: users.name })
+      .from(users)
+      .where(eq(users.isActive, 1))
+      .orderBy(users.name, users.username)
+      .all();
+  }
+
   getUserById(id: number): any {
     const user = this.db.select().from(users).where(eq(users.id, id)).get();
     if (!user) throw new NotFoundException('User not found');

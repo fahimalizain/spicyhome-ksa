@@ -29,6 +29,9 @@ const { mockRealtimeSubscribe, mockRealtimeOnReconnect, mockRealtimeOffReconnect
 
 vi.mock('../api', () => ({
   client: {
+    auth: {
+      listActiveUsers: vi.fn().mockResolvedValue([]),
+    },
     orders: {
       list: (...args: any[]) => mockList(...args),
       get: (...args: any[]) => mockGet(...args),

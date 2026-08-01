@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
+import { todayInRiyadh, riyadhCalendarDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -3108,6 +3109,311 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   });
 });
 
+describe('listOrders — GET /orders returns newest first (DESC by orders.id)', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    createdIds.push(res.body.id);
+    return res.body;
+  }
+
+  it('returns orders strictly descending by id (newest first)', async () => {
+    const first = await createOrder({ type: 'takeaway' });
+    const second = await createOrder({ type: 'takeaway' });
+    const third = await createOrder({ type: 'takeaway' });
+
+    // Sanity: ids are distinct and increasing as created
+    expect(second.id).toBeGreaterThan(first.id);
+    expect(third.id).toBeGreaterThan(second.id);
+
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    // The three orders just created sit on top, newest id first
+    expect(ids[0]).toBe(third.id);
+    expect(ids[1]).toBe(second.id);
+    expect(ids[2]).toBe(first.id);
+
+    // Whole list is strictly descending
+    for (let i = 1; i < ids.length; i++) {
+      expect(ids[i - 1]).toBeGreaterThan(ids[i]);
+    }
+  });
+
+  it('status filter still returns newest-first', async () => {
+    const a = await createOrder({ type: 'takeaway' });
+    const b = await createOrder({ type: 'takeaway' });
+
+    const res = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const openIds: number[] = res.body.map((o: any) => o.id);
+
+    expect(openIds[0]).toBe(b.id);
+    expect(openIds[1]).toBe(a.id);
+  });
+});
+
+describe('listOrders — date / user / multi-status filters', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    createdIds.push(res.body.id);
+    return res.body;
+  }
+
+  it('date filter returns only orders created that Riyadh calendar day (neighbors excluded)', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+
+    const yesterdayOrder = await createOrder({ type: 'takeaway' });
+    const todayOrder = await createOrder({ type: 'takeaway' });
+    const tomorrowOrder = await createOrder({ type: 'takeaway' });
+
+    // Yesterday 12:00 / today 12:00 / tomorrow 12:00 Asia/Riyadh.
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix - 86400 + 12 * 3600, yesterdayOrder.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 12 * 3600, todayOrder.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.endUnix + 12 * 3600, tomorrowOrder.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(todayOrder.id);
+    expect(ids).not.toContain(yesterdayOrder.id);
+    expect(ids).not.toContain(tomorrowOrder.id);
+  });
+
+  it('date filter keeps newest-first (DESC by id) within the day', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+
+    const first = await createOrder({ type: 'takeaway' });
+    const second = await createOrder({ type: 'takeaway' });
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 10 * 3600, first.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 14 * 3600, second.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+    const filtered = ids.filter((id) => id === first.id || id === second.id);
+
+    expect(filtered).toEqual([second.id, first.id]);
+  });
+
+  it('rejects invalid date format with 400', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?date=2026-13-99')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/orders?date=not-a-date')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('status multi: open,paid returns both; single open still works', async () => {
+    const openOrder = await createOrder({ type: 'takeaway' });
+    const paidOrder = await createOrder({ type: 'takeaway' });
+    sqlite.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(paidOrder.id);
+
+    const multi = await request(app.getHttpServer())
+      .get('/orders?status=open,paid')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const multiIds: number[] = multi.body.map((o: any) => o.id);
+    expect(multiIds).toContain(openOrder.id);
+    expect(multiIds).toContain(paidOrder.id);
+
+    const single = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const singleIds: number[] = single.body.map((o: any) => o.id);
+    expect(singleIds).toContain(openOrder.id);
+    expect(singleIds).not.toContain(paidOrder.id);
+  });
+
+  it('status rejects unknown tokens with 400 (single and mixed)', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?status=bogus')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/orders?status=open,bogus')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('userId filter filters by created_by', async () => {
+    const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
+      id: number;
+    };
+    const adminId = admin.id;
+    // A real seeded user that is NOT admin (seed guarantees cashier exists).
+    const cashier = sqlite.prepare("SELECT id FROM users WHERE username = 'cashier'").get() as {
+      id: number;
+    };
+    const otherUserId = cashier.id;
+
+    const adminOrder = await createOrder({ type: 'takeaway' });
+    const otherOrder = await createOrder({ type: 'takeaway' });
+    sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, otherOrder.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(adminOrder.id);
+    expect(ids).not.toContain(otherOrder.id);
+
+    const cashierRes = await request(app.getHttpServer())
+      .get(`/orders?userId=${otherUserId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const cashierIds: number[] = cashierRes.body.map((o: any) => o.id);
+    expect(cashierIds).toContain(otherOrder.id);
+    expect(cashierIds).not.toContain(adminOrder.id);
+  });
+
+  it('userId rejects non-integer values with 400', async () => {
+    await request(app.getHttpServer())
+      .get('/orders?userId=abc')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+  });
+
+  it('combined filters (date + status + userId) and still DESC by id', async () => {
+    const today = todayInRiyadh();
+    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
+      id: number;
+    };
+    const adminId = admin.id;
+    // A real seeded user that is NOT admin (seed guarantees cashier exists).
+    const cashier = sqlite.prepare("SELECT id FROM users WHERE username = 'cashier'").get() as {
+      id: number;
+    };
+    const otherUserId = cashier.id;
+
+    // today + open + admin
+    const a = await createOrder({ type: 'takeaway' });
+    // today + paid + admin (fails status filter)
+    const b = await createOrder({ type: 'takeaway' });
+    // today + open + other user (fails user filter)
+    const c = await createOrder({ type: 'takeaway' });
+    // yesterday + open + admin (fails date filter)
+    const d = await createOrder({ type: 'takeaway' });
+
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 9 * 3600, a.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 10 * 3600, b.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 11 * 3600, c.id);
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix - 3600, d.id);
+    sqlite.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(b.id);
+    sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, c.id);
+
+    const res = await request(app.getHttpServer())
+      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+    expect(ids).not.toContain(c.id);
+    expect(ids).not.toContain(d.id);
+
+    // A second matching order (newer id) must sort first — combined DESC.
+    const a2 = await createOrder({ type: 'takeaway' });
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.startUnix + 12 * 3600, a2.id);
+    const res2 = await request(app.getHttpServer())
+      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids2: number[] = res2.body.map((o: any) => o.id);
+    const filtered2 = ids2.filter((id) => id === a.id || id === a2.id);
+    expect(filtered2).toEqual([a2.id, a.id]);
+  });
+
+  it('omitting all filters still returns the full list newest-first (no regression)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const ids: number[] = res.body.map((o: any) => o.id);
+    for (let i = 1; i < ids.length; i++) {
+      expect(ids[i - 1]).toBeGreaterThan(ids[i]);
+    }
+  });
+});
+
 describe('Delivery partner payment restriction — POST /orders/:id/payments (ADR 0007)', () => {
   // Partner catalog + their owned payment methods (1:1, shared slug
   // namespace). OR IGNORE: the partner PATCH describe above seeds the partner
@@ -3296,6 +3602,195 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
 
     expect(submitRes.body.status).toBe('paid');
     expect(submitRes.body.invoiceType).toBe('simplified');
+  });
+});
+
+describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0007)', () => {
+  // Partner catalog + their owned payment methods (1:1, shared slug
+  // namespace). OR IGNORE: earlier describes seed the same rows already.
+  beforeAll(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT OR IGNORE INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+      INSERT OR IGNORE INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 1, ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 3, '30', ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 4, '30', ${now}, ${now});
+    `);
+  });
+
+  let orderIds: number[];
+
+  beforeEach(() => {
+    orderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of orderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  // Open takeaway order with 2× Zinger Burger (total 4600 halalas).
+  async function createOpenOrderWithItems(): Promise<{ orderId: number; totalHalalas: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+    orderIds.push(orderId);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
+      .expect(200);
+
+    const fetched = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, totalHalalas: fetched.body.totalHalalas };
+  }
+
+  // Link the order to HungerStation via PATCH /orders/:id/partner.
+  async function setPartner(orderId: number): Promise<void> {
+    const before = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/orders/${orderId}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: before.body.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+  }
+
+  // Pay the order fully and submit (walk-in: cash; partner order: own method).
+  async function payAndSubmit(
+    orderId: number,
+    totalHalalas: number,
+    methodId: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId, amountHalalas: totalHalalas })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    // Wait for receipt print
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  async function firstOrderItemId(orderId: number): Promise<number> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body.items[0].id;
+  }
+
+  it('paid walk-in order (no partner) + refund with a partner-owned method → 400', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await payAndSubmit(orderId, totalHalalas, 'cash');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'hungerstation',
+      })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+  });
+
+  it('paid partner order + refund with cash → 400 with partner guidance', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }], methodId: 'cash' })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+    expect(res.body.message).toContain('cash');
+  });
+
+  it('paid partner order + refund with a DIFFERENT partner method (keeta) → 400', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'keeta',
+      })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+    expect(res.body.message).toContain('keeta');
+  });
+
+  it('paid partner order + refund with the partner own method → 201, partner code snapshot', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'hungerstation',
+      })
+      .expect(201);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('paid');
+
+    // Refund row snapshots the partner method's ZATCA code (30, Credit/On Account)
+    const refundRow = db
+      .select()
+      .from(schema.orderRefunds)
+      .where(eq(schema.orderRefunds.orderId, orderId))
+      .get() as any;
+    expect(refundRow.methodId).toBe('hungerstation');
+    expect(refundRow.methodTitle).toBe('HungerStation');
+    expect(refundRow.zatcaPaymentMeansCode).toBe('30');
   });
 });
 

@@ -5,6 +5,7 @@ import com.spicyhome.client.apis.AuthApi
 import com.spicyhome.client.models.LoginDto
 import com.spicyhome.client.models.LoginResponse
 import com.spicyhome.client.models.MeResponse
+import com.spicyhome.client.models.UserOptionResponse
 import com.spicyhome.client.models.UsernamesResponse
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -27,6 +28,9 @@ class AuthRepositoryTest {
 
     @MockK
     private lateinit var usernamesCall: Call<UsernamesResponse>
+
+    @MockK
+    private lateinit var activeUsersCall: Call<List<UserOptionResponse>>
 
     private lateinit var repository: AuthRepository
 
@@ -161,5 +165,31 @@ class AuthRepositoryTest {
 
         assertThat(result.isSuccessful).isFalse()
         assertThat(result.code()).isEqualTo(500)
+    }
+
+    @Test
+    fun `listActiveUsers delegates to authApi`() {
+        every { authApi.authControllerListActiveUsers() } returns activeUsersCall
+
+        val result = repository.listActiveUsers()
+
+        assertThat(result).isSameInstanceAs(activeUsersCall)
+        verify { authApi.authControllerListActiveUsers() }
+    }
+
+    @Test
+    fun `listActiveUsers success returns user options`() {
+        val users = listOf(
+            UserOptionResponse(id = 1L, username = "admin", name = "Administrator"),
+            UserOptionResponse(id = 2L, username = "cashier", name = "Cashier"),
+        )
+        every { authApi.authControllerListActiveUsers() } returns activeUsersCall
+        every { activeUsersCall.execute() } returns Response.success(users)
+
+        val result = repository.listActiveUsers().execute()
+
+        assertThat(result.isSuccessful).isTrue()
+        assertThat(result.body()).hasSize(2)
+        assertThat(result.body()!![1].username).isEqualTo("cashier")
     }
 }

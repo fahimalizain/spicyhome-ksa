@@ -62,6 +62,44 @@ export function sarDisplayToHalalas(value: string): number {
   return whole * 100 + frac;
 }
 
+/**
+ * Format an integer halala count as a SAR numpad display string
+ * (e.g. 1250 → "12.50"), using integer-only math. Accepts negative input and
+ * uses its absolute value — the caller owns the sign.
+ * 0 → "0.00".
+ */
+export function halalasToAmountInput(halalas: number): string {
+  if (!Number.isInteger(halalas)) {
+    throw new Error(`halalasToAmountInput: expected integer halalas, got ${halalas}`);
+  }
+  const abs = Math.abs(halalas);
+  const whole = Math.floor(abs / 100);
+  const frac = abs % 100;
+  return `${whole}.${String(frac).padStart(2, '0')}`;
+}
+
+/**
+ * Default amount + sign when the cashier picks a payment method.
+ * `outstandingHalalas` is signed: positive = still due, negative = overpaid
+ * (temporary overpay needing a correction line).
+ *
+ * - positive → sign +1, amount = full outstanding (e.g. 4600 → "46.00")
+ * - negative → sign −1, amount = absolute outstanding (e.g. −1250 → "12.50")
+ * - zero → empty amount, sign +1 (a 0-halala line can never be confirmed)
+ */
+export function amountPrefillFromOutstanding(outstandingHalalas: number): {
+  amountInput: string;
+  sign: 1 | -1;
+} {
+  if (outstandingHalalas > 0) {
+    return { amountInput: halalasToAmountInput(outstandingHalalas), sign: 1 };
+  }
+  if (outstandingHalalas < 0) {
+    return { amountInput: halalasToAmountInput(-outstandingHalalas), sign: -1 };
+  }
+  return { amountInput: '', sign: 1 };
+}
+
 /** Signed amount from the display string + sign toggle. 0 stays 0. */
 export function signedAmountHalalas(amountInput: string, sign: 1 | -1): number {
   const halalas = sarDisplayToHalalas(amountInput);

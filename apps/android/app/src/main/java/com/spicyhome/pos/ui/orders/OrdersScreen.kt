@@ -10,8 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,7 +23,12 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrdersScreen(
     viewModel: OrdersViewModel,
@@ -83,7 +92,7 @@ fun OrdersScreen(
                 Text("← Back", color = Accent, fontSize = 16.sp)
             }
             Text(
-                text = "Today's Orders",
+                text = if (state.date == todayInRiyadhDate()) "Today's Orders" else "Orders",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = OnDark,
@@ -92,6 +101,13 @@ fun OrdersScreen(
                 Text("Refresh", color = Accent, fontSize = 16.sp)
             }
         }
+
+        OrdersFilterBar(
+            state = state,
+            onDateChange = { viewModel.setDate(it) },
+            onToggleStatus = { viewModel.toggleStatus(it) },
+            onUserChange = { viewModel.setUserId(it) },
+        )
 
         if (state.isLoading) {
             Box(
@@ -118,7 +134,7 @@ fun OrdersScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No orders today", color = OnDarkSecondary, fontSize = 18.sp)
+                Text("No orders match filters", color = OnDarkSecondary, fontSize = 18.sp)
             }
         } else {
             LazyColumn(
@@ -136,6 +152,163 @@ fun OrdersScreen(
             }
         }
     }
+}
+
+/** Status accent color for the active filter pill (matches OrderCard/OrderScreen). */
+private fun statusPillColor(status: String): Color = when (status) {
+    "paid" -> StatusPaid
+    "voided" -> StatusVoided
+    "refunded" -> StatusRefunded
+    else -> StatusOpen
+}
+
+/**
+ * Server-side filter bar: date (single day), user (dropdown, default =
+ * current user), status (multiselect chips). Every change reloads the list
+ * through the ViewModel.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OrdersFilterBar(
+    state: OrdersUiState,
+    onDateChange: (String) -> Unit,
+    onToggleStatus: (String) -> Unit,
+    onUserChange: (Long?) -> Unit,
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DarkSurface)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = { showDatePicker = true }) {
+            Text(state.date, color = Accent, fontSize = 14.sp)
+        }
+
+        ORDER_FILTER_STATUSES.forEach { status ->
+            val selected = status in state.statuses
+            val statusColor = statusPillColor(status)
+            FilterChip(
+                selected = selected,
+                onClick = { onToggleStatus(status) },
+                label = {
+                    Text(
+                        status.replaceFirstChar { it.uppercase() },
+                        color = if (selected) OnDark else OnDarkSecondary,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                    )
+                },
+                modifier = Modifier.height(36.dp),
+                shape = RoundedCornerShape(percent = 50),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = DarkSurfaceVariant,
+                    labelColor = OnDarkSecondary,
+                    selectedContainerColor = statusColor.copy(alpha = 0.3f),
+                    selectedLabelColor = OnDark,
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = selected,
+                    borderColor = OnDarkSecondary.copy(alpha = 0.35f),
+                    selectedBorderColor = statusColor,
+                ),
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+        UserFilterDropdown(state = state, onUserChange = onUserChange)
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = parseRiyadhDateMillis(state.date),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        onDateChange(riyadhDateString(millis))
+                    }
+                    showDatePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserFilterDropdown(
+    state: OrdersUiState,
+    onUserChange: (Long?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = state.users.firstOrNull { it.id == state.userId }
+        ?.let { it.name.ifBlank { it.username } }
+        ?: "All users"
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.menuAnchor(),
+        ) {
+            Text(selectedLabel, color = Accent, fontSize = 14.sp, maxLines = 1)
+            Text(" ▾", color = Accent, fontSize = 14.sp)
+        }
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("All users") },
+                onClick = {
+                    onUserChange(null)
+                    expanded = false
+                },
+            )
+            state.users.forEach { user ->
+                DropdownMenuItem(
+                    text = { Text(user.name.ifBlank { user.username }) },
+                    onClick = {
+                        onUserChange(user.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Parse a YYYY-MM-DD string to UTC-midnight millis (DatePicker's epoch). */
+private fun parseRiyadhDateMillis(date: String): Long? {
+    return try {
+        LocalDate.parse(date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** Format a DatePicker UTC-midnight instant as YYYY-MM-DD in Asia/Riyadh. */
+private fun riyadhDateString(epochMillis: Long): String {
+    return LocalDate.ofInstant(Instant.ofEpochMilli(epochMillis), ZoneId.of("Asia/Riyadh")).toString()
 }
 
 @Composable

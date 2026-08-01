@@ -432,22 +432,28 @@ export class PrintJobService {
       notes: notesById.get(d.orderItemId) ?? null,
     }));
 
-    const ticket = this.kitchenTicketBuilder.build({
-      orderNo: order.orderNo,
-      createdAt: order.createdAt,
-      orderType: order.type as 'dine_in' | 'takeaway',
-      tableName,
-      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
-      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
-      orderNotes: order.notes,
-      items: ticketItems,
-    });
+    // Prefer the ZATCA document id; fall back to the internal reference as
+    // last resort (same pattern as receipts).
+    const documentId = order.documentId?.length ? order.documentId : `Order-${order.orderNo}`;
+    const deliveryPartnerTitle = this.getDeliveryPartnerTitle(order);
 
     const printed: PrinterRecord[] = [];
     const errors: string[] = [];
 
     for (const printer of targets) {
       try {
+        // Build per printer so each ticket's header names its own station.
+        const ticket = this.kitchenTicketBuilder.build({
+          documentId,
+          printerName: printer.name,
+          createdAt: order.createdAt,
+          orderType: order.type as 'dine_in' | 'takeaway',
+          tableName,
+          deliveryPartnerTitle,
+          deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+          orderNotes: order.notes,
+          items: ticketItems,
+        });
         await this.printersService.sendBuffer(printer, ticket);
         printed.push(printer);
       } catch (err: any) {
@@ -500,22 +506,28 @@ export class PrintJobService {
       notes: oi.notes,
     }));
 
-    const ticket = this.kitchenTicketBuilder.build({
-      orderNo: order.orderNo,
-      createdAt: order.createdAt,
-      orderType: order.type as 'dine_in' | 'takeaway',
-      tableName,
-      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
-      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
-      orderNotes: order.notes,
-      items: ticketItems,
-    });
+    // Prefer the ZATCA document id; fall back to the internal reference as
+    // last resort (same pattern as receipts).
+    const documentId = order.documentId?.length ? order.documentId : `Order-${order.orderNo}`;
+    const deliveryPartnerTitle = this.getDeliveryPartnerTitle(order);
 
     const printed: PrinterRecord[] = [];
     const errors: string[] = [];
 
     for (const printer of targets) {
       try {
+        // Build per printer so each ticket's header names its own station.
+        const ticket = this.kitchenTicketBuilder.build({
+          documentId,
+          printerName: printer.name,
+          createdAt: order.createdAt,
+          orderType: order.type as 'dine_in' | 'takeaway',
+          tableName,
+          deliveryPartnerTitle,
+          deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+          orderNotes: order.notes,
+          items: ticketItems,
+        });
         await this.printersService.sendBuffer(printer, ticket);
         printed.push(printer);
       } catch (err: any) {

@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  amountPrefillFromOutstanding,
   applyNumpadKey,
   buildAddPaymentDraft,
   calcCashChange,
   canConfirmAddPayment,
   filterMethodsForOrder,
+  halalasToAmountInput,
   sarDisplayToHalalas,
   signedAmountHalalas,
   tenderedToHalalas,
@@ -54,6 +56,50 @@ describe('signedAmountHalalas', () => {
   it('zero stays zero regardless of sign', () => {
     expect(signedAmountHalalas('', -1)).toBe(0);
     expect(signedAmountHalalas('0', -1)).toBe(0);
+  });
+});
+
+describe('halalasToAmountInput', () => {
+  it('formats whole SAR with two decimals', () => {
+    expect(halalasToAmountInput(100)).toBe('1.00');
+    expect(halalasToAmountInput(4600)).toBe('46.00');
+  });
+
+  it('formats halalas with a fractional part', () => {
+    expect(halalasToAmountInput(1250)).toBe('12.50');
+    expect(halalasToAmountInput(1)).toBe('0.01');
+    expect(halalasToAmountInput(50)).toBe('0.50');
+  });
+
+  it('formats zero as 0.00', () => {
+    expect(halalasToAmountInput(0)).toBe('0.00');
+  });
+
+  it('takes the absolute value of negative input (caller owns the sign)', () => {
+    expect(halalasToAmountInput(-1250)).toBe('12.50');
+    expect(halalasToAmountInput(-4600)).toBe('46.00');
+  });
+
+  it('round-trips with sarDisplayToHalalas for non-negative integers', () => {
+    for (const n of [0, 1, 50, 100, 1250, 4600]) {
+      expect(sarDisplayToHalalas(halalasToAmountInput(n))).toBe(n);
+    }
+  });
+});
+
+describe('amountPrefillFromOutstanding', () => {
+  it('positive outstanding → sign +1 and full amount prefilled', () => {
+    expect(amountPrefillFromOutstanding(4600)).toEqual({ amountInput: '46.00', sign: 1 });
+    expect(amountPrefillFromOutstanding(1250)).toEqual({ amountInput: '12.50', sign: 1 });
+  });
+
+  it('negative outstanding → sign −1 with absolute amount (correction)', () => {
+    expect(amountPrefillFromOutstanding(-1250)).toEqual({ amountInput: '12.50', sign: -1 });
+    expect(amountPrefillFromOutstanding(-4600)).toEqual({ amountInput: '46.00', sign: -1 });
+  });
+
+  it('zero outstanding → empty amount, sign +1 (0 cannot be confirmed anyway)', () => {
+    expect(amountPrefillFromOutstanding(0)).toEqual({ amountInput: '', sign: 1 });
   });
 });
 

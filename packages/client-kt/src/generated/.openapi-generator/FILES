@@ -71,6 +71,7 @@ docs/UpdatePrinterDto.md
 docs/UpdateRoleDto.md
 docs/UpdateTableDto.md
 docs/UpdateUserDto.md
+docs/UserOptionResponse.md
 docs/UserResponse.md
 docs/UsernamesResponse.md
 docs/WindowsPrinterQueuesResponse.md
@@ -171,6 +172,7 @@ src/main/kotlin/com/spicyhome/client/models/UpdatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateRoleDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateTableDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
+src/main/kotlin/com/spicyhome/client/models/UserOptionResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UserResponse.kt
 src/main/kotlin/com/spicyhome/client/models/UsernamesResponse.kt
 src/main/kotlin/com/spicyhome/client/models/WindowsPrinterQueuesResponse.kt
@@ -252,6 +254,7 @@ src/test/kotlin/com/spicyhome/client/models/UpdatePrinterDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateRoleDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateTableDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateUserDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/UserOptionResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/UserResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/UsernamesResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/WindowsPrinterQueuesResponseTest.kt

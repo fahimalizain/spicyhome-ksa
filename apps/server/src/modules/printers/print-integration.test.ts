@@ -205,7 +205,8 @@ describe('Print Integration', () => {
       await new Promise((r) => setTimeout(r, 300));
 
       // TEMPORARY fan-out: BOTH kitchen printers (Kitchen .51 + Cold Station
-      // .52) receive the SAME full ticket; the receipt printer (.50) never
+      // .52) receive the full ticket — each buffer built for its own station
+      // (printer name in the header); the receipt printer (.50) never
       // receives kitchen tickets
       const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50'); // exclude receipt
       expect(kitchenPrints).toHaveLength(2);
@@ -215,8 +216,18 @@ describe('Print Integration', () => {
         expect(str).toContain('Zinger Burger');
         expect(str).toContain('2 Zinger Burger');
         expect(str).toContain('Pepsi');
-        expect(str).toContain(`ORDER #${orderRes.body.orderNo}`);
+        // Big header id is the ZATCA documentId, NOT the order number
+        expect(str).toContain(orderRes.body.documentId);
+        expect(str).not.toContain(`ORDER #${orderRes.body.orderNo}`);
+        // Dine-in on table T4 → table on its own big line
+        expect(str).toContain('TABLE T4');
       }
+
+      // Each fan-out target receives its OWN buffer, naming its station in
+      // the header (Kitchen .51 and Cold Station .52).
+      const byIp = new Map(kitchenPrints.map((p) => [p.ip, p.data.toString('ascii')]));
+      expect(byIp.get('192.168.1.51')).toContain('Printer: Kitchen');
+      expect(byIp.get('192.168.1.52')).toContain('Printer: Cold Station');
 
       // Exactly ONE kitchen_print_enqueued per send: items cover both lines,
       // printers[] lists both fan-out targets
