@@ -211,6 +211,57 @@ describe('OrderEventTimeline', () => {
     expect(screen.getByText('Fully Refunded')).toBeInTheDocument();
   });
 
+  it('renders type_changed label with from/to payload (takeaway → dine_in + table)', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'type_changed',
+        payload: JSON.stringify({
+          fromType: 'takeaway',
+          toType: 'dine_in',
+          fromTableId: null,
+          toTableId: 3,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Type / Table Changed')).toBeInTheDocument();
+    expect(
+      screen.getByText('Type / Table Changed. takeaway → dine_in (table — → #3)'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders type_changed payload for dine_in → takeaway (table released)', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'type_changed',
+        payload: JSON.stringify({
+          fromType: 'dine_in',
+          toType: 'takeaway',
+          fromTableId: 3,
+          toTableId: null,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText('Type / Table Changed. dine_in → takeaway (table #3 → —)'),
+    ).toBeInTheDocument();
+  });
+
   it('shows warning for broken print chain', async () => {
     mockGetEvents.mockResolvedValue([
       makeEvent({

@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Param,
+  Body,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -10,6 +20,7 @@ import {
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
+import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
 import { PayOrderDto } from './dto/pay-order.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
@@ -44,6 +55,19 @@ export class OrdersController {
   @ApiOkResponse({ description: 'Order with items and events', type: OrderResponse })
   getOrder(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.getOrder(id);
+  }
+
+  @Patch(':id')
+  @RequiresPermission('update_order')
+  @ApiOperation({ summary: 'Update open order type and/or table' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderMeta(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderMetaDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderMeta(id, dto, user.sub);
   }
 
   @Post()

@@ -20,6 +20,7 @@ const EVENT_LABELS: Record<string, string> = {
   voided: 'Order Voided',
   refund_issued: 'Refund Issued',
   refunded: 'Fully Refunded',
+  type_changed: 'Type / Table Changed',
 };
 
 function parsePayload(raw: string): Record<string, unknown> {
@@ -66,6 +67,11 @@ function formatPayload(event: OrderEventResponse): string {
     }
     case 'refunded':
       return `${label}. From: ${p.fromStatus || '?'}`;
+    case 'type_changed': {
+      const fromTable = p.fromTableId != null ? `#${p.fromTableId}` : '—';
+      const toTable = p.toTableId != null ? `#${p.toTableId}` : '—';
+      return `${label}. ${p.fromType || '?'} → ${p.toType || '?'} (table ${fromTable} → ${toTable})`;
+    }
     default:
       return label;
   }

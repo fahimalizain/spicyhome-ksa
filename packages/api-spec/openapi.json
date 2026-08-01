@@ -1169,6 +1169,51 @@
             "bearer": []
           }
         ]
+      },
+      "patch": {
+        "operationId": "OrdersController_updateOrderMeta",
+        "summary": "Update open order type and/or table",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderMetaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/orders/{orderId}/items/sync": {
@@ -4326,6 +4371,35 @@
           "items",
           "events",
           "payments"
+        ]
+      },
+      "UpdateOrderMetaDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "dine_in",
+              "takeaway"
+            ],
+            "example": "dine_in"
+          },
+          "tableId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "Target table (required for dine_in). Ignored and forced to null when type is takeaway."
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "type"
         ]
       },
       "CreateOrderDto": {

@@ -166,6 +166,129 @@ export class OrdersService {
     return result;
   }
 
+  async updateOrderMeta(
+    orderId: number,
+    dto: { baseUpdatedAt: number; type: 'dine_in' | 'takeaway'; tableId?: number },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Normalize intended state outside the transaction (read-only, stable
+    // data). Table catalog is stable, so 404 for a bad table before the tx
+    // is safe and keeps the error simpler.
+    const toType = dto.type;
+    let toTableId: number | null;
+
+    if (toType === 'takeaway') {
+      // Issue D4: takeaway never holds a table — force-release regardless of
+      // what the client sent (ignore non-null tableId).
+      toTableId = null;
+    } else {
+      // dine_in requires a table
+      if (!dto.tableId) {
+        throw new BadRequestException('Table is required for dine-in orders');
+      }
+      const table = this.db.select().from(tables).where(eq(tables.id, dto.tableId)).get();
+      if (!table || !table.isActive) throw new NotFoundException('Table not found or inactive');
+      toTableId = dto.tableId;
+    }
+
+    // All order state checks + the mutation happen inside ONE transaction to
+    // close the TOCTOU window between loading and writing (same style as
+    // syncItems).
+    let anyMutation = false;
+
+    const updatedOrder = this.db.transaction((tx: any) => {
+      // Load order; 404 if missing
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Only open orders can change type or table
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can change type or table');
+      }
+
+      // Concurrency check — same shape as syncItems stale conflict
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      const fromType = order.type;
+      const fromTableId = order.tableId ?? null;
+
+      // No-op: same type + same table → return current order without bumping
+      // updated_at or writing an event.
+      if (fromType === toType && fromTableId === toTableId) {
+        const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+        const refreshedItems = tx
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, orderId))
+          .all();
+        const logs = this.orderEvents.getEvents(tx, orderId);
+        return { ...refreshedOrder, items: refreshedItems, events: logs };
+      }
+
+      // Prevent another open order from holding the target table (exclude self)
+      if (toTableId != null) {
+        const existingOpen = tx
+          .select({ id: orders.id, orderNo: orders.orderNo })
+          .from(orders)
+          .where(and(eq(orders.tableId, toTableId), eq(orders.status, 'open')))
+          .all()
+          .filter((o: any) => o.id !== orderId);
+        if (existingOpen.length > 0) {
+          throw new ConflictException(
+            `Table already has an open order #${existingOpen[0].orderNo} (id ${existingOpen[0].id}).`,
+          );
+        }
+      }
+
+      anyMutation = true;
+
+      tx.update(orders)
+        .set({
+          type: toType,
+          tableId: toTableId,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        'type_changed',
+        {
+          fromType,
+          toType,
+          fromTableId,
+          toTableId,
+        },
+        now,
+      );
+
+      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      const refreshedItems = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      const logs = this.orderEvents.getEvents(tx, orderId);
+      return { ...refreshedOrder, items: refreshedItems, events: logs };
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    return mapBools(updatedOrder, ['isStandardInvoice']);
+  }
+
   private emitDomainEvent(
     event: string,
     orderId: number,

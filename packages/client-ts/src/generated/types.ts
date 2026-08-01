@@ -353,7 +353,8 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /** Update open order type and/or table */
+    patch: operations['OrdersController_updateOrderMeta'];
     trace?: never;
   };
   '/orders/{orderId}/items/sync': {
@@ -452,6 +453,23 @@ export interface paths {
     get: operations['OrdersController_getOrderRefunds'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/refunds/{refundId}/print': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reprint a specific refund receipt */
+    post: operations['OrdersController_reprintRefundReceipt'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1046,7 +1064,7 @@ export interface components {
     LoginDto: {
       /** @example admin */
       username: string;
-      /** @example 1234 */
+      /** @example 771133 */
       pin: string;
     };
     LoginResponse: {
@@ -1179,7 +1197,7 @@ export interface components {
        */
       androidLogin?: boolean;
       /**
-       * @description New PIN (4-6 digits)
+       * @description New PIN (1-6 digits)
        * @example 5678
        */
       pin?: string;
@@ -1613,6 +1631,7 @@ export interface components {
       connectionType?: 'tcp' | 'windows';
       /** @description Windows printer queue name. Required when connectionType is "windows". */
       windowsPrinterName?: string;
+      /** @description IP address or hostname. Required when connectionType is "tcp". Can be empty string for windows. */
       ip?: string;
       /** Format: int32 */
       port?: number;
@@ -1934,6 +1953,25 @@ export interface components {
       items: components['schemas']['OrderItemResponse'][];
       events: components['schemas']['OrderEventResponse'][];
       payments: components['schemas']['OrderPaymentResponse'][];
+    };
+    UpdateOrderMetaDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @example dine_in
+       * @enum {string}
+       */
+      type: 'dine_in' | 'takeaway';
+      /**
+       * Format: int64
+       * @description Target table (required for dine_in). Ignored and forced to null when type is takeaway.
+       * @example 1
+       */
+      tableId?: number;
     };
     CreateOrderDto: {
       /**
@@ -3271,6 +3309,32 @@ export interface operations {
       };
     };
   };
+  OrdersController_updateOrderMeta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderMetaDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
   OrdersController_syncItems: {
     parameters: {
       query?: never;
@@ -3415,6 +3479,29 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['OrderRefundResponse'][];
+        };
+      };
+    };
+  };
+  OrdersController_reprintRefundReceipt: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        refundId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Print result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PrintResponse'];
         };
       };
     };
