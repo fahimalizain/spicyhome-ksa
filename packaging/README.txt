@@ -128,6 +128,7 @@ Production vs Debug
 -------------------
 - Production: NSSM Windows service "SpicyHomePOS" (installed via install.bat).
   The service starts the server automatically on system boot.
+  The service runs at Above Normal process priority (NSSM AppPriority).
 - Debug: start-server.bat (or start-server.ps1) runs the server in the
   foreground. Press Ctrl+C to stop. Use for troubleshooting only.
 
