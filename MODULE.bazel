@@ -1,6 +1,6 @@
 module(
     name = "spicyhome",
-    version = "202608.01.0",
+    version = "202608.01.1",
 )
 
 bazel_dep(name = "aspect_rules_js", version = "2.9.2")
