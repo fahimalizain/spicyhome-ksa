@@ -306,14 +306,25 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
-    // Wait for the modal numpad (rendered after payment methods load)
+    // No auto-select on open: the amount block stays hidden until a method
+    // chip is picked.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cash' })).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('amount-numpad')).not.toBeInTheDocument();
+
+    // Clicking a method prefills the amount from outstanding (46.00).
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
     await waitFor(() => {
       expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
     });
+    expect(screen.getByRole('button', { name: '46.00 SAR' })).toBeInTheDocument();
     const amountNumpad = within(screen.getByTestId('amount-numpad'));
 
-    // Enter 46.40 via numpad (sign defaults to +) — above the 46.00 total.
-    // The tendered numpad appears once the amount > 0, so scope all key taps.
+    // Clear the prefill and enter 46.40 via numpad (sign defaults to +) —
+    // above the 46.00 total. The tendered numpad appears once the amount
+    // > 0, so scope all key taps.
+    fireEvent.click(amountNumpad.getByText('C'));
     fireEvent.click(amountNumpad.getByText('4'));
     fireEvent.click(amountNumpad.getByText('6'));
     fireEvent.click(amountNumpad.getByText('.'));
@@ -360,6 +371,14 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
+    // No auto-select on open; picking Cash with 0 outstanding prefills
+    // nothing (empty amount, sign +1).
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cash' })).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('amount-numpad')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
     await waitFor(() => {
       expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
     });
@@ -429,7 +448,7 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
 
   // ---- ADR 0007: delivery-partner payment method filtering ----
 
-  it('payments tab: partner order modal shows ONLY the partner method, auto-selected', async () => {
+  it('payments tab: partner order modal shows ONLY the partner method; one tap selects + prefills', async () => {
     mockGetReturns(
       makeOrder({
         type: 'takeaway',
@@ -477,22 +496,25 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
+    // No auto-select — even a sole partner method still requires one tap.
     await waitFor(() => {
-      expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
+      expect(screen.getByText('HungerStation')).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('amount-numpad')).not.toBeInTheDocument();
 
     // Partner method chip is present (the order header also shows the
     // partner title + ref as one combined text node); non-partner and
     // other-partner methods are NOT rendered.
-    expect(screen.getByText('HungerStation')).toBeInTheDocument(); // modal chip
     expect(screen.getByText('HungerStation · Ref HS-1')).toBeInTheDocument(); // header
     expect(screen.queryByText('Cash')).not.toBeInTheDocument();
     expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
 
-    // The sole partner method is auto-selected: confirming sends its id.
-    const amountNumpad = within(screen.getByTestId('amount-numpad'));
-    fireEvent.click(amountNumpad.getByText('4'));
-    fireEvent.click(amountNumpad.getByText('6'));
+    // Tapping the sole partner method selects it and prefills the
+    // outstanding 46.00: confirming sends its id.
+    fireEvent.click(screen.getByText('HungerStation'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '46.00 SAR' })).toBeInTheDocument();
+    });
     const confirmButtons = screen.getAllByRole('button', { name: 'Add Payment' });
     fireEvent.click(confirmButtons[confirmButtons.length - 1]);
 
@@ -525,15 +547,23 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
+    // No auto-select on open: the amount block only appears after a method
+    // chip is picked.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cash' })).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('amount-numpad')).not.toBeInTheDocument();
+
+    // Normal methods remain visible; partner-owned methods are hidden.
+    expect(screen.getByRole('button', { name: 'Card' })).toBeInTheDocument();
+    expect(screen.queryByText('HungerStation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
+
+    // Picking a method reveals the amount block.
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
     await waitFor(() => {
       expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
     });
-
-    // Normal methods remain visible; partner-owned methods are hidden.
-    expect(screen.getByText('Cash')).toBeInTheDocument();
-    expect(screen.getByText('Card')).toBeInTheDocument();
-    expect(screen.queryByText('HungerStation')).not.toBeInTheDocument();
-    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
   });
 
   // ---- Summary tab ----
