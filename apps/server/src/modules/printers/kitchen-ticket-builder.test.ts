@@ -195,6 +195,32 @@ describe('KitchenTicketBuilder', () => {
     expect(str).toContain('3 Fries');
   });
 
+  it('adds a blank line between item blocks', () => {
+    const buf = builder.build(baseOpts);
+    const str = buf.toString('ascii');
+    const countLf = (s: string) => (s.match(/\n/g) || []).length;
+
+    // Notes stay attached to their item: only the name line's LF separates
+    // the item name from its notes (no blank line in between).
+    const nameToNotes = str.slice(str.indexOf('1 Pepsi'), str.indexOf('* no ice'));
+    expect(countLf(nameToNotes)).toBe(1);
+
+    // Item without notes: name line LF + blank line LF.
+    const noNotesBlock = str.slice(
+      str.indexOf('2 Zinger Burger') + '2 Zinger Burger'.length,
+      str.indexOf('1 Pepsi'),
+    );
+    expect(countLf(noNotesBlock)).toBe(2);
+
+    // Item with notes: name LF + notes LF + blank line LF (blank after notes).
+    const notesBlock = str.slice(str.indexOf('1 Pepsi') + '1 Pepsi'.length, str.indexOf('3 Fries'));
+    expect(countLf(notesBlock)).toBe(3);
+
+    // Blank line before the bottom separator as well.
+    const beforeSep = str.slice(str.indexOf('3 Fries') + '3 Fries'.length, str.lastIndexOf('===='));
+    expect(countLf(beforeSep)).toBe(2);
+  });
+
   it('renders item notes highlighted with underline', () => {
     const buf = builder.build(baseOpts);
     const hex = buf.toString('hex');

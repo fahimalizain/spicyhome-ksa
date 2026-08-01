@@ -121,6 +121,10 @@ export class KitchenTicketBuilder {
         eb.text(truncated);
         eb.underline(false);
       }
+
+      // Blank line after each item block so kitchen staff can read items
+      // more easily (gap is between item blocks, not between name and notes).
+      eb.blankLine();
     }
 
     eb.separator('=');
