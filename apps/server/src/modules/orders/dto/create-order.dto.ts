@@ -47,12 +47,13 @@ export class UpdateOrderItemDto {
 
 export class ReprintOrderDto {
   @ApiProperty({
-    enum: ['receipt'],
+    enum: ['receipt', 'open_receipt'],
     example: 'receipt',
-    description: 'Reprint target (receipt only; kitchen reprints are not supported)',
+    description:
+      "Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip",
   })
   @IsString()
-  @IsIn(['receipt'])
+  @IsIn(['receipt', 'open_receipt'])
   target!: string;
 }
 

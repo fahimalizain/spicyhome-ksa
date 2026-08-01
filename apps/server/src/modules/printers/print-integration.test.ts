@@ -783,6 +783,203 @@ describe('Print Integration', () => {
       const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
       expect(kitchenPrints.length).toBe(0);
     });
+
+    it('POST /orders/:id/print with target open_receipt prints a non-ZATCA open order slip', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Sync items (order stays open)
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      transport.sent = [];
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ target: 'open_receipt' })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.errors).toEqual([]);
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const str = receiptPrints[0].data.toString('ascii');
+      expect(str).toContain('OPEN ORDER RECEIPT');
+      expect(str).not.toContain('SIMPLIFIED TAX INVOICE');
+      expect(str).toContain('Order #:');
+      expect(str).not.toContain('Invoice #');
+      expect(str).not.toContain('VAT: 300123456789'); // no VAT registration
+      expect(str).toContain('Zinger Burger');
+      expect(str).toContain('TOTAL (incl. VAT)');
+      expect(str).toContain('NOT A TAX INVOICE');
+
+      // No drawer kick on the open order slip
+      expect(receiptPrints[0].data.toString('hex')).not.toContain('1b70');
+
+      // Events carry kind 'open_order' so the timeline can distinguish it
+      const orderRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const enqueued = orderRes2.body.events.find((e: any) => e.type === 'receipt_print_enqueued');
+      expect(enqueued).toBeDefined();
+      expect(JSON.parse(enqueued.payload).kind).toBe('open_order');
+      expect(JSON.parse(enqueued.payload).kickDrawer).toBe(false);
+    });
+
+    it('open order receipt shows PAID and AMOUNT DUE reduced by a partial payment', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // 2 Zinger = 4600 halalas (46.00)
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      // Partial payment before food (ADR 0006): 1000 halalas of 4600
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 1000 })
+        .expect(201);
+
+      transport.sent = [];
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ target: 'open_receipt' })
+        .expect(201);
+      expect(res.body.success).toBe(true);
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const str = receiptPrints[0].data.toString('ascii');
+      const paidLine = str.split('\n').find((l) => l.trimStart().startsWith('PAID'));
+      expect(paidLine).toBeDefined();
+      expect(paidLine).toContain('10.00');
+      // Strip ESC/POS command bytes so the bold-prefixed label starts the line
+      const dueLine = str
+        .replace(/\x1bE[\x00\x01]/g, '')
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      expect(dueLine).toContain('36.00'); // 46.00 − 10.00
+    });
+
+    it('POST /orders/:id/print with target open_receipt rejects paid orders with 400', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+
+      // Finalize (open → paid): 1 Zinger = 2300 halalas
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: 2300 })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(201);
+
+      transport.sent = [];
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ target: 'open_receipt' })
+        .expect(400);
+
+      expect(res.body.message).toContain('Open order receipt is only available for open orders');
+      // Nothing should have been sent to the printer
+      expect(transport.sent.length).toBe(0);
+    });
+
+    it('POST /orders/:id/print with target open_receipt rejects empty carts with 400', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const res = await request(app.getHttpServer())
+        .post(`/orders/${orderId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ target: 'open_receipt' })
+        .expect(400);
+
+      expect(res.body.message).toContain('empty order');
+    });
+
+    it('POST /orders/:id/print still rejects unknown targets with 400', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/print`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ target: 'open_invoice' })
+        .expect(400);
+    });
   });
 
   describe('audit log entries for printing', () => {

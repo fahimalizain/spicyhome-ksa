@@ -47,6 +47,30 @@ describe('ReceiptBuilder', () => {
     return buf.toString('ascii');
   }
 
+  /**
+   * ASCII text with ESC/POS command bytes stripped, so column lines start at
+   * their label (the bold-on ESC E prefix of AMOUNT DUE is removed).
+   */
+  function plainText(buf: Buffer): string {
+    const bytes = Array.from(buf);
+    let out = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      if (b === 0x1b) {
+        // ESC command: ESC @ has 1 parameter byte; ESC n x has 2.
+        i += bytes[i + 1] === 0x40 ? 1 : 2;
+        continue;
+      }
+      if (b === 0x1d) {
+        // GS command (partial cut here: GS V B n = 4 bytes total).
+        i += 3;
+        continue;
+      }
+      out += String.fromCharCode(b);
+    }
+    return out;
+  }
+
   function hex(buf: Buffer): string {
     return buf.toString('hex');
   }
@@ -279,6 +303,12 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('SAR');
   });
 
+  it('never renders PAID/AMOUNT DUE on ZATCA documents (open order only)', () => {
+    const s = str(builder.build({ ...baseOpts, paidHalalas: 2000 }));
+    expect(s).not.toContain('AMOUNT DUE');
+    expect(s.split('\n').some((l) => l.trimStart().startsWith('PAID'))).toBe(false);
+  });
+
   it('renders bold TOTAL line', () => {
     const buf = builder.build(baseOpts);
     const h = hex(buf);
@@ -338,6 +368,208 @@ describe('ReceiptBuilder', () => {
       const s = str(builder.build(opts));
       expect(s).not.toContain('Original Invoice:');
       expect(s).not.toContain('Reason:');
+    });
+  });
+
+  // ── Open order receipt (non-ZATCA) ────────────────────────────────────────
+
+  describe('open order receipt', () => {
+    const openOpts: ReceiptOptions = {
+      ...baseOpts,
+      documentKind: 'open_order',
+      // ZATCA-only fields that must be IGNORED for open_order:
+      qrTlvPayload: 'TEST-TLV-DATA',
+      kickDrawer: true,
+      footer: 'Custom footer (must be replaced by the STI collect message)',
+    };
+
+    it('renders OPEN ORDER RECEIPT titles (EN bold + AR) instead of tax invoice', () => {
+      const buf = builder.build(openOpts);
+      const s = str(buf);
+      expect(s).toContain('OPEN ORDER RECEIPT');
+      expect(s).not.toContain('SIMPLIFIED TAX INVOICE');
+      expect(s).not.toContain('CREDIT NOTE');
+      // إيصال طلب مفتوح as UTF-8 fallback with default config
+      expect(
+        findSequence(
+          buf,
+          encodeUtf8(
+            shapeArabic(
+              '\u0625\u064A\u0635\u0627\u0644 \u0637\u0644\u0628 \u0645\u0641\u062A\u0648\u062D',
+            ),
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('renders Arabic title bytes with a configured Arabic encoding', () => {
+      const arTitle =
+        '\u0625\u064A\u0635\u0627\u0644 \u0637\u0644\u0628 \u0645\u0641\u062A\u0648\u062D';
+      const buf = builder.build({
+        ...openOpts,
+        arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
+      });
+      expect(findSequence(buf, encodePc864(arTitle))).toBe(true);
+    });
+
+    it('prints Order # from orderNo (internal reference, not documentId)', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('Order #: 42');
+      expect(s).not.toContain('Invoice #');
+      expect(s).not.toContain('Order ref:');
+    });
+
+    it('omits seller address and VAT registration number', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('SpicyHome Restaurant'); // display name still printed
+      expect(s).not.toContain('VAT:');
+      expect(s).not.toContain('King Fahd Rd');
+      expect(s).not.toContain('Riyadh 12211');
+    });
+
+    it('does not print "Amount includes VAT"', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).not.toContain('Amount includes VAT');
+    });
+
+    it('still renders the totals block (amount due is critical)', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('SUBTOTAL (excl. VAT)');
+      expect(s).toContain('VAT (15.0%)');
+      expect(s).toContain('TOTAL (incl. VAT)');
+      expect(s).toContain('51.75');
+      expect(s).toContain('SAR');
+    });
+
+    it('always renders AMOUNT DUE, equal to the total when nothing is paid', () => {
+      const buf = builder.build(openOpts);
+      const s = str(buf);
+      expect(s).toContain('AMOUNT DUE');
+      const dueLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      expect(dueLine).toContain('51.75'); // outstanding = total (paidHalalas absent)
+    });
+
+    it('omits the standalone PAID line when no payment was recorded', () => {
+      const buf = builder.build(openOpts);
+      const paidLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('PAID'));
+      expect(paidLine).toBeUndefined();
+    });
+
+    it('renders PAID 20.00 and AMOUNT DUE 31.75 for a partial payment', () => {
+      const buf = builder.build({ ...openOpts, paidHalalas: 2000 });
+      const s = str(buf);
+      const paidLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('PAID'));
+      expect(paidLine).toBeDefined();
+      expect(paidLine).toContain('20.00');
+      const dueLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      expect(dueLine).toContain('31.75'); // 51.75 − 20.00
+      expect(s).toContain('AMOUNT DUE');
+    });
+
+    it('renders AMOUNT DUE in bold', () => {
+      const h = hex(builder.build(openOpts));
+      const labelHex = Buffer.from('AMOUNT DUE', 'ascii').toString('hex');
+      const idx = h.indexOf(labelHex);
+      expect(idx).not.toBe(-1);
+      // Bold-on (1b 45 01) immediately before the label
+      expect(h.slice(idx - 6, idx)).toBe('1b4501');
+      // Bold-off (1b 45 00) right after the AMOUNT DUE line's LF
+      expect(h.indexOf('0a1b4500', idx)).toBeGreaterThan(idx);
+    });
+
+    it('renders NOT A TAX INVOICE (EN + AR)', () => {
+      const buf = builder.build(openOpts);
+      const s = str(buf);
+      expect(s).toContain('*** NOT A TAX INVOICE ***');
+      expect(s).toContain('NOT A TAX INVOICE');
+      // هذا ليس فاتورة ضريبية (UTF-8 fallback)
+      expect(
+        findSequence(
+          buf,
+          encodeUtf8(
+            shapeArabic(
+              '\u0647\u0630\u0627 \u0644\u064A\u0633 \u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629',
+            ),
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('renders the STI collect footer (EN + AR) and replaces the default footer', () => {
+      const buf = builder.build(openOpts);
+      const s = str(buf);
+      expect(s).toContain('Please collect your Simplified Tax Invoice');
+      expect(s).toContain('at the end of your visit.');
+      expect(s).not.toContain('Thank you! Visit again.');
+      expect(s).not.toContain('Custom footer');
+      // يرجى استلام فاتورتك الضريبية المبسطة في نهاية زيارتكم (UTF-8 fallback)
+      expect(
+        findSequence(
+          buf,
+          encodeUtf8(
+            shapeArabic(
+              '\u064A\u0631\u062C\u0649 \u0627\u0633\u062A\u0644\u0627\u0645 \u0641\u0627\u062A\u0648\u0631\u062A\u0643 \u0627\u0644\u0636\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0645\u0628\u0633\u0637\u0629 \u0641\u064A \u0646\u0647\u0627\u064A\u0629 \u0632\u064A\u0627\u0631\u062A\u0643\u0645',
+            ),
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('never emits a QR even when qrTlvPayload is provided', () => {
+      const buf = builder.build(openOpts);
+      const h = hex(buf);
+      expect(h).not.toContain('1d286b'); // GS ( k — QR command family
+      expect(str(buf)).not.toContain('TEST-TLV-DATA');
+    });
+
+    it('never kicks the cash drawer even when kickDrawer is requested', () => {
+      const buf = builder.build(openOpts);
+      expect(hex(buf)).not.toContain('1b70'); // ESC p
+    });
+
+    it('omits the ZATCA Arabic "amount includes VAT" bytes', () => {
+      const buf = builder.build(openOpts);
+      expect(
+        findSequence(
+          buf,
+          encodeUtf8(
+            shapeArabic(
+              '\u0627\u0644\u0645\u0628\u0644\u063A \u0634\u0627\u0645\u0644 \u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629',
+            ),
+          ),
+        ),
+      ).toBe(false);
+    });
+
+    it('still renders item lines with Arabic primary names', () => {
+      const buf = builder.build({
+        ...openOpts,
+        arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
+      });
+      expect(
+        findSequence(buf, encodePc864('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+      ).toBe(true);
+      expect(str(buf)).toContain('Zinger Burger');
+    });
+
+    it('renders order type and table', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('Type: Dine-in');
+      expect(s).toContain('Table: T4');
+    });
+
+    it('renders partial cut at end', () => {
+      expect(hex(builder.build(openOpts))).toContain('1d564203');
     });
   });
 

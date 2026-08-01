@@ -13,7 +13,32 @@ const mockOrdersSyncItems = vi.fn();
 const mockOrdersSendToKitchen = vi.fn();
 const mockOrdersAddPayment = vi.fn();
 const mockOrdersSubmit = vi.fn();
+const mockOrdersReprint = vi.fn();
 const mockPaymentMethodsListEnabled = vi.fn();
+const mockGetMe = vi.fn();
+
+function makeMe(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    username: 'admin',
+    name: 'Admin',
+    roleId: 1,
+    roleName: 'admin',
+    isActive: true,
+    createOrder: true,
+    updateOrder: true,
+    deleteOrderItem: true,
+    voidOrder: true,
+    refundOrder: true,
+    payOrder: true,
+    manageMenu: true,
+    manageTables: true,
+    managePrinters: true,
+    manageUsers: true,
+    manageSettings: true,
+    ...overrides,
+  };
+}
 
 vi.mock('../api', () => ({
   client: {
@@ -41,7 +66,7 @@ vi.mock('../api', () => ({
       getRefunds: vi.fn(),
       getEvents: vi.fn(),
       verifyEvents: vi.fn(),
-      reprint: vi.fn(),
+      reprint: (...args: any[]) => mockOrdersReprint(...args),
       getZatcaInvoice: vi.fn(),
       retryZatcaClearance: vi.fn(),
       reissueZatcaInvoice: vi.fn(),
@@ -63,25 +88,7 @@ vi.mock('../api', () => ({
   setMe: vi.fn(),
   clearToken: vi.fn(),
   getToken: vi.fn(),
-  getMe: vi.fn(() => ({
-    id: 1,
-    username: 'admin',
-    name: 'Admin',
-    roleId: 1,
-    roleName: 'admin',
-    isActive: true,
-    createOrder: true,
-    updateOrder: true,
-    deleteOrderItem: true,
-    voidOrder: true,
-    refundOrder: true,
-    payOrder: true,
-    manageMenu: true,
-    manageTables: true,
-    managePrinters: true,
-    manageUsers: true,
-    manageSettings: true,
-  })),
+  getMe: () => mockGetMe(),
   isAuthenticated: vi.fn(() => true),
 }));
 
@@ -206,6 +213,7 @@ function mockGetReturns(order: Record<string, unknown>) {
 describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetMe.mockReturnValue(makeMe());
     mockDayIsOpen();
     mockPaymentMethodsListEnabled.mockResolvedValue([
       { id: 'cash', title: 'Cash' },
@@ -613,6 +621,137 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.getByText('Buyer Name')).toBeInTheDocument();
     });
+  });
+
+  // ---- Print Open Receipt (non-ZATCA guest slip) ----
+
+  it('summary tab: Print Open Receipt sits beside Void Order on a clean open order', async () => {
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    expect(screen.getByRole('button', { name: 'Print Open Receipt' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Void Order' })).toBeInTheDocument();
+  });
+
+  it('summary tab: Print Open Receipt prints via reprint(open_receipt) and confirms', async () => {
+    mockGetReturns(makeOrder());
+    mockOrdersReprint.mockResolvedValue({ success: true, errors: [] });
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    const printBtn = screen.getByRole('button', { name: 'Print Open Receipt' });
+    expect(printBtn).not.toBeDisabled();
+
+    fireEvent.click(printBtn);
+
+    await waitFor(() => {
+      expect(mockOrdersReprint).toHaveBeenCalledWith(1, { target: 'open_receipt' });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Open receipt printed')).toBeInTheDocument();
+    });
+  });
+
+  it('summary tab: Print Open Receipt surfaces API errors under the button', async () => {
+    mockGetReturns(makeOrder());
+    mockOrdersReprint.mockResolvedValue({
+      success: false,
+      errors: ['No active receipt printer configured'],
+    });
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    fireEvent.click(screen.getByRole('button', { name: 'Print Open Receipt' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('No active receipt printer configured')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Open receipt printed')).not.toBeInTheDocument();
+  });
+
+  it('summary tab: Print Open Receipt shows error text when the request rejects', async () => {
+    mockGetReturns(makeOrder());
+    mockOrdersReprint.mockRejectedValue(new Error('Printer offline'));
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    fireEvent.click(screen.getByRole('button', { name: 'Print Open Receipt' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Printer offline')).toBeInTheDocument();
+    });
+  });
+
+  it('summary tab: Print Open Receipt hidden while the cart is dirty', async () => {
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Dirty the cart: +1 Fries
+    fireEvent.click(screen.getAllByText('Fries')[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Unsent changes')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    expect(screen.queryByRole('button', { name: 'Print Open Receipt' })).not.toBeInTheDocument();
+  });
+
+  it('summary tab: Print Open Receipt hidden without updateOrder permission', async () => {
+    mockGetMe.mockReturnValue(makeMe({ updateOrder: false }));
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    expect(screen.queryByRole('button', { name: 'Print Open Receipt' })).not.toBeInTheDocument();
+  });
+
+  it('summary tab: Print Open Receipt hidden for paid orders', async () => {
+    mockGetReturns(makeOrder({ status: 'paid', payments: [makePayment()] }));
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    expect(screen.queryByRole('button', { name: 'Print Open Receipt' })).not.toBeInTheDocument();
   });
 
   // ---- Send to Kitchen ----

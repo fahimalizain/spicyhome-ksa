@@ -3,6 +3,7 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 import {
   orders,
   orderItems,
+  orderPayments,
   orderRefunds,
   orderRefundItems,
   items,
@@ -171,6 +172,85 @@ export class PrintJobService {
       arabic: safeParsePrinterConfig(receiptPrinter.config).arabic,
       kickDrawer: opts?.kickDrawer ?? false,
       qrTlvPayload,
+    });
+
+    await this.printersService.sendBuffer(receiptPrinter, receipt);
+    return { printer: receiptPrinter };
+  }
+
+  /**
+   * Print a non-ZATCA open order receipt (guest pays at the table with a
+   * portable ATM-POS). Title is "OPEN ORDER RECEIPT" — deliberately NOT a tax
+   * invoice: no QR, no VAT registration number, no seller address, no drawer
+   * kick. The display name comes from the `restaurant_name` setting (not the
+   * ZATCA `seller_name`). Does NOT write audit events — the caller handles that.
+   */
+  async printOpenOrderReceipt(orderId: number): Promise<{ printer: PrinterRecord }> {
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new Error(`Order ${orderId} not found`);
+
+    const oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+
+    const receiptPrinter = this.printersService.getActiveByRole(PrinterRole.RECEIPT);
+    if (!receiptPrinter) {
+      throw new Error('No active receipt printer configured');
+    }
+
+    // Restaurant display name — NOT the ZATCA legal seller name.
+    const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
+
+    let tableName: string | undefined;
+    if (order.tableId) {
+      const tbl = this.db.select().from(tables).where(eq(tables.id, order.tableId)).get() as any;
+      tableName = tbl?.name;
+    }
+
+    // Arabic name fallback for historical rows that predate the snapshot:
+    // batch-load items.name_ar once for order items that have item_id set.
+    const nameArFallback = this.loadItemNameArFallback(
+      oiRows.filter((oi) => !oi.itemNameAr && oi.itemId != null).map((oi) => oi.itemId as number),
+    );
+
+    const receiptItems: ReceiptItem[] = oiRows.map((oi) => ({
+      qty: oi.qty,
+      name: oi.itemName,
+      nameAr: oi.itemNameAr ?? (oi.itemId != null ? (nameArFallback.get(oi.itemId) ?? null) : null),
+      unitPriceHalalas: oi.unitPriceHalalas,
+      totalHalalas: oi.totalHalalas,
+      vatRateBp: oi.vatRateBp,
+    }));
+
+    // Net payments already recorded on the order (ADR 0006 — payment before
+    // food). The ledger is signed: correction lines are negative, so the
+    // reduce gives the true net paid amount.
+    const paymentRows = this.db
+      .select({ amountHalalas: orderPayments.amountHalalas })
+      .from(orderPayments)
+      .where(eq(orderPayments.orderId, orderId))
+      .all();
+    const paidHalalas = paymentRows.reduce((s, r) => s + r.amountHalalas, 0);
+
+    const receipt = this.receiptBuilder.build({
+      documentKind: 'open_order',
+      // Not printed for open_order — kept in the type for ZATCA documents.
+      documentId: order.documentId?.length ? order.documentId : `Order-${order.orderNo}`,
+      orderNo: order.orderNo,
+      createdAt: order.createdAt,
+      sellerName: restaurantName,
+      vatNumber: '',
+      orderType: order.type as 'dine_in' | 'takeaway',
+      tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+      items: receiptItems,
+      subtotalHalalas: order.subtotalHalalas,
+      vatHalalas: order.vatHalalas,
+      totalHalalas: order.totalHalalas,
+      paidHalalas,
+      vatRateBp: this.sharedVatRateBp(oiRows.map((oi) => oi.vatRateBp)),
+      arabic: safeParsePrinterConfig(receiptPrinter.config).arabic,
+      kickDrawer: false,
+      // No QR — open order receipts are not tax invoices.
     });
 
     await this.printersService.sendBuffer(receiptPrinter, receipt);
