@@ -374,6 +374,23 @@ export interface paths {
     patch: operations['OrdersController_updateOrderPartner'];
     trace?: never;
   };
+  '/orders/{id}/items/{orderItemId}/unit-price': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 */
+    patch: operations['OrdersController_updateOrderItemUnitPrice'];
+    trace?: never;
+  };
   '/orders/{orderId}/items/sync': {
     parameters: {
       query?: never;
@@ -2147,6 +2164,20 @@ export interface components {
        */
       deliveryExternalRef?: string | null;
     };
+    UpdateOrderItemUnitPriceDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * Format: int64
+       * @description New VAT-inclusive unit price in halalas (SAR × 100). Must be an integer ≥ the live catalog items.price_halalas (the floor).
+       * @example 2500
+       */
+      unitPriceHalalas: number;
+    };
     CreateOrderDto: {
       /**
        * @example dine_in
@@ -3579,6 +3610,34 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['UpdateOrderPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderItemUnitPrice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        /** @description order_items.id — the LINE id, not the catalog item id */
+        orderItemId: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderItemUnitPriceDto'];
       };
     };
     responses: {

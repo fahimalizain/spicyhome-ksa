@@ -25,6 +25,7 @@ export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
 export type UpdateOrderMetaDto = Schemas['UpdateOrderMetaDto'];
 export type UpdateOrderPartnerDto = Schemas['UpdateOrderPartnerDto'];
+export type UpdateOrderItemUnitPriceDto = Schemas['UpdateOrderItemUnitPriceDto'];
 
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
@@ -342,6 +343,20 @@ export class SpicyHomeClient {
      */
     updatePartner: (orderId: number, dto: UpdateOrderPartnerDto) =>
       request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}/partner`, dto),
+
+    /**
+     * Override one order LINE unit price on a delivery-partner order
+     * (ADR 0007). `orderItemId` is `order_items.id` (line id), not the
+     * catalog item id. `unitPriceHalalas` is floored at the live catalog
+     * price (server 400 below the floor).
+     */
+    updateItemUnitPrice: (orderId: number, orderItemId: number, dto: UpdateOrderItemUnitPriceDto) =>
+      request<OrderResponse>(
+        this.config,
+        'PATCH',
+        `/orders/${orderId}/items/${orderItemId}/unit-price`,
+        dto,
+      ),
 
     /** Append ONE payment line to an open order (ADR 0006 — status stays open). */
     addPayment: (orderId: number, dto: AddOrderPaymentDto) =>

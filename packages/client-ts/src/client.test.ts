@@ -1,4 +1,9 @@
-import { SpicyHomeClient, type AddOrderPaymentDto, type SubmitOrderDto } from './client';
+import {
+  SpicyHomeClient,
+  type AddOrderPaymentDto,
+  type SubmitOrderDto,
+  type UpdateOrderItemUnitPriceDto,
+} from './client';
 
 describe('SpicyHomeClient', () => {
   it('can be instantiated', () => {
@@ -71,6 +76,7 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.orders.sendToKitchen).toBe('function');
     expect(typeof client.orders.update).toBe('function');
     expect(typeof client.orders.updatePartner).toBe('function');
+    expect(typeof client.orders.updateItemUnitPrice).toBe('function');
     expect(typeof client.orders.addPayment).toBe('function');
     expect(typeof client.orders.submit).toBe('function');
     expect(typeof client.orders.void).toBe('function');
@@ -156,6 +162,40 @@ describe('SpicyHomeClient', () => {
       amountHalalas: 4600,
     };
     expect(dto.amountHalalas).toBe(4600);
+  });
+
+  it('UpdateOrderItemUnitPriceDto type is constructable', () => {
+    const dto: UpdateOrderItemUnitPriceDto = {
+      baseUpdatedAt: 1720000000,
+      unitPriceHalalas: 2500,
+    };
+    expect(dto.unitPriceHalalas).toBe(2500);
+  });
+
+  it('updateItemUnitPrice builds the PATCH path and body (orderItemId = line id)', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify({ id: 7, items: [] }),
+    });
+    globalThis.fetch = fetchMock as any;
+
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => 'token',
+    });
+
+    await client.orders.updateItemUnitPrice(7, 101, {
+      baseUpdatedAt: 1720000000,
+      unitPriceHalalas: 2500,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3000/orders/7/items/101/unit-price');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ baseUpdatedAt: 1720000000, unitPriceHalalas: 2500 });
   });
 });
 

@@ -23,6 +23,7 @@ const EVENT_LABELS: Record<string, string> = {
   type_changed: 'Type / Table Changed',
   delivery_partner_changed: 'Delivery Partner Changed',
   item_price_reset: 'Item Price Reset',
+  item_price_overridden: 'Item Price Overridden',
   zatca_clearance_rejected: 'ZATCA Clearance Rejected',
   zatca_clearance_approved: 'ZATCA Clearance Approved',
 };
@@ -96,6 +97,11 @@ function formatPayload(event: OrderEventResponse): string {
       return `${label}: ${halalasToSar(Number(p.fromUnitPriceHalalas) || 0)} → ${halalasToSar(
         Number(p.toUnitPriceHalalas) || 0,
       )} SAR (${reason})`;
+    }
+    case 'item_price_overridden': {
+      return `${label}: ${halalasToSar(Number(p.fromUnitPriceHalalas) || 0)} → ${halalasToSar(
+        Number(p.toUnitPriceHalalas) || 0,
+      )} SAR (floor ${halalasToSar(Number(p.floorPriceHalalas) || 0)} SAR)`;
     }
     case 'zatca_clearance_approved': {
       const doc = (p.documentId || p.cbcId || '?') as string;

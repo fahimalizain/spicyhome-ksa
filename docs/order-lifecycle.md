@@ -176,6 +176,7 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `delivery_partner_changed` | `PATCH /orders/:id/partner` (set / change / clear / ref-only edit), and the partner-clear half of a `takeaway → dine_in` type change | `{ fromPartnerId, toPartnerId, fromPartnerTitle, toPartnerTitle, fromExternalRef, toExternalRef, resetItemCount }`          |
 | `item_price_reset`         | Clear-partner, and the price-reset half of a `takeaway → dine_in` type change (one event per changed line)                           | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, reason: 'partner_cleared' \| 'type_changed_to_dine_in' }` |
+| `item_price_overridden`    | `PATCH /orders/:id/items/:orderItemId/unit-price` (per-line partner price override)                                                  | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, floorPriceHalalas }`                                      |
 
 > **ADR 0007**: `takeaway → dine_in` via `PATCH /orders/:id` additionally clears
 > `delivery_partner_id` / `delivery_external_ref` and resets every line price to
@@ -499,29 +500,42 @@ additionally carries a partner reference** — there is no third order type.
   touches no prices.
 - `OrderResponse` / order list/summary responses embed `deliveryPartnerId`,
   `deliveryPartnerTitle` (joined when set) and `deliveryExternalRef`.
-- Per-line price overrides (`item_price_overridden`) land in Phase 7
-  (`PATCH /orders/:id/items/:itemId/unit-price`); the `item_price_reset`
-  events reference the same `unit_price_halalas` snapshot column.
+- **`PATCH /orders/:id/items/:orderItemId/unit-price`** (permission
+  `update_order`, Phase 7) — per-line partner price override. `:orderItemId`
+  is the **line id** (`order_items.id`), not the catalog item id. Body:
+  `{ baseUpdatedAt, unitPriceHalalas }`. Rules: order must be `open` **and**
+  have a delivery partner set (else 400); the line must belong to the order
+  (else 404); lines with `item_id` NULL cannot be overridden (400);
+  `unitPriceHalalas` must be an integer ≥ the **live catalog**
+  `items.price_halalas` read inside the transaction — the floor applies even
+  when the item is inactive (else 400 with the floor in the message). On
+  success the line total (`unit_price × qty`) and order totals are recomputed
+  via the existing VAT path, one `item_price_overridden`
+  (`{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas,
+floorPriceHalalas }`) event is written, and `order.updated` is emitted.
+  Identical price → 200 no-op (no event, no `updated_at` bump). Stale
+  `baseUpdatedAt` → 409 `{ message, updatedAt }`. Response is the full order.
 
 ## Endpoint Summary
 
-| Endpoint                           | Permission     |   POS SPA    | Android Tablet |
-| ---------------------------------- | -------------- | :----------: | :------------: |
-| `POST /orders`                     | `create_order` |     Yes      |      Yes       |
-| `GET /orders`                      | none           |     Yes      |      Yes       |
-| `GET /orders/:id`                  | none           |     Yes      |      Yes       |
-| `GET /orders/:id/events`           | none           |     Yes      |       No       |
-| `GET /orders/:id/events/verify`    | none           |     Yes      |       No       |
-| `PUT /orders/:orderId/items/sync`  | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                                  |
-| `PATCH /orders/:id`                | `update_order` |   **Yes**    |     **No**     | Type/table change; `takeaway → dine_in` also clears partner and resets prices (ADR 0007) |
-| `PATCH /orders/:id/partner`        | `update_order` |   **Yes**    |     **No**     | Set/change/clear delivery partner + external ref (ADR 0007)                              |
-| `POST /orders/:id/send-to-kitchen` | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006)            |
-| `POST /orders/:id/payments`        | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                             |
-| `POST /orders/:id/submit`          | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                                         |
-| `POST /orders/:id/refund`          | `refund_order` |   **Yes**    |     **No**     |
-| `GET /orders/:id/refunds`          | none           |     Yes      |       No       |
-| `POST /orders/:id/void`            | `void_order`   |   **Yes**    |     **No**     |
-| `POST /orders/:id/print`           | `update_order` | Receipt only |       No       |
+| Endpoint                                          | Permission     |   POS SPA    | Android Tablet |
+| ------------------------------------------------- | -------------- | :----------: | :------------: |
+| `POST /orders`                                    | `create_order` |     Yes      |      Yes       |
+| `GET /orders`                                     | none           |     Yes      |      Yes       |
+| `GET /orders/:id`                                 | none           |     Yes      |      Yes       |
+| `GET /orders/:id/events`                          | none           |     Yes      |       No       |
+| `GET /orders/:id/events/verify`                   | none           |     Yes      |       No       |
+| `PUT /orders/:orderId/items/sync`                 | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                                  |
+| `PATCH /orders/:id`                               | `update_order` |   **Yes**    |     **No**     | Type/table change; `takeaway → dine_in` also clears partner and resets prices (ADR 0007) |
+| `PATCH /orders/:id/partner`                       | `update_order` |   **Yes**    |     **No**     | Set/change/clear delivery partner + external ref (ADR 0007)                              |
+| `PATCH /orders/:id/items/:orderItemId/unit-price` | `update_order` |   **Yes**    |     **No**     | Per-line partner price override, floored at the live catalog price (ADR 0007, Phase 7)   |
+| `POST /orders/:id/send-to-kitchen`                | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006)            |
+| `POST /orders/:id/payments`                       | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                             |
+| `POST /orders/:id/submit`                         | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                                         |
+| `POST /orders/:id/refund`                         | `refund_order` |   **Yes**    |     **No**     |
+| `GET /orders/:id/refunds`                         | none           |     Yes      |       No       |
+| `POST /orders/:id/void`                           | `void_order`   |   **Yes**    |     **No**     |
+| `POST /orders/:id/print`                          | `update_order` | Receipt only |       No       |
 
 > `POST /orders/:id/pay` is **removed** (ADR 0006) — no alias, no deprecation
 > period. The Android app should only bind to endpoints for order creation and

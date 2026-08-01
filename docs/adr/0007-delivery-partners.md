@@ -41,12 +41,12 @@ by this feature.
 `'dine_in' | 'takeaway'` (ADR 0004 enum unchanged). A delivery-app order is a
 `takeaway` order that additionally carries a partner reference:
 
-| Layer    | Name               |
-| -------- | ------------------ |
-| Domain   | Delivery Partner   |
-| Table    | `delivery_partners`|
+| Layer    | Name                 |
+| -------- | -------------------- |
+| Domain   | Delivery Partner     |
+| Table    | `delivery_partners`  |
 | API path | `/delivery-partners` |
-| UI label | Delivery Partners  |
+| UI label | Delivery Partners    |
 
 - New nullable column `orders.delivery_partner_id` → FK to
   `delivery_partners.id`.
@@ -113,13 +113,13 @@ makes on-account settlement flow through the existing pay machinery
 `POST /delivery-partners` **atomically creates** the partner row **and** a
 `payment_methods` row:
 
-| `payment_methods` column       | Value                                     |
-| ------------------------------ | ----------------------------------------- |
-| `id`                           | **Same slug** as the partner `id`         |
-| `title`                        | Same as partner `title`                   |
-| `zatca_payment_means_code`     | `'30'` (Credit / On Account)              |
-| `enabled`                      | Mirrors partner `enabled` (1 on create)   |
-| `sort_order`                   | `0` (adjustable independently, see below) |
+| `payment_methods` column   | Value                                     |
+| -------------------------- | ----------------------------------------- |
+| `id`                       | **Same slug** as the partner `id`         |
+| `title`                    | Same as partner `title`                   |
+| `zatca_payment_means_code` | `'30'` (Credit / On Account)              |
+| `enabled`                  | Mirrors partner `enabled` (1 on create)   |
+| `sort_order`               | `0` (adjustable independently, see below) |
 
 ```sql
 INSERT INTO payment_methods
@@ -137,12 +137,12 @@ are rolled back.
 `PATCH /delivery-partners/:id` propagates to the owned method in the same
 transaction:
 
-| Partner change       | Payment method effect                        |
-| -------------------- | -------------------------------------------- |
-| `title` changed      | `title` updated to the same value            |
+| Partner change       | Payment method effect                                  |
+| -------------------- | ------------------------------------------------------ |
+| `title` changed      | `title` updated to the same value                      |
 | `enabled` 1 → 0      | `enabled` set to 0 (method hidden from all pay modals) |
-| `enabled` 0 → 1      | `enabled` set to 1                           |
-| `sort_order` changed | **Not** mirrored (see below)                 |
+| `enabled` 0 → 1      | `enabled` set to 1                                     |
+| `sort_order` changed | **Not** mirrored (see below)                           |
 
 - The owned method's `sort_order` is the **one deliberately divergent field**:
   it places the method in the pay modal and may be tuned independently via
@@ -190,7 +190,7 @@ catalogs share one slug namespace:
   partner's method, and all ADR 0006 submit preconditions (exact balance,
   net-per-method ≥ 0, etc.) apply unchanged.
 - **Non-cash semantics**: the partner method is `zatca_payment_means_code
-  '30'` (Credit / On Account) — no `tenderedHalalas` / `changeHalalas`, no
+'30'` (Credit / On Account) — no `tenderedHalalas` / `changeHalalas`, no
   cash-drawer kick (drawer kick already fires only on positive cash lines,
   ADR 0002/0006). The order is still submitted with `PaymentMeans` = the
   partner method id.
@@ -247,16 +247,16 @@ New endpoint `PATCH /orders/:id/partner`, body:
 may be sent on its own (editing the ref does not require changing the
 partner). Server rules:
 
-| Scenario                          | Behavior                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------- |
-| Status gate                       | `orders.status === 'open'` only; paid/voided/refunded → 400.                                 |
-| Set partner                       | Type must be `takeaway`; `dine_in` → 400 with guidance ("set order type to takeaway first"). Partner must exist and be enabled; unknown/disabled → 400. **Does not touch line prices.** |
-| Change partner (HS → Keeta)       | Partner id swapped; **line prices untouched**; `deliveryExternalRef` may be sent in the same call or edited separately. |
-| Clear partner (stay takeaway)     | `deliveryPartnerId = null` ⇒ **reset every line's `unit_price_halalas` to the live catalog** (`items.price_halalas`) and recompute totals. `deliveryExternalRef` is force-nulled. |
-| Ref with null partner             | If `deliveryPartnerId` is null, any `deliveryExternalRef` in the body is **ignored / force-nulled** (a ref has no meaning without a partner). |
-| Concurrency                       | `baseUpdatedAt` must equal `orders.updated_at`; stale → 409 with the standard conflict shape `{ message, updatedAt }` (ADR 0004 pattern). |
-| Permission                        | Reuses `update_order`. No new permission.                                                    |
-| Response                          | Full order with items and events, same shape as `GET /orders/:id`.                           |
+| Scenario                      | Behavior                                                                                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status gate                   | `orders.status === 'open'` only; paid/voided/refunded → 400.                                                                                                                            |
+| Set partner                   | Type must be `takeaway`; `dine_in` → 400 with guidance ("set order type to takeaway first"). Partner must exist and be enabled; unknown/disabled → 400. **Does not touch line prices.** |
+| Change partner (HS → Keeta)   | Partner id swapped; **line prices untouched**; `deliveryExternalRef` may be sent in the same call or edited separately.                                                                 |
+| Clear partner (stay takeaway) | `deliveryPartnerId = null` ⇒ **reset every line's `unit_price_halalas` to the live catalog** (`items.price_halalas`) and recompute totals. `deliveryExternalRef` is force-nulled.       |
+| Ref with null partner         | If `deliveryPartnerId` is null, any `deliveryExternalRef` in the body is **ignored / force-nulled** (a ref has no meaning without a partner).                                           |
+| Concurrency                   | `baseUpdatedAt` must equal `orders.updated_at`; stale → 409 with the standard conflict shape `{ message, updatedAt }` (ADR 0004 pattern).                                               |
+| Permission                    | Reuses `update_order`. No new permission.                                                                                                                                               |
+| Response                      | Full order with items and events, same shape as `GET /orders/:id`.                                                                                                                      |
 
 #### takeaway → dine_in now clears partner and resets prices (extends ADR 0004)
 
@@ -282,11 +282,11 @@ a reset event for them.
 
 Three new `AuditAction` values in `packages/shared/src/enums.ts`:
 
-| Event type                  | Written by                                              | Payload |
-| --------------------------- | ------------------------------------------------------- | ------- |
-| `delivery_partner_changed`  | partner set / clear / change / ref-only edit, and the partner-clear half of takeaway → dine_in | `{ fromPartnerId, toPartnerId, fromPartnerTitle, toPartnerTitle, fromExternalRef, toExternalRef, resetItemCount }` |
-| `item_price_overridden`     | `PATCH /orders/:id/items/:itemId/unit-price`            | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, floorPriceHalalas }` |
-| `item_price_reset`          | clear-partner, and the price-reset half of takeaway → dine_in (one event per line) | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, reason: 'partner_cleared' \| 'type_changed_to_dine_in' }` |
+| Event type                 | Written by                                                                                     | Payload                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `delivery_partner_changed` | partner set / clear / change / ref-only edit, and the partner-clear half of takeaway → dine_in | `{ fromPartnerId, toPartnerId, fromPartnerTitle, toPartnerTitle, fromExternalRef, toExternalRef, resetItemCount }`          |
+| `item_price_overridden`    | `PATCH /orders/:id/items/:itemId/unit-price`                                                   | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, floorPriceHalalas }`                                      |
+| `item_price_reset`         | clear-partner, and the price-reset half of takeaway → dine_in (one event per line)             | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, reason: 'partner_cleared' \| 'type_changed_to_dine_in' }` |
 
 The existing `type_changed` payload (`{ fromType, toType, fromTableId,
 toTableId }`) is **unchanged**; the partner-clear and price resets that
@@ -297,23 +297,23 @@ ledger tells the full story without altering ADR 0004's contract.
 
 #### Catalog CRUD — `/delivery-partners`
 
-| Method   | Path                    | Auth              | Description                                              |
-| -------- | ----------------------- | ----------------- | -------------------------------------------------------- |
-| `GET`    | `/delivery-partners`    | `manage_settings` | List all (incl. disabled), `sort_order ASC, title ASC`   |
-| `POST`   | `/delivery-partners`    | `manage_settings` | Create `{ title }` → slug; auto-creates the linked payment method (atomic) |
-| `PATCH`  | `/delivery-partners/:id`| `manage_settings` | Update `title` / `enabled` / `sort_order`; mirrors `title`/`enabled` to the method |
-| `DELETE` | —                       | —                 | Not offered (soft-disable only)                          |
+| Method   | Path                     | Auth              | Description                                                                        |
+| -------- | ------------------------ | ----------------- | ---------------------------------------------------------------------------------- |
+| `GET`    | `/delivery-partners`     | `manage_settings` | List all (incl. disabled), `sort_order ASC, title ASC`                             |
+| `POST`   | `/delivery-partners`     | `manage_settings` | Create `{ title }` → slug; auto-creates the linked payment method (atomic)         |
+| `PATCH`  | `/delivery-partners/:id` | `manage_settings` | Update `title` / `enabled` / `sort_order`; mirrors `title`/`enabled` to the method |
+| `DELETE` | —                        | —                 | Not offered (soft-disable only)                                                    |
 
 Create body is `{ "title": "HungerStation" }` (like ADR 0002); `enabled` and
 `sort_order` default to 1 / 0 and are adjustable via PATCH.
 
 #### Order changes
 
-| Method  | Path                                    | Auth          | Description                                                        |
-| ------- | --------------------------------------- | ------------- | ------------------------------------------------------------------ |
-| `PATCH` | `/orders/:id/partner`                   | `update_order`| Set/clear/change partner + external ref (open order, takeaway rules)|
-| `PATCH` | `/orders/:id/items/:itemId/unit-price`  | `update_order`| Per-line partner price override (`{ baseUpdatedAt, unitPriceHalalas }`; order must be `open` **and** have a partner set; floor = live catalog) |
-| `PATCH` | `/orders/:id` (existing, ADR 0004)      | `update_order`| `takeaway → dine_in` now also clears partner/ref and resets line prices |
+| Method  | Path                                   | Auth           | Description                                                                                                                                    |
+| ------- | -------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH` | `/orders/:id/partner`                  | `update_order` | Set/clear/change partner + external ref (open order, takeaway rules)                                                                           |
+| `PATCH` | `/orders/:id/items/:itemId/unit-price` | `update_order` | Per-line partner price override (`{ baseUpdatedAt, unitPriceHalalas }`; order must be `open` **and** have a partner set; floor = live catalog) |
+| `PATCH` | `/orders/:id` (existing, ADR 0004)     | `update_order` | `takeaway → dine_in` now also clears partner/ref and resets line prices                                                                        |
 
 `OrderResponse` (full order detail) embeds `deliveryPartnerId`,
 `deliveryPartnerTitle`, and `deliveryExternalRef`; open-orders list/summary
@@ -415,6 +415,7 @@ tablets are order-item management only).
 ## Rejected alternatives
 
 ### Third order type (`delivery`)
+
 **Rejected.** A third type would leak into every type switch site, occupancy
 logic, kitchen routing, and the Android type UI for zero modeling gain — a
 delivery-app order is semantically a takeaway order that is settled on
@@ -422,33 +423,39 @@ account. The nullable partner FK keeps the type enum and all existing
 takeaway behaviors intact.
 
 ### Partner price catalog / % markup in v1
+
 **Rejected.** Default price lists and markup rules are real but not required
 for the first deployment; per-line manual override with a catalog floor is
 the minimal correct mechanism. A catalog can be layered on later without
 schema churn (it would only change how `unit_price_halalas` is populated).
 
 ### Skip-payment shortcut for partner orders
+
 **Rejected.** Auto-marking partner orders paid without `order_payments` rows
 would break the payment ledger, ZATCA `PaymentMeans`, and the Z-report
 bucketing. Partner orders use the normal payment flow with a restricted
 method set.
 
 ### Store `is_delivery_partner` on `payment_methods`
+
 **Rejected.** The ownership relation is derivable from `delivery_partners`
 and storing it creates a second source of truth that can drift during the
 mirroring transaction. The derived flag is always consistent.
 
 ### Hard delete of partners
+
 **Rejected.** Deleting would orphan `orders.delivery_partner_id` rows and the
 owned payment method (which itself cannot be deleted, ADR 0002). Soft-disable
 preserves referential integrity and history.
 
 ### By-partner Z-report section in v1
+
 **Rejected.** Partner methods already bucket via `order_payments`; a separate
 report section duplicates that aggregation and is easy to add later if
 operators ask for it.
 
 ### Android support
+
 **Rejected.** Device-responsibilities rule is unchanged: tablets are order-item
 management only. No partner UI, no new tablet endpoints.
 

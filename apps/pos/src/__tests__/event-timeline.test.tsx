@@ -530,4 +530,31 @@ describe('OrderEventTimeline', () => {
       screen.getByText('Item Price Reset: 30.00 → 23.00 SAR (order type changed to dine-in)'),
     ).toBeInTheDocument();
   });
+
+  it('renders item_price_overridden with from/to prices and the catalog floor', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'item_price_overridden',
+        payload: JSON.stringify({
+          orderItemId: 101,
+          itemId: 1,
+          fromUnitPriceHalalas: 2300,
+          toUnitPriceHalalas: 2500,
+          floorPriceHalalas: 2300,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Item Price Overridden')).toBeInTheDocument();
+    expect(
+      screen.getByText('Item Price Overridden: 23.00 → 25.00 SAR (floor 23.00 SAR)'),
+    ).toBeInTheDocument();
+  });
 });

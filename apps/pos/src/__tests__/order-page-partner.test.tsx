@@ -609,7 +609,12 @@ describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 
     });
 
     const refInput = screen.getByPlaceholderText('App order #') as HTMLInputElement;
-    expect(refInput.value).toBe('HS-OLD');
+    // The draft is synced from the cart via an effect after hydration —
+    // wait for it instead of asserting the raw DOM right away (race under
+    // parallel test load).
+    await waitFor(() => {
+      expect(refInput.value).toBe('HS-OLD');
+    });
 
     fireEvent.change(refInput, { target: { value: 'HS-NEW' } });
     fireEvent.blur(refInput);
@@ -685,7 +690,10 @@ describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 
       expect(screen.getByText('Partner: Keeta')).toBeInTheDocument();
     });
     const refInput = screen.getByPlaceholderText('App order #') as HTMLInputElement;
-    expect(refInput.value).toBe('K-REMOTE');
+    // Draft sync effect after hydration — wait for it (race under parallel load)
+    await waitFor(() => {
+      expect(refInput.value).toBe('K-REMOTE');
+    });
   });
 
   // ── Gating ──

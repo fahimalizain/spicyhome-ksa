@@ -1263,6 +1263,63 @@
         ]
       }
     },
+    "/orders/{id}/items/{orderItemId}/unit-price": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderItemUnitPrice",
+        "summary": "Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "orderItemId",
+            "required": true,
+            "in": "path",
+            "description": "order_items.id — the LINE id, not the catalog item id",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderItemUnitPriceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders/{orderId}/items/sync": {
       "put": {
         "operationId": "OrdersController_syncItems",
@@ -4778,6 +4835,27 @@
         },
         "required": [
           "baseUpdatedAt"
+        ]
+      },
+      "UpdateOrderItemUnitPriceDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "unitPriceHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2500,
+            "description": "New VAT-inclusive unit price in halalas (SAR × 100). Must be an integer ≥ the live catalog items.price_halalas (the floor)."
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "unitPriceHalalas"
         ]
       },
       "CreateOrderDto": {

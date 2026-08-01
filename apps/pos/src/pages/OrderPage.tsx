@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { AddPaymentModal } from '../components/orders/AddPaymentModal';
+import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
 import {
   StandardInvoiceBuyerForm,
@@ -109,12 +110,16 @@ export function OrderPage() {
   const permissions = usePermissions();
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [items, setItems] = useState<ItemResponse[]>([]);
+  // Full catalog (incl. inactive items) — the override floor applies even
+  // when an item is inactive (ADR 0007), so the price modal needs it.
+  const [catalogItems, setCatalogItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartnerResponse[]>([]);
   const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
+  const [showPartnerPriceModal, setShowPartnerPriceModal] = useState(false);
   const [externalRefDraft, setExternalRefDraft] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
@@ -343,6 +348,7 @@ export function OrderPage() {
       ]);
       setCategories(cats.filter((c) => c.isActive));
       setItems(allItems.filter((i) => i.isActive));
+      setCatalogItems(allItems);
     } catch {
       setError('Failed to load menu');
     }
@@ -415,6 +421,7 @@ export function OrderPage() {
     setCurrentOrder(null);
     setShowTablePicker(false);
     setShowPartnerPicker(false);
+    setShowPartnerPriceModal(false);
     setExternalRefDraft('');
     setShowRefundModal(false);
     setRefundOrder(null);
@@ -868,6 +875,24 @@ export function OrderPage() {
     }
   }
 
+  // ── Partner price overrides (ADR 0007, Phase 7) ──
+
+  /**
+   * Live catalog floor by item id for the price modal — built from the FULL
+   * menu response (incl. inactive items, whose catalog price still floors
+   * overrides server-side).
+   */
+  const floorByItemId: Record<number, number> = Object.fromEntries(
+    catalogItems.map((i) => [i.id, i.priceHalalas]),
+  );
+
+  /** On final save success: hydrate the cart from the returned order. */
+  function handlePartnerPricesSaved(order: OrderResponse) {
+    hydrateOrder(order);
+    loadOpenOrders();
+    setShowPartnerPriceModal(false);
+  }
+
   // ── Navigation guard (D7) ──
 
   function guardedNavigate(navigateFn: () => void) {
@@ -967,6 +992,20 @@ export function OrderPage() {
 
   // - Void: open + clean + voidOrder (server rejects when payments net ≠ 0)
   const canVoid = openOrder && !cart.isDirty && permissions.voidOrder && !loading;
+
+  /**
+   * "Edit partner prices" button gate (ADR 0007, Phase 7): open order +
+   * partner set + update permission + clean cart (the modal edits server
+   * lines, so a dirty cart must be saved first) + not busy.
+   */
+  const canEditPartnerPrices =
+    openOrder &&
+    cart.deliveryPartnerId != null &&
+    permissions.updateOrder &&
+    !cart.isDirty &&
+    !loading &&
+    !syncing &&
+    !metaUpdating;
 
   // Summary totals: prefer server totals when clean; local + warning when dirty
   const summaryTotals = cart.isDirty
@@ -1092,6 +1131,15 @@ export function OrderPage() {
                   placeholder="App order #"
                   className="w-44 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 />
+              )}
+              {/* ADR 0007 Phase 7: explicit per-line price override modal */}
+              {canEditPartnerPrices && (
+                <button
+                  onClick={() => setShowPartnerPriceModal(true)}
+                  className="touch-target px-3 py-1.5 bg-brand-700/40 text-brand-200 border border-brand-600/50 hover:bg-brand-700 rounded-lg text-sm whitespace-nowrap"
+                >
+                  Edit partner prices
+                </button>
               )}
             </>
           )}
@@ -1734,6 +1782,27 @@ export function OrderPage() {
           outstandingHalalas={outstandingHalalas}
           onAdded={handlePaymentAdded}
           onClose={() => setShowAddPaymentModal(false)}
+        />
+      )}
+
+      {/* Partner price override modal (ADR 0007, Phase 7) */}
+      {showPartnerPriceModal && currentOrder && (
+        <PartnerPriceModal
+          orderId={currentOrder.id}
+          baseUpdatedAt={cart.serverUpdatedAt ?? 0}
+          items={cart.items
+            .filter((i) => i.orderItemId != null)
+            .map((i) => ({
+              orderItemId: i.orderItemId!,
+              itemId: i.itemId || null,
+              name: i.name,
+              unitPriceHalalas: i.unitPriceHalalas,
+              qty: i.qty,
+            }))}
+          floorByItemId={floorByItemId}
+          partnerTitle={cart.deliveryPartnerTitle}
+          onSaved={handlePartnerPricesSaved}
+          onClose={() => setShowPartnerPriceModal(false)}
         />
       )}
 

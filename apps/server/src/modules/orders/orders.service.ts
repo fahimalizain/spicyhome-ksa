@@ -574,6 +574,154 @@ export class OrdersService {
   }
 
   /**
+   * PATCH /orders/:id/items/:orderItemId/unit-price — per-line partner price
+   * override (ADR 0007). `orderItemId` is the `order_items.id` (line id),
+   * NOT the catalog item id.
+   *
+   * Rules (implemented exactly as the ADR):
+   *
+   * - open orders only → else 400
+   * - the order must have a delivery partner set → else 400
+   * - the line must belong to the order → else 404
+   * - lines with `item_id` NULL (catalog item deleted) cannot be overridden
+   *   → else 400
+   * - `unitPriceHalalas` must be an integer ≥ the LIVE catalog
+   *   `items.price_halalas` read inside the transaction (the floor applies
+   *   even when the item is inactive) → else 400 with the floor in the
+   *   message; a catalog row that no longer exists (hard-deleted item) also
+   *   has no floor → 400
+   * - stale `baseUpdatedAt` → 409 `{ message, updatedAt }`
+   * - identical price → 200 no-op: no event, no `updated_at` bump, no emit
+   *
+   * Writes one `item_price_overridden` event with
+   * `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas,
+   * floorPriceHalalas }`, recomputes the line total (`unit_price × qty`) and
+   * the order totals via the existing VAT path, and emits `order.updated`.
+   */
+  async updateOrderItemUnitPrice(
+    orderId: number,
+    orderItemId: number,
+    dto: { baseUpdatedAt: number; unitPriceHalalas: number },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+    let anyMutation = false;
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Status gate — open orders only (ADR 0007)
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can override line prices');
+      }
+
+      // Partner gate — overrides exist only on linked delivery orders
+      if (order.deliveryPartnerId == null) {
+        throw new BadRequestException(
+          'Line price overrides require a delivery partner on the order',
+        );
+      }
+
+      // Concurrency — same 409 shape as syncItems / updateOrderMeta
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      // The line must exist AND belong to this order (orderItemId is the
+      // global order_items.id PK — same ownership check as syncItems).
+      const oi = tx.select().from(orderItems).where(eq(orderItems.id, orderItemId)).get();
+      if (!oi || oi.orderId !== orderId) {
+        throw new NotFoundException(`Order item ${orderItemId} not found on order ${orderId}`);
+      }
+
+      // Lines without a catalog link cannot be overridden (no floor).
+      if (oi.itemId == null) {
+        throw new BadRequestException(
+          `Order item ${orderItemId} has no catalog item — cannot override its price`,
+        );
+      }
+
+      // Floor = live catalog price, read fresh inside the transaction. The
+      // floor applies even when the item is inactive (ADR 0007).
+      const catalogRow = tx
+        .select({ priceHalalas: items.priceHalalas })
+        .from(items)
+        .where(eq(items.id, oi.itemId))
+        .get();
+      if (!catalogRow) {
+        throw new BadRequestException(
+          `Cannot override price: catalog item ${oi.itemId} no longer exists`,
+        );
+      }
+      const floorPriceHalalas = catalogRow.priceHalalas;
+      if (!Number.isInteger(dto.unitPriceHalalas) || dto.unitPriceHalalas < floorPriceHalalas) {
+        throw new BadRequestException(
+          `Unit price must be at least the catalog price of ${floorPriceHalalas} halalas (floor)`,
+        );
+      }
+
+      const fromUnitPriceHalalas = oi.unitPriceHalalas;
+      const toUnitPriceHalalas = dto.unitPriceHalalas;
+
+      // No-op: identical price → return the current order without bumping
+      // updated_at or writing an event (same as updateOrderMeta's no-op).
+      if (toUnitPriceHalalas === fromUnitPriceHalalas) {
+        const snapshot = () => {
+          const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+          const refreshedItems = tx
+            .select()
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId))
+            .all();
+          const logs = this.orderEvents.getEvents(tx, orderId);
+          return { ...refreshedOrder, items: refreshedItems, events: logs };
+        };
+        return snapshot();
+      }
+
+      anyMutation = true;
+
+      tx.update(orderItems)
+        .set({
+          unitPriceHalalas: toUnitPriceHalalas,
+          totalHalalas: toUnitPriceHalalas * oi.qty,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orderItems.id, orderItemId))
+        .run();
+
+      // Recompute order totals (existing VAT-inclusive path).
+      this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.ITEM_PRICE_OVERRIDDEN,
+        {
+          orderItemId,
+          itemId: oi.itemId,
+          fromUnitPriceHalalas,
+          toUnitPriceHalalas,
+          floorPriceHalalas,
+        },
+        now,
+      );
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
+  }
+
+  /**
    * ADR 0007 price reset — set every order line's `unit_price_halalas` to
    * the live catalog price (`items.price_halalas`) and recompute the order
    * totals. Shared by the clear-partner endpoint and the takeaway → dine_in

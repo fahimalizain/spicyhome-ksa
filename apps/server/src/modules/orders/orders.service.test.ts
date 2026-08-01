@@ -2919,6 +2919,318 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   });
 });
 
+describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-price (ADR 0007, Phase 7)', () => {
+  let priceOrderIds: number[];
+
+  beforeEach(() => {
+    priceOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of priceOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    priceOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
+      .expect(200);
+    return res.body;
+  }
+
+  function patchUnitPrice(orderId: number, orderItemId: number, body: Record<string, unknown>) {
+    return request(app.getHttpServer())
+      .patch(`/orders/${orderId}/items/${orderItemId}/unit-price`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body);
+  }
+
+  /** Open takeaway order with one item (item 1 @ 2300) and a partner set. */
+  async function createPartnerOrderWithLine(): Promise<{
+    orderId: number;
+    orderItemId: number;
+    updatedAt: number;
+    order: any;
+  }> {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2); // qty 2 → line total 4600
+    const set = await request(app.getHttpServer())
+      .patch(`/orders/${id}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: synced.updatedAt,
+        deliveryPartnerId: 'hungerstation',
+        deliveryExternalRef: 'HS-P7',
+      })
+      .expect(200);
+    return {
+      orderId: id,
+      orderItemId: set.body.items[0].id,
+      updatedAt: set.body.updatedAt,
+      order: set.body,
+    };
+  }
+
+  it('override success: line + order totals recomputed, event payload exact, full order returned', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(200);
+
+    // Line total = unit price × qty; order totals recomputed via the VAT path
+    expect(res.body.items[0].unitPriceHalalas).toBe(2500);
+    expect(res.body.items[0].totalHalalas).toBe(5000);
+    expect(res.body.totalHalalas).toBe(5000);
+    // VAT decomposition: decomposeVat(5000, 1500) → excl ≈ 4348, vat ≈ 652
+    expect(res.body.subtotalHalalas).toBe(4348);
+    expect(res.body.vatHalalas).toBe(652);
+
+    // DB persisted
+    const dbOrderItem: any = db
+      .select()
+      .from(schema.orderItems)
+      .where(eq(schema.orderItems.id, orderItemId))
+      .get();
+    expect(dbOrderItem.unitPriceHalalas).toBe(2500);
+    expect(dbOrderItem.totalHalalas).toBe(5000);
+
+    // Event payload exact per ADR 0007
+    const overrides = res.body.events.filter((e: any) => e.type === 'item_price_overridden');
+    expect(overrides).toHaveLength(1);
+    expect(JSON.parse(overrides[0].payload)).toEqual({
+      orderItemId,
+      itemId: 1,
+      fromUnitPriceHalalas: 2300,
+      toUnitPriceHalalas: 2500,
+      floorPriceHalalas: 2300,
+    });
+  });
+
+  it('override to the floor price itself succeeds', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2300, // floor
+    }).expect(200);
+
+    expect(res.body.items[0].unitPriceHalalas).toBe(2300);
+    expect(res.body.items[0].totalHalalas).toBe(4600);
+    // Same price → no-op, no event, no bump
+    expect(res.body.events.filter((e: any) => e.type === 'item_price_overridden')).toHaveLength(0);
+    expect(res.body.updatedAt).toBe(updatedAt);
+  });
+
+  it('identical price → 200 no-op: no event, no updated_at bump', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+    const eventCount = (await getOrder(orderId)).events.length;
+
+    // First a real override so the line sits off-catalog…
+    const first = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(200);
+
+    // …then send the same price again → no-op
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: first.body.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(200);
+
+    expect(res.body.items[0].unitPriceHalalas).toBe(2500);
+    expect(res.body.updatedAt).toBe(first.body.updatedAt);
+    expect(res.body.events.length).toBe(eventCount + 1); // only the first override event
+  });
+
+  it('below-floor price → 400 with the floor in the message', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2299,
+    }).expect(400);
+    expect(res.body.message).toBe(
+      'Unit price must be at least the catalog price of 2300 halalas (floor)',
+    );
+  });
+
+  it('floor is the LIVE catalog price read at edit time, even when the item is inactive', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+
+    // Catalog price raised after the line snapshot; item soft-disabled.
+    sqlite.exec(`UPDATE items SET price_halalas = 2500, is_active = 0 WHERE id = 1`);
+
+    // Old floor is no longer enough → 400 with the new floor
+    const below = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2400,
+    }).expect(400);
+    expect(below.body.message).toBe(
+      'Unit price must be at least the catalog price of 2500 halalas (floor)',
+    );
+
+    // At the new floor → ok, even though the item is inactive
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(200);
+    expect(res.body.items[0].unitPriceHalalas).toBe(2500);
+    expect(JSON.parse(res.body.events.at(-1).payload)).toEqual({
+      orderItemId,
+      itemId: 1,
+      fromUnitPriceHalalas: 2300,
+      toUnitPriceHalalas: 2500,
+      floorPriceHalalas: 2500,
+    });
+
+    // Restore catalog for later tests
+    sqlite.exec(`UPDATE items SET price_halalas = 2300, is_active = 1 WHERE id = 1`);
+  });
+
+  it('order without a delivery partner → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchUnitPrice(id, synced.items[0].id, {
+      baseUpdatedAt: synced.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(400);
+    expect(res.body.message).toBe('Line price overrides require a delivery partner on the order');
+  });
+
+  it('non-open (paid) order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+    const set = await request(app.getHttpServer())
+      .patch(`/orders/${id}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: synced.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: set.body.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    const paid = await getOrder(id);
+    const res = await patchUnitPrice(id, set.body.items[0].id, {
+      baseUpdatedAt: paid.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(400);
+    expect(res.body.message).toBe('Only open orders can override line prices');
+  });
+
+  it('line with item_id NULL → 400 (cannot override)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+    const set = await request(app.getHttpServer())
+      .patch(`/orders/${id}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: synced.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+
+    // Legacy/orphan line with no catalog link
+    sqlite.exec(`
+      INSERT INTO order_items (order_id, item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+      VALUES (${id}, NULL, 'Legacy Special', 2000, 1500, 1, 2000, ${set.body.updatedAt}, ${set.body.updatedAt});
+    `);
+    const withLegacy = await getOrder(id);
+    const legacy = withLegacy.items.find((i: any) => i.itemId === null);
+
+    const res = await patchUnitPrice(id, legacy.id, {
+      baseUpdatedAt: withLegacy.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(400);
+    expect(res.body.message).toBe(
+      `Order item ${legacy.id} has no catalog item — cannot override its price`,
+    );
+  });
+
+  it('line that does not belong to the order (or unknown line) → 404', async () => {
+    const a = await createPartnerOrderWithLine();
+    const b = await createPartnerOrderWithLine();
+
+    // b's line id against a's order → 404
+    const res = await patchUnitPrice(a.orderId, b.orderItemId, {
+      baseUpdatedAt: a.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(404);
+    expect(res.body.message).toBe(`Order item ${b.orderItemId} not found on order ${a.orderId}`);
+
+    // Unknown line id → 404
+    await patchUnitPrice(a.orderId, 999999, {
+      baseUpdatedAt: a.updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(404);
+  });
+
+  it('stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { orderId, orderItemId, updatedAt } = await createPartnerOrderWithLine();
+
+    // Wait >1s so the first override lands in a later second than the
+    // create/sync/partner-set (updated_at is second-granularity) and
+    // therefore actually bumps it.
+    await new Promise((r) => setTimeout(r, 1500));
+    const other = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt,
+      unitPriceHalalas: 2500,
+    }).expect(200);
+
+    const res = await patchUnitPrice(orderId, orderItemId, {
+      baseUpdatedAt: updatedAt, // stale — order was overridden since
+      unitPriceHalalas: 2600,
+    }).expect(409);
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(other.body.updatedAt);
+  }, 10000);
+
+  it('missing order → 404', async () => {
+    await patchUnitPrice(999999, 1, { baseUpdatedAt: 0, unitPriceHalalas: 2500 }).expect(404);
+  });
+});
+
 describe('syncItems (bulk cart sync)', () => {
   let zingerItemId: number;
   let pepsiItemId: number;
