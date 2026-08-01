@@ -42,6 +42,16 @@ export class PrinterArabicConfigDto {
   })
   @IsBoolean()
   visualRtl!: boolean;
+
+  @ApiProperty({
+    enum: ['charset', 'raster'],
+    example: 'charset',
+    description:
+      'How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas)',
+  })
+  @IsString()
+  @IsIn(['charset', 'raster'])
+  renderMode!: 'charset' | 'raster';
 }
 
 export class PrinterConfigDto {

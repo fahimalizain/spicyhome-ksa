@@ -16,6 +16,7 @@ describe('TestTicketBuilder', () => {
           encoding: 'none',
           codePage: 0,
           visualRtl: false,
+          renderMode: 'charset',
           ...arabic,
         },
       };
@@ -135,6 +136,8 @@ describe('TestTicketBuilder', () => {
       expect(s).toContain('AR W1256 + CP50:');
       expect(s).toContain('AR W1256 + CP22:');
       expect(s).toContain('AR W1256 visual-RTL + CP50:');
+      expect(s).toContain('AR shaped+bidi W1256 + CP50:');
+      expect(s).toContain('AR RASTER (GS v 0, joined):');
       expect(s).toContain('End of Arabic probes.');
       expect(s).toContain('Note which probe looked best.');
     });
@@ -171,6 +174,19 @@ describe('TestTicketBuilder', () => {
       // Reversed: 0xC7 0xC8 0xCD 0xD1 0xE5
       const reversed = [0xc7, 0xc8, 0xcd, 0xd1, 0xe5];
       expect(findSequence(buf, reversed)).toBe(true);
+    });
+
+    it('shaped+bidi probe keeps "5x " before the reversed Arabic bytes', () => {
+      const buf = build();
+      // shaped مرحبا (FEE3 FEAE FEA3 FE92 FE8E) reversed → base bytes:
+      // ا(0xC7) ب(0xC8) ح(0xCD) ر(0xD1) م(0xE5) — after "5x " (0x35 0x78 0x20)
+      const seq = [0x35, 0x78, 0x20, 0xc7, 0xc8, 0xcd, 0xd1, 0xe5];
+      expect(findSequence(buf, seq)).toBe(true);
+    });
+
+    it('raster probe emits GS v 0 bit images', () => {
+      const h = hex(build());
+      expect(h).toContain('1d7630');
     });
 
     it('preserves English text after Arabic probe section', () => {
@@ -216,13 +232,28 @@ describe('TestTicketBuilder', () => {
 
     it('with encoding=utf8: contains UTF-8 bytes of a configured sample', () => {
       const buf = build({ encoding: 'utf8' });
-      // شكرا in UTF-8: D8 B4 D9 83 D8 B1 D8 A7
-      const شكرا_utf8 = [0xd8, 0xb4, 0xd9, 0x83, 0xd8, 0xb1, 0xd8, 0xa7];
-      expect(findSequence(buf, شكرا_utf8)).toBe(true);
+      // شكرا SHAPED (presentation forms) in UTF-8:
+      // ش(initial FEB7) ك(final FEDC) ر(final FEAE) ا(isolated FE8D)
+      const shaped_utf8 = [
+        0xef,
+        0xba,
+        0xb7, // FEB7
+        0xef,
+        0xbb,
+        0x9c, // FEDC
+        0xef,
+        0xba,
+        0xae, // FEAE
+        0xef,
+        0xba,
+        0x8d, // FE8D
+      ];
+      expect(findSequence(buf, shaped_utf8)).toBe(true);
 
-      // Config summary line should show utf8
+      // Config summary line should show utf8 + charset render mode
       const s = str(buf);
       expect(s).toContain('encoding=utf8 codePage=0 visualRtl=false');
+      expect(s).toContain('renderMode=charset');
     });
 
     it('with encoding=w1256 codePage=50: ESC t 50 present for configured section', () => {
@@ -254,6 +285,18 @@ describe('TestTicketBuilder', () => {
       // Config summary should show pc864 and codePage 22
       const s = str(buf);
       expect(s).toContain('encoding=pc864 codePage=22 visualRtl=true');
+      expect(s).toContain('renderMode=charset');
+    });
+
+    it('with renderMode=raster: section 7 renders GS v 0 images, no ESC t', () => {
+      const buf = build({ encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'raster' });
+      const h = hex(buf);
+      const s = str(buf);
+      // Summary shows raster mode
+      expect(s).toContain('renderMode=raster');
+      // Raster images appear after the section 7 label
+      const section7Idx = h.indexOf('372e2041524142494320434f4e46494755524544');
+      expect(h.indexOf('1d7630', section7Idx)).toBeGreaterThan(-1);
     });
 
     it('with encoding=pc864 visualRtl=true: PC864 bytes of مرحبا reversed', () => {

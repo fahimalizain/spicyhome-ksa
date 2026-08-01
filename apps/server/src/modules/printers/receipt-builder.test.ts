@@ -1,5 +1,5 @@
 import { ReceiptBuilder, ReceiptOptions } from './receipt-builder';
-import { encodePc864, encodeUtf8 } from './arabic-encode';
+import { encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('ReceiptBuilder', () => {
   const builder = new ReceiptBuilder(42);
@@ -72,7 +72,7 @@ describe('ReceiptBuilder', () => {
       '\u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629 \u0645\u0628\u0633\u0637\u0629';
     const buf = builder.build({
       ...baseOpts,
-      arabic: { encoding: 'pc864', codePage: 22, visualRtl: false },
+      arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
     });
     expect(findSequence(buf, encodePc864(arTitle))).toBe(true);
   });
@@ -81,7 +81,7 @@ describe('ReceiptBuilder', () => {
     const arTitle =
       '\u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629 \u0645\u0628\u0633\u0637\u0629';
     const buf = builder.build(baseOpts); // default arabic = none → UTF-8 fallback
-    expect(findSequence(buf, encodeUtf8(arTitle))).toBe(true);
+    expect(findSequence(buf, encodeUtf8(shapeArabic(arTitle)))).toBe(true);
   });
 
   it('renders Invoice # from documentId (not only order no)', () => {
@@ -151,7 +151,7 @@ describe('ReceiptBuilder', () => {
   it('renders Arabic item name as primary line with configured encoding', () => {
     const buf = builder.build({
       ...baseOpts,
-      arabic: { encoding: 'pc864', codePage: 22, visualRtl: false },
+      arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
     });
     // زنجر برجر in PC864 (prefixed with "2x ")
     expect(
@@ -162,7 +162,10 @@ describe('ReceiptBuilder', () => {
   it('renders Arabic item name as UTF-8 with default (none) encoding', () => {
     const buf = builder.build(baseOpts);
     expect(
-      findSequence(buf, encodeUtf8('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+      findSequence(
+        buf,
+        encodeUtf8(shapeArabic('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+      ),
     ).toBe(true);
   });
 
@@ -230,7 +233,7 @@ describe('ReceiptBuilder', () => {
     // المبلغ شامل ضريبة القيمة المضافة (UTF-8 fallback with default config)
     const arLine =
       '\u0627\u0644\u0645\u0628\u0644\u063A \u0634\u0627\u0645\u0644 \u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629';
-    expect(findSequence(buf, encodeUtf8(arLine))).toBe(true);
+    expect(findSequence(buf, encodeUtf8(shapeArabic(arLine)))).toBe(true);
   });
 
   it('renders SAR marker', () => {
@@ -277,7 +280,10 @@ describe('ReceiptBuilder', () => {
       expect(s).not.toContain('SIMPLIFIED TAX INVOICE');
       // إشعار دائن as UTF-8 fallback with default config
       expect(
-        findSequence(buf, encodeUtf8('\u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\u0646')),
+        findSequence(
+          buf,
+          encodeUtf8(shapeArabic('\u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\u0646')),
+        ),
       ).toBe(true);
     });
 
@@ -374,7 +380,7 @@ describe('ReceiptBuilder', () => {
   it('restores code page 0 after Arabic blocks', () => {
     const buf = builder.build({
       ...baseOpts,
-      arabic: { encoding: 'w1256', codePage: 50, visualRtl: false },
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: false, renderMode: 'charset' },
     });
     const h = hex(buf);
     // ESC t 50 used, and CP0 restore present after it
@@ -382,5 +388,55 @@ describe('ReceiptBuilder', () => {
     expect(h).toContain('1b7400');
     const lastEscT = h.lastIndexOf('1b74');
     expect(h.slice(lastEscT).includes('1b7400')).toBe(true);
+  });
+
+  // ── renderMode: raster ─────────────────────────────────────────────────────
+
+  it('emits GS v 0 raster bit images for Arabic lines in raster mode', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'raster' },
+    });
+    const h = hex(buf);
+    // Arabic title + item name + VAT line → several raster images
+    expect(h).toContain('1d7630'); // GS v 0
+    expect(h.split('1d7630').length - 1).toBeGreaterThanOrEqual(3);
+    // No ESC t code-page switch in raster mode
+    expect(h).not.toContain('1b7432'); // ESC t 50
+  });
+
+  it('charset mode still emits ESC t 50 and no raster for Arabic lines', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'charset' },
+    });
+    const h = hex(buf);
+    expect(h).toContain('1b7432'); // ESC t 50
+    expect(h).not.toContain('1d7630'); // no raster
+  });
+
+  it('item lines in raster mode keep "5x " as bitmap text (segment bidi)', () => {
+    const opts: ReceiptOptions = {
+      ...baseOpts,
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'raster' },
+      items: [
+        {
+          qty: 5,
+          name: 'Corn Soup',
+          nameAr: '\u0634\u0648\u0631\u0628\u0629 \u0630\u0631\u0629', // شوربة ذرة
+          unitPriceHalalas: 1000,
+          totalHalalas: 5000,
+          vatRateBp: 1500,
+        },
+      ],
+      subtotalHalalas: 4348,
+      vatHalalas: 652,
+      totalHalalas: 5000,
+    };
+    const buf = builder.build(opts);
+    const h = hex(buf);
+    // raster lines are GS v 0 images (never raw Arabic bytes in CP50)
+    expect(h).toContain('1d7630');
+    expect(h).not.toContain('1b7432');
   });
 });

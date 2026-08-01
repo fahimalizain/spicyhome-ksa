@@ -1525,6 +1525,12 @@ export interface components {
        * @example false
        */
       visualRtl: boolean;
+      /**
+       * @description How to render Arabic lines: charset = ESC t code-page bytes (isolated glyphs, correct order); raster = GS v 0 bitmaps (joined Arabic, requires glyph atlas)
+       * @example charset
+       * @enum {string}
+       */
+      renderMode: 'charset' | 'raster';
     };
     PrinterConfigDto: {
       arabic: components['schemas']['PrinterArabicConfigDto'];

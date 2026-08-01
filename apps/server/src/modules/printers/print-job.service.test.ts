@@ -15,7 +15,7 @@ import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
 import { FakePrinterTransport } from './printer-transport';
 import { DRIZZLE } from '../database/database.module';
-import { encodePc864, encodeUtf8 } from './arabic-encode';
+import { encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('PrintJobService', () => {
   let sqlite: Database.Database;
@@ -227,7 +227,10 @@ describe('PrintJobService', () => {
       expect(transport.sent.length).toBe(1);
       const buf = transport.sent[0].data;
       expect(
-        findSequence(buf, encodeUtf8('1x \u0628\u0631\u062C\u0631 \u0637\u0627\u0632\u062C')),
+        findSequence(
+          buf,
+          encodeUtf8(shapeArabic('1x \u0628\u0631\u062C\u0631 \u0637\u0627\u0632\u062C')),
+        ),
       ).toBe(true);
     });
 

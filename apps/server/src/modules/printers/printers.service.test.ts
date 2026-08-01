@@ -88,6 +88,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'none',
         codePage: 0,
         visualRtl: false,
+        renderMode: 'charset',
       },
     });
   });
@@ -103,6 +104,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'none',
         codePage: 0,
         visualRtl: false,
+        renderMode: 'charset',
       },
     });
   });
@@ -115,6 +117,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'pc864' as const,
         codePage: 22,
         visualRtl: true,
+        renderMode: 'charset',
       },
     };
 
@@ -141,6 +144,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'w1256' as const,
         codePage: 50,
         visualRtl: false,
+        renderMode: 'charset',
       },
     };
 
@@ -168,6 +172,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'utf8' as const,
         codePage: 128,
         visualRtl: true,
+        renderMode: 'charset',
       },
     };
     service.create({ name: 'B', ip: '192.168.1.2', role: 'receipt', config }, userId);
@@ -177,7 +182,7 @@ describe('PrintersService — config CRUD', () => {
 
     // First printer has defaults
     expect(printers[0].config).toEqual({
-      arabic: { encoding: 'none', codePage: 0, visualRtl: false },
+      arabic: { encoding: 'none', codePage: 0, visualRtl: false, renderMode: 'charset' },
     });
     // Second printer has custom config
     expect(printers[1].config).toEqual(config);
@@ -193,7 +198,7 @@ describe('PrintersService — config CRUD', () => {
 
     // Verify initial defaults
     expect(created.config).toEqual({
-      arabic: { encoding: 'none', codePage: 0, visualRtl: false },
+      arabic: { encoding: 'none', codePage: 0, visualRtl: false, renderMode: 'charset' },
     });
 
     const newConfig = {
@@ -201,6 +206,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'pc864' as const,
         codePage: 22,
         visualRtl: true,
+        renderMode: 'charset',
       },
     };
 
@@ -218,6 +224,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'pc864' as const,
         codePage: 22,
         visualRtl: true,
+        renderMode: 'charset',
       },
     };
     const created = service.create(
@@ -231,6 +238,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'none' as const,
         codePage: 0,
         visualRtl: false,
+        renderMode: 'charset',
       },
     };
 
@@ -244,6 +252,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'utf8' as const,
         codePage: 100,
         visualRtl: false,
+        renderMode: 'charset',
       },
     };
 
@@ -272,6 +281,7 @@ describe('PrintersService — config CRUD', () => {
               encoding: 'invalid_encoding',
               codePage: 0,
               visualRtl: false,
+              renderMode: 'charset',
             },
           },
         },
@@ -292,6 +302,7 @@ describe('PrintersService — config CRUD', () => {
               encoding: 'not-real',
               codePage: 0,
               visualRtl: false,
+              renderMode: 'charset',
             },
           },
         },
@@ -312,6 +323,7 @@ describe('PrintersService — config CRUD', () => {
               encoding: 'none',
               codePage: -1,
               visualRtl: false,
+              renderMode: 'charset',
             },
           },
         },
@@ -332,6 +344,7 @@ describe('PrintersService — config CRUD', () => {
               encoding: 'none',
               codePage: 256,
               visualRtl: false,
+              renderMode: 'charset',
             },
           },
         },
@@ -360,6 +373,7 @@ describe('PrintersService — config CRUD', () => {
         encoding: 'none',
         codePage: 0,
         visualRtl: false,
+        renderMode: 'charset',
       },
     });
   });
