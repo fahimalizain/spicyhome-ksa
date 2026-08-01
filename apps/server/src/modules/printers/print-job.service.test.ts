@@ -54,6 +54,16 @@ describe('PrintJobService', () => {
       VALUES (1, 'Counter', '192.168.1.50', 9100, 'receipt', 1, ${now}, ${now})
     `);
 
+    // Seed: kitchen printers (fan-out targets for kitchen tickets)
+    sqlite.exec(`
+      INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
+      VALUES (2, 'Kitchen', '192.168.1.51', 9100, 'kitchen', 1, ${now}, ${now})
+    `);
+    sqlite.exec(`
+      INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
+      VALUES (3, 'Cold Station', '192.168.1.52', 9100, 'kitchen', 1, ${now}, ${now})
+    `);
+
     // Seed: settings
     sqlite.exec(`
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
@@ -742,6 +752,55 @@ describe('PrintJobService', () => {
       expect(transport.sent.length).toBe(1);
       const buf = transport.sent[0].data;
       expect(buf.toString('hex')).not.toContain('315130');
+    });
+  });
+
+  // ── printKitchenTickets / printKitchenDeltas — documentId + printer name ──
+
+  describe('printKitchenTickets / printKitchenDeltas', () => {
+    it('prints the ZATCA documentId in the header when set (not the order number)', async () => {
+      const orderId = createBasicOrder(); // document_id = INV26-TEST-<orderSeq>
+      await printJobService.printKitchenTickets(orderId);
+
+      expect(transport.sent.length).toBe(2);
+      const str = transport.sent[0].data.toString('ascii');
+      expect(str).toContain(`INV26-TEST-${orderSeq}`);
+      expect(str).not.toContain('ORDER #');
+    });
+
+    it('falls back to Order-<orderNo> when document_id is missing and names each station', async () => {
+      const orderId = createOpenOrder(); // document_id = NULL
+      const orderNo = (
+        sqlite.prepare('SELECT order_no FROM orders WHERE id = ?').get(orderId) as any
+      ).order_no;
+
+      await printJobService.printKitchenTickets(orderId);
+
+      expect(transport.sent.length).toBe(2);
+      const byIp = new Map(transport.sent.map((s) => [s.ip, s.data.toString('ascii')]));
+      expect(byIp.get('192.168.1.51')).toContain(`Order-${orderNo}`);
+      expect(byIp.get('192.168.1.51')).toContain('Printer: Kitchen');
+      expect(byIp.get('192.168.1.52')).toContain(`Order-${orderNo}`);
+      expect(byIp.get('192.168.1.52')).toContain('Printer: Cold Station');
+    });
+
+    it('printKitchenDeltas passes order notes and item notes into the ticket', async () => {
+      const orderId = createOpenOrder();
+      sqlite.exec(`UPDATE orders SET notes = 'call on arrival' WHERE id = ${orderId}`);
+      const oi = sqlite
+        .prepare('SELECT id FROM order_items WHERE order_id = ?')
+        .get(orderId) as any;
+      sqlite.exec(`UPDATE order_items SET notes = 'no ice' WHERE id = ${oi.id}`);
+
+      await printJobService.printKitchenDeltas(orderId, [
+        { orderItemId: oi.id, printedQty: 2, itemName: 'Test Item' },
+      ]);
+
+      expect(transport.sent.length).toBe(2);
+      const str = transport.sent[0].data.toString('ascii');
+      expect(str).toContain('NOTES: call on arrival');
+      expect(str).toContain('* no ice');
+      expect(str).toContain('2 Test Item');
     });
   });
 });

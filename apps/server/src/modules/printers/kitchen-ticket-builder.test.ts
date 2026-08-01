@@ -4,7 +4,8 @@ describe('KitchenTicketBuilder', () => {
   const builder = new KitchenTicketBuilder(42);
 
   const baseOpts = {
-    orderNo: 42,
+    documentId: 'INV26-0042',
+    printerName: 'Grill',
     createdAt: 1700000000,
     orderType: 'dine_in' as const,
     tableName: 'T4',
@@ -15,19 +16,46 @@ describe('KitchenTicketBuilder', () => {
     ],
   };
 
-  it('renders big order number with double size', () => {
+  it('renders big document id with double size', () => {
     const buf = builder.build(baseOpts);
     const hex = buf.toString('hex');
     // GS ! 0x11 = double size on
     expect(hex).toContain('1d2111');
     const str = buf.toString('ascii');
-    expect(str).toContain('ORDER #42');
+    expect(str).toContain('INV26-0042');
+    // The raw order id / "ORDER #" label is gone
+    expect(str).not.toContain('ORDER #42');
+    expect(str).not.toContain('ORDER #');
   });
 
-  it('renders table information for dine-in', () => {
+  it('renders printer name in the header when set', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');
-    expect(str).toContain('Table: T4');
+    expect(str).toContain('Printer: Grill');
+  });
+
+  it('omits the printer line when printerName is empty/undefined', () => {
+    const opts = { ...baseOpts, printerName: '' };
+    expect(builder.build(opts).toString('ascii')).not.toContain('Printer:');
+
+    const opts2 = { ...baseOpts };
+    delete (opts2 as any).printerName;
+    expect(builder.build(opts2).toString('ascii')).not.toContain('Printer:');
+  });
+
+  it('renders table on its own line at double size for dine-in', () => {
+    const buf = builder.build(baseOpts);
+    const hex = buf.toString('hex');
+    const str = buf.toString('ascii');
+    expect(str).toContain('TABLE T4');
+    // No inline "Table: T4" on the type line anymore
+    expect(str).not.toContain('Table:');
+    // The TABLE line is double-size + bold: GS ! 0x11 and ESC E 0x01
+    // are emitted immediately before the "TABLE" text
+    const idxTable = hex.indexOf(Buffer.from('TABLE', 'ascii').toString('hex'));
+    expect(idxTable).not.toBe(-1);
+    expect(hex.slice(idxTable - 6, idxTable)).toBe('1d2111'); // double size on
+    expect(hex.slice(idxTable - 12, idxTable - 6)).toBe('1b4501'); // bold on
   });
 
   it('renders takeaway without table', () => {
@@ -35,7 +63,26 @@ describe('KitchenTicketBuilder', () => {
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
     expect(str).toContain('Takeaway');
-    expect(str).not.toContain('Table:');
+    expect(str).not.toContain('TABLE');
+  });
+
+  it('truncates a long table name to half the paper width (double-size)', () => {
+    const longTable = 'T'.repeat(50);
+    const opts = { ...baseOpts, tableName: longTable };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).not.toContain(longTable);
+    // 42 / 2 = 21 chars max: "TABLE " (6) + 15 T's
+    expect(str).toContain('TABLE ' + 'T'.repeat(15));
+  });
+
+  it('truncates a long document id to half the paper width (double-size)', () => {
+    const longId = 'D'.repeat(50);
+    const opts = { ...baseOpts, documentId: longId };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).not.toContain(longId);
+    expect(str).toContain('D'.repeat(21));
   });
 
   // ── Delivery partner (ADR 0007) ─────────────────────────────────────────────
@@ -206,10 +253,18 @@ describe('KitchenTicketBuilder', () => {
     expect(text).toContain('1 A'); // "1 " followed by the truncated name start
   });
 
+  it('renders order notes and item notes together on the same ticket', () => {
+    const opts = { ...baseOpts, orderNotes: 'Call on arrival' };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).toContain('NOTES: Call on arrival');
+    expect(str).toContain('* no ice');
+  });
+
   it('handles empty items list', () => {
     const opts = { ...baseOpts, items: [] };
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
-    expect(str).toContain('ORDER #42');
+    expect(str).toContain('INV26-0042');
   });
 });
