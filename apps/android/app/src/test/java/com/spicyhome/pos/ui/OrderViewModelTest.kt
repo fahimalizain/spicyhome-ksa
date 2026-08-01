@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -569,6 +570,77 @@ class OrderViewModelTest {
         assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
         assertThat(state.error).isNotNull()
         assertThat(state.error).contains("404")
+    }
+
+    @Test
+    fun `initialOrderId starts in LOADING before hydrate runs`() = runTest {
+        // Standard dispatcher: the init coroutine stays queued until advanced,
+        // so the constructor state is observable.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        val order = createOrderResponse(42L, 1001L, "open", emptyList())
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(order)
+
+        val store = ViewModelStore()
+        viewModelStores.add(store)
+        val factory = OrderViewModel.Factory(
+            preferencesManager = preferencesManager,
+            apiClientProvider = apiClientProvider,
+            realtimeClient = realtimeClient,
+            initialOrderId = 42L,
+            ioDispatcher = dispatcher,
+        )
+        val vm = ViewModelProvider(store, factory)[OrderViewModel::class.java]
+
+        // Before any coroutine runs: LOADING, not the type selector
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.LOADING)
+
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // After hydrate: open order lands on EDITING_ORDER
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
+        assertThat(vm.uiState.value.currentOrderId).isEqualTo(42L)
+    }
+
+    @Test
+    fun `initialTableId starts in LOADING before init applies table context`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        val store = ViewModelStore()
+        viewModelStores.add(store)
+        val factory = OrderViewModel.Factory(
+            preferencesManager = preferencesManager,
+            apiClientProvider = apiClientProvider,
+            realtimeClient = realtimeClient,
+            initialTableId = 7L,
+            ioDispatcher = dispatcher,
+        )
+        val vm = ViewModelProvider(store, factory)[OrderViewModel::class.java]
+
+        // Constructor pre-seeds the table and starts in LOADING
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.LOADING)
+        assertThat(vm.uiState.value.selectedTableId).isEqualTo(7L)
+
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Free-table deep link exits LOADING into EDITING_ORDER with DINE_IN
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
+        assertThat(vm.uiState.value.selectedTableId).isEqualTo(7L)
+        assertThat(vm.uiState.value.orderType).isEqualTo(OrderType.DINE_IN)
+    }
+
+    @Test
+    fun `initialTableId exits LOADING into EDITING_ORDER with table context`() = runTest(testDispatcher) {
+        val vm = createViewModel(initialTableId = 7L)
+
+        // Unconfined: applyInitialTableContext has already run
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
+        assertThat(vm.uiState.value.selectedTableId).isEqualTo(7L)
+        assertThat(vm.uiState.value.orderType).isEqualTo(OrderType.DINE_IN)
     }
 
     // --- hydrateFromOrder tests ---

@@ -75,6 +75,8 @@ enum class OrderType(val value: String) {
 }
 
 enum class OrderScreenState {
+    /** Initial state for deep links (existing order / free table) while hydrate runs. */
+    LOADING,
     SELECTING_TYPE,
     EDITING_ORDER,
     ORDER_TERMINAL,
@@ -193,7 +195,21 @@ class OrderViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(OrderUiState())
+    private val _uiState = MutableStateFlow(
+        OrderUiState(
+            // Deep links (existing order or free table) must not flash the type
+            // selector while menu/order hydrate is in flight — start in LOADING.
+            screenState = if (initialOrderId != null || initialTableId != null) {
+                OrderScreenState.LOADING
+            } else {
+                OrderScreenState.SELECTING_TYPE
+            },
+            // Free-table path: pre-seed the table so it survives until
+            // applyInitialTableContext runs (hydrateFromOrder overwrites it
+            // for order deep links).
+            selectedTableId = initialTableId,
+        )
+    )
     val uiState: StateFlow<OrderUiState> = _uiState
 
     private var bearerToken: String = ""

@@ -43,6 +43,11 @@ fun OrdersScreen(
         } else if (state.selectedOrder != null) {
             OrderDetailView(
                 order = state.selectedOrder!!,
+                tableName = resolveOrderTableName(
+                    state.selectedOrder!!.type,
+                    state.selectedOrder!!.tableId,
+                    state.tablesById,
+                ),
                 onBack = { viewModel.closeDetail() },
                 onContinue = onContinue,
             )
@@ -122,7 +127,11 @@ fun OrdersScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.orders, key = { it.id }) { order ->
-                    OrderCard(order = order, onClick = { viewModel.selectOrder(order) })
+                    OrderCard(
+                        order = order,
+                        tableName = resolveOrderTableName(order.type, order.tableId, state.tablesById),
+                        onClick = { viewModel.selectOrder(order) },
+                    )
                 }
             }
         }
@@ -130,12 +139,18 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
+private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: () -> Unit) {
     val statusColor = when (order.status) {
         "paid" -> Success
         "voided" -> StatusVoided
         "refunded" -> StatusRefunded
         else -> StatusOpen
+    }
+    // Middle-dot pattern matching the OrderScreen header: "INV26-42 · T12".
+    val title = if (tableName != null) {
+        listOfNotNull(order.documentId.takeIf { it.isNotBlank() }, tableName).joinToString(" · ")
+    } else {
+        order.documentId
     }
 
     Card(
@@ -154,7 +169,7 @@ private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
         ) {
             Column {
                 Text(
-                    text = "Order #${order.orderNo}",
+                    text = title,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = OnDark,
@@ -188,9 +203,16 @@ private fun OrderCard(order: OrderSummaryResponse, onClick: () -> Unit) {
 @Composable
 private fun OrderDetailView(
     order: OrderResponse,
+    tableName: String?,
     onBack: () -> Unit,
     onContinue: (Long) -> Unit = {},
 ) {
+    // Middle-dot pattern: "INV26-42 · T12"; table segment only for dine-in.
+    val detailTitle = listOfNotNull(
+        order.documentId.takeIf { it.isNotBlank() },
+        tableName,
+    ).joinToString(" · ")
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Detail top bar
         Row(
@@ -205,7 +227,7 @@ private fun OrderDetailView(
                 Text("← Back", color = Accent, fontSize = 16.sp)
             }
             Text(
-                text = "Order #${order.orderNo}",
+                text = detailTitle,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = OnDark,
@@ -238,6 +260,15 @@ private fun OrderDetailView(
                     ) {
                         Text("Type:", color = OnDarkSecondary, fontSize = 14.sp)
                         Text(order.type, color = OnDark, fontSize = 14.sp)
+                    }
+                    if (tableName != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("Table:", color = OnDarkSecondary, fontSize = 14.sp)
+                            Text(tableName, color = OnDark, fontSize = 14.sp)
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -366,4 +397,20 @@ private fun OrderDetailView(
             }
         }
     }
+}
+
+/**
+ * Resolve the table name for an order card/detail header.
+ *
+ * Table segment only for dine-in orders with a known table id whose name is
+ * loaded (and non-blank). Returns null when the tables map is not loaded yet,
+ * the table is unknown, or the order is not dine-in — the UI omits the segment.
+ */
+private fun resolveOrderTableName(
+    type: String,
+    tableId: Long?,
+    tablesById: Map<Long, String>,
+): String? {
+    if (type != "dine_in" || tableId == null) return null
+    return tablesById[tableId]?.takeIf { it.isNotBlank() }
 }
