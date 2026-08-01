@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // ── user_roles ──────────────────────────────────────────────────────────────────
 
@@ -85,12 +85,48 @@ export const itemCategories = sqliteTable('item_categories', {
   updatedBy: integer('updated_by').references(() => users.id),
 });
 
+// ── item_subcategories ─────────────────────────────────────────────────────────
+//
+// Sub-layer under item_categories (RMS SubCourse). Names are not globally
+// unique ("Starters" can repeat under different parents) — uniqueness is
+// per (category_id, name).
+
+export const itemSubcategories = sqliteTable(
+  'item_subcategories',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    categoryId: integer('category_id')
+      .references(() => itemCategories.id)
+      .notNull(),
+    name: text('name').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: integer('is_active').notNull().default(1),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    updatedBy: integer('updated_by').references(() => users.id),
+  },
+  (t) => ({
+    idxItemSubcategoriesCategoryId: index('idx_item_subcategories_category_id').on(t.categoryId),
+    uniqueCategoryName: uniqueIndex('item_subcategories_category_id_name_unique').on(
+      t.categoryId,
+      t.name,
+    ),
+  }),
+);
+
 // ── items ──────────────────────────────────────────────────────────────────────
 
 export const items = sqliteTable('items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   categoryId: integer('category_id')
     .references(() => itemCategories.id)
+    .notNull(),
+  // Sub-layer under the parent category (RMS SubCourse). Denormalized
+  // category_id stays NOT NULL (kitchen routing / reports); the server always
+  // derives categoryId from the subcategory's parent on create/update.
+  subcategoryId: integer('subcategory_id')
+    .references(() => itemSubcategories.id)
     .notNull(),
   name: text('name').notNull(),
   nameAr: text('name_ar'),

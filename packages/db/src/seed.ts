@@ -56,18 +56,20 @@ const catalog: CatalogDump = catalogJson;
 
 /**
  * DEV SEED — inserts baseline roles, default admin user, tables,
- * categories, and menu items from the real SpicyHome RMS catalog.
+ * categories, sub-categories, and menu items from the real SpicyHome RMS
+ * catalog.
  *
  * Catalog source: RMS dump `spicyhome_dump_20260731.json` (MSSQL SPICYHOME
  * backup SPICYHOME_20260731, extracted 2026-07-31).
  *
- * Category strategy (issue #99, option A — Course-only):
- *   - POS categories are the 7 Courses only (SOUP, STARTERS, TANDOORI,
+ * Category strategy:
+ *   - POS categories are the 7 Courses (SOUP, STARTERS, TANDOORI,
  *     MAIN COURSE, RICE & NOODLES, BREADS, DESSERTS), display names
  *     Title Case.
- *   - SubCourse is NOT a POS category layer. It is only used to resolve
- *     each item's parent Course via
- *     item.sub_course_id -> sub_courses[].course_id -> courses[].
+ *   - Sub-categories are the 17 SubCourses (Veg, Non Veg, Chicken, Rice,
+ *     ...), each resolved to its parent course. Items carry BOTH the parent
+ *     category_id (kitchen routing / reports, denormalized) and the
+ *     subcategory_id derived from item.sub_course_id.
  *
  * Money:
  *   - Dump rates are VAT-inclusive SAR (see dump meta notes); converted to
@@ -109,6 +111,7 @@ export function seed(sqliteOrDb: Database.Database | BetterSQLite3Database): voi
   seedUsers(effectiveSqlite);
   seedTables(effectiveSqlite);
   seedCategories(effectiveSqlite);
+  seedSubcategories(effectiveSqlite);
   seedItems(effectiveSqlite);
   seedPaymentMethods(effectiveSqlite);
 }
@@ -234,6 +237,72 @@ function seedCategories(sqlite: Database.Database): void {
   insertAll();
 }
 
+function seedSubcategories(sqlite: Database.Database): void {
+  const existing = sqlite.prepare('SELECT COUNT(*) as cnt FROM item_subcategories').get() as {
+    cnt: number;
+  };
+
+  if (existing.cnt > 0) return;
+
+  // Resolve sub_course -> course. Missing links are data-integrity errors;
+  // fail the seed loudly instead of silently skipping sub-categories.
+  const courseIdSet = new Set(catalog.courses.map((c) => c.id));
+  for (const subCourse of catalog.sub_courses) {
+    if (!courseIdSet.has(subCourse.course_id)) {
+      throw new Error(
+        `Seed integrity: sub_course ${subCourse.id} (${subCourse.name}) references missing course ${subCourse.course_id}`,
+      );
+    }
+  }
+
+  const categoryNameByCourseId = new Map(
+    catalog.courses.map((c) => [c.id, toTitleCase(c.name)] as const),
+  );
+
+  // Look up seeded category ids once by display name.
+  const categoryRows = sqlite.prepare('SELECT id, name FROM item_categories').all() as Array<{
+    id: number;
+    name: string;
+  }>;
+  const categoryIdByName = new Map(categoryRows.map((row) => [row.name, row.id]));
+
+  const insert = sqlite.prepare(`
+    INSERT INTO item_subcategories (category_id, name, sort_order, is_active, created_at, updated_at, created_by, updated_by)
+    VALUES (?, ?, ?, 1, ?, ?, 1, 1)
+  `);
+
+  const insertAll = sqlite.transaction(() => {
+    // sort_order = sub_course id ascending within the parent course
+    const subCourses = [...catalog.sub_courses].sort((a, b) => {
+      if (a.course_id !== b.course_id) return a.course_id - b.course_id;
+      return a.id - b.id;
+    });
+    const sortOrderByCategory = new Map<number, number>();
+
+    for (const subCourse of subCourses) {
+      const categoryName = categoryNameByCourseId.get(subCourse.course_id);
+      if (categoryName === undefined) {
+        throw new Error(
+          `Seed integrity: sub_course ${subCourse.id} (${subCourse.name}) resolves to missing course ${subCourse.course_id}`,
+        );
+      }
+      const categoryId = categoryIdByName.get(categoryName);
+      if (categoryId === undefined) {
+        throw new Error(
+          `Seed integrity: category '${categoryName}' was not seeded for course ${subCourse.course_id}`,
+        );
+      }
+
+      const sortOrder = (sortOrderByCategory.get(categoryId) ?? 0) + 1;
+      sortOrderByCategory.set(categoryId, sortOrder);
+
+      insert.run(categoryId, toTitleCase(subCourse.name), sortOrder, now, now);
+    }
+  });
+
+  insertAll();
+}
+
 function seedItems(sqlite: Database.Database): void {
   const existing = sqlite.prepare('SELECT COUNT(*) as cnt FROM items').get() as {
     cnt: number;
@@ -241,8 +310,9 @@ function seedItems(sqlite: Database.Database): void {
 
   if (existing.cnt > 0) return;
 
-  // Resolve item -> sub_course -> course. Missing links are data-integrity
-  // errors; fail the seed loudly instead of silently skipping items.
+  // Resolve item -> sub_course -> subcategory row. Missing links are
+  // data-integrity errors; fail the seed loudly instead of silently
+  // skipping items.
   const subCourseToCourse = new Map<number, number>();
   const courseIdSet = new Set(catalog.courses.map((c) => c.id));
   for (const subCourse of catalog.sub_courses) {
@@ -265,14 +335,26 @@ function seedItems(sqlite: Database.Database): void {
   }>;
   const categoryIdByName = new Map(categoryRows.map((row) => [row.name, row.id]));
 
+  // Look up seeded subcategory ids once by (category_id, Title Case name) —
+  // the same tuple seeded into item_subcategories.
+  const subcategoryRows = sqlite
+    .prepare('SELECT id, category_id, name FROM item_subcategories')
+    .all() as Array<{ id: number; category_id: number; name: string }>;
+  const subcategoryIdByKey = new Map(
+    subcategoryRows.map((row) => [`${row.category_id}:${row.name}`, row.id]),
+  );
+  const subCourseNameById = new Map(
+    catalog.sub_courses.map((s) => [s.id, toTitleCase(s.name)] as const),
+  );
+
   // Stable ordering: item_id ascending; per-category sort_order 1..N.
   const items = [...catalog.items].sort((a, b) => a.item_id - b.item_id);
 
   // Prepared statement: Arabic names are bound as parameters, never
   // interpolated into SQL.
   const insert = sqlite.prepare(`
-    INSERT INTO items (category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, 1500, ?, ?, ?, ?, 1, 1)
+    INSERT INTO items (category_id, subcategory_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, 1500, ?, ?, ?, ?, 1, 1)
   `);
 
   const insertAll = sqlite.transaction(() => {
@@ -300,6 +382,18 @@ function seedItems(sqlite: Database.Database): void {
         );
       }
 
+      // Sub-category key: (category_id, Title Case sub_course name) — the
+      // same tuple seeded into item_subcategories.
+      const subCourseName = subCourseNameById.get(item.sub_course_id);
+      const subcategoryId = subCourseName
+        ? subcategoryIdByKey.get(`${categoryId}:${subCourseName}`)
+        : undefined;
+      if (subcategoryId === undefined) {
+        throw new Error(
+          `Seed integrity: item ${item.item_id} (${item.name}) references missing subcategory for sub_course ${item.sub_course_id} under category '${categoryName}'`,
+        );
+      }
+
       const sortOrder = (sortOrderByCategory.get(categoryId) ?? 0) + 1;
       sortOrderByCategory.set(categoryId, sortOrder);
 
@@ -307,7 +401,17 @@ function seedItems(sqlite: Database.Database): void {
       const priceHalalas = Math.round(item.rate * 100);
       const isActive = item.inactive ? 0 : 1;
 
-      insert.run(categoryId, item.name, nameAr, priceHalalas, sortOrder, isActive, now, now);
+      insert.run(
+        categoryId,
+        subcategoryId,
+        item.name,
+        nameAr,
+        priceHalalas,
+        sortOrder,
+        isActive,
+        now,
+        now,
+      );
     }
   });
 
