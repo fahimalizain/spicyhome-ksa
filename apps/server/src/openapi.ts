@@ -27,6 +27,7 @@ async function generate(): Promise<void> {
     .addTag('reports', 'X/Z reports and sales summaries')
     .addTag('zatca', 'ZATCA e-invoicing')
     .addTag('payment-methods', 'Payment method configuration')
+    .addTag('delivery-partners', 'Delivery partner catalog')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

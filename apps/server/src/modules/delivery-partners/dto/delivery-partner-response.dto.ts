@@ -1,31 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 
-export class PaymentMethodResponse {
-  @ApiProperty({ example: 'cash' })
+export class DeliveryPartnerResponse {
+  @ApiProperty({ example: 'hungerstation' })
   id!: string;
 
-  @ApiProperty({ example: 'Cash' })
+  @ApiProperty({ example: 'HungerStation' })
   title!: string;
-
-  @ApiProperty({
-    example: '10',
-    description: 'ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)',
-  })
-  zatcaPaymentMeansCode!: string;
 
   @ApiProperty({ example: true })
   enabled!: boolean;
 
   @ApiProperty({ ...ApiInt32, example: 0 })
   sortOrder!: number;
-
-  @ApiProperty({
-    example: false,
-    description:
-      'Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column.',
-  })
-  isDeliveryPartner!: boolean;
 
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;

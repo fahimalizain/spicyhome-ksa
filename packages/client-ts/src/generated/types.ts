@@ -1091,6 +1091,58 @@ export interface paths {
     patch: operations['PaymentMethodsController_update'];
     trace?: never;
   };
+  '/delivery-partners': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all delivery partners (including disabled) */
+    get: operations['DeliveryPartnersController_list'];
+    put?: never;
+    /** Create a delivery partner (atomically creates its owned payment method) */
+    post: operations['DeliveryPartnersController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/delivery-partners/enabled': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List enabled delivery partners (no special permission required) */
+    get: operations['DeliveryPartnersController_listEnabled'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/delivery-partners/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method) */
+    patch: operations['DeliveryPartnersController_update'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2583,6 +2635,11 @@ export interface components {
        */
       sortOrder: number;
       /**
+       * @description Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column.
+       * @example false
+       */
+      isDeliveryPartner: boolean;
+      /**
        * Format: int64
        * @example 1700000000
        */
@@ -2620,6 +2677,56 @@ export interface components {
        * @example 30
        */
       zatcaPaymentMeansCode?: string;
+      /** @default true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+    };
+    DeliveryPartnerResponse: {
+      /** @example hungerstation */
+      id: string;
+      /** @example HungerStation */
+      title: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateDeliveryPartnerDto: {
+      /** @example HungerStation */
+      title: string;
+    };
+    UpdateDeliveryPartnerDto: {
+      /** @description Immutable slug — sending a different value is rejected */
+      id?: string;
+      /** @example HungerStation */
+      title?: string;
       /** @default true */
       enabled: boolean;
       /**
@@ -4409,6 +4516,97 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PaymentMethodResponse'];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of delivery partners */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'][];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateDeliveryPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Created delivery partner */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_listEnabled: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of enabled delivery partners */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'][];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Delivery partner slug */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateDeliveryPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated delivery partner */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'];
         };
       };
     };

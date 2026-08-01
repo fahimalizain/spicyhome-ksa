@@ -14,6 +14,7 @@ import { BusinessDayModule } from './modules/business-day/business-day.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
+import { DeliveryPartnersModule } from './modules/delivery-partners/delivery-partners.module';
 import { HealthModule } from './health/health.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -35,6 +36,7 @@ const imports: any[] = [
   ReportsModule,
   RealtimeModule,
   PaymentMethodsModule,
+  DeliveryPartnersModule,
   HealthModule,
 ];
 
@@ -55,6 +57,7 @@ if (spaDist) {
         '/reports/(.*)',
         '/health',
         '/payment-methods/(.*)',
+        '/delivery-partners/(.*)',
       ],
     }),
   );

@@ -2834,6 +2834,148 @@
           }
         ]
       }
+    },
+    "/delivery-partners": {
+      "get": {
+        "operationId": "DeliveryPartnersController_list",
+        "summary": "List all delivery partners (including disabled)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of delivery partners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "DeliveryPartnersController_create",
+        "summary": "Create a delivery partner (atomically creates its owned payment method)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeliveryPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created delivery partner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/delivery-partners/enabled": {
+      "get": {
+        "operationId": "DeliveryPartnersController_listEnabled",
+        "summary": "List enabled delivery partners (no special permission required)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of enabled delivery partners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/delivery-partners/{id}": {
+      "patch": {
+        "operationId": "DeliveryPartnersController_update",
+        "summary": "Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Delivery partner slug",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeliveryPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated delivery partner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -2882,6 +3024,10 @@
     {
       "name": "payment-methods",
       "description": "Payment method configuration"
+    },
+    {
+      "name": "delivery-partners",
+      "description": "Delivery partner catalog"
     }
   ],
   "servers": [],
@@ -5572,6 +5718,11 @@
             "format": "int32",
             "example": 0
           },
+          "isDeliveryPartner": {
+            "type": "boolean",
+            "example": false,
+            "description": "Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column."
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -5601,6 +5752,7 @@
           "zatcaPaymentMeansCode",
           "enabled",
           "sortOrder",
+          "isDeliveryPartner",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -5636,6 +5788,94 @@
             "type": "string",
             "example": "30",
             "description": "ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        }
+      },
+      "DeliveryPartnerResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "hungerstation"
+          },
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "enabled",
+          "sortOrder",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateDeliveryPartnerDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdateDeliveryPartnerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Immutable slug — sending a different value is rejected"
+          },
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
           },
           "enabled": {
             "type": "boolean",
