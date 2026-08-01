@@ -353,7 +353,8 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /** Update open order type and/or table */
+    patch: operations['OrdersController_updateOrderMeta'];
     trace?: never;
   };
   '/orders/{orderId}/items/sync': {
@@ -1958,6 +1959,25 @@ export interface components {
       events: components['schemas']['OrderEventResponse'][];
       payments: components['schemas']['OrderPaymentResponse'][];
     };
+    UpdateOrderMetaDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @example dine_in
+       * @enum {string}
+       */
+      type: 'dine_in' | 'takeaway';
+      /**
+       * Format: int64
+       * @description Target table (required for dine_in). Ignored and forced to null when type is takeaway.
+       * @example 1
+       */
+      tableId?: number;
+    };
     CreateOrderDto: {
       /**
        * @example dine_in
@@ -3284,6 +3304,32 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderMeta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderMetaDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
       200: {
         headers: {
           [name: string]: unknown;

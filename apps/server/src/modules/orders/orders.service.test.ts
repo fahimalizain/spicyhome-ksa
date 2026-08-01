@@ -1657,6 +1657,310 @@ describe('One open order per table', () => {
   });
 });
 
+describe('updateOrderMeta (PATCH /orders/:id)', () => {
+  const TABLE_A = 10;
+  const TABLE_B = 11;
+  const TABLE_INACTIVE = 12;
+  let metaOrderIds: number[];
+
+  beforeAll(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (${TABLE_A}, 'TA', 10, 1, ${now}, ${now});
+      INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (${TABLE_B}, 'TB', 11, 1, ${now}, ${now});
+      INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (${TABLE_INACTIVE}, 'TI', 12, 0, ${now}, ${now});
+    `);
+  });
+
+  beforeEach(() => {
+    metaOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of metaOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    metaOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  // Returns the supertest chain — supports both `.expect(...)` chaining
+  // and `await` (resolves to the response).
+  function patchOrder(id: number, body: Record<string, unknown>) {
+    return request(app.getHttpServer())
+      .patch(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body);
+  }
+
+  it('open takeaway → dine-in + table: 200, DB type/table + type_changed event payload correct', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the PATCH
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.tableId).toBe(TABLE_A);
+    expect(res.body.updatedAt).toBeGreaterThan(before.updatedAt);
+    expect(res.body.updatedBy).not.toBeNull();
+
+    // Persisted in DB
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.type).toBe('dine_in');
+    expect(dbOrder.tableId).toBe(TABLE_A);
+
+    // Event written with from/to payload
+    const changed = res.body.events.filter((e: any) => e.type === 'type_changed');
+    expect(changed).toHaveLength(1);
+    const payload = JSON.parse(changed[0].payload);
+    expect(payload).toEqual({
+      fromType: 'takeaway',
+      toType: 'dine_in',
+      fromTableId: null,
+      toTableId: TABLE_A,
+    });
+  });
+
+  it('open dine-in → other free table: 200', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: TABLE_A });
+    const before = await getOrder(id);
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_B,
+    }).expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.tableId).toBe(TABLE_B);
+    const payload = JSON.parse(
+      res.body.events.filter((e: any) => e.type === 'type_changed')[0].payload,
+    );
+    expect(payload.fromTableId).toBe(TABLE_A);
+    expect(payload.toTableId).toBe(TABLE_B);
+  });
+
+  it('open dine-in → table with another open order: 409 same message style as create', async () => {
+    const other = await createOrder({ type: 'dine_in', tableId: TABLE_A });
+    const mine = await createOrder({ type: 'dine_in', tableId: TABLE_B });
+    const before = await getOrder(mine.id);
+
+    const res = await patchOrder(mine.id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(409);
+
+    expect(res.body.message).toBe(
+      `Table already has an open order #${other.orderNo} (id ${other.id}).`,
+    );
+  });
+
+  it('open dine-in → takeaway: table_id null, previous table free for new create', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: TABLE_A });
+    const before = await getOrder(id);
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      // Sending a non-null tableId with takeaway is ignored (force-null, D4)
+      tableId: TABLE_A,
+    }).expect(200);
+
+    expect(res.body.type).toBe('takeaway');
+    expect(res.body.tableId).toBeNull();
+
+    const payload = JSON.parse(
+      res.body.events.filter((e: any) => e.type === 'type_changed')[0].payload,
+    );
+    expect(payload.fromType).toBe('dine_in');
+    expect(payload.toType).toBe('takeaway');
+    expect(payload.fromTableId).toBe(TABLE_A);
+    expect(payload.toTableId).toBeNull();
+
+    // Table released — a new dine-in on the same table succeeds
+    const fresh = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'dine_in', tableId: TABLE_A })
+      .expect(201);
+    metaOrderIds.push(fresh.body.id);
+  });
+
+  it('voided order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+    const before = await getOrder(id);
+
+    await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(400);
+  });
+
+  it('paid order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Add an item so the order has a total to pay
+    const syncRes = await request(app.getHttpServer())
+      .put(`/orders/${id}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: before.updatedAt, items: [{ itemId: 1, qty: 1 }] })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/pay`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ payments: [{ methodId: 'cash', amountHalalas: syncRes.body.totalHalalas }] })
+      .expect(201);
+
+    const paidOrder = await getOrder(id);
+    await patchOrder(id, {
+      baseUpdatedAt: paidOrder.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(400);
+  });
+
+  it('stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the sync
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Bump updated_at via item sync
+    await request(app.getHttpServer())
+      .put(`/orders/${id}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: before.updatedAt, items: [{ itemId: 1, qty: 1 }] })
+      .expect(200);
+
+    const after = await getOrder(id);
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt, // stale
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(409);
+
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(after.updatedAt);
+  }, 10000);
+
+  it('dine-in without tableId → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+    }).expect(400);
+  });
+
+  it('inactive table → 404', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_INACTIVE,
+    }).expect(404);
+  });
+
+  it('missing table → 404', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: 99999,
+    }).expect(404);
+  });
+
+  it('no-op same type+table → 200, no new type_changed event, updatedAt unchanged', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: TABLE_A });
+    const before = await getOrder(id);
+    const eventCountBefore = before.events.length;
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+    }).expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.tableId).toBe(TABLE_A);
+    expect(res.body.updatedAt).toBe(before.updatedAt);
+    expect(res.body.events.length).toBe(eventCountBefore);
+    expect(res.body.events.filter((e: any) => e.type === 'type_changed')).toHaveLength(0);
+  });
+
+  it('no-op takeaway (no table) → 200, no event', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const eventCountBefore = before.events.length;
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+    }).expect(200);
+
+    expect(res.body.type).toBe('takeaway');
+    expect(res.body.tableId).toBeNull();
+    expect(res.body.updatedAt).toBe(before.updatedAt);
+    expect(res.body.events.length).toBe(eventCountBefore);
+  });
+
+  it('missing order → 404', async () => {
+    await patchOrder(999999, {
+      baseUpdatedAt: 0,
+      type: 'takeaway',
+    }).expect(404);
+  });
+});
+
 describe('syncItems (bulk cart sync)', () => {
   let zingerItemId: number;
   let pepsiItemId: number;

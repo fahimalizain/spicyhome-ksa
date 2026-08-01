@@ -95,6 +95,7 @@ export function OrderPage() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [metaUpdating, setMetaUpdating] = useState(false);
   const [error, setError] = useState('');
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
@@ -200,6 +201,15 @@ export function OrderPage() {
         if (cart.isDirty && order.updatedAt !== cart.serverUpdatedAt) {
           setShowRealtimeConflict(true);
           clearInterval(interval);
+          return;
+        }
+
+        // Decision A: remote type/table (or item) changes while the cart is
+        // clean are hydrated silently so the controls reflect the server.
+        if (!cart.isDirty && order.updatedAt !== cart.serverUpdatedAt) {
+          cart.loadOrder(order);
+          loadOpenOrders();
+          setCurrentOrder((prev) => (prev ? { ...prev, status: order.status } : null));
         }
       } catch {
         // Ignore poll errors
@@ -269,7 +279,12 @@ export function OrderPage() {
   }
 
   function isTableOccupied(tableId: number): boolean {
-    return openOrders.some((o) => o.tableId != null && Number(o.tableId) === tableId);
+    return openOrders.some(
+      (o) =>
+        o.tableId != null &&
+        Number(o.tableId) === tableId &&
+        (!currentOrder || o.id !== currentOrder.id),
+    );
   }
 
   const filteredItems = filterMenuItems(items, {
@@ -443,6 +458,94 @@ export function OrderPage() {
     cart.removeItem(cartItem.itemId);
   }
 
+  // ── Type / Table change (#109) ──
+
+  /**
+   * PATCH the open order's type/table. Returns true on success, false on
+   * failure (error message surfaced via setError). On 409 (occupied or stale)
+   * the order is refetched and hydrated when the cart is clean.
+   */
+  async function handleUpdateOrderMeta(
+    type: 'dine_in' | 'takeaway',
+    tableId?: number,
+  ): Promise<boolean> {
+    if (!currentOrder || currentOrder.status !== 'open') return false;
+    if (cart.serverUpdatedAt == null) return false;
+
+    setMetaUpdating(true);
+    setError('');
+    try {
+      const res = await client.orders.update(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        type,
+        ...(tableId !== undefined ? { tableId } : {}),
+      });
+      cart.loadOrder(res);
+      loadOpenOrders();
+      setCurrentOrder({ id: res.id, status: res.status, documentId: res.documentId });
+      return true;
+    } catch (e: any) {
+      // 409 occupied or stale: keep the previous type/table. Refetch + hydrate
+      // when clean so the controls reflect the server state.
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          if (order.status !== 'open') {
+            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+          } else if (!cart.isDirty) {
+            cart.loadOrder(order);
+            loadOpenOrders();
+          }
+        } catch {
+          // Ignore refetch errors — the error message below is the source of truth
+        }
+      }
+      setError(e.message || 'Failed to update order');
+      return false;
+    } finally {
+      setMetaUpdating(false);
+    }
+  }
+
+  function handleSelectTakeaway() {
+    // Pre-create: local-only staging as today
+    if (!currentOrder) {
+      cart.setOrderType('takeaway', null);
+      return;
+    }
+    if (currentOrder.status !== 'open') return;
+    // Already takeaway → no-op
+    if (cart.orderType === 'takeaway') return;
+    void handleUpdateOrderMeta('takeaway');
+  }
+
+  function handleSelectDineIn() {
+    // Pre-create: local-only staging as today
+    if (!currentOrder) {
+      if (cart.orderType !== 'dine_in') {
+        cart.setOrderType('dine_in', null);
+      }
+      setShowTablePicker(true);
+      return;
+    }
+    if (currentOrder.status !== 'open') return;
+    // Open order: always open the table picker; the PATCH happens only after
+    // the staff picks a table (single PATCH with type + tableId).
+    setShowTablePicker(true);
+  }
+
+  async function handleTableSelect(t: TableResponse) {
+    if (isTableOccupied(t.id)) return;
+    if (!currentOrder) {
+      cart.setOrderType('dine_in', t.id);
+      setShowTablePicker(false);
+      return;
+    }
+    if (currentOrder.status !== 'open') return;
+    const ok = await handleUpdateOrderMeta('dine_in', t.id);
+    if (ok) setShowTablePicker(false);
+  }
+
   // ── Navigation guard (D7) ──
 
   function guardedNavigate(navigateFn: () => void) {
@@ -493,6 +596,20 @@ export function OrderPage() {
   const permissionsReadonly = currentOrder ? !permissions.updateOrder : false;
   const cartDisabled = orderReadonly || permissionsReadonly || loading || syncing;
   const canCreateOrder = !currentOrder && permissions.createOrder;
+
+  // Type toggle + table button enablement (#109):
+  // - Pre-create (no currentOrder): editable as today (local staging) —
+  //   ungated by update_order (same as pre-#109).
+  // - Existing open order: only when open + updateOrder + cart clean +
+  //   not loading/syncing/meta-updating.
+  const canEditTypeTable =
+    !loading &&
+    !syncing &&
+    !metaUpdating &&
+    !orderReadonly &&
+    (!currentOrder
+      ? true // pre-create: local staging only (unchanged from pre-#109)
+      : permissions.updateOrder && !cart.isDirty);
 
   // Dirty state: hide Pay/Void (D15), show Send + Discard
   const showPayVoid =
@@ -552,35 +669,30 @@ export function OrderPage() {
         {/* Order type toggle */}
         <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 border-b border-gray-700 shrink-0">
           <button
-            onClick={() => {
-              if (cart.orderType !== 'dine_in') {
-                cart.setOrderType('dine_in', null);
-              }
-              setShowTablePicker(true);
-            }}
-            className={`touch-target px-4 rounded-lg text-sm font-medium ${
+            onClick={handleSelectDineIn}
+            className={`touch-target px-4 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
               cart.orderType === 'dine_in' ? 'bg-brand-600 text-white' : 'bg-gray-700 text-gray-300'
             }`}
-            disabled={!!currentOrder}
+            disabled={!canEditTypeTable}
           >
             Dine-in
           </button>
           <button
-            onClick={() => cart.setOrderType('takeaway', null)}
-            className={`touch-target px-4 rounded-lg text-sm font-medium ${
+            onClick={handleSelectTakeaway}
+            className={`touch-target px-4 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
               cart.orderType === 'takeaway'
                 ? 'bg-brand-600 text-white'
                 : 'bg-gray-700 text-gray-300'
             }`}
-            disabled={!!currentOrder}
+            disabled={!canEditTypeTable}
           >
             Takeaway
           </button>
           {cart.orderType === 'dine_in' && (
             <button
               onClick={() => setShowTablePicker(true)}
-              disabled={!!currentOrder}
-              className={`touch-target px-3 py-1.5 rounded-lg text-sm ${
+              disabled={!canEditTypeTable}
+              className={`touch-target px-3 py-1.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                 cart.tableId
                   ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   : 'bg-brand-700/50 text-brand-300 border border-brand-600/50 hover:bg-brand-700'
@@ -894,7 +1006,10 @@ export function OrderPage() {
                 const occupied = isTableOccupied(t.id);
                 const selected = cart.tableId === t.id;
                 const openOrder = openOrders.find(
-                  (o) => o.tableId != null && Number(o.tableId) === t.id,
+                  (o) =>
+                    o.tableId != null &&
+                    Number(o.tableId) === t.id &&
+                    (!currentOrder || o.id !== currentOrder.id),
                 );
 
                 return (
@@ -902,9 +1017,7 @@ export function OrderPage() {
                     key={t.id}
                     disabled={occupied}
                     onClick={() => {
-                      if (occupied) return;
-                      cart.setOrderType('dine_in', t.id);
-                      setShowTablePicker(false);
+                      void handleTableSelect(t);
                     }}
                     className={`touch-target flex flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 min-w-0 rounded-lg text-sm font-bold ${
                       occupied
