@@ -1,7 +1,17 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
 
 export interface KitchenTicketOptions {
-  orderNo: number;
+  /**
+   * Human-facing order identifier (e.g. "INV26-0042") — printed big in the
+   * header. The caller resolves the ZATCA document id with a fallback to the
+   * internal reference (`Order-<orderNo>`) before calling build().
+   */
+  documentId: string;
+  /**
+   * Printer name — printed in the header so kitchen staff can identify the
+   * station when tickets from several printers pile up.
+   */
+  printerName?: string;
   /** Unix epoch seconds */
   createdAt: number;
   orderType: 'dine_in' | 'takeaway';
@@ -33,13 +43,20 @@ export class KitchenTicketBuilder {
 
     eb.init();
 
-    // Big order number
+    // Big document id — double-size bold, centered, so the kitchen can match
+    // the ticket to the order at a glance (e.g. "INV26-0042").
     eb.align(Align.Center);
     eb.doubleSize(true);
     eb.bold(true);
-    eb.text(`ORDER #${opts.orderNo}`);
+    eb.text(this.truncateDouble(opts.documentId));
     eb.bold(false);
     eb.doubleSize(false);
+
+    // Printer name — normal size under the document id so kitchen staff can
+    // tell which station this ticket belongs to.
+    if (opts.printerName) {
+      eb.text(`Printer: ${opts.printerName}`.slice(0, this.width));
+    }
 
     eb.separator('=');
 
@@ -59,9 +76,20 @@ export class KitchenTicketBuilder {
     // Order info
     eb.align(Align.Left);
     const typeLabel = opts.orderType === 'dine_in' ? 'Dine-in' : 'Takeaway';
-    let typeLine = `Type: ${typeLabel}`;
-    if (opts.tableName) typeLine += `  Table: ${opts.tableName}`;
-    eb.text(typeLine);
+    eb.text(`Type: ${typeLabel}`);
+
+    // Table — its own line at double size + bold (far more visible than the
+    // old inline "Table: T4" on the type line). Omitted for takeaway.
+    if (opts.tableName) {
+      eb.align(Align.Center);
+      eb.bold(true);
+      eb.doubleSize(true);
+      eb.text(this.truncateDouble(`TABLE ${opts.tableName}`));
+      eb.doubleSize(false);
+      eb.bold(false);
+      eb.align(Align.Left);
+    }
+
     eb.text(`Time: ${this.formatTime(opts.createdAt)}`);
 
     // Order-level notes — prominent (bold), truncated to paper width, right
@@ -116,5 +144,10 @@ export class KitchenTicketBuilder {
       const pad = (n: number) => String(n).padStart(2, '0');
       return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
+  }
+
+  /** Double-size characters occupy two columns each — keep to half the paper width. */
+  private truncateDouble(text: string): string {
+    return text.slice(0, Math.floor(this.width / 2));
   }
 }
