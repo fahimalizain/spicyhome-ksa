@@ -1906,6 +1906,38 @@ export class OrdersService {
       throw new BadRequestException(`Payment method "${dto.methodId}" is disabled`);
     }
 
+    // ADR 0007: delivery-partner refund restriction (same rules as addOrderPayment).
+    // - Partner order: ONLY the partner's own method is allowed (method id
+    //   === partner id, shared slug namespace).
+    // - Non-partner order: partner-owned methods are rejected — a partner
+    //   method may only be used on an order linked to that partner.
+    if (order.deliveryPartnerId != null) {
+      if (dto.methodId !== order.deliveryPartnerId) {
+        const partner = this.db
+          .select({ title: deliveryPartners.title })
+          .from(deliveryPartners)
+          .where(eq(deliveryPartners.id, order.deliveryPartnerId))
+          .get();
+        const partnerLabel = partner
+          ? `"${order.deliveryPartnerId}" (${partner.title})`
+          : `"${order.deliveryPartnerId}"`;
+        throw new BadRequestException(
+          `Order has delivery partner ${partnerLabel}; only that partner's payment method "${order.deliveryPartnerId}" is allowed (got "${dto.methodId}").`,
+        );
+      }
+    } else {
+      const isPartnerOwned = !!this.db
+        .select({ id: deliveryPartners.id })
+        .from(deliveryPartners)
+        .where(eq(deliveryPartners.id, dto.methodId))
+        .get();
+      if (isPartnerOwned) {
+        throw new BadRequestException(
+          `Payment method "${dto.methodId}" belongs to a delivery partner and may only be used on orders linked to that partner.`,
+        );
+      }
+    }
+
     // Load all order items and validate each requested item belongs to the order
     const allOrderItems = this.db
       .select()

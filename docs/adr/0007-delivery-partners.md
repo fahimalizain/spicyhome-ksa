@@ -198,6 +198,16 @@ catalogs share one slug namespace:
   hidden; the normal methods only. A partner-owned method can never be
   selected for an order that does not carry that partner.
 
+#### Refund rules
+
+Refund method selection follows the **same partner restriction as pay**
+(`POST /orders/:id/refund`): a partner order may only be refunded through its
+own partner method (`methodId === order.deliveryPartnerId`); any other method
+→ 400. On a walk-in order (partner null), partner-owned methods are rejected
+the same way. The POS refund panel applies the same `filterMethodsForOrder`
+visibility rules as the pay modal, so partner methods never appear on the
+wrong order.
+
 #### Disabling a partner that has open orders
 
 Disabling a partner (`enabled` 1 → 0) that any **open** order references →
