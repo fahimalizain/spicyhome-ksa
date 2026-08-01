@@ -57,6 +57,8 @@ describe('StandardInvoiceBuyerModal', () => {
     expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Company / Legal Name')).toHaveValue(buyer.name);
     expect(screen.getByPlaceholderText('SA')).toHaveValue(buyer.country);
+    // Card is 50% wider than the old 520px so the docked OSK is not crammed
+    expect(document.querySelector('[data-osk-scope]')).toHaveClass('w-[780px]');
     // Full QWERTY keyboard dock (md), not the sm numpad
     expect(screen.getByTestId('osk-dock')).toBeInTheDocument();
     expect(screen.getByTestId('osk-dock')).toHaveAttribute('data-osk-size', 'md');
@@ -108,5 +110,27 @@ describe('StandardInvoiceBuyerModal', () => {
 
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('saving prop shows "Saving..." on Done and disables both actions', () => {
+    const onSave = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <StandardInvoiceBuyerModal
+        initialBuyer={makeBuyer()}
+        disabled
+        saving
+        onSave={onSave}
+        onCancel={onCancel}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Saving...' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });

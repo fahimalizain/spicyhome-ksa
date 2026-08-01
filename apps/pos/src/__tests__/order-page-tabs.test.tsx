@@ -13,6 +13,7 @@ const mockOrdersSyncItems = vi.fn();
 const mockOrdersSendToKitchen = vi.fn();
 const mockOrdersAddPayment = vi.fn();
 const mockOrdersSubmit = vi.fn();
+const mockOrdersUpdateStandardInvoice = vi.fn();
 const mockOrdersReprint = vi.fn();
 const mockOrdersGetZatcaInvoice = vi.fn();
 const mockPaymentMethodsListEnabled = vi.fn();
@@ -62,6 +63,7 @@ vi.mock('../api', () => ({
       sendToKitchen: (...args: any[]) => mockOrdersSendToKitchen(...args),
       addPayment: (...args: any[]) => mockOrdersAddPayment(...args),
       submit: (...args: any[]) => mockOrdersSubmit(...args),
+      updateStandardInvoice: (...args: any[]) => mockOrdersUpdateStandardInvoice(...args),
       void: vi.fn(),
       refund: vi.fn(),
       getRefunds: vi.fn(),
@@ -209,6 +211,33 @@ function mockDayIsOpen() {
 
 function mockGetReturns(order: Record<string, unknown>) {
   mockOrdersGet.mockResolvedValue(Promise.resolve(order));
+}
+
+function fillBuyerForm(buyer: Record<string, string>) {
+  fireEvent.change(screen.getByPlaceholderText('Company / Legal Name'), {
+    target: { value: buyer.name },
+  });
+  fireEvent.change(screen.getByPlaceholderText('300123456789012'), {
+    target: { value: buyer.vatNumber },
+  });
+  fireEvent.change(screen.getByPlaceholderText('King Fahd Road'), {
+    target: { value: buyer.street },
+  });
+  fireEvent.change(screen.getByPlaceholderText('7845'), {
+    target: { value: buyer.buildingNumber },
+  });
+  fireEvent.change(screen.getByPlaceholderText('Al-Olaya'), {
+    target: { value: buyer.citySubdivision },
+  });
+  fireEvent.change(screen.getByPlaceholderText('Riyadh'), {
+    target: { value: buyer.city },
+  });
+  fireEvent.change(screen.getByPlaceholderText('12271'), {
+    target: { value: buyer.postalCode },
+  });
+  fireEvent.change(screen.getByPlaceholderText('SA'), {
+    target: { value: buyer.country },
+  });
 }
 
 describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
@@ -685,12 +714,13 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
       expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
     });
     // Empty/invalid buyer → the toggle is un-checked so no incomplete
-    // standard invoice can be left armed
+    // standard invoice can be left armed; the checkbox is back
     expect(toggle).not.toBeChecked();
-    expect(screen.queryByText('Edit buyer details')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Issue ZATCA Standard Invoice')).toBeInTheDocument();
+    expect(screen.queryByText('Standard Invoice')).not.toBeInTheDocument();
   });
 
-  it('summary tab: standard invoice modal — valid buyer + Done keeps checked and Submit sends standard payload', async () => {
+  it('summary tab: standard invoice modal — valid buyer + Done PATCHes immediately and Submit sends standard payload', async () => {
     const validBuyer = {
       name: 'Abdullah Al-Otaibi Est.',
       vatNumber: '300123456789012',
@@ -703,6 +733,15 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     };
     mockGetReturns(
       makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+    // Done → PATCH resolves with the persisted standard order (updatedAt bumped)
+    mockOrdersUpdateStandardInvoice.mockResolvedValue(
+      makeOrder({
+        updatedAt: 6000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: validBuyer,
         payments: [makePayment()],
       }),
     );
@@ -744,45 +783,36 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
       expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText('Company / Legal Name'), {
-      target: { value: validBuyer.name },
-    });
-    fireEvent.change(screen.getByPlaceholderText('300123456789012'), {
-      target: { value: validBuyer.vatNumber },
-    });
-    fireEvent.change(screen.getByPlaceholderText('King Fahd Road'), {
-      target: { value: validBuyer.street },
-    });
-    fireEvent.change(screen.getByPlaceholderText('7845'), {
-      target: { value: validBuyer.buildingNumber },
-    });
-    fireEvent.change(screen.getByPlaceholderText('Al-Olaya'), {
-      target: { value: validBuyer.citySubdivision },
-    });
-    fireEvent.change(screen.getByPlaceholderText('Riyadh'), {
-      target: { value: validBuyer.city },
-    });
-    fireEvent.change(screen.getByPlaceholderText('12271'), {
-      target: { value: validBuyer.postalCode },
-    });
-    fireEvent.change(screen.getByPlaceholderText('SA'), {
-      target: { value: validBuyer.country },
-    });
-
+    fillBuyerForm(validBuyer);
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
-    // Modal closes, toggle stays checked, compact status shows the buyer
+    // Done PATCHes the buyer onto the open order right away
+    await waitFor(() => {
+      expect(mockOrdersUpdateStandardInvoice).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 5000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: validBuyer,
+      });
+    });
+
+    // Modal closes after the PATCH resolves; the checkbox is replaced by the
+    // buyer callout (hydrated from the response)
     await waitFor(() => {
       expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
     });
-    expect(toggle).toBeChecked();
-    expect(screen.getByText(`Buyer: ${validBuyer.name}`)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Issue ZATCA Standard Invoice')).not.toBeInTheDocument();
+    expect(screen.getByText('Standard Invoice')).toBeInTheDocument();
+    expect(screen.getByText(validBuyer.name)).toBeInTheDocument();
+    expect(screen.getByText(`VAT ${validBuyer.vatNumber}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`${validBuyer.city} · ${validBuyer.citySubdivision}`),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
       expect(mockOrdersSubmit).toHaveBeenCalledWith(1, {
-        baseUpdatedAt: 5000,
+        baseUpdatedAt: 6000,
         isStandardInvoice: true,
         zatcaBuyerDetails: validBuyer,
       });
@@ -802,6 +832,14 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     };
     mockGetReturns(
       makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+    mockOrdersUpdateStandardInvoice.mockResolvedValue(
+      makeOrder({
+        updatedAt: 6000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: savedBuyer,
         payments: [makePayment()],
       }),
     );
@@ -852,11 +890,11 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+      expect(mockOrdersUpdateStandardInvoice).toHaveBeenCalledTimes(1);
     });
 
-    // Re-open via "Edit buyer details" — the draft is seeded with saved data
-    fireEvent.click(screen.getByRole('button', { name: 'Edit buyer details' }));
+    // Re-open via the callout body — the draft is seeded with saved data
+    fireEvent.click(screen.getByLabelText('Edit standard invoice buyer details'));
     await waitFor(() => {
       expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
     });
@@ -872,8 +910,133 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
     });
-    expect(toggle).toBeChecked();
-    expect(screen.getByText(`Buyer: ${savedBuyer.name}`)).toBeInTheDocument();
+    // Callout still shows the committed buyer; checkbox stays hidden
+    expect(screen.queryByLabelText('Issue ZATCA Standard Invoice')).not.toBeInTheDocument();
+    expect(screen.getByText(savedBuyer.name)).toBeInTheDocument();
+    expect(screen.queryByText('Changed Co.')).not.toBeInTheDocument();
+  });
+
+  it('summary tab: standard invoice callout X PATCHes a clear and restores the checkbox', async () => {
+    const savedBuyer = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+    mockGetReturns(
+      makeOrder({
+        payments: [makePayment()],
+      }),
+    );
+    // Done → PATCH resolves with the persisted standard order
+    mockOrdersUpdateStandardInvoice.mockResolvedValueOnce(
+      makeOrder({
+        updatedAt: 6000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: savedBuyer,
+        payments: [makePayment()],
+      }),
+    );
+    // X → PATCH clear resolves with the flag off
+    mockOrdersUpdateStandardInvoice.mockResolvedValueOnce(
+      makeOrder({
+        updatedAt: 7000,
+        isStandardInvoice: false,
+        zatcaBuyerDetails: null,
+        payments: [makePayment()],
+      }),
+    );
+    mockOrdersSubmit.mockResolvedValue({ success: true, status: 'paid' });
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByLabelText('Issue ZATCA Standard Invoice'));
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice — Buyer Details')).toBeInTheDocument();
+    });
+
+    fillBuyerForm(savedBuyer);
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    await waitFor(() => {
+      expect(mockOrdersUpdateStandardInvoice).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 5000,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: savedBuyer,
+      });
+    });
+    expect(screen.getByText(savedBuyer.name)).toBeInTheDocument();
+
+    // X clears the buyer via PATCH: callout gone, checkbox back and unchecked
+    fireEvent.click(screen.getByLabelText('Clear standard invoice buyer'));
+    await waitFor(() => {
+      expect(mockOrdersUpdateStandardInvoice).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 6000,
+        isStandardInvoice: false,
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Standard Invoice')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(savedBuyer.name)).not.toBeInTheDocument();
+    const toggle = screen.getByLabelText('Issue ZATCA Standard Invoice');
+    expect(toggle).not.toBeChecked();
+
+    // isStandardInvoice is off after the clear: Submit sends a plain payload
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() => {
+      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, { baseUpdatedAt: 7000 });
+    });
+  });
+
+  it('summary tab: hydrated order with persisted standard invoice shows the callout without checking', async () => {
+    const persistedBuyer = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+    mockGetReturns(
+      makeOrder({
+        isStandardInvoice: true,
+        zatcaBuyerDetails: persistedBuyer,
+        payments: [makePayment()],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Summary'));
+
+    // Callout directly — no checkbox to check, no modal to open
+    await waitFor(() => {
+      expect(screen.getByText('Standard Invoice')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('Issue ZATCA Standard Invoice')).not.toBeInTheDocument();
+    expect(screen.queryByText('Standard Invoice — Buyer Details')).not.toBeInTheDocument();
+    expect(screen.getByText(persistedBuyer.name)).toBeInTheDocument();
+    expect(screen.getByText(`VAT ${persistedBuyer.vatNumber}`)).toBeInTheDocument();
   });
 
   // ---- Print Open Receipt (non-ZATCA guest slip) ----

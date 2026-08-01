@@ -622,6 +622,136 @@ export class OrdersService {
   }
 
   /**
+   * PATCH /orders/:id/standard-invoice — set or clear the ZATCA standard
+   * invoice buyer details on an open order.
+   *
+   * Rules (same style as partner/meta):
+   *
+   * - open orders only → else 400
+   * - stale `baseUpdatedAt` → 409 `{ message, updatedAt }`
+   * - `isStandardInvoice: true` → buyer is validated (400 on invalid/missing)
+   *   and persisted as `is_standard_invoice = 1` + JSON buyer
+   * - `isStandardInvoice: false` → `is_standard_invoice = 0`, buyer null
+   * - no-op (same flag + same buyer JSON) → returns the current order without
+   *   bumping `updated_at` or writing an event
+   *
+   * Audit: writes `standard_invoice_changed` with
+   * `{ fromIsStandardInvoice, toIsStandardInvoice, fromBuyerVatNumber,
+   * toBuyerVatNumber, fromBuyerName, toBuyerName }` and emits `order.updated`
+   * on mutation.
+   */
+  async updateOrderStandardInvoice(
+    orderId: number,
+    dto: {
+      baseUpdatedAt: number;
+      isStandardInvoice: boolean;
+      zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+    },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+    let anyMutation = false;
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Status gate — open orders only
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can change the standard invoice buyer');
+      }
+
+      // Concurrency — same 409 shape as syncItems / updateOrderMeta
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      const fromIsStandardInvoice = order.isStandardInvoice === 1;
+      const fromBuyer = this.parseOrderBuyerDetails(order);
+
+      let toIsStandardInvoice: boolean;
+      let toBuyer: Record<string, unknown> | null;
+
+      if (dto.isStandardInvoice) {
+        const validated = this.validateStandardInvoiceBuyer({
+          isStandardInvoice: true,
+          zatcaBuyerDetails: dto.zatcaBuyerDetails,
+        });
+        toIsStandardInvoice = true;
+        toBuyer = validated as unknown as Record<string, unknown>;
+      } else {
+        toIsStandardInvoice = false;
+        toBuyer = null;
+      }
+
+      // No-op: same flag + same normalized buyer JSON → return the current
+      // order without bumping updated_at or writing an event.
+      if (
+        toIsStandardInvoice === fromIsStandardInvoice &&
+        JSON.stringify(toBuyer) === JSON.stringify(fromBuyer)
+      ) {
+        const snapshot = () => {
+          const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+          const refreshedItems = tx
+            .select()
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId))
+            .all();
+          const logs = this.orderEvents.getEvents(tx, orderId);
+          return { ...refreshedOrder, items: refreshedItems, events: logs };
+        };
+        return snapshot();
+      }
+
+      anyMutation = true;
+
+      tx.update(orders)
+        .set({
+          isStandardInvoice: toIsStandardInvoice ? 1 : 0,
+          zatcaBuyerDetails: toBuyer ? JSON.stringify(toBuyer) : null,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.STANDARD_INVOICE_CHANGED,
+        {
+          fromIsStandardInvoice,
+          toIsStandardInvoice,
+          fromBuyerVatNumber: fromBuyer?.vatNumber ?? null,
+          toBuyerVatNumber: toBuyer?.vatNumber ?? null,
+          fromBuyerName: fromBuyer?.name ?? null,
+          toBuyerName: toBuyer?.name ?? null,
+        },
+        now,
+      );
+
+      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      const refreshedItems = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      const logs = this.orderEvents.getEvents(tx, orderId);
+      return { ...refreshedOrder, items: refreshedItems, events: logs };
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
+  }
+
+  /**
    * PATCH /orders/:id/items/:orderItemId/unit-price — per-line partner price
    * override (ADR 0007). `orderItemId` is the `order_items.id` (line id),
    * NOT the catalog item id.
@@ -1359,9 +1489,15 @@ export class OrdersService {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
 
-    // Validate standard invoice buyer fields outside transaction
-    const validatedBuyer = this.validateStandardInvoiceBuyer(dto);
-    const isStandardInvoice = dto.isStandardInvoice === true;
+    // Standard-invoice intent is resolved INSIDE the transaction because the
+    // omitted-body case needs the order row:
+    //   1. body isStandardInvoice:true  → use body buyer (validate)
+    //   2. body isStandardInvoice:false → simplified (ignore order flag)
+    //   3. omitted → follow the persisted order flag; when set, its buyer must
+    //      parse/validate (400 if missing/invalid)
+    //   4. otherwise simplified
+    let isStandardInvoice = false;
+    let validatedBuyer: Record<string, unknown> | null = null;
 
     // Set inside the transaction from the payment lines actually on the order
     let hasCashPayment = false;
@@ -1384,6 +1520,33 @@ export class OrdersService {
             updatedAt: order.updatedAt,
           });
         }
+      }
+
+      // Resolve the standard-invoice intent (see doc comment above).
+      if (dto.isStandardInvoice === true) {
+        validatedBuyer = this.validateStandardInvoiceBuyer({
+          isStandardInvoice: true,
+          zatcaBuyerDetails: dto.zatcaBuyerDetails,
+        });
+        isStandardInvoice = true;
+      } else if (dto.isStandardInvoice === false) {
+        isStandardInvoice = false;
+        validatedBuyer = null;
+      } else if (order.isStandardInvoice === 1) {
+        // Body omitted the flag — use the already-persisted order fields.
+        // Strict here (unlike getOrder's tolerant parse): a standard submit
+        // must never proceed with missing/corrupt buyer data.
+        if (!order.zatcaBuyerDetails) {
+          throw new BadRequestException(
+            'Order is marked for a standard invoice but has no buyer details. Clear the standard invoice flag or save buyer details first.',
+          );
+        }
+        const parsed = parseZatcaBuyerDetails(order.zatcaBuyerDetails);
+        if (!parsed.success) {
+          throw new BadRequestException('Order has invalid persisted buyer details');
+        }
+        validatedBuyer = parsed.data as unknown as Record<string, unknown>;
+        isStandardInvoice = true;
       }
 
       // ADR 0006 precondition: ≥ 1 order item

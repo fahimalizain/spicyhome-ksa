@@ -15,6 +15,11 @@ type Props = {
    */
   initialErrors?: Partial<Record<keyof ZatcaBuyerDetails, string>>;
   disabled?: boolean;
+  /**
+   * True while the parent's save/clear PATCH is in flight — the Done button
+   * shows "Saving..." and stays disabled (parent also passes `disabled`).
+   */
+  saving?: boolean;
   /** Called with the validated buyer on Done. */
   onSave: (buyer: ZatcaBuyerDetails) => void;
   /** Called on Cancel (the parent decides whether to uncheck). */
@@ -34,6 +39,7 @@ export function StandardInvoiceBuyerModal({
   initialBuyer,
   initialErrors,
   disabled,
+  saving,
   onSave,
   onCancel,
 }: Props) {
@@ -61,7 +67,7 @@ export function StandardInvoiceBuyerModal({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div
         data-osk-scope
-        className="bg-gray-900 rounded-xl p-4 w-[520px] max-w-[90vw] max-h-[90vh] overflow-y-auto"
+        className="bg-gray-900 rounded-xl p-4 w-[780px] max-w-[90vw] max-h-[90vh] overflow-y-auto"
       >
         <h2 className="text-lg font-bold text-white mb-1">Standard Invoice — Buyer Details</h2>
         <p className="text-xs text-gray-500 mb-3">
@@ -96,7 +102,7 @@ export function StandardInvoiceBuyerModal({
             disabled={disabled}
             className="flex-1 touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
           >
-            Done
+            {saving ? 'Saving...' : 'Done'}
           </button>
         </div>
       </div>
