@@ -39,6 +39,31 @@ export class OrderResponse {
   @ApiProperty({ ...ApiInt64, example: 0 })
   discountHalalas!: number;
 
+  // ── Delivery partner (ADR 0007) ────────────────────────────────────────────
+
+  @ApiProperty({
+    example: 'hungerstation',
+    nullable: true,
+    description:
+      'Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.',
+  })
+  deliveryPartnerId!: string | null;
+
+  @ApiProperty({
+    example: 'HungerStation',
+    nullable: true,
+    description: 'Delivery partner title (joined from delivery_partners when a partner is set).',
+  })
+  deliveryPartnerTitle!: string | null;
+
+  @ApiProperty({
+    example: 'HS-883129',
+    nullable: true,
+    description:
+      "Delivery app's order number for reconciliation (only meaningful alongside a partner).",
+  })
+  deliveryExternalRef!: string | null;
+
   @ApiProperty({
     description: 'ZATCA root cbc:ID — the business invoice number',
     example: 'INV26-0001',

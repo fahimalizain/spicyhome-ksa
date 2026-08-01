@@ -2360,6 +2360,565 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
   });
 });
 
+describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
+  // Partner catalog seeds. 'ghost' is soft-disabled (enabled = 0).
+  beforeAll(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 1, ${now}, ${now});
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('ghost', 'Ghost', 0, 2, ${now}, ${now});
+    `);
+  });
+
+  let partnerOrderIds: number[];
+
+  beforeEach(() => {
+    partnerOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of partnerOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    partnerOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  // Returns the supertest chain — supports both `.expect(...)` chaining
+  // and `await` (resolves to the response).
+  function patchPartner(id: number, body: Record<string, unknown>) {
+    return request(app.getHttpServer())
+      .patch(`/orders/${id}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body);
+  }
+
+  async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
+      .expect(200);
+    return res.body;
+  }
+
+  function setLinePrice(orderId: number, priceHalalas: number): void {
+    sqlite.exec(
+      `UPDATE order_items SET unit_price_halalas = ${priceHalalas}, total_halalas = ${priceHalalas} * qty WHERE order_id = ${orderId}`,
+    );
+  }
+
+  it('set partner on takeaway open order: 200, ref stored, partner title in response, prices untouched', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-123',
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBe('hungerstation');
+    expect(res.body.deliveryPartnerTitle).toBe('HungerStation');
+    expect(res.body.deliveryExternalRef).toBe('HS-123');
+    // Set partner never touches line prices (ADR 0007)
+    expect(res.body.items[0].unitPriceHalalas).toBe(2300);
+    expect(res.body.totalHalalas).toBe(4600);
+
+    // Persisted in DB
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.deliveryPartnerId).toBe('hungerstation');
+    expect(dbOrder.deliveryExternalRef).toBe('HS-123');
+
+    const evts = res.body.events.filter((e: any) => e.type === 'delivery_partner_changed');
+    expect(evts).toHaveLength(1);
+    expect(JSON.parse(evts[0].payload)).toEqual({
+      fromPartnerId: null,
+      toPartnerId: 'hungerstation',
+      fromPartnerTitle: null,
+      toPartnerTitle: 'HungerStation',
+      fromExternalRef: null,
+      toExternalRef: 'HS-123',
+      resetItemCount: 0,
+    });
+    // No price resets on set
+    expect(res.body.events.filter((e: any) => e.type === 'item_price_reset')).toHaveLength(0);
+  });
+
+  it('set partner on dine_in order → 400 with guidance', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: 1 });
+    const before = await getOrder(id);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: before.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+    }).expect(400);
+    expect(res.body.message).toBe('Set order type to takeaway first');
+  });
+
+  it('unknown or disabled partner → 400', async () => {
+    const a = await createOrder({ type: 'takeaway' });
+    const beforeA = await getOrder(a.id);
+    const resUnknown = await patchPartner(a.id, {
+      baseUpdatedAt: beforeA.updatedAt,
+      deliveryPartnerId: 'nonexistent',
+    }).expect(400);
+    expect(resUnknown.body.message).toBe('Unknown delivery partner "nonexistent"');
+
+    const b = await createOrder({ type: 'takeaway' });
+    const beforeB = await getOrder(b.id);
+    const resDisabled = await patchPartner(b.id, {
+      baseUpdatedAt: beforeB.updatedAt,
+      deliveryPartnerId: 'ghost',
+    }).expect(400);
+    expect(resDisabled.body.message).toBe('Delivery partner "ghost" is disabled');
+  });
+
+  it('change partner swaps the slug and never touches line prices (ADR 0007)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const _synced = await addItem(id, before.updatedAt, 1, 1);
+
+    // Simulate a Phase-7-style manual override (no endpoint yet): set the
+    // line off-catalog directly in the DB.
+    setLinePrice(id, 2500);
+
+    const overridden = await getOrder(id);
+    const set = await patchPartner(id, {
+      baseUpdatedAt: overridden.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+    expect(set.body.items[0].unitPriceHalalas).toBe(2500);
+
+    const afterSet = await getOrder(id);
+    const change = await patchPartner(id, {
+      baseUpdatedAt: afterSet.updatedAt,
+      deliveryPartnerId: 'keeta',
+      deliveryExternalRef: 'K-2',
+    }).expect(200);
+
+    expect(change.body.deliveryPartnerId).toBe('keeta');
+    expect(change.body.deliveryPartnerTitle).toBe('Keeta');
+    expect(change.body.items[0].unitPriceHalalas).toBe(2500); // still overridden
+
+    // No price resets on set/change
+    expect(change.body.events.filter((e: any) => e.type === 'item_price_reset')).toHaveLength(0);
+  });
+
+  it('change partner without a ref keeps the existing ref (edited separately)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      deliveryPartnerId: 'keeta',
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBe('keeta');
+    expect(res.body.deliveryExternalRef).toBe('HS-1');
+  });
+
+  it('clear partner resets line prices to the live catalog, nulls ref, writes events', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const _synced = await addItem(id, before.updatedAt, 1, 2);
+    setLinePrice(id, 2500);
+
+    const overridden = await getOrder(id);
+    const set = await patchPartner(id, {
+      baseUpdatedAt: overridden.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      deliveryPartnerId: null,
+      // A ref sent alongside a clear is ignored / force-nulled
+      deliveryExternalRef: 'HS-BOGUS',
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBeNull();
+    expect(res.body.deliveryExternalRef).toBeNull();
+    expect(res.body.items[0].unitPriceHalalas).toBe(2300); // catalog price
+    expect(res.body.items[0].totalHalalas).toBe(4600);
+    expect(res.body.totalHalalas).toBe(4600); // totals recomputed
+
+    const partnerEvts = res.body.events.filter((e: any) => e.type === 'delivery_partner_changed');
+    expect(partnerEvts).toHaveLength(2); // set + clear
+    expect(JSON.parse(partnerEvts[1].payload)).toEqual({
+      fromPartnerId: 'hungerstation',
+      toPartnerId: null,
+      fromPartnerTitle: 'HungerStation',
+      toPartnerTitle: null,
+      fromExternalRef: 'HS-1',
+      toExternalRef: null,
+      resetItemCount: 1,
+    });
+
+    const resets = res.body.events.filter((e: any) => e.type === 'item_price_reset');
+    expect(resets).toHaveLength(1);
+    expect(JSON.parse(resets[0].payload)).toMatchObject({
+      orderItemId: res.body.items[0].id,
+      itemId: 1,
+      fromUnitPriceHalalas: 2500,
+      toUnitPriceHalalas: 2300,
+      reason: 'partner_cleared',
+    });
+  });
+
+  it('lines with item_id NULL keep their price on clear (no reset event for them)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+    const orderItemId = synced.items[0].id;
+
+    // Simulate a legacy/orphan line: no catalog link, custom price.
+    sqlite.exec(`
+      INSERT INTO order_items (order_id, item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+      VALUES (${id}, NULL, 'Legacy Special', 2000, 1500, 1, 2000, ${synced.updatedAt}, ${synced.updatedAt});
+    `);
+    // Push the catalog line off-catalog, then restore the legacy line's price
+    setLinePrice(id, 2500);
+    sqlite.exec(
+      `UPDATE order_items SET unit_price_halalas = 2000, total_halalas = 2000 * qty WHERE order_id = ${id} AND item_id IS NULL`,
+    );
+
+    const overridden = await getOrder(id);
+    expect(overridden.items).toHaveLength(2);
+
+    const set = await patchPartner(id, {
+      baseUpdatedAt: overridden.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      deliveryPartnerId: null,
+    }).expect(200);
+
+    const byId = new Map<number, any>(res.body.items.map((i: any) => [i.id, i]));
+    expect(byId.get(orderItemId).unitPriceHalalas).toBe(2300); // reset to catalog
+    const legacy = [...byId.values()].find((i: any) => i.itemId === null);
+    expect(legacy.unitPriceHalalas).toBe(2000); // kept as-is
+
+    // Only the catalog line got a reset event; totals = 2300 + 2000
+    const resets = res.body.events.filter((e: any) => e.type === 'item_price_reset');
+    expect(resets).toHaveLength(1);
+    expect(JSON.parse(resets[0].payload)).toMatchObject({
+      orderItemId,
+      reason: 'partner_cleared',
+    });
+    expect(res.body.totalHalalas).toBe(4300);
+
+    const partnerEvts = res.body.events.filter((e: any) => e.type === 'delivery_partner_changed');
+    expect(JSON.parse(partnerEvts[partnerEvts.length - 1].payload).resetItemCount).toBe(1);
+  });
+
+  it('ref-only edit when partner set: ref updated, delivery_partner_changed written, prices untouched', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      deliveryExternalRef: 'HS-2',
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBe('hungerstation');
+    expect(res.body.deliveryExternalRef).toBe('HS-2');
+
+    const evts = res.body.events.filter((e: any) => e.type === 'delivery_partner_changed');
+    expect(evts).toHaveLength(2);
+    expect(JSON.parse(evts[1].payload)).toEqual({
+      fromPartnerId: 'hungerstation',
+      toPartnerId: 'hungerstation',
+      fromPartnerTitle: 'HungerStation',
+      toPartnerTitle: 'HungerStation',
+      fromExternalRef: 'HS-1',
+      toExternalRef: 'HS-2',
+      resetItemCount: 0,
+    });
+    expect(res.body.events.filter((e: any) => e.type === 'item_price_reset')).toHaveLength(0);
+  });
+
+  it('ref-only edit without a partner → no-op: ref force-nulled, no events, no bump', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+    const eventCount = synced.events.length;
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryExternalRef: 'HS-X',
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBeNull();
+    expect(res.body.deliveryExternalRef).toBeNull();
+    expect(res.body.updatedAt).toBe(synced.updatedAt);
+    expect(res.body.events.length).toBe(eventCount);
+  });
+
+  it('clear on an already-partnerless order → no-op (no events, no bump)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+    const eventCount = synced.events.length;
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: null,
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBeNull();
+    expect(res.body.updatedAt).toBe(synced.updatedAt);
+    expect(res.body.events.length).toBe(eventCount);
+  });
+
+  it('body without deliveryPartnerId or deliveryExternalRef → no-op (keeps partner and ref)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-1',
+    }).expect(200);
+    const eventCount = set.body.events.length;
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: set.body.updatedAt,
+    }).expect(200);
+
+    expect(res.body.deliveryPartnerId).toBe('hungerstation');
+    expect(res.body.deliveryExternalRef).toBe('HS-1'); // not cleared
+    expect(res.body.updatedAt).toBe(set.body.updatedAt);
+    expect(res.body.events.length).toBe(eventCount);
+  });
+
+  it('stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the sync
+    await new Promise((r) => setTimeout(r, 1500));
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchPartner(id, {
+      baseUpdatedAt: before.updatedAt, // stale
+      deliveryPartnerId: 'hungerstation',
+    }).expect(409);
+
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(synced.updatedAt);
+  }, 10000);
+
+  it('paid order partner patch → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: synced.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    const paid = await getOrder(id);
+    const res = await patchPartner(id, {
+      baseUpdatedAt: paid.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+    }).expect(400);
+    expect(res.body.message).toBe('Only open orders can change the delivery partner');
+  });
+
+  it('GET /orders list includes deliveryPartnerId + title when set', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    await patchPartner(id, {
+      baseUpdatedAt: synced.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-77',
+    }).expect(200);
+
+    const listRes = await request(app.getHttpServer())
+      .get('/orders?status=open')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const mine = listRes.body.find((o: any) => o.id === id);
+    expect(mine.deliveryPartnerId).toBe('hungerstation');
+    expect(mine.deliveryPartnerTitle).toBe('HungerStation');
+    expect(mine.deliveryExternalRef).toBe('HS-77');
+  });
+
+  // ── takeaway → dine_in side effects (ADR 0007 extends ADR 0004) ────────────
+
+  it('takeaway → dine_in clears partner/ref, resets prices, writes all events', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const _synced = await addItem(id, before.updatedAt, 1, 1);
+    setLinePrice(id, 2500);
+
+    const overridden = await getOrder(id);
+    const set = await patchPartner(id, {
+      baseUpdatedAt: overridden.updatedAt,
+      deliveryPartnerId: 'hungerstation',
+      deliveryExternalRef: 'HS-9',
+    }).expect(200);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: set.body.updatedAt, type: 'dine_in', tableId: 1 })
+      .expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.deliveryPartnerId).toBeNull();
+    expect(res.body.deliveryPartnerTitle).toBeNull();
+    expect(res.body.deliveryExternalRef).toBeNull();
+    expect(res.body.items[0].unitPriceHalalas).toBe(2300);
+    expect(res.body.totalHalalas).toBe(2300);
+
+    // type_changed payload unchanged (ADR 0004 contract)
+    const types = res.body.events.filter((e: any) => e.type === 'type_changed');
+    expect(types).toHaveLength(1);
+    expect(JSON.parse(types[0].payload)).toEqual({
+      fromType: 'takeaway',
+      toType: 'dine_in',
+      fromTableId: null,
+      toTableId: 1,
+    });
+
+    const partnerEvts = res.body.events.filter((e: any) => e.type === 'delivery_partner_changed');
+    expect(partnerEvts).toHaveLength(2); // set + dine_in clear
+    expect(JSON.parse(partnerEvts[1].payload)).toMatchObject({
+      fromPartnerId: 'hungerstation',
+      toPartnerId: null,
+      fromPartnerTitle: 'HungerStation',
+      toPartnerTitle: null,
+      fromExternalRef: 'HS-9',
+      toExternalRef: null,
+      resetItemCount: 1,
+    });
+
+    const resets = res.body.events.filter((e: any) => e.type === 'item_price_reset');
+    expect(resets).toHaveLength(1);
+    expect(JSON.parse(resets[0].payload)).toMatchObject({
+      itemId: 1,
+      fromUnitPriceHalalas: 2500,
+      toUnitPriceHalalas: 2300,
+      reason: 'type_changed_to_dine_in',
+    });
+  });
+
+  it('takeaway → dine_in without a partner still resets prices (no partner event)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const _synced = await addItem(id, before.updatedAt, 1, 2);
+    setLinePrice(id, 2500);
+
+    const overridden = await getOrder(id);
+    const res = await request(app.getHttpServer())
+      .patch(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: overridden.updatedAt, type: 'dine_in', tableId: 1 })
+      .expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.items[0].unitPriceHalalas).toBe(2300);
+    expect(res.body.totalHalalas).toBe(4600);
+    expect(res.body.events.filter((e: any) => e.type === 'delivery_partner_changed')).toHaveLength(
+      0,
+    );
+    const resets = res.body.events.filter((e: any) => e.type === 'item_price_reset');
+    expect(resets).toHaveLength(1);
+    expect(JSON.parse(resets[0].payload)).toMatchObject({ reason: 'type_changed_to_dine_in' });
+  });
+
+  it('dine_in → takeaway: no partner auto-set, prices unchanged', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: 1 });
+    const before = await getOrder(id);
+    const _synced = await addItem(id, before.updatedAt, 1, 1);
+    setLinePrice(id, 2500);
+
+    const overridden = await getOrder(id);
+    const res = await request(app.getHttpServer())
+      .patch(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: overridden.updatedAt, type: 'takeaway' })
+      .expect(200);
+
+    expect(res.body.type).toBe('takeaway');
+    expect(res.body.deliveryPartnerId).toBeNull();
+    expect(res.body.deliveryExternalRef).toBeNull();
+    expect(res.body.items[0].unitPriceHalalas).toBe(2500); // untouched
+    expect(res.body.events.filter((e: any) => e.type === 'delivery_partner_changed')).toHaveLength(
+      0,
+    );
+    expect(res.body.events.filter((e: any) => e.type === 'item_price_reset')).toHaveLength(0);
+  });
+
+  it('missing order → 404', async () => {
+    await patchPartner(999999, {
+      baseUpdatedAt: 0,
+      deliveryPartnerId: 'hungerstation',
+    }).expect(404);
+  });
+});
+
 describe('syncItems (bulk cart sync)', () => {
   let zingerItemId: number;
   let pepsiItemId: number;

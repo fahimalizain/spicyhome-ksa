@@ -22,6 +22,7 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
+import { UpdateOrderPartnerDto } from './dto/update-order-partner.dto';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
@@ -70,6 +71,22 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.updateOrderMeta(id, dto, user.sub);
+  }
+
+  @Patch(':id/partner')
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary:
+      'Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderPartner(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderPartnerDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderPartner(id, dto, user.sub);
   }
 
   @Post()

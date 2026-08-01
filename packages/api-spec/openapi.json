@@ -1216,6 +1216,53 @@
         ]
       }
     },
+    "/orders/{id}/partner": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderPartner",
+        "summary": "Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders/{orderId}/items/sync": {
       "put": {
         "operationId": "OrdersController_syncItems",
@@ -4198,6 +4245,24 @@
             "format": "int64",
             "example": 0
           },
+          "deliveryPartnerId": {
+            "type": "object",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
+          },
+          "deliveryPartnerTitle": {
+            "type": "object",
+            "example": "HungerStation",
+            "nullable": true,
+            "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
+          },
+          "deliveryExternalRef": {
+            "type": "object",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
+          },
           "documentId": {
             "type": "string",
             "description": "ZATCA root cbc:ID — the business invoice number",
@@ -4238,6 +4303,9 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "deliveryPartnerId",
+          "deliveryPartnerTitle",
+          "deliveryExternalRef",
           "documentId",
           "createdAt",
           "updatedAt",
@@ -4553,6 +4621,24 @@
             "format": "int64",
             "example": 0
           },
+          "deliveryPartnerId": {
+            "type": "object",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
+          },
+          "deliveryPartnerTitle": {
+            "type": "object",
+            "example": "HungerStation",
+            "nullable": true,
+            "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
+          },
+          "deliveryExternalRef": {
+            "type": "object",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
+          },
           "documentId": {
             "type": "string",
             "description": "ZATCA root cbc:ID — the business invoice number",
@@ -4625,6 +4711,9 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "deliveryPartnerId",
+          "deliveryPartnerTitle",
+          "deliveryExternalRef",
           "documentId",
           "isStandardInvoice",
           "createdAt",
@@ -4663,6 +4752,32 @@
         "required": [
           "baseUpdatedAt",
           "type"
+        ]
+      },
+      "UpdateOrderPartnerDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "deliveryPartnerId": {
+            "type": "object",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner."
+          },
+          "deliveryExternalRef": {
+            "type": "object",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent."
+          }
+        },
+        "required": [
+          "baseUpdatedAt"
         ]
       },
       "CreateOrderDto": {

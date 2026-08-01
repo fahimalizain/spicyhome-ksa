@@ -357,6 +357,23 @@ export interface paths {
     patch: operations['OrdersController_updateOrderMeta'];
     trace?: never;
   };
+  '/orders/{id}/partner': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) */
+    patch: operations['OrdersController_updateOrderPartner'];
+    trace?: never;
+  };
   '/orders/{orderId}/items/sync': {
     parameters: {
       query?: never;
@@ -1794,6 +1811,21 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+       * @example hungerstation
+       */
+      deliveryPartnerId: Record<string, never> | null;
+      /**
+       * @description Delivery partner title (joined from delivery_partners when a partner is set).
+       * @example HungerStation
+       */
+      deliveryPartnerTitle: Record<string, never> | null;
+      /**
+       * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
+       * @example HS-883129
+       */
+      deliveryExternalRef: Record<string, never> | null;
+      /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
        */
@@ -2028,6 +2060,21 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+       * @example hungerstation
+       */
+      deliveryPartnerId: Record<string, never> | null;
+      /**
+       * @description Delivery partner title (joined from delivery_partners when a partner is set).
+       * @example HungerStation
+       */
+      deliveryPartnerTitle: Record<string, never> | null;
+      /**
+       * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
+       * @example HS-883129
+       */
+      deliveryExternalRef: Record<string, never> | null;
+      /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
        */
@@ -2081,6 +2128,24 @@ export interface components {
        * @example 1
        */
       tableId?: number;
+    };
+    UpdateOrderPartnerDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @description Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner.
+       * @example hungerstation
+       */
+      deliveryPartnerId?: Record<string, never> | null;
+      /**
+       * @description Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent.
+       * @example HS-883129
+       */
+      deliveryExternalRef?: Record<string, never> | null;
     };
     CreateOrderDto: {
       /**
@@ -3488,6 +3553,32 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['UpdateOrderMetaDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderPartner: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderPartnerDto'];
       };
     };
     responses: {

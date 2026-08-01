@@ -47,6 +47,10 @@ export const AuditAction = {
   RECEIPT_PRINT_ENQUEUED: 'receipt_print_enqueued',
   RECEIPT_PRINT_SUCCEEDED: 'receipt_print_succeeded',
   TYPE_CHANGED: 'type_changed',
+  // Delivery partners (ADR 0007)
+  DELIVERY_PARTNER_CHANGED: 'delivery_partner_changed',
+  ITEM_PRICE_OVERRIDDEN: 'item_price_overridden', // Phase 7 (unit-price override)
+  ITEM_PRICE_RESET: 'item_price_reset',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

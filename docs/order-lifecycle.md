@@ -170,6 +170,21 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 | `refund_issued` | `POST /orders/:id/refund` | `{ refundId, documentId, methodId, methodTitle, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
 | `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                  |
 
+#### Delivery Partner & Price Reset Events (ADR 0007)
+
+| Type                       | Trigger                                                                                                                              | Payload                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `delivery_partner_changed` | `PATCH /orders/:id/partner` (set / change / clear / ref-only edit), and the partner-clear half of a `takeaway → dine_in` type change | `{ fromPartnerId, toPartnerId, fromPartnerTitle, toPartnerTitle, fromExternalRef, toExternalRef, resetItemCount }`          |
+| `item_price_reset`         | Clear-partner, and the price-reset half of a `takeaway → dine_in` type change (one event per changed line)                           | `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas, reason: 'partner_cleared' \| 'type_changed_to_dine_in' }` |
+
+> **ADR 0007**: `takeaway → dine_in` via `PATCH /orders/:id` additionally clears
+> `delivery_partner_id` / `delivery_external_ref` and resets every line price to
+> the live catalog (a dine-in order is always at menu prices). The existing
+> `type_changed` payload is unchanged; the partner clear and price resets are
+> recorded as their own events above. `dine_in → takeaway` sets no partner and
+> touches no prices. Lines whose `item_id` is NULL keep their current price
+> during a reset and get no `item_price_reset` event.
+
 > **`documentId` = ZATCA UBL root `cbc:ID`**: The `documentId` field on the
 > `created` and `refund_issued` events is the business Invoice ID / document
 > number that appears as the root `<cbc:ID>` in the signed ZATCA XML. See
@@ -455,6 +470,39 @@ is **dropped** (ADR 0006) — multiple lines per method are allowed; ZATCA
 - `paymentTotals` is an array of `{ methodId, methodTitle, totalHalalas }`, aggregated from `order_payments` via JOIN with `orders` filtered by `day_opening_id` and `status = 'paid'`. GROUP BY `methodId` only.
 - Expected cash = `openingCashHalalas + SUM(amountHalalas WHERE methodId = 'cash')` (not total sales).
 
+### Delivery Partners (ADR 0007)
+
+A delivery-app order (HungerStation, Keeta, …) is a **`takeaway` order that
+additionally carries a partner reference** — there is no third order type.
+
+- `orders.delivery_partner_id` (slug FK → `delivery_partners`) + `orders.delivery_external_ref`
+  (the app's order number) are both nullable and only meaningful on `takeaway`.
+- **`PATCH /orders/:id/partner`** (permission `update_order`, open orders only):
+
+  | Scenario                                  | Behavior                                                                                                            |
+  | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+  | Set partner                               | Type must be `takeaway` (`dine_in` → 400); partner must exist and be enabled (else 400). **Line prices untouched.** |
+  | Change partner                            | Slug swapped; **line prices untouched**; ref may be sent in the same call or edited separately.                     |
+  | Clear partner (`deliveryPartnerId: null`) | Resets every line's `unit_price_halalas` to the live catalog and recomputes totals; ref force-nulled.               |
+  | Ref-only edit                             | Allowed when a partner is already set; without a partner the ref is ignored/force-nulled (no-op).                   |
+  | Concurrency                               | `baseUpdatedAt` must equal `orders.updated_at`; stale → 409 `{ message, updatedAt }`.                               |
+
+  Writes `delivery_partner_changed` (+ `item_price_reset` per changed line with
+  `reason: 'partner_cleared'` on clear) and emits `order.updated`. Response is
+  the full order (`GET /orders/:id` shape).
+
+- **`PATCH /orders/:id` with `type: 'dine_in'`** (ADR 0004 extension): in the
+  same transaction it clears partner/ref, resets line prices to the live
+  catalog, and writes `delivery_partner_changed` (when a partner was set) +
+  `item_price_reset` (`reason: 'type_changed_to_dine_in'`) alongside the
+  unchanged `type_changed` event. `dine_in → takeaway` sets no partner and
+  touches no prices.
+- `OrderResponse` / order list/summary responses embed `deliveryPartnerId`,
+  `deliveryPartnerTitle` (joined when set) and `deliveryExternalRef`.
+- Per-line price overrides (`item_price_overridden`) land in Phase 7
+  (`PATCH /orders/:id/items/:itemId/unit-price`); the `item_price_reset`
+  events reference the same `unit_price_halalas` snapshot column.
+
 ## Endpoint Summary
 
 | Endpoint                           | Permission     |   POS SPA    | Android Tablet |
@@ -464,10 +512,12 @@ is **dropped** (ADR 0006) — multiple lines per method are allowed; ZATCA
 | `GET /orders/:id`                  | none           |     Yes      |      Yes       |
 | `GET /orders/:id/events`           | none           |     Yes      |       No       |
 | `GET /orders/:id/events/verify`    | none           |     Yes      |       No       |
-| `PUT /orders/:orderId/items/sync`  | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                       |
-| `POST /orders/:id/send-to-kitchen` | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006) |
-| `POST /orders/:id/payments`        | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                  |
-| `POST /orders/:id/submit`          | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                              |
+| `PUT /orders/:orderId/items/sync`  | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                                  |
+| `PATCH /orders/:id`                | `update_order` |   **Yes**    |     **No**     | Type/table change; `takeaway → dine_in` also clears partner and resets prices (ADR 0007) |
+| `PATCH /orders/:id/partner`        | `update_order` |   **Yes**    |     **No**     | Set/change/clear delivery partner + external ref (ADR 0007)                              |
+| `POST /orders/:id/send-to-kitchen` | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006)            |
+| `POST /orders/:id/payments`        | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                             |
+| `POST /orders/:id/submit`          | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                                         |
 | `POST /orders/:id/refund`          | `refund_order` |   **Yes**    |     **No**     |
 | `GET /orders/:id/refunds`          | none           |     Yes      |       No       |
 | `POST /orders/:id/void`            | `void_order`   |   **Yes**    |     **No**     |

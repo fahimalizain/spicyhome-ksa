@@ -24,6 +24,7 @@ export type UpdateDeliveryPartnerDto = Schemas['UpdateDeliveryPartnerDto'];
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
 export type UpdateOrderMetaDto = Schemas['UpdateOrderMetaDto'];
+export type UpdateOrderPartnerDto = Schemas['UpdateOrderPartnerDto'];
 
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
@@ -333,6 +334,14 @@ export class SpicyHomeClient {
 
     update: (orderId: number, dto: UpdateOrderMetaDto) =>
       request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}`, dto),
+
+    /**
+     * Set / change / clear the delivery partner + external ref on an open
+     * order (ADR 0007). `deliveryPartnerId: null` clears the partner and
+     * resets line prices to the live catalog.
+     */
+    updatePartner: (orderId: number, dto: UpdateOrderPartnerDto) =>
+      request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}/partner`, dto),
 
     /** Append ONE payment line to an open order (ADR 0006 — status stays open). */
     addPayment: (orderId: number, dto: AddOrderPaymentDto) =>
