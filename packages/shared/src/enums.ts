@@ -45,6 +45,7 @@ export const AuditAction = {
   KITCHEN_PRINT_SUCCEEDED: 'kitchen_print_succeeded',
   RECEIPT_PRINT_ENQUEUED: 'receipt_print_enqueued',
   RECEIPT_PRINT_SUCCEEDED: 'receipt_print_succeeded',
+  TYPE_CHANGED: 'type_changed',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

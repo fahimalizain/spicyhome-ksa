@@ -21,6 +21,7 @@ export type PaymentLineDto = Schemas['PaymentLineDto'];
 
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
+export type UpdateOrderMetaDto = Schemas['UpdateOrderMetaDto'];
 
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
@@ -318,6 +319,9 @@ export class SpicyHomeClient {
 
     syncItems: (orderId: number, dto: SyncOrderItemsDto) =>
       request<OrderResponse>(this.config, 'PUT', `/orders/${orderId}/items/sync`, dto),
+
+    update: (orderId: number, dto: UpdateOrderMetaDto) =>
+      request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}`, dto),
 
     pay: (orderId: number, dto: PayOrderDto) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/pay`, dto),
