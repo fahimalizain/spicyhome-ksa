@@ -51,7 +51,9 @@ function extractSqlite(db: BetterSQLite3Database<typeof schema>): Database.Datab
         Logger.log(`Database path: ${dbPath}`, DatabaseModule.name);
         const sqlite = new Database(dbPath);
         sqlite.pragma('journal_mode = WAL');
+        sqlite.pragma('synchronous = NORMAL');
         sqlite.pragma('foreign_keys = ON');
+        sqlite.pragma('busy_timeout = 5000');
         return drizzle(sqlite, { schema });
       },
     },

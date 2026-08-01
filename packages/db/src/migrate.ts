@@ -90,7 +90,9 @@ if (require.main === module) {
 
     const sqlite = new Database(dbPath);
     sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('synchronous = NORMAL');
     sqlite.pragma('foreign_keys = ON');
+    sqlite.pragma('busy_timeout = 5000');
 
     applyMigrations(sqlite, migrationsDir);
 
