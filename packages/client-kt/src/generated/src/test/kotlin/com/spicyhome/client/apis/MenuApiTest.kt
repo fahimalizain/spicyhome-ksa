@@ -22,9 +22,12 @@ import com.spicyhome.client.apis.MenuApi
 import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.CreateCategoryDto
 import com.spicyhome.client.models.CreateItemDto
+import com.spicyhome.client.models.CreateSubcategoryDto
 import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.SubcategoryResponse
 import com.spicyhome.client.models.UpdateCategoryDto
 import com.spicyhome.client.models.UpdateItemDto
+import com.spicyhome.client.models.UpdateSubcategoryDto
 
 class MenuApiTest : ShouldSpec() {
     init {
@@ -47,6 +50,14 @@ class MenuApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test menuControllerCreateSubcategory
+        should("test menuControllerCreateSubcategory") {
+            // uncomment below to test menuControllerCreateSubcategory
+            //val createSubcategoryDto : CreateSubcategoryDto =  // CreateSubcategoryDto | 
+            //val result : SubcategoryResponse = apiInstance.menuControllerCreateSubcategory(createSubcategoryDto)
+            //result shouldBe ("TODO")
+        }
+
         // to test menuControllerGetCategory
         should("test menuControllerGetCategory") {
             // uncomment below to test menuControllerGetCategory
@@ -63,6 +74,14 @@ class MenuApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test menuControllerGetSubcategory
+        should("test menuControllerGetSubcategory") {
+            // uncomment below to test menuControllerGetSubcategory
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : SubcategoryResponse = apiInstance.menuControllerGetSubcategory(id)
+            //result shouldBe ("TODO")
+        }
+
         // to test menuControllerListCategories
         should("test menuControllerListCategories") {
             // uncomment below to test menuControllerListCategories
@@ -74,7 +93,16 @@ class MenuApiTest : ShouldSpec() {
         should("test menuControllerListItems") {
             // uncomment below to test menuControllerListItems
             //val categoryId : kotlin.String = categoryId_example // kotlin.String | 
-            //val result : kotlin.collections.List<ItemResponse> = apiInstance.menuControllerListItems(categoryId)
+            //val subcategoryId : kotlin.String = subcategoryId_example // kotlin.String | 
+            //val result : kotlin.collections.List<ItemResponse> = apiInstance.menuControllerListItems(categoryId, subcategoryId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test menuControllerListSubcategories
+        should("test menuControllerListSubcategories") {
+            // uncomment below to test menuControllerListSubcategories
+            //val categoryId : kotlin.String = categoryId_example // kotlin.String | 
+            //val result : kotlin.collections.List<SubcategoryResponse> = apiInstance.menuControllerListSubcategories(categoryId)
             //result shouldBe ("TODO")
         }
 
@@ -93,6 +121,15 @@ class MenuApiTest : ShouldSpec() {
             //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateItemDto : UpdateItemDto =  // UpdateItemDto | 
             //val result : ItemResponse = apiInstance.menuControllerUpdateItem(id, updateItemDto)
+            //result shouldBe ("TODO")
+        }
+
+        // to test menuControllerUpdateSubcategory
+        should("test menuControllerUpdateSubcategory") {
+            // uncomment below to test menuControllerUpdateSubcategory
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val updateSubcategoryDto : UpdateSubcategoryDto =  // UpdateSubcategoryDto | 
+            //val result : SubcategoryResponse = apiInstance.menuControllerUpdateSubcategory(id, updateSubcategoryDto)
             //result shouldBe ("TODO")
         }
 

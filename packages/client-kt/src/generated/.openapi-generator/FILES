@@ -16,6 +16,7 @@ docs/CreatePaymentMethodDto.md
 docs/CreatePrinterDto.md
 docs/CreateRefundDto.md
 docs/CreateRoleDto.md
+docs/CreateSubcategoryDto.md
 docs/CreateTableDto.md
 docs/CreateUserDto.md
 docs/CurrentDayResponse.md
@@ -54,6 +55,7 @@ docs/SetSettingDto.md
 docs/SettingResponse.md
 docs/SettingsApi.md
 docs/StatusResponse.md
+docs/SubcategoryResponse.md
 docs/SubmitOrderDto.md
 docs/SuccessResponse.md
 docs/SyncOrderItemDto.md
@@ -69,6 +71,7 @@ docs/UpdateOrderPartnerDto.md
 docs/UpdatePaymentMethodDto.md
 docs/UpdatePrinterDto.md
 docs/UpdateRoleDto.md
+docs/UpdateSubcategoryDto.md
 docs/UpdateTableDto.md
 docs/UpdateUserDto.md
 docs/UserOptionResponse.md
@@ -126,6 +129,7 @@ src/main/kotlin/com/spicyhome/client/models/CreatePaymentMethodDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateRefundDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateRoleDto.kt
+src/main/kotlin/com/spicyhome/client/models/CreateSubcategoryDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateTableDto.kt
 src/main/kotlin/com/spicyhome/client/models/CreateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/CurrentDayResponse.kt
@@ -156,6 +160,7 @@ src/main/kotlin/com/spicyhome/client/models/RoleResponse.kt
 src/main/kotlin/com/spicyhome/client/models/SetSettingDto.kt
 src/main/kotlin/com/spicyhome/client/models/SettingResponse.kt
 src/main/kotlin/com/spicyhome/client/models/StatusResponse.kt
+src/main/kotlin/com/spicyhome/client/models/SubcategoryResponse.kt
 src/main/kotlin/com/spicyhome/client/models/SubmitOrderDto.kt
 src/main/kotlin/com/spicyhome/client/models/SuccessResponse.kt
 src/main/kotlin/com/spicyhome/client/models/SyncOrderItemDto.kt
@@ -170,6 +175,7 @@ src/main/kotlin/com/spicyhome/client/models/UpdateOrderPartnerDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdatePaymentMethodDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdatePrinterDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateRoleDto.kt
+src/main/kotlin/com/spicyhome/client/models/UpdateSubcategoryDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateTableDto.kt
 src/main/kotlin/com/spicyhome/client/models/UpdateUserDto.kt
 src/main/kotlin/com/spicyhome/client/models/UserOptionResponse.kt
@@ -208,6 +214,7 @@ src/test/kotlin/com/spicyhome/client/models/CreatePaymentMethodDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CreatePrinterDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CreateRefundDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CreateRoleDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/CreateSubcategoryDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CreateTableDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CreateUserDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/CurrentDayResponseTest.kt
@@ -238,6 +245,7 @@ src/test/kotlin/com/spicyhome/client/models/RoleResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/SetSettingDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/SettingResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/StatusResponseTest.kt
+src/test/kotlin/com/spicyhome/client/models/SubcategoryResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/SubmitOrderDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/SuccessResponseTest.kt
 src/test/kotlin/com/spicyhome/client/models/SyncOrderItemDtoTest.kt
@@ -252,6 +260,7 @@ src/test/kotlin/com/spicyhome/client/models/UpdateOrderPartnerDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdatePaymentMethodDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdatePrinterDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateRoleDtoTest.kt
+src/test/kotlin/com/spicyhome/client/models/UpdateSubcategoryDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateTableDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UpdateUserDtoTest.kt
 src/test/kotlin/com/spicyhome/client/models/UserOptionResponseTest.kt

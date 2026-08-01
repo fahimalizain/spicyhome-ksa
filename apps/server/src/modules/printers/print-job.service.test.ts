@@ -283,8 +283,12 @@ describe('PrintJobService', () => {
         VALUES (101, 'Test Category', 0, 1, ${now}, ${now})
       `);
       sqlite.exec(`
-        INSERT INTO items (id, category_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
-        VALUES (101, 101, 'Burger', '${'برجر طازج'}', 11500, 1500, 0, 1, ${now}, ${now})
+        INSERT INTO item_subcategories (id, category_id, name, sort_order, is_active, created_at, updated_at)
+        VALUES (101, 101, 'Test Subcategory', 0, 1, ${now}, ${now})
+      `);
+      sqlite.exec(`
+        INSERT INTO items (id, category_id, subcategory_id, name, name_ar, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+        VALUES (101, 101, 101, 'Burger', '${'برجر طازج'}', 11500, 1500, 0, 1, ${now}, ${now})
       `);
       sqlite.exec(`
         UPDATE order_items SET item_id = 101, item_name_ar = NULL WHERE order_id = ${orderId}

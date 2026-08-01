@@ -9,6 +9,8 @@ export type CreateRoleDto = Schemas['CreateRoleDto'];
 export type UpdateRoleDto = Schemas['UpdateRoleDto'];
 export type CreateCategoryDto = Schemas['CreateCategoryDto'];
 export type UpdateCategoryDto = Schemas['UpdateCategoryDto'];
+export type CreateSubcategoryDto = Schemas['CreateSubcategoryDto'];
+export type UpdateSubcategoryDto = Schemas['UpdateSubcategoryDto'];
 export type CreateItemDto = Schemas['CreateItemDto'];
 export type UpdateItemDto = Schemas['UpdateItemDto'];
 export type CreateTableDto = Schemas['CreateTableDto'];
@@ -44,6 +46,7 @@ export type UserOptionResponse = Schemas['UserOptionResponse'];
 export type UsernamesResponse = Schemas['UsernamesResponse'];
 export type RoleResponse = Schemas['RoleResponse'];
 export type CategoryResponse = Schemas['CategoryResponse'];
+export type SubcategoryResponse = Schemas['SubcategoryResponse'];
 export type ItemResponse = Schemas['ItemResponse'];
 export type OrderResponse = Schemas['OrderResponse'];
 export type OrderSummaryResponse = Schemas['OrderSummaryResponse'];
@@ -307,9 +310,24 @@ export class SpicyHomeClient {
     updateCategory: (id: number, dto: UpdateCategoryDto) =>
       request<CategoryResponse>(this.config, 'PUT', `/menu/categories/${id}`, dto),
 
-    listItems: (categoryId?: number) =>
+    listSubcategories: (categoryId?: number) =>
+      request<SubcategoryResponse[]>(this.config, 'GET', '/menu/subcategories', undefined, {
+        categoryId: categoryId?.toString(),
+      }),
+
+    getSubcategory: (id: number) =>
+      request<SubcategoryResponse>(this.config, 'GET', `/menu/subcategories/${id}`),
+
+    createSubcategory: (dto: CreateSubcategoryDto) =>
+      request<SubcategoryResponse>(this.config, 'POST', '/menu/subcategories', dto),
+
+    updateSubcategory: (id: number, dto: UpdateSubcategoryDto) =>
+      request<SubcategoryResponse>(this.config, 'PUT', `/menu/subcategories/${id}`, dto),
+
+    listItems: (categoryId?: number, subcategoryId?: number) =>
       request<ItemResponse[]>(this.config, 'GET', '/menu/items', undefined, {
         categoryId: categoryId?.toString(),
+        subcategoryId: subcategoryId?.toString(),
       }),
 
     getItem: (id: number) => request<ItemResponse>(this.config, 'GET', `/menu/items/${id}`),

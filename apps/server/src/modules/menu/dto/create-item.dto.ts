@@ -5,7 +5,17 @@ import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 export class CreateItemDto {
   @ApiProperty({ ...ApiInt64, example: 1 })
   @IsInt()
-  categoryId!: number;
+  subcategoryId!: number;
+
+  @ApiPropertyOptional({
+    ...ApiInt64,
+    example: 1,
+    description:
+      "Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts.",
+  })
+  @IsOptional()
+  @IsInt()
+  categoryId?: number;
 
   @ApiProperty({ example: 'Zinger Burger' })
   @IsString()
@@ -48,6 +58,14 @@ export class CreateItemDto {
 }
 
 export class UpdateItemDto {
+  @ApiPropertyOptional({
+    ...ApiInt64,
+    description: "When provided, categoryId is derived from the subcategory's parent.",
+  })
+  @IsOptional()
+  @IsInt()
+  subcategoryId?: number;
+
   @ApiPropertyOptional({ ...ApiInt64 })
   @IsOptional()
   @IsInt()

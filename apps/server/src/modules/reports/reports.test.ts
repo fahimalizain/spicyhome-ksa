@@ -73,9 +73,21 @@ describe('ReportsService', () => {
         created_by INTEGER REFERENCES users(id),
         updated_by INTEGER REFERENCES users(id)
       );
+      CREATE TABLE IF NOT EXISTS item_subcategories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER NOT NULL REFERENCES item_categories(id),
+        name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id)
+      );
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER NOT NULL,
+        subcategory_id INTEGER REFERENCES item_subcategories(id),
         name TEXT NOT NULL,
         price_halalas INTEGER NOT NULL,
         vat_rate_bp INTEGER NOT NULL DEFAULT 1500,
@@ -199,8 +211,10 @@ describe('ReportsService', () => {
       VALUES (1, 'admin', 'x', 'Admin', 1, ${now}, ${now});
       INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
       VALUES (1, 'Burgers', 0, 1, ${now}, ${now});
-      INSERT INTO items (id, category_id, name, price_halalas, vat_rate_bp, is_active, created_at, updated_at)
-      VALUES (1, 1, 'Zinger', 2300, 1500, 1, ${now}, ${now});
+      INSERT INTO item_subcategories (id, category_id, name, sort_order, is_active, created_at, updated_at)
+      VALUES (1, 1, 'Chicken', 0, 1, ${now}, ${now});
+      INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, is_active, created_at, updated_at)
+      VALUES (1, 1, 1, 'Zinger', 2300, 1500, 1, ${now}, ${now});
     `);
 
     db = drizzle(sqlite, { schema });
@@ -321,8 +335,8 @@ describe('ReportsService', () => {
 
       // Create a temp item, use it, then delete it (simulating deleted item)
       sqlite.exec(`
-        INSERT INTO items (id, category_id, name, price_halalas, vat_rate_bp, is_active, created_at, updated_at)
-        VALUES (2, 1, 'Temp Item', 2300, 1500, 1, ${now}, ${now});
+        INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, is_active, created_at, updated_at)
+        VALUES (2, 1, 1, 'Temp Item', 2300, 1500, 1, ${now}, ${now});
         INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, total_halalas, created_at, updated_at)
         VALUES (1, 1, 'a', 'dine_in', ${day.id}, 'paid', 2300, ${now}, ${now});
         INSERT INTO order_items (id, order_id, item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)

@@ -531,13 +531,177 @@
         ]
       }
     },
-    "/menu/items": {
+    "/menu/subcategories": {
       "get": {
-        "operationId": "MenuController_listItems",
-        "summary": "List all items, optionally filtered by category",
+        "operationId": "MenuController_listSubcategories",
+        "summary": "List all sub-categories, optionally filtered by category",
         "parameters": [
           {
             "name": "categoryId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sub-categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubcategoryResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "MenuController_createSubcategory",
+        "summary": "Create a sub-category",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubcategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created sub-category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubcategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/subcategories/{id}": {
+      "get": {
+        "operationId": "MenuController_getSubcategory",
+        "summary": "Get sub-category by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sub-category details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubcategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "MenuController_updateSubcategory",
+        "summary": "Update a sub-category",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubcategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated sub-category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubcategoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "menu"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/menu/items": {
+      "get": {
+        "operationId": "MenuController_listItems",
+        "summary": "List all items, optionally filtered by category or sub-category",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subcategoryId",
             "required": true,
             "in": "query",
             "schema": {
@@ -3779,6 +3943,116 @@
           }
         }
       },
+      "SubcategoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Non Veg"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "categoryId",
+          "name",
+          "sortOrder",
+          "isActive",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateSubcategoryDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "Parent category ID"
+          },
+          "name": {
+            "type": "string",
+            "example": "Non Veg"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "categoryId",
+          "name"
+        ]
+      },
+      "UpdateSubcategoryDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Parent category ID"
+          },
+          "name": {
+            "type": "string",
+            "example": "Non Veg"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
       "ItemResponse": {
         "type": "object",
         "properties": {
@@ -3788,6 +4062,12 @@
             "example": 1
           },
           "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "Parent category (denormalized from subcategory)"
+          },
+          "subcategoryId": {
             "type": "integer",
             "format": "int64",
             "example": 1
@@ -3848,6 +4128,7 @@
         "required": [
           "id",
           "categoryId",
+          "subcategoryId",
           "name",
           "nameAr",
           "priceHalalas",
@@ -3863,10 +4144,16 @@
       "CreateItemDto": {
         "type": "object",
         "properties": {
-          "categoryId": {
+          "subcategoryId": {
             "type": "integer",
             "format": "int64",
             "example": 1
+          },
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts."
           },
           "name": {
             "type": "string",
@@ -3899,7 +4186,7 @@
           }
         },
         "required": [
-          "categoryId",
+          "subcategoryId",
           "name",
           "priceHalalas"
         ]
@@ -3907,6 +4194,11 @@
       "UpdateItemDto": {
         "type": "object",
         "properties": {
+          "subcategoryId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When provided, categoryId is derived from the subcategory's parent."
+          },
           "categoryId": {
             "type": "integer",
             "format": "int64"

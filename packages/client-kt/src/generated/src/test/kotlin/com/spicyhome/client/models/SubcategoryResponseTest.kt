@@ -18,12 +18,12 @@ package com.spicyhome.client.models
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
-import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.SubcategoryResponse
 
-class ItemResponseTest : ShouldSpec() {
+class SubcategoryResponseTest : ShouldSpec() {
     init {
-        // uncomment below to create an instance of ItemResponse
-        //val modelInstance = ItemResponse()
+        // uncomment below to create an instance of SubcategoryResponse
+        //val modelInstance = SubcategoryResponse()
 
         // to test the property `id`
         should("test id") {
@@ -31,40 +31,16 @@ class ItemResponseTest : ShouldSpec() {
             //modelInstance.id shouldBe ("TODO")
         }
 
-        // to test the property `categoryId` - Parent category (denormalized from subcategory)
+        // to test the property `categoryId`
         should("test categoryId") {
             // uncomment below to test the property
             //modelInstance.categoryId shouldBe ("TODO")
-        }
-
-        // to test the property `subcategoryId`
-        should("test subcategoryId") {
-            // uncomment below to test the property
-            //modelInstance.subcategoryId shouldBe ("TODO")
         }
 
         // to test the property `name`
         should("test name") {
             // uncomment below to test the property
             //modelInstance.name shouldBe ("TODO")
-        }
-
-        // to test the property `nameAr`
-        should("test nameAr") {
-            // uncomment below to test the property
-            //modelInstance.nameAr shouldBe ("TODO")
-        }
-
-        // to test the property `priceHalalas` - VAT-inclusive price in halalas
-        should("test priceHalalas") {
-            // uncomment below to test the property
-            //modelInstance.priceHalalas shouldBe ("TODO")
-        }
-
-        // to test the property `vatRateBp` - VAT rate in basis points
-        should("test vatRateBp") {
-            // uncomment below to test the property
-            //modelInstance.vatRateBp shouldBe ("TODO")
         }
 
         // to test the property `sortOrder`

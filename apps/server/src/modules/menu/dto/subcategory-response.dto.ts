@@ -1,31 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiInt64, ApiInt32 } from '../../../common/api-property-helpers';
 
-export class ItemResponse {
+export class SubcategoryResponse {
   @ApiProperty({ ...ApiInt64, example: 1 })
   id!: number;
 
-  @ApiProperty({
-    ...ApiInt64,
-    example: 1,
-    description: 'Parent category (denormalized from subcategory)',
-  })
+  @ApiProperty({ ...ApiInt64, example: 1 })
   categoryId!: number;
 
-  @ApiProperty({ ...ApiInt64, example: 1 })
-  subcategoryId!: number;
-
-  @ApiProperty({ example: 'Zinger Burger' })
+  @ApiProperty({ example: 'Non Veg' })
   name!: string;
-
-  @ApiProperty({ type: String, example: 'زنجر برجر', nullable: true })
-  nameAr!: string | null;
-
-  @ApiProperty({ ...ApiInt64, example: 2300, description: 'VAT-inclusive price in halalas' })
-  priceHalalas!: number;
-
-  @ApiProperty({ ...ApiInt32, example: 1500, description: 'VAT rate in basis points' })
-  vatRateBp!: number;
 
   @ApiProperty({ ...ApiInt32, example: 0 })
   sortOrder!: number;

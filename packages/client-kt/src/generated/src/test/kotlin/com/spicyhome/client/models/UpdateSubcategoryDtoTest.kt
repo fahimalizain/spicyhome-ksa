@@ -18,20 +18,14 @@ package com.spicyhome.client.models
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
-import com.spicyhome.client.models.UpdateItemDto
+import com.spicyhome.client.models.UpdateSubcategoryDto
 
-class UpdateItemDtoTest : ShouldSpec() {
+class UpdateSubcategoryDtoTest : ShouldSpec() {
     init {
-        // uncomment below to create an instance of UpdateItemDto
-        //val modelInstance = UpdateItemDto()
+        // uncomment below to create an instance of UpdateSubcategoryDto
+        //val modelInstance = UpdateSubcategoryDto()
 
-        // to test the property `subcategoryId` - When provided, categoryId is derived from the subcategory's parent.
-        should("test subcategoryId") {
-            // uncomment below to test the property
-            //modelInstance.subcategoryId shouldBe ("TODO")
-        }
-
-        // to test the property `categoryId`
+        // to test the property `categoryId` - Parent category ID
         should("test categoryId") {
             // uncomment below to test the property
             //modelInstance.categoryId shouldBe ("TODO")
@@ -41,24 +35,6 @@ class UpdateItemDtoTest : ShouldSpec() {
         should("test name") {
             // uncomment below to test the property
             //modelInstance.name shouldBe ("TODO")
-        }
-
-        // to test the property `nameAr`
-        should("test nameAr") {
-            // uncomment below to test the property
-            //modelInstance.nameAr shouldBe ("TODO")
-        }
-
-        // to test the property `priceHalalas`
-        should("test priceHalalas") {
-            // uncomment below to test the property
-            //modelInstance.priceHalalas shouldBe ("TODO")
-        }
-
-        // to test the property `vatRateBp`
-        should("test vatRateBp") {
-            // uncomment below to test the property
-            //modelInstance.vatRateBp shouldBe ("TODO")
         }
 
         // to test the property `sortOrder`

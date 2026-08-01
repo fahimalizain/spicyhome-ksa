@@ -40,6 +40,7 @@ beforeAll(async () => {
   // Replace seeded data with test-specific data
   sqlite.exec(`
     DELETE FROM items;
+    DELETE FROM item_subcategories;
     DELETE FROM item_categories;
     DELETE FROM tables;
 
@@ -49,8 +50,11 @@ beforeAll(async () => {
     INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
     VALUES (1, 'Burgers', 0, 1, ${now}, ${now});
 
-    INSERT INTO items (id, category_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
-    VALUES (1, 1, 'Zinger Burger', 2300, 1500, 0, 1, ${now}, ${now});
+    INSERT INTO item_subcategories (id, category_id, name, sort_order, is_active, created_at, updated_at)
+    VALUES (1, 1, 'Chicken', 0, 1, ${now}, ${now});
+
+    INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+    VALUES (1, 1, 1, 'Zinger Burger', 2300, 1500, 0, 1, ${now}, ${now});
   `);
 
   const loginRes = await request(app.getHttpServer())
