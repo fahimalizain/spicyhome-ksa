@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import {
+  amountPrefillFromOutstanding,
   applyNumpadKey,
   buildAddPaymentDraft,
   calcCashChange,
@@ -91,9 +92,8 @@ export function AddPaymentModal({
       // ADR 0007: restrict the visible methods for delivery partner orders.
       const visible = filterMethodsForOrder(res, deliveryPartnerId);
       setMethods(visible);
-      // Preselect the first visible method for fast cashier flow; for a
-      // partner order this is the sole partner method.
-      if (visible.length > 0) setSelectedMethodId(visible[0].id);
+      // No auto-select: the cashier picks a method explicitly, even when only
+      // one method is visible (ADR 0007 partner orders still require one tap).
     } catch {
       setError('Failed to load payment methods');
     } finally {
@@ -139,6 +139,20 @@ export function AddPaymentModal({
   function handleSign(next: 1 | -1) {
     setSign(next);
     if (next === -1) setTenderedInput(''); // negative lines carry no tendered
+  }
+
+  /**
+   * Pick a payment method: select it and prefill the amount from the order's
+   * outstanding balance (sign-aware). Switching methods re-applies the prefill
+   * and clears cash tendered, which never carries over between methods.
+   */
+  function handleMethodSelect(m: PaymentMethod) {
+    const prefill = amountPrefillFromOutstanding(outstandingHalalas);
+    setSelectedMethodId(m.id);
+    setAmountInput(prefill.amountInput);
+    setSign(prefill.sign);
+    setTenderedInput('');
+    setNumpadTarget('amount');
   }
 
   async function handleConfirm() {
@@ -198,7 +212,7 @@ export function AddPaymentModal({
             <button
               key={m.id}
               type="button"
-              onClick={() => setSelectedMethodId(m.id)}
+              onClick={() => handleMethodSelect(m)}
               className={`touch-target flex flex-col items-center py-3 px-2 rounded-lg text-sm border-2 ${
                 selectedMethodId === m.id
                   ? 'border-brand-500 bg-brand-600/20 text-white'
