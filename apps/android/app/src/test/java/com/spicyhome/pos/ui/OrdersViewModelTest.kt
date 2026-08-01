@@ -157,6 +157,8 @@ class OrdersViewModelTest {
             updatedAt = 1700000000L,
             createdBy = 1L,
             updatedBy = 1L,
+            kitchenPrintedQty = 0L,
+            itemQtyTotal = 0L,
         )
     }
 

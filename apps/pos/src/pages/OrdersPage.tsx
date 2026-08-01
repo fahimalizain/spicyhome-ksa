@@ -296,12 +296,25 @@ export function OrdersPage() {
                       {halalasToSar(order.totalHalalas)} SAR
                     </span>
                   </div>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                    <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
-                    {order.tableId != null && (
-                      <span>Table #{order.tableId as unknown as number}</span>
-                    )}
-                    <span>
+                  <div className="flex items-center justify-between gap-3 mt-1 text-xs text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 min-w-0">
+                      <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
+                      {order.tableId != null && (
+                        <span>Table #{order.tableId as unknown as number}</span>
+                      )}
+                      {order.status === 'open' && (
+                        <span
+                          className={
+                            order.kitchenPrintedQty !== order.itemQtyTotal
+                              ? 'text-amber-400 font-semibold'
+                              : undefined
+                          }
+                        >
+                          Kitchen Qty Printed: {order.kitchenPrintedQty} / {order.itemQtyTotal}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 ml-auto">
                       {new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}
                     </span>
                   </div>

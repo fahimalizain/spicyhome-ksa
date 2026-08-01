@@ -1900,6 +1900,18 @@ export interface components {
        * @example 1
        */
       updatedBy: number | null;
+      /**
+       * Format: int64
+       * @description Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).
+       * @example 3
+       */
+      kitchenPrintedQty: number;
+      /**
+       * Format: int64
+       * @description Sum of current order line quantities for this order.
+       * @example 5
+       */
+      itemQtyTotal: number;
     };
     ZatcaBuyerDetailsDto: {
       /** @example Abdullah Al-Otaibi Est. */
