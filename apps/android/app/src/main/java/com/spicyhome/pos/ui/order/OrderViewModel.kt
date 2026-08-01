@@ -94,6 +94,8 @@ data class OrderUiState(
     val cart: List<CartItem> = emptyList(),
     val orderType: OrderType = OrderType.DINE_IN,
     val selectedTableId: Long? = null,
+    /** Order-level notes ("Order notes"). Pre-create: staged locally, sent on create. Open order: hydrated from the server, PATCHed via updateOrderMeta. */
+    val orderNotes: String = "",
     val currentOrderId: Long? = null,
     val currentOrder: OrderResponse? = null,
     val isLoading: Boolean = false,
@@ -470,12 +472,87 @@ class OrderViewModel(
         }
     }
 
+    /**
+     * Update the order-level notes ("Order notes").
+     *
+     * Pre-create: staged locally and sent with the create DTO (no server
+     * call). Open order: immediate PATCH /orders/:id meta with the current
+     * type/table + notes + serverUpdatedAt — a notes-only change NEVER
+     * kitchen-prints (server rule). 409 (stale) refetches + hydrates, same
+     * conflict UX as item sync.
+     */
+    fun updateOrderNotes(notes: String) {
+        val state = _uiState.value
+        val orderId = state.currentOrderId
+
+        // Pre-create: local staging only
+        if (orderId == null) {
+            _uiState.value = state.copy(orderNotes = notes)
+            return
+        }
+
+        val serverUpdatedAt = state.serverUpdatedAt ?: return
+        if (notes.trim() == (state.currentOrder?.notes ?: "").trim()) return // no-op
+
+        _uiState.value = state.copy(isSyncing = true, error = null)
+
+        viewModelScope.launch {
+            try {
+                val response = withContext(ioDispatcher) {
+                    orderRepo!!.updateOrderMeta(
+                        orderId = orderId,
+                        baseUpdatedAt = serverUpdatedAt,
+                        type = state.orderType.value,
+                        tableId = state.selectedTableId,
+                        notes = notes.trim().ifBlank { null },
+                    ).execute()
+                }
+                if (response.isSuccessful) {
+                    hydrateFromOrder(response.body()!!)
+                    _uiState.value = _uiState.value.copy(isSyncing = false)
+                } else if (response.code() == 409) {
+                    // Conflict: refetch and reset
+                    val order = refetchOrder()
+                    if (order != null) {
+                        hydrateFromOrder(order)
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Order was modified elsewhere. Your local changes have been reset.",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Failed to save order notes (${response.code()})",
+                    )
+                }
+            } catch (e: Exception) {
+                if (e.message?.contains("409") == true) {
+                    val order = refetchOrder()
+                    if (order != null) {
+                        hydrateFromOrder(order)
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = "Order was modified elsewhere. Your local changes have been reset.",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isSyncing = false,
+                        error = e.message ?: "Failed to save order notes",
+                    )
+                }
+            }
+        }
+    }
+
     fun clearCart() {
         _uiState.value = _uiState.value.copy(
             cart = mutableListOf(),
             isDirty = null,
             snapshotCart = null,
             serverUpdatedAt = null,
+            orderNotes = "",
         )
     }
 
@@ -508,6 +585,7 @@ class OrderViewModel(
                     orderRepo!!.createOrder(
                         type = state.orderType.value,
                         tableId = state.selectedTableId,
+                        notes = state.orderNotes.trim().ifBlank { null },
                     ).execute()
                 }
 
@@ -721,6 +799,7 @@ class OrderViewModel(
             currentOrder = order,
             orderType = if (order.type == "dine_in") OrderType.DINE_IN else OrderType.TAKEAWAY,
             selectedTableId = order.tableId,
+            orderNotes = order.notes ?: "",
             screenState = if (order.status == "open") OrderScreenState.EDITING_ORDER else OrderScreenState.ORDER_TERMINAL,
             isDirty = false,
             serverUpdatedAt = order.updatedAt?.toLong(),

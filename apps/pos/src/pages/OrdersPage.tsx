@@ -191,6 +191,12 @@ export function OrdersPage() {
               <p>{selectedOrder.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</p>
               <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
             </div>
+            {selectedOrder.notes && (
+              <p className="text-xs text-gray-400 mt-1">
+                <span className="text-gray-500">Notes:</span>{' '}
+                {selectedOrder.notes as unknown as string}
+              </p>
+            )}
             {previousDocumentIds.length > 0 && (
               <p className="text-xs text-gray-500 mt-1">
                 Previous: {previousDocumentIds.join(', ')}

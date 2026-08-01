@@ -439,6 +439,7 @@ export class PrintJobService {
       tableName,
       deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
       deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+      orderNotes: order.notes,
       items: ticketItems,
     });
 
@@ -506,6 +507,7 @@ export class PrintJobService {
       tableName,
       deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
       deliveryExternalRef: order.deliveryExternalRef ?? undefined,
+      orderNotes: order.notes,
       items: ticketItems,
     });
 

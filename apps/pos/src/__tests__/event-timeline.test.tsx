@@ -498,6 +498,39 @@ describe('OrderEventTimeline', () => {
     expect(screen.getByText('Kitchen Print Queued. Printer: Kitchen')).toBeInTheDocument();
   });
 
+  it('renders notes_changed label with from/to payload (— for null)', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'notes_changed',
+        payload: JSON.stringify({ fromNotes: null, toNotes: 'Call on arrival' }),
+      }),
+      makeEvent({
+        id: 2,
+        eventIdx: 2,
+        type: 'notes_changed',
+        payload: JSON.stringify({ fromNotes: 'Call on arrival', toNotes: null }),
+      }),
+      makeEvent({
+        id: 3,
+        eventIdx: 3,
+        type: 'notes_changed',
+        payload: JSON.stringify({ fromNotes: 'old', toNotes: 'new notes' }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Order Notes Changed')).toHaveLength(3);
+    expect(screen.getByText('Order Notes Changed. — → Call on arrival')).toBeInTheDocument();
+    expect(screen.getByText('Order Notes Changed. Call on arrival → —')).toBeInTheDocument();
+    expect(screen.getByText('Order Notes Changed. old → new notes')).toBeInTheDocument();
+  });
+
   it('renders delivery_partner_changed with titles, refs and reset count', async () => {
     mockGetEvents.mockResolvedValue([
       makeEvent({

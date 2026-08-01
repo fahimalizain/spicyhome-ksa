@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -21,12 +23,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -470,6 +475,8 @@ private fun OrderEditingPanel(
             onIncrease = { index, _ -> viewModel.increaseQty(index) },
             onRemove = { index, _ -> viewModel.removeFromCart(index) },
             onUpdateNotes = { index, _, notes -> viewModel.updateItemNotes(index, notes) },
+            onUpdateOrderNotes = { viewModel.updateOrderNotes(it) },
+            canEditOrderNotes = !isOpenOrder || state.permissions.updateOrder,
             onNewOrder = { guardedNavigate { viewModel.newOrder() } },
             onSendToKitchen = { viewModel.sendToKitchen() },
             onDiscard = { viewModel.discardChanges() },
@@ -577,11 +584,19 @@ private fun UnifiedCartPanel(
     onIncrease: (Int, CartItem) -> Unit,
     onRemove: (Int, CartItem) -> Unit,
     onUpdateNotes: (Int, CartItem, String) -> Unit,
+    onUpdateOrderNotes: (String) -> Unit,
+    canEditOrderNotes: Boolean,
     onNewOrder: () -> Unit,
     onSendToKitchen: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Order-notes draft: committed on keyboard Done / focus loss — never per
+    // keystroke, so an open order is not PATCHed on every character.
+    var orderNotesDraft by remember(state.orderNotes) { mutableStateOf(state.orderNotes) }
+    var orderNotesHadFocus by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
     Column(
         modifier = modifier
             .background(DarkSurface)
@@ -606,6 +621,41 @@ private fun UnifiedCartPanel(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Order-level notes ("Order notes"). Pre-create: staged locally, sent
+        // with create. Open order: committed PATCH (notes-only → no kitchen
+        // auto-print). Gated by updateOrder when open+synced.
+        OutlinedTextField(
+            value = orderNotesDraft,
+            onValueChange = { orderNotesDraft = it },
+            enabled = canEditOrderNotes && !state.isSyncing && !state.isLoading,
+            singleLine = true,
+            placeholder = { Text("Order notes", color = OnDarkSecondary) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                onUpdateOrderNotes(orderNotesDraft)
+                focusManager.clearFocus()
+            }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused && orderNotesHadFocus) {
+                        onUpdateOrderNotes(orderNotesDraft)
+                    }
+                    orderNotesHadFocus = focusState.isFocused
+                },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Accent,
+                unfocusedBorderColor = DarkSurfaceVariant,
+                focusedTextColor = OnDark,
+                unfocusedTextColor = OnDark,
+                cursorColor = Accent,
+                focusedContainerColor = DarkSurface,
+                unfocusedContainerColor = DarkSurface,
+            ),
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -925,6 +975,22 @@ private fun OrderTerminalPanel(viewModel: OrderViewModel, state: OrderUiState) {
                 fontWeight = FontWeight.Bold,
                 color = statusColor,
             )
+        }
+
+        // Order-level notes on read-only terminal view
+        order?.notes?.takeIf { it.isNotBlank() }?.let { notes ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = "Notes: $notes",
+                    fontSize = 13.sp,
+                    color = OnDarkSecondary,
+                )
+            }
         }
 
         // Items (prefer currentOrder.items over cart for terminal)

@@ -73,6 +73,14 @@ export class OrderResponse {
   })
   documentId!: string;
 
+  @ApiProperty({
+    type: String,
+    example: 'Call on arrival',
+    nullable: true,
+    description: 'Order-level notes ("Order notes"). Null when none are set.',
+  })
+  notes!: string | null;
+
   // ── Standard invoice (ZATCA) buyer fields ───────────────────────────────────
 
   @ApiProperty({ description: 'Whether this order is a ZATCA standard invoice', example: false })

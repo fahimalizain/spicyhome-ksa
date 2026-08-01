@@ -24,6 +24,7 @@ import com.squareup.moshi.JsonClass
  *
  * @param type 
  * @param tableId Required for dine_in
+ * @param notes Order-level notes (\"Order notes\"). An empty string is stored as null.
  */
 
 
@@ -34,7 +35,11 @@ data class CreateOrderDto (
 
     /* Required for dine_in */
     @Json(name = "tableId")
-    val tableId: kotlin.Long? = null
+    val tableId: kotlin.Long? = null,
+
+    /* Order-level notes (\"Order notes\"). An empty string is stored as null. */
+    @Json(name = "notes")
+    val notes: kotlin.String? = null
 
 ) {
 

@@ -37,5 +37,11 @@ class CreateOrderDtoTest : ShouldSpec() {
             //modelInstance.tableId shouldBe ("TODO")
         }
 
+        // to test the property `notes` - Order-level notes (\"Order notes\"). An empty string is stored as null.
+        should("test notes") {
+            // uncomment below to test the property
+            //modelInstance.notes shouldBe ("TODO")
+        }
+
     }
 }

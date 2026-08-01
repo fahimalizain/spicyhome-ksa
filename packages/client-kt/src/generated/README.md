@@ -60,6 +60,10 @@ All URIs are relative to *http://localhost*
 | *DayApi* | [**businessDayControllerGetDay**](docs/DayApi.md#businessdaycontrollergetday) | **GET** day/{id} | Get a business day by ID |
 | *DayApi* | [**businessDayControllerList**](docs/DayApi.md#businessdaycontrollerlist) | **GET** day | List past business days (paged) |
 | *DayApi* | [**businessDayControllerOpenDay**](docs/DayApi.md#businessdaycontrolleropenday) | **POST** day/open | Open a new business day |
+| *DeliveryPartnersApi* | [**deliveryPartnersControllerCreate**](docs/DeliveryPartnersApi.md#deliverypartnerscontrollercreate) | **POST** delivery-partners | Create a delivery partner (atomically creates its owned payment method) |
+| *DeliveryPartnersApi* | [**deliveryPartnersControllerList**](docs/DeliveryPartnersApi.md#deliverypartnerscontrollerlist) | **GET** delivery-partners | List all delivery partners (including disabled) |
+| *DeliveryPartnersApi* | [**deliveryPartnersControllerListEnabled**](docs/DeliveryPartnersApi.md#deliverypartnerscontrollerlistenabled) | **GET** delivery-partners/enabled | List enabled delivery partners (no special permission required) |
+| *DeliveryPartnersApi* | [**deliveryPartnersControllerUpdate**](docs/DeliveryPartnersApi.md#deliverypartnerscontrollerupdate) | **PATCH** delivery-partners/{id} | Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method) |
 | *MenuApi* | [**menuControllerCreateCategory**](docs/MenuApi.md#menucontrollercreatecategory) | **POST** menu/categories | Create a category |
 | *MenuApi* | [**menuControllerCreateItem**](docs/MenuApi.md#menucontrollercreateitem) | **POST** menu/items | Create an item |
 | *MenuApi* | [**menuControllerGetCategory**](docs/MenuApi.md#menucontrollergetcategory) | **GET** menu/categories/{id} | Get category by ID |
@@ -86,7 +90,9 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerSendToKitchen**](docs/OrdersApi.md#orderscontrollersendtokitchen) | **POST** orders/{id}/send-to-kitchen | Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent) |
 | *OrdersApi* | [**ordersControllerSubmitOrder**](docs/OrdersApi.md#orderscontrollersubmitorder) | **POST** orders/{id}/submit | Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt |
 | *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
+| *OrdersApi* | [**ordersControllerUpdateOrderItemUnitPrice**](docs/OrdersApi.md#orderscontrollerupdateorderitemunitprice) | **PATCH** orders/{id}/items/{orderItemId}/unit-price | Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 |
 | *OrdersApi* | [**ordersControllerUpdateOrderMeta**](docs/OrdersApi.md#orderscontrollerupdateordermeta) | **PATCH** orders/{id} | Update open order type and/or table |
+| *OrdersApi* | [**ordersControllerUpdateOrderPartner**](docs/OrdersApi.md#orderscontrollerupdateorderpartner) | **PATCH** orders/{id}/partner | Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
 | *PaymentMethodsApi* | [**paymentMethodsControllerCreate**](docs/PaymentMethodsApi.md#paymentmethodscontrollercreate) | **POST** payment-methods | Create a payment method |
@@ -135,6 +141,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CloseDayDto](docs/CloseDayDto.md)
  - [com.spicyhome.client.models.CloseDayResponse](docs/CloseDayResponse.md)
  - [com.spicyhome.client.models.CreateCategoryDto](docs/CreateCategoryDto.md)
+ - [com.spicyhome.client.models.CreateDeliveryPartnerDto](docs/CreateDeliveryPartnerDto.md)
  - [com.spicyhome.client.models.CreateItemDto](docs/CreateItemDto.md)
  - [com.spicyhome.client.models.CreateOrderDto](docs/CreateOrderDto.md)
  - [com.spicyhome.client.models.CreateOrderResponse](docs/CreateOrderResponse.md)
@@ -146,6 +153,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateUserDto](docs/CreateUserDto.md)
  - [com.spicyhome.client.models.CurrentDayResponse](docs/CurrentDayResponse.md)
  - [com.spicyhome.client.models.DayOpeningResponse](docs/DayOpeningResponse.md)
+ - [com.spicyhome.client.models.DeliveryPartnerResponse](docs/DeliveryPartnerResponse.md)
  - [com.spicyhome.client.models.ItemResponse](docs/ItemResponse.md)
  - [com.spicyhome.client.models.LoginDto](docs/LoginDto.md)
  - [com.spicyhome.client.models.LoginResponse](docs/LoginResponse.md)
@@ -177,8 +185,11 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.SyncOrderItemsDto](docs/SyncOrderItemsDto.md)
  - [com.spicyhome.client.models.TableResponse](docs/TableResponse.md)
  - [com.spicyhome.client.models.UpdateCategoryDto](docs/UpdateCategoryDto.md)
+ - [com.spicyhome.client.models.UpdateDeliveryPartnerDto](docs/UpdateDeliveryPartnerDto.md)
  - [com.spicyhome.client.models.UpdateItemDto](docs/UpdateItemDto.md)
+ - [com.spicyhome.client.models.UpdateOrderItemUnitPriceDto](docs/UpdateOrderItemUnitPriceDto.md)
  - [com.spicyhome.client.models.UpdateOrderMetaDto](docs/UpdateOrderMetaDto.md)
+ - [com.spicyhome.client.models.UpdateOrderPartnerDto](docs/UpdateOrderPartnerDto.md)
  - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)

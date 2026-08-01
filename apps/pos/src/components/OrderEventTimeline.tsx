@@ -21,6 +21,7 @@ const EVENT_LABELS: Record<string, string> = {
   refund_issued: 'Refund Issued',
   refunded: 'Fully Refunded',
   type_changed: 'Type / Table Changed',
+  notes_changed: 'Order Notes Changed',
   delivery_partner_changed: 'Delivery Partner Changed',
   item_price_reset: 'Item Price Reset',
   item_price_overridden: 'Item Price Overridden',
@@ -87,6 +88,12 @@ function formatPayload(event: OrderEventResponse): string {
       const fromTable = p.fromTableId != null ? `#${p.fromTableId}` : '—';
       const toTable = p.toTableId != null ? `#${p.toTableId}` : '—';
       return `${label}. ${p.fromType || '?'} → ${p.toType || '?'} (table ${fromTable} → ${toTable})`;
+    }
+    case 'notes_changed': {
+      // Order-level notes: "—" renders null (no notes)
+      const from = (p.fromNotes as string) || '—';
+      const to = (p.toNotes as string) || '—';
+      return `${label}. ${from} → ${to}`;
     }
     case 'delivery_partner_changed': {
       const from = p.fromPartnerTitle || 'None';

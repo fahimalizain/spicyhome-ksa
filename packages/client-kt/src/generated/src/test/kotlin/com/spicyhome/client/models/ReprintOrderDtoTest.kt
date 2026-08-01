@@ -25,7 +25,7 @@ class ReprintOrderDtoTest : ShouldSpec() {
         // uncomment below to create an instance of ReprintOrderDto
         //val modelInstance = ReprintOrderDto()
 
-        // to test the property `target` - Reprint target (receipt only; kitchen reprints are not supported)
+        // to test the property `target` - Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip
         should("test target") {
             // uncomment below to test the property
             //modelInstance.target shouldBe ("TODO")

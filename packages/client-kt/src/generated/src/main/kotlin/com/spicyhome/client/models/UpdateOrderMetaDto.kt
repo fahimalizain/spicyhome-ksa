@@ -25,6 +25,7 @@ import com.squareup.moshi.JsonClass
  * @param baseUpdatedAt Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
  * @param type 
  * @param tableId Target table (required for dine_in). Ignored and forced to null when type is takeaway.
+ * @param notes Order-level notes (\"Order notes\"). Send null or an empty string to clear. Omit to keep the current value.
  */
 
 
@@ -39,7 +40,11 @@ data class UpdateOrderMetaDto (
 
     /* Target table (required for dine_in). Ignored and forced to null when type is takeaway. */
     @Json(name = "tableId")
-    val tableId: kotlin.Long? = null
+    val tableId: kotlin.Long? = null,
+
+    /* Order-level notes (\"Order notes\"). Send null or an empty string to clear. Omit to keep the current value. */
+    @Json(name = "notes")
+    val notes: kotlin.String? = null
 
 ) {
 

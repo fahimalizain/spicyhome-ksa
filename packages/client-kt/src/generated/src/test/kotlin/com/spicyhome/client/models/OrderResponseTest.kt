@@ -95,10 +95,34 @@ class OrderResponseTest : ShouldSpec() {
             //modelInstance.discountHalalas shouldBe ("TODO")
         }
 
+        // to test the property `deliveryPartnerId` - Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+        should("test deliveryPartnerId") {
+            // uncomment below to test the property
+            //modelInstance.deliveryPartnerId shouldBe ("TODO")
+        }
+
+        // to test the property `deliveryPartnerTitle` - Delivery partner title (joined from delivery_partners when a partner is set).
+        should("test deliveryPartnerTitle") {
+            // uncomment below to test the property
+            //modelInstance.deliveryPartnerTitle shouldBe ("TODO")
+        }
+
+        // to test the property `deliveryExternalRef` - Delivery app's order number for reconciliation (only meaningful alongside a partner).
+        should("test deliveryExternalRef") {
+            // uncomment below to test the property
+            //modelInstance.deliveryExternalRef shouldBe ("TODO")
+        }
+
         // to test the property `documentId` - ZATCA root cbc:ID — the business invoice number
         should("test documentId") {
             // uncomment below to test the property
             //modelInstance.documentId shouldBe ("TODO")
+        }
+
+        // to test the property `notes` - Order-level notes (\"Order notes\"). Null when none are set.
+        should("test notes") {
+            // uncomment below to test the property
+            //modelInstance.notes shouldBe ("TODO")
         }
 
         // to test the property `isStandardInvoice` - Whether this order is a ZATCA standard invoice

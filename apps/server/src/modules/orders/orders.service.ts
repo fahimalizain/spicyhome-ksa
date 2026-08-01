@@ -86,7 +86,10 @@ export class OrdersService {
     private zatcaStandardService: ZatcaStandardInvoiceService,
   ) {}
 
-  async createOrder(dto: { type: string; tableId?: number }, userId: number) {
+  async createOrder(
+    dto: { type: string; tableId?: number; notes?: string | null },
+    userId: number,
+  ) {
     const now = Math.floor(Date.now() / 1000);
     if (dto.type === 'dine_in') {
       if (!dto.tableId) throw new BadRequestException('Table is required for dine-in orders');
@@ -112,6 +115,7 @@ export class OrdersService {
     }
 
     const orderUuid = uuidv4();
+    const normalizedNotes = normalizeNotes(dto.notes);
 
     const result: any = await this.db.transaction((tx: any) => {
       // Prevent multiple open orders on the same table
@@ -145,6 +149,7 @@ export class OrdersService {
           totalHalalas: 0,
           discountHalalas: 0,
           documentId,
+          notes: normalizedNotes,
           ...createAuditFields(userId, now),
         })
         .run();
@@ -162,6 +167,7 @@ export class OrdersService {
           orderNo,
           uuid: orderUuid,
           documentId,
+          ...(normalizedNotes ? { notes: normalizedNotes } : {}),
         },
         now,
       );
@@ -175,7 +181,12 @@ export class OrdersService {
 
   async updateOrderMeta(
     orderId: number,
-    dto: { baseUpdatedAt: number; type: 'dine_in' | 'takeaway'; tableId?: number },
+    dto: {
+      baseUpdatedAt: number;
+      type: 'dine_in' | 'takeaway';
+      tableId?: number;
+      notes?: string | null;
+    },
     userId: number,
   ) {
     const now = Math.floor(Date.now() / 1000);
@@ -204,15 +215,17 @@ export class OrdersService {
     // close the TOCTOU window between loading and writing (same style as
     // syncItems).
     let anyMutation = false;
+    let typeTableChanged = false;
+    let notesChanged = false;
 
     this.db.transaction((tx: any) => {
       // Load order; 404 if missing
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
 
-      // Only open orders can change type or table
+      // Only open orders can change type, table, or notes
       if (order.status !== 'open') {
-        throw new BadRequestException('Only open orders can change type or table');
+        throw new BadRequestException('Only open orders can change type, table, or notes');
       }
 
       // Concurrency check — same shape as syncItems stale conflict
@@ -225,10 +238,17 @@ export class OrdersService {
 
       const fromType = order.type;
       const fromTableId = order.tableId ?? null;
+      const fromNotes = order.notes ?? null;
+      // Omitted notes keep the current value; empty string / whitespace-only
+      // normalize to null (same normalizeNotes as item notes).
+      const toNotes = dto.notes !== undefined ? normalizeNotes(dto.notes) : fromNotes;
 
-      // No-op: same type + same table → return current order without bumping
-      // updated_at or writing an event.
-      if (fromType === toType && fromTableId === toTableId) {
+      typeTableChanged = fromType !== toType || fromTableId !== toTableId;
+      notesChanged = fromNotes !== toNotes;
+
+      // No-op: same type + same table + same notes → return current order
+      // without bumping updated_at or writing an event.
+      if (!typeTableChanged && !notesChanged) {
         const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
         const refreshedItems = tx
           .select()
@@ -256,35 +276,59 @@ export class OrdersService {
 
       anyMutation = true;
 
-      tx.update(orders)
-        .set({
-          type: toType,
-          tableId: toTableId,
-          ...updateAuditFields(userId, now),
-        })
-        .where(eq(orders.id, orderId))
-        .run();
+      const updates: Record<string, any> = { ...updateAuditFields(userId, now) };
+      if (typeTableChanged) {
+        updates.type = toType;
+        updates.tableId = toTableId;
+      }
+      if (notesChanged) {
+        updates.notes = toNotes;
+      }
 
-      this.orderEvents.createEvent(
-        tx,
-        orderId,
-        userId,
-        'type_changed',
-        {
-          fromType,
-          toType,
-          fromTableId,
-          toTableId,
-        },
-        now,
-      );
+      tx.update(orders).set(updates).where(eq(orders.id, orderId)).run();
+
+      if (typeTableChanged) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'type_changed',
+          {
+            fromType,
+            toType,
+            fromTableId,
+            toTableId,
+          },
+          now,
+        );
+      }
+
+      // Order-level notes are a separate ledger event so the timeline can
+      // show "from → to" (null renders as "—"). Notes-only changes NEVER
+      // enqueue kitchen prints — notes ride along on the next send-to-kitchen
+      // / differential / reprint ticket.
+      if (notesChanged) {
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          AuditAction.NOTES_CHANGED,
+          {
+            fromNotes,
+            toNotes,
+          },
+          now,
+        );
+      }
 
       // ADR 0007: takeaway → dine_in (and any other patch that ends up
       // dine_in) clears the delivery partner + external ref and resets every
       // line price to the live catalog — a dine-in order is always at menu
-      // prices. The existing type_changed payload is unchanged; the partner
-      // clear and price resets are recorded as their own events.
-      if (toType === 'dine_in') {
+      // prices. Gated on typeTableChanged: notes-only patches must NOT touch
+      // the partner or line prices. The existing type_changed payload is
+      // unchanged; the partner clear and price resets are recorded as their
+      // own events.
+      if (typeTableChanged && toType === 'dine_in') {
         const hadPartner = order.deliveryPartnerId != null;
         if (hadPartner || order.deliveryExternalRef != null) {
           tx.update(orders)

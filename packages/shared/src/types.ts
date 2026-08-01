@@ -109,6 +109,7 @@ export interface Order {
   vatHalalas: number;
   totalHalalas: number;
   discountHalalas: number;
+  notes: string | null;
   createdAt: number;
   updatedAt: number;
   createdBy: number | null;

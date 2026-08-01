@@ -4325,6 +4325,12 @@
             "description": "ZATCA root cbc:ID — the business invoice number",
             "example": "INV26-0001"
           },
+          "notes": {
+            "type": "string",
+            "example": "Call on arrival",
+            "nullable": true,
+            "description": "Order-level notes (\"Order notes\"). Null when none are set."
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -4364,6 +4370,7 @@
           "deliveryPartnerTitle",
           "deliveryExternalRef",
           "documentId",
+          "notes",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -4701,6 +4708,12 @@
             "description": "ZATCA root cbc:ID — the business invoice number",
             "example": "INV26-0001"
           },
+          "notes": {
+            "type": "string",
+            "example": "Call on arrival",
+            "nullable": true,
+            "description": "Order-level notes (\"Order notes\"). Null when none are set."
+          },
           "isStandardInvoice": {
             "type": "boolean",
             "description": "Whether this order is a ZATCA standard invoice",
@@ -4772,6 +4785,7 @@
           "deliveryPartnerTitle",
           "deliveryExternalRef",
           "documentId",
+          "notes",
           "isStandardInvoice",
           "createdAt",
           "updatedAt",
@@ -4804,6 +4818,12 @@
             "format": "int64",
             "example": 1,
             "description": "Target table (required for dine_in). Ignored and forced to null when type is takeaway."
+          },
+          "notes": {
+            "type": "string",
+            "example": "Call on arrival",
+            "nullable": true,
+            "description": "Order-level notes (\"Order notes\"). Send null or an empty string to clear. Omit to keep the current value."
           }
         },
         "required": [
@@ -4874,6 +4894,12 @@
             "format": "int64",
             "example": 1,
             "description": "Required for dine_in"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Call on arrival",
+            "nullable": true,
+            "description": "Order-level notes (\"Order notes\"). An empty string is stored as null."
           }
         },
         "required": [

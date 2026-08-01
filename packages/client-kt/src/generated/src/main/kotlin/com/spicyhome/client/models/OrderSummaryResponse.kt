@@ -33,7 +33,11 @@ import com.squareup.moshi.JsonClass
  * @param vatHalalas 
  * @param totalHalalas 
  * @param discountHalalas 
+ * @param deliveryPartnerId Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+ * @param deliveryPartnerTitle Delivery partner title (joined from delivery_partners when a partner is set).
+ * @param deliveryExternalRef Delivery app's order number for reconciliation (only meaningful alongside a partner).
  * @param documentId ZATCA root cbc:ID — the business invoice number
+ * @param notes Order-level notes (\"Order notes\"). Null when none are set.
  * @param createdAt 
  * @param updatedAt 
  * @param createdBy 
@@ -76,9 +80,25 @@ data class OrderSummaryResponse (
     @Json(name = "discountHalalas")
     val discountHalalas: kotlin.Long,
 
+    /* Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null. */
+    @Json(name = "deliveryPartnerId")
+    val deliveryPartnerId: kotlin.String?,
+
+    /* Delivery partner title (joined from delivery_partners when a partner is set). */
+    @Json(name = "deliveryPartnerTitle")
+    val deliveryPartnerTitle: kotlin.String?,
+
+    /* Delivery app's order number for reconciliation (only meaningful alongside a partner). */
+    @Json(name = "deliveryExternalRef")
+    val deliveryExternalRef: kotlin.String?,
+
     /* ZATCA root cbc:ID — the business invoice number */
     @Json(name = "documentId")
     val documentId: kotlin.String,
+
+    /* Order-level notes (\"Order notes\"). Null when none are set. */
+    @Json(name = "notes")
+    val notes: kotlin.String?,
 
     @Json(name = "createdAt")
     val createdAt: kotlin.Long,

@@ -69,6 +69,7 @@ describe('BusinessDayService', () => {
         vat_halalas INTEGER NOT NULL DEFAULT 0,
         total_halalas INTEGER NOT NULL DEFAULT 0,
         discount_halalas INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),

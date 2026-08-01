@@ -22,7 +22,9 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerSendToKitchen**](OrdersApi.md#ordersControllerSendToKitchen) | **POST** orders/{id}/send-to-kitchen | Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent) |
 | [**ordersControllerSubmitOrder**](OrdersApi.md#ordersControllerSubmitOrder) | **POST** orders/{id}/submit | Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt |
 | [**ordersControllerSyncItems**](OrdersApi.md#ordersControllerSyncItems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
+| [**ordersControllerUpdateOrderItemUnitPrice**](OrdersApi.md#ordersControllerUpdateOrderItemUnitPrice) | **PATCH** orders/{id}/items/{orderItemId}/unit-price | Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 |
 | [**ordersControllerUpdateOrderMeta**](OrdersApi.md#ordersControllerUpdateOrderMeta) | **PATCH** orders/{id} | Update open order type and/or table |
+| [**ordersControllerUpdateOrderPartner**](OrdersApi.md#ordersControllerUpdateOrderPartner) | **PATCH** orders/{id}/partner | Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) |
 | [**ordersControllerVerifyOrderChain**](OrdersApi.md#ordersControllerVerifyOrderChain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | [**ordersControllerVoidOrder**](OrdersApi.md#ordersControllerVoidOrder) | **POST** orders/{id}/void | Void an order (open → voided) |
 
@@ -734,6 +736,48 @@ Configure bearer:
  - **Accept**: application/json
 
 
+Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(OrdersApi::class.java)
+val id : kotlin.Long = 789 // kotlin.Long | 
+val orderItemId : kotlin.Long = 789 // kotlin.Long | order_items.id — the LINE id, not the catalog item id
+val updateOrderItemUnitPriceDto : UpdateOrderItemUnitPriceDto =  // UpdateOrderItemUnitPriceDto | 
+
+val result : OrderResponse = webService.ordersControllerUpdateOrderItemUnitPrice(id, orderItemId, updateOrderItemUnitPriceDto)
+```
+
+### Parameters
+| **id** | **kotlin.Long**|  | |
+| **orderItemId** | **kotlin.Long**| order_items.id — the LINE id, not the catalog item id | |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **updateOrderItemUnitPriceDto** | [**UpdateOrderItemUnitPriceDto**](UpdateOrderItemUnitPriceDto.md)|  | |
+
+### Return type
+
+[**OrderResponse**](OrderResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
 Update open order type and/or table
 
 ### Example
@@ -757,6 +801,46 @@ val result : OrderResponse = webService.ordersControllerUpdateOrderMeta(id, upda
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
 | **updateOrderMetaDto** | [**UpdateOrderMetaDto**](UpdateOrderMetaDto.md)|  | |
+
+### Return type
+
+[**OrderResponse**](OrderResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
+Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(OrdersApi::class.java)
+val id : kotlin.Long = 789 // kotlin.Long | 
+val updateOrderPartnerDto : UpdateOrderPartnerDto =  // UpdateOrderPartnerDto | 
+
+val result : OrderResponse = webService.ordersControllerUpdateOrderPartner(id, updateOrderPartnerDto)
+```
+
+### Parameters
+| **id** | **kotlin.Long**|  | |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **updateOrderPartnerDto** | [**UpdateOrderPartnerDto**](UpdateOrderPartnerDto.md)|  | |
 
 ### Return type
 

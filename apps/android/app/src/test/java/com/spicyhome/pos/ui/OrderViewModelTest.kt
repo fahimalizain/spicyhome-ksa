@@ -287,6 +287,187 @@ class OrderViewModelTest {
         assertThat(vm.uiState.value.cart[0].notes).isEqualTo("no onions, extra spicy")
     }
 
+    // --- Order-level notes ---
+
+    @Test
+    fun `updateOrderNotes stages locally before create`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        vm.updateOrderNotes("call on arrival")
+        assertThat(vm.uiState.value.orderNotes).isEqualTo("call on arrival")
+        assertThat(vm.uiState.value.currentOrderId).isNull()
+    }
+
+    @Test
+    fun `hydrateFromOrder with null notes resets orderNotes to empty`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        vm.updateOrderNotes("stale staged value")
+        val order = createOrderResponse(1L, 100L, "open", emptyList(), notes = null)
+        vm.hydrateFromOrder(order)
+        assertThat(vm.uiState.value.orderNotes).isEmpty()
+    }
+
+    @Test
+    fun `updateOrderNotes PATCHes meta on an open order`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        // Stub updateOrderMeta
+        val metaCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) } returns metaCall
+        val updatedOrder = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 6000L, notes = "extra napkins")
+        every { metaCall.execute() } returns Response.success(updatedOrder)
+
+        vm.updateOrderNotes("extra napkins")
+
+        verify {
+            ordersApi.ordersControllerUpdateOrderMeta(
+                1L,
+                match { dto ->
+                    dto.baseUpdatedAt == 5000L &&
+                        dto.type == com.spicyhome.client.models.UpdateOrderMetaDto.Type.dine_in &&
+                        dto.tableId == 5L &&
+                        dto.notes == "extra napkins"
+                }
+            )
+        }
+        val state = vm.uiState.value
+        assertThat(state.orderNotes).isEqualTo("extra napkins")
+        assertThat(state.isSyncing).isFalse()
+        assertThat(state.isDirty).isFalse()
+    }
+
+    @Test
+    fun `updateOrderNotes blank input sends null and clears`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L, notes = "old")
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        val metaCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) } returns metaCall
+        val updatedOrder = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 6000L, notes = null)
+        every { metaCall.execute() } returns Response.success(updatedOrder)
+
+        vm.updateOrderNotes("   ")
+
+        verify {
+            ordersApi.ordersControllerUpdateOrderMeta(
+                1L,
+                match { dto -> dto.notes == null }
+            )
+        }
+        assertThat(vm.uiState.value.orderNotes).isEmpty()
+    }
+
+    @Test
+    fun `updateOrderNotes with same value is a no-op`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L, notes = "same")
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        vm.updateOrderNotes("same")
+
+        verify(exactly = 0) { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) }
+        assertThat(vm.uiState.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `updateOrderNotes 409 refetches and resets`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 2000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L, notes = "server value")
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        val metaCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) } returns metaCall
+        every { metaCall.execute() } returns Response.error(409, okhttp3.ResponseBody.create(null, "Conflict"))
+
+        // Refetch returns the server truth
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(1L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(order)
+
+        vm.updateOrderNotes("my local edit")
+
+        val state = vm.uiState.value
+        assertThat(state.isSyncing).isFalse()
+        assertThat(state.error).contains("modified elsewhere")
+        assertThat(state.orderNotes).isEqualTo("server value")
+    }
+
+    @Test
+    fun `clearCart resets orderNotes`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        vm.updateOrderNotes("call on arrival")
+        vm.clearCart()
+        assertThat(vm.uiState.value.orderNotes).isEmpty()
+    }
+
+    @Test
+    fun `createOrder passes staged order notes`() = runTest(testDispatcher) {
+        val item = createItem(1, "Burger", 1500, 1500)
+        stubMenuItems(listOf(item))
+
+        val vm = createViewModel()
+        vm.setOrderType(OrderType.TAKEAWAY)
+        vm.proceedToBuild()
+        vm.addToCart(item)
+        vm.updateOrderNotes("call on arrival")
+
+        val createCall = mockk<Call<com.spicyhome.client.models.CreateOrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
+        every { createCall.execute() } returns Response.success(
+            com.spicyhome.client.models.CreateOrderResponse(id = 10L, uuid = "uuid", orderNo = 200L, documentId = "INV26-10")
+        )
+
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(10L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(
+            createOrderResponse(10L, 200L, "open", emptyList(), updatedAt = 5000L, notes = "call on arrival")
+        )
+
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        every { syncCall.execute() } returns Response.success(
+            createOrderResponse(10L, 200L, "open", emptyList(), updatedAt = 6000L, notes = "call on arrival")
+        )
+
+        vm.createOrder()
+
+        verify {
+            ordersApi.ordersControllerCreateOrder(
+                match { dto -> dto.notes == "call on arrival" }
+            )
+        }
+    }
+
     // --- Category / item filtering tests (client-side) ---
 
     @Test
@@ -505,6 +686,10 @@ class OrderViewModelTest {
             status = "open",
             subtotalHalalas = 2608L, vatHalalas = 392L, totalHalalas = 3000L,
             discountHalalas = 0L,
+            deliveryPartnerId = null,
+            deliveryPartnerTitle = null,
+            deliveryExternalRef = null,
+            notes = "call on arrival",
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
             items = listOf(oi),
@@ -521,6 +706,7 @@ class OrderViewModelTest {
         assertThat(state.screenState).isEqualTo(OrderScreenState.EDITING_ORDER)
         assertThat(state.currentOrderId).isEqualTo(42L)
         assertThat(state.currentOrder).isNotNull()
+        assertThat(state.orderNotes).isEqualTo("call on arrival")
         assertThat(state.cart).hasSize(1)
         assertThat(state.cart[0].orderItemId).isEqualTo(100L)
         assertThat(state.cart[0].qty).isEqualTo(2)
@@ -541,6 +727,10 @@ class OrderViewModelTest {
             status = "paid",
             subtotalHalalas = 4000L, vatHalalas = 600L, totalHalalas = 4600L,
             discountHalalas = 0L,
+            deliveryPartnerId = null,
+            deliveryPartnerTitle = null,
+            deliveryExternalRef = null,
+            notes = null,
             createdAt = 1700000000L, updatedAt = 1700000000L,
             createdBy = 1L, updatedBy = 1L,
             items = emptyList(),
@@ -1415,6 +1605,7 @@ class OrderViewModelTest {
         status: String,
         items: List<OrderItemResponse>,
         updatedAt: Long = 1700000000L,
+        notes: String? = null,
     ): OrderResponse = OrderResponse(
         id = id,
         orderNo = orderNo,
@@ -1429,6 +1620,10 @@ class OrderViewModelTest {
         vatHalalas = items.sumOf { it.totalHalalas * it.vatRateBp / (10000 + it.vatRateBp) },
         totalHalalas = items.sumOf { it.totalHalalas },
         discountHalalas = 0L,
+        deliveryPartnerId = null,
+        deliveryPartnerTitle = null,
+        deliveryExternalRef = null,
+        notes = notes,
         createdAt = 1700000000L,
         updatedAt = updatedAt,
         createdBy = 1L,

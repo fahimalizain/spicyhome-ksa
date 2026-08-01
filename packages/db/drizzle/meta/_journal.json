@@ -78,6 +78,13 @@
       "when": 1785568521448,
       "tag": "0010_delivery_partners",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1785577371044,
+      "tag": "0011_order_notes",
+      "breakpoints": true
     }
   ]
 }
