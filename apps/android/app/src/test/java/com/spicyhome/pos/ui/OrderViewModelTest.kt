@@ -56,6 +56,7 @@ class OrderViewModelTest {
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
+    private val usernameFlow = MutableStateFlow<String?>("admin")
 
     @Before
     fun setUp() {
@@ -72,6 +73,7 @@ class OrderViewModelTest {
 
         every { preferencesManager.serverUrl } returns serverUrlFlow
         every { preferencesManager.authToken } returns authTokenFlow
+        every { preferencesManager.username } returns usernameFlow
         every { realtimeClient.events } returns eventsFlow
 
         every { apiClientProvider.createMenuApi(any(), any()) } returns menuApi
@@ -1070,6 +1072,135 @@ class OrderViewModelTest {
         val state = vm.uiState.value
         assertThat(state.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
         assertThat(state.error).contains("500")
+    }
+
+    // --- Username (user dropdown) tests ---
+
+    @Test
+    fun `username loads from preferences on init`() = runTest(testDispatcher) {
+        usernameFlow.value = "cashier1"
+
+        val vm = createViewModel()
+
+        // getMe fails by default, so the prefs username is not upgraded
+        assertThat(vm.uiState.value.username).isEqualTo("cashier1")
+    }
+
+    @Test
+    fun `username prefers me name when available`() = runTest(testDispatcher) {
+        usernameFlow.value = "cashier1"
+        val meResponse = MeResponse(
+            id = 1L, username = "test", name = "Test User", roleId = 1L,
+            isActive = true, roleName = "Admin",
+            createOrder = true, updateOrder = true, deleteOrderItem = true,
+            voidOrder = false, refundOrder = false, payOrder = false,
+            manageMenu = false, manageTables = false,
+            managePrinters = false, manageUsers = false, manageSettings = false,
+        )
+        val meCall = mockk<Call<MeResponse>>(relaxed = true)
+        every { authApi.authControllerGetMe() } returns meCall
+        every { meCall.execute() } returns Response.success(meResponse)
+
+        val vm = createViewModel()
+
+        assertThat(vm.uiState.value.username).isEqualTo("Test User")
+    }
+
+    @Test
+    fun `username keeps prefs when me name blank`() = runTest(testDispatcher) {
+        usernameFlow.value = "cashier1"
+        val meResponse = MeResponse(
+            id = 1L, username = "test", name = "", roleId = 1L,
+            isActive = true, roleName = "Waiter",
+            createOrder = false, updateOrder = false, deleteOrderItem = false,
+            voidOrder = false, refundOrder = false, payOrder = false,
+            manageMenu = false, manageTables = false,
+            managePrinters = false, manageUsers = false, manageSettings = false,
+        )
+        val meCall = mockk<Call<MeResponse>>(relaxed = true)
+        every { authApi.authControllerGetMe() } returns meCall
+        every { meCall.execute() } returns Response.success(meResponse)
+
+        val vm = createViewModel()
+
+        assertThat(vm.uiState.value.username).isEqualTo("cashier1")
+    }
+
+    @Test
+    fun `newOrder preserves username`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        assertThat(vm.uiState.value.username).isEqualTo("admin")
+
+        vm.newOrder()
+
+        assertThat(vm.uiState.value.username).isEqualTo("admin")
+    }
+
+    // --- refresh tests ---
+
+    @Test
+    fun `refresh reloads menu`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        vm.refresh()
+
+        // init loadMenu + refresh loadMenu
+        verify(atLeast = 2) { menuApi.menuControllerListCategories() }
+        verify(atLeast = 2) { menuApi.menuControllerListItems(any()) }
+    }
+
+    @Test
+    fun `refresh when DAY_NOT_OPEN calls checkDayOpen`() = runTest(testDispatcher) {
+        // Day closed → land on DAY_NOT_OPEN
+        val dayCall = mockk<Call<CurrentDayResponse>>(relaxed = true)
+        every { dayApi.businessDayControllerGetCurrent() } returns dayCall
+        every { dayCall.execute() } returns Response.success(CurrentDayResponse(open = false))
+
+        val vm = createViewModel()
+        vm.checkDayOpen()
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
+
+        vm.refresh()
+
+        // explicit checkDayOpen + the one triggered by refresh
+        verify(atLeast = 2) { dayApi.businessDayControllerGetCurrent() }
+        // refresh() short-circuits to checkDayOpen — menu is not reloaded
+        verify(exactly = 1) { menuApi.menuControllerListCategories() }
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.DAY_NOT_OPEN)
+    }
+
+    @Test
+    fun `refresh refetches current order when currentOrderId set`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 100L, orderId = 42L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 1500L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val openOrder = createOrderResponse(42L, 1001L, "open", listOf(oi), updatedAt = 5000L)
+        val getOrderCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerGetOrder(42L) } returns getOrderCall
+        every { getOrderCall.execute() } returns Response.success(openOrder)
+
+        val vm = createViewModel(initialOrderId = 42L)
+        assertThat(vm.uiState.value.cart[0].qty).isEqualTo(1)
+
+        // Server order changed (qty bumped by another terminal)
+        val updatedOi = oi.copy(qty = 3, totalHalalas = 4500L, updatedAt = 6000L)
+        val updatedOrder = openOrder.copy(updatedAt = 6000L, items = listOf(updatedOi))
+        every { getOrderCall.execute() } returns Response.success(updatedOrder)
+
+        vm.refresh()
+
+        verify(atLeast = 2) { ordersApi.ordersControllerGetOrder(42L) }
+        val state = vm.uiState.value
+        assertThat(state.cart[0].qty).isEqualTo(3)
+        assertThat(state.currentOrder?.updatedAt).isEqualTo(6000L)
+        assertThat(state.isDirty).isFalse()
     }
 
     // --- ADR 0005: qty floor on synced lines ---

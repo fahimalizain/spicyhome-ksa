@@ -46,7 +46,7 @@ fun OrderScreen(
 
     when (state.screenState) {
         OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onLogout)
-        OrderScreenState.EDITING_ORDER -> OrderEditingPanel(viewModel, state, onViewOrders, onViewTables)
+        OrderScreenState.EDITING_ORDER -> OrderEditingPanel(viewModel, state, onViewOrders, onViewTables, onLogout)
         OrderScreenState.ORDER_TERMINAL -> OrderTerminalPanel(viewModel, state)
         OrderScreenState.DAY_NOT_OPEN -> DayNotOpenPanel(viewModel, state)
     }
@@ -57,6 +57,8 @@ private fun TopBar(
     title: String,
     onViewOrders: (() -> Unit)? = null,
     onViewTables: (() -> Unit)? = null,
+    username: String? = null,
+    onRefresh: (() -> Unit)? = null,
     onLogout: (() -> Unit)? = null,
 ) {
     Row(
@@ -84,11 +86,46 @@ private fun TopBar(
                     Text("Tables", color = Accent, fontSize = 16.sp)
                 }
             }
-            onLogout?.let {
-                TextButton(onClick = it) {
-                    Text("Logout", color = OnDarkSecondary, fontSize = 16.sp)
-                }
+            if (username != null && onRefresh != null && onLogout != null) {
+                UserMenu(username = username, onRefresh = onRefresh, onLogout = onLogout)
             }
+        }
+    }
+}
+
+@Composable
+private fun UserMenu(
+    username: String,
+    onRefresh: () -> Unit,
+    onLogout: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(
+                text = "${username.ifBlank { "User" }} ▾",
+                color = OnDarkSecondary,
+                fontSize = 16.sp,
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Refresh", color = OnDark, fontSize = 16.sp) },
+                onClick = {
+                    expanded = false
+                    onRefresh()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Logout", color = OnDarkSecondary, fontSize = 16.sp) },
+                onClick = {
+                    expanded = false
+                    onLogout()
+                },
+            )
         }
     }
 }
@@ -96,7 +133,12 @@ private fun TopBar(
 @Composable
 private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState, onLogout: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "New Order", onLogout = { viewModel.logout(); onLogout() })
+        TopBar(
+            title = "New Order",
+            username = state.username,
+            onRefresh = { viewModel.refresh() },
+            onLogout = { viewModel.logout(); onLogout() },
+        )
 
         Column(
             modifier = Modifier
@@ -197,6 +239,7 @@ private fun OrderEditingPanel(
     state: OrderUiState,
     onViewOrders: () -> Unit,
     onViewTables: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     val isServerSynced = state.currentOrderId != null
     val isOpenOrder = isServerSynced && state.currentOrder?.status == "open"
@@ -222,6 +265,9 @@ private fun OrderEditingPanel(
                 title = if (isOpenOrder) "Order #${state.currentOrder?.orderNo ?: state.currentOrderId}" else "New Order",
                 onViewOrders = { guardedNavigate(onViewOrders) },
                 onViewTables = { guardedNavigate(onViewTables) },
+                username = state.username,
+                onRefresh = { viewModel.refresh() },
+                onLogout = { viewModel.logout(); onLogout() },
             )
 
             // Category tabs + inline search

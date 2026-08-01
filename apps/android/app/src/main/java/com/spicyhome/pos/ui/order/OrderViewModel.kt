@@ -83,6 +83,8 @@ enum class OrderScreenState {
 
 data class OrderUiState(
     val screenState: OrderScreenState = OrderScreenState.SELECTING_TYPE,
+    /** Display name for the user menu (from prefs username, refined with me.name when available). */
+    val username: String = "",
     val categories: List<CategoryResponse> = emptyList(),
     val items: List<ItemResponse> = emptyList(),
     val tables: List<TableResponse> = emptyList(),
@@ -207,7 +209,9 @@ class OrderViewModel(
         viewModelScope.launch {
             bearerToken = preferencesManager.authToken.first() ?: ""
             baseUrl = preferencesManager.serverUrl.first() ?: ""
+            val prefsUsername = preferencesManager.username.first() ?: ""
             initRepos()
+            _uiState.value = _uiState.value.copy(username = prefsUsername)
             loadMenu()
             loadTables()
             applyInitialTableContext()
@@ -257,8 +261,10 @@ class OrderViewModel(
                     authRepo!!.getMe().execute()
                 }
                 if (meResponse.isSuccessful) {
+                    val me = meResponse.body()
                     _uiState.value = _uiState.value.copy(
-                        permissions = Permissions.from(meResponse.body())
+                        permissions = Permissions.from(me),
+                        username = me?.name?.takeIf { it.isNotBlank() } ?: _uiState.value.username,
                     )
                 }
             } catch (_: Exception) {
@@ -726,7 +732,29 @@ class OrderViewModel(
             tables = _uiState.value.tables,
             categoriesLoaded = _uiState.value.categoriesLoaded,
             permissions = _uiState.value.permissions,
+            username = _uiState.value.username,
         )
+    }
+
+    /**
+     * Soft reload: re-checks the day when not open, otherwise reloads menu,
+     * tables, and permissions and refetches the current order (if any).
+     * Does not reset auth or navigate.
+     */
+    fun refresh() {
+        if (_uiState.value.screenState == OrderScreenState.DAY_NOT_OPEN) {
+            checkDayOpen()
+            return
+        }
+        viewModelScope.launch {
+            loadMenu()
+            loadTables()
+            loadPermissions()
+            val order = refetchOrder()
+            if (order != null) {
+                hydrateFromOrder(order)
+            }
+        }
     }
 
     fun checkDayOpen() {
