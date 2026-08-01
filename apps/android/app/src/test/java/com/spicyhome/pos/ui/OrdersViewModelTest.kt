@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import com.google.common.truth.Truth.assertThat
 import com.spicyhome.client.apis.OrdersApi
+import com.spicyhome.client.apis.TablesApi
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
+import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
@@ -36,6 +38,7 @@ class OrdersViewModelTest {
     private lateinit var apiClientProvider: ApiClientProvider
     private lateinit var realtimeClient: RealtimeClient
     private lateinit var ordersApi: OrdersApi
+    private lateinit var tablesApi: TablesApi
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
@@ -48,10 +51,12 @@ class OrdersViewModelTest {
         apiClientProvider = mockk(relaxed = true)
         realtimeClient = mockk(relaxed = true)
         ordersApi = mockk(relaxed = true)
+        tablesApi = mockk(relaxed = true)
 
         every { preferencesManager.serverUrl } returns serverUrlFlow
         every { preferencesManager.authToken } returns authTokenFlow
         every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
+        every { apiClientProvider.createTablesApi(any(), any()) } returns tablesApi
 
         // Stub empty realtime flows so viewModel init coroutines suspend gracefully
         every { realtimeClient.events } returns MutableSharedFlow(replay = 0, extraBufferCapacity = 0)
@@ -61,6 +66,11 @@ class OrdersViewModelTest {
         val listCall = mockk<Call<List<OrderSummaryResponse>>>(relaxed = true)
         every { ordersApi.ordersControllerListOrders(any(), any()) } returns listCall
         every { listCall.execute() } returns Response.success(emptyList())
+
+        // Stub listTables (best-effort) so the init's loadTables() call succeeds
+        val tablesCall = mockk<Call<List<TableResponse>>>(relaxed = true)
+        every { tablesApi.tablesControllerList() } returns tablesCall
+        every { tablesCall.execute() } returns Response.success(emptyList())
     }
 
     @After
@@ -212,5 +222,64 @@ class OrdersViewModelTest {
         assertThat(state.showDetail).isFalse()
         assertThat(state.selectedOrder).isNull()
         assertThat(state.detailLoading).isFalse()
+    }
+
+    @Test
+    fun `loadOrders populates tablesById from tables endpoint`() = runTest(testDispatcher) {
+        val table = TableResponse(
+            id = 1L,
+            name = "T12",
+            sortOrder = 1,
+            isActive = true,
+            createdAt = 1700000000L,
+            updatedAt = 1700000000L,
+            createdBy = 1L,
+            updatedBy = 1L,
+        )
+        val tablesCall = mockk<Call<List<TableResponse>>>(relaxed = true)
+        every { tablesApi.tablesControllerList() } returns tablesCall
+        every { tablesCall.execute() } returns Response.success(listOf(table))
+
+        val vm = createViewModel()
+
+        assertThat(vm.uiState.value.tablesById).containsEntry(1L, "T12")
+        // Table id 1L matches the dine-in summary's tableId, so it resolves to "T12".
+        assertThat(vm.uiState.value.orders).isEmpty()
+    }
+
+    @Test
+    fun `loadTables failure keeps previous table map and does not block orders`() = runTest(testDispatcher) {
+        // First load succeeds with one table.
+        val table = TableResponse(
+            id = 1L,
+            name = "T12",
+            sortOrder = 1,
+            isActive = true,
+            createdAt = 1700000000L,
+            updatedAt = 1700000000L,
+            createdBy = 1L,
+            updatedBy = 1L,
+        )
+        val tablesCall = mockk<Call<List<TableResponse>>>(relaxed = true)
+        every { tablesApi.tablesControllerList() } returns tablesCall
+        every { tablesCall.execute() } returns Response.success(listOf(table))
+
+        val vm = createViewModel()
+        assertThat(vm.uiState.value.tablesById).containsEntry(1L, "T12")
+
+        // Second refresh: tables endpoint fails, orders still load fine.
+        val failingCall = mockk<Call<List<TableResponse>>>(relaxed = true)
+        every { tablesApi.tablesControllerList() } returns failingCall
+        every { failingCall.execute() } returns Response.error(500, okhttp3.ResponseBody.create(null, "boom"))
+
+        val ordersCall = mockk<Call<List<OrderSummaryResponse>>>(relaxed = true)
+        every { ordersApi.ordersControllerListOrders(any(), any()) } returns ordersCall
+        every { ordersCall.execute() } returns Response.success(listOf(createSummary(7L, 3003L)))
+
+        vm.loadOrders()
+
+        assertThat(vm.uiState.value.tablesById).containsEntry(1L, "T12")
+        assertThat(vm.uiState.value.orders).hasSize(1)
+        assertThat(vm.uiState.value.error).isNull()
     }
 }

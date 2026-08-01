@@ -9,6 +9,7 @@ import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.data.repository.OrderRepository
+import com.spicyhome.pos.data.repository.TableRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.withContext
 
 data class OrdersUiState(
     val orders: List<OrderSummaryResponse> = emptyList(),
+    val tablesById: Map<Long, String> = emptyMap(), // table id → name
     val isLoading: Boolean = false,
     val error: String? = null,
     val selectedOrder: OrderResponse? = null,
@@ -37,12 +39,14 @@ class OrdersViewModel(
     val uiState: StateFlow<OrdersUiState> = _uiState
 
     private var orderRepo: OrderRepository? = null
+    private var tableRepo: TableRepository? = null
 
     init {
         viewModelScope.launch {
             val token = preferencesManager.authToken.first() ?: ""
             val url = preferencesManager.serverUrl.first() ?: ""
             orderRepo = OrderRepository(apiClientProvider.createOrdersApi(url, token))
+            tableRepo = TableRepository(apiClientProvider.createTablesApi(url, token))
             loadOrders()
         }
         viewModelScope.launch {
@@ -82,6 +86,30 @@ class OrdersViewModel(
                     isLoading = false,
                     error = e.message,
                 )
+            }
+        }
+        loadTables()
+    }
+
+    /**
+     * Load the table id → name map used to resolve table names for dine-in
+     * orders. Best-effort: a tables failure must never block the orders list,
+     * so failures keep the previous map (or empty) and never set [OrdersUiState.error].
+     */
+    private fun loadTables() {
+        viewModelScope.launch {
+            try {
+                val response = withContext(ioDispatcher) {
+                    tableRepo!!.listTables().execute()
+                }
+                if (response.isSuccessful) {
+                    val byId = (response.body() ?: emptyList())
+                        .filter { it.name.isNotBlank() }
+                        .associate { it.id.toLong() to it.name }
+                    _uiState.value = _uiState.value.copy(tablesById = byId)
+                }
+            } catch (_: Exception) {
+                // Best-effort: keep the previous table map.
             }
         }
     }

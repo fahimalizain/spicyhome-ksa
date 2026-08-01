@@ -45,10 +45,26 @@ fun OrderScreen(
     val state by viewModel.uiState.collectAsState()
 
     when (state.screenState) {
-        OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onLogout)
+        OrderScreenState.LOADING -> LoadingPanel()
+        OrderScreenState.SELECTING_TYPE -> TypeSelectionPanel(viewModel, state, onViewOrders, onViewTables, onLogout)
         OrderScreenState.EDITING_ORDER -> OrderEditingPanel(viewModel, state, onViewOrders, onViewTables, onLogout)
         OrderScreenState.ORDER_TERMINAL -> OrderTerminalPanel(viewModel, state)
         OrderScreenState.DAY_NOT_OPEN -> DayNotOpenPanel(viewModel, state)
+    }
+}
+
+/** Full-screen spinner shown while a deep link (order / free table) hydrates. */
+@Composable
+private fun LoadingPanel() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Accent)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Loading order...", color = OnDarkSecondary, fontSize = 16.sp)
+        }
     }
 }
 
@@ -130,11 +146,60 @@ private fun UserMenu(
     }
 }
 
+/**
+ * Resolve the table name for the current order context.
+ *
+ * Preference: `selectedTableId` (set on free-table deep link and on hydrate),
+ * falling back to `currentOrder.tableId`. Returns null when the tables list
+ * is not loaded yet or the table is unknown.
+ */
+private fun resolveTableName(state: OrderUiState): String? {
+    val tableId = state.selectedTableId
+        ?: state.currentOrder?.tableId
+        ?: return null
+    return state.tables.firstOrNull { it.id.toLong() == tableId }?.name
+        ?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * Build the top-left title for the order workspace.
+ *
+ * - Pre-create local cart: "New Order", plus " · <table>" when dine-in and the
+ *   table name is known (e.g. free-table deep link).
+ * - Open order: `documentId`, plus " · <table>" when dine-in and the table
+ *   name is known. Table segment is never shown for takeaway.
+ * - No `Order #`/orderNo fallbacks — documentId is the only order identity.
+ */
+private fun orderHeaderTitle(
+    documentId: String?,
+    orderType: OrderType,
+    tableName: String?,
+    isOpenOrder: Boolean,
+): String {
+    val doc = documentId?.takeIf { it.isNotBlank() }
+    val table = if (orderType == OrderType.DINE_IN) tableName else null
+    return when {
+        !isOpenOrder -> listOfNotNull("New Order", table).joinToString(" · ")
+        doc != null && table != null -> "$doc · $table"
+        doc != null -> doc
+        table != null -> table
+        else -> ""
+    }
+}
+
 @Composable
-private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState, onLogout: () -> Unit) {
+private fun TypeSelectionPanel(
+    viewModel: OrderViewModel,
+    state: OrderUiState,
+    onViewOrders: () -> Unit,
+    onViewTables: () -> Unit,
+    onLogout: () -> Unit,
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
             title = "New Order",
+            onViewOrders = onViewOrders,
+            onViewTables = onViewTables,
             username = state.username,
             onRefresh = { viewModel.refresh() },
             onLogout = { viewModel.logout(); onLogout() },
@@ -178,49 +243,27 @@ private fun TypeSelectionPanel(viewModel: OrderViewModel, state: OrderUiState, o
                 }
             }
 
-            if (state.orderType == OrderType.DINE_IN) {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text("Select Table", fontSize = 20.sp, color = OnDark)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(state.tables) { table ->
-                        val tableId = table.id.toLong()
-                        val selected = state.selectedTableId == tableId
-                        Card(
-                            modifier = Modifier
-                                .width(120.dp)
-                                .height(80.dp)
-                                .clickable { viewModel.setTable(tableId) },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selected) Accent else DarkSurfaceVariant,
-                            ),
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text(
-                                    text = table.name,
-                                    color = OnDark,
-                                    fontSize = 18.sp,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = { viewModel.proceedToBuild() },
-                enabled = !(state.orderType == OrderType.DINE_IN && state.selectedTableId == null),
+                onClick = {
+                    when (state.orderType) {
+                        OrderType.DINE_IN -> onViewTables()
+                        OrderType.TAKEAWAY -> viewModel.proceedToBuild()
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Accent),
                 modifier = Modifier
                     .width(300.dp)
                     .height(56.dp),
             ) {
-                Text("Start Order", fontSize = 20.sp)
+                Text(
+                    text = when (state.orderType) {
+                        OrderType.DINE_IN -> "Select Table"
+                        OrderType.TAKEAWAY -> "Start Order"
+                    },
+                    fontSize = 20.sp,
+                )
             }
 
             if (state.error != null) {
@@ -262,7 +305,12 @@ private fun OrderEditingPanel(
         // Left: categories + items
         Column(modifier = Modifier.weight(0.65f)) {
             TopBar(
-                title = if (isOpenOrder) "Order #${state.currentOrder?.orderNo ?: state.currentOrderId}" else "New Order",
+                title = orderHeaderTitle(
+                    documentId = state.currentOrder?.documentId,
+                    orderType = state.orderType,
+                    tableName = resolveTableName(state),
+                    isOpenOrder = isOpenOrder,
+                ),
                 onViewOrders = { guardedNavigate(onViewOrders) },
                 onViewTables = { guardedNavigate(onViewTables) },
                 username = state.username,
@@ -674,7 +722,7 @@ private fun UnifiedCartPanel(
                     }
                 }
             } else if (state.isDirty == true) {
-                // ── Open + Dirty: Send to Kitchen + Discard (D12, D14) ──
+                // ── Open + Dirty: Update Order + Discard (D12, D14) ──
                 Button(
                     onClick = onSendToKitchen,
                     enabled = !state.isSyncing && !state.isLoading,
@@ -684,7 +732,7 @@ private fun UnifiedCartPanel(
                         .height(52.dp),
                 ) {
                     Text(
-                        text = if (state.isSyncing) "Syncing..." else "Send to Kitchen",
+                        text = if (state.isSyncing) "Syncing..." else "Update Order",
                         fontSize = 18.sp,
                     )
                 }
@@ -853,7 +901,15 @@ private fun OrderTerminalPanel(viewModel: OrderViewModel, state: OrderUiState) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "Order #${order?.orderNo ?: ""}")
+        TopBar(
+            title = orderHeaderTitle(
+                documentId = order?.documentId,
+                // hydrateFromOrder always sets state.orderType from order.type
+                orderType = state.orderType,
+                tableName = resolveTableName(state),
+                isOpenOrder = true,
+            ),
+        )
 
         // Status badge
         Box(
