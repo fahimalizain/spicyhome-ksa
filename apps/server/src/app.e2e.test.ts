@@ -29,6 +29,10 @@ beforeAll(async () => {
   app = moduleFixture.createNestApplication();
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  // Listen explicitly ONCE so supertest reuses a stable port instead of
+  // re-listening (listen(0)) on every request, which races and can send
+  // requests to stale listeners in full-suite runs.
+  await app.listen(0);
   await app.init();
 
   const now = Math.floor(Date.now() / 1000);
@@ -275,15 +279,20 @@ describe('Orders (e2e)', () => {
     expect(res.body.valid).toBe(true);
   });
 
-  it('POST /orders/:id/pay transitions to paid (from open)', async () => {
+  it('POST /orders/:id/submit transitions to paid (from open)', async () => {
     // Get the order to know its total
     const orderRes = await request(app.getHttpServer())
       .get(`/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`);
-    const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/pay`)
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ payments: [{ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas }] })
+      .send({ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas })
+      .expect(201);
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(201);
     expect(res.body.status).toBe('paid');
   });
@@ -337,9 +346,14 @@ describe('Orders (e2e)', () => {
       .get(`/orders/${secondOrderId}`)
       .set('Authorization', `Bearer ${jwtToken}`);
     await request(app.getHttpServer())
-      .post(`/orders/${secondOrderId}/pay`)
+      .post(`/orders/${secondOrderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ payments: [{ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas }] })
+      .send({ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${secondOrderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
       .expect(201);
 
     const res = await request(app.getHttpServer())

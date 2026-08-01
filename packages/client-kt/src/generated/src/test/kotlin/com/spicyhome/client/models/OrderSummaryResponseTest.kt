@@ -91,6 +91,12 @@ class OrderSummaryResponseTest : ShouldSpec() {
             //modelInstance.discountHalalas shouldBe ("TODO")
         }
 
+        // to test the property `documentId` - ZATCA root cbc:ID — the business invoice number
+        should("test documentId") {
+            // uncomment below to test the property
+            //modelInstance.documentId shouldBe ("TODO")
+        }
+
         // to test the property `createdAt`
         should("test createdAt") {
             // uncomment below to test the property

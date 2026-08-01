@@ -4,11 +4,11 @@ import com.google.common.truth.Truth.assertThat
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Types
 import com.spicyhome.client.infrastructure.Serializer
-import com.spicyhome.client.models.AddOrderItemDto
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
+import com.spicyhome.client.models.SyncOrderItemDto
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
@@ -145,16 +145,16 @@ class AdapterSerializationTest {
         assertThat(json).contains("\"type\":\"dine_in\"")
     }
 
-    // -- AddOrderItemDto serialization (itemId is now Long, qty is now Int) --
+    // -- SyncOrderItemDto serialization (itemId is now Long, qty is now Int) --
 
     @Test
-    fun `AddOrderItemDto numeric fields serialize as JSON numbers`() {
-        val dto = AddOrderItemDto(
+    fun `SyncOrderItemDto numeric fields serialize as JSON numbers`() {
+        val dto = SyncOrderItemDto(
             itemId = 100L,
             qty = 5,
             notes = "no onions"
         )
-        val json = moshi.adapter(AddOrderItemDto::class.java).toJson(dto)
+        val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(dto)
         assertThat(json).contains("\"itemId\":100")
         assertThat(json).contains("\"qty\":5")
         assertThat(json).doesNotContain("\"itemId\":\"")
@@ -162,25 +162,25 @@ class AdapterSerializationTest {
     }
 
     @Test
-    fun `AddOrderItemDto qty equals one serializes as number 1`() {
-        val dto = AddOrderItemDto(
+    fun `SyncOrderItemDto qty equals one serializes as number 1`() {
+        val dto = SyncOrderItemDto(
             itemId = 1L,
             qty = 1,
             notes = null
         )
-        val json = moshi.adapter(AddOrderItemDto::class.java).toJson(dto)
+        val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(dto)
         assertThat(json).contains("\"qty\":1")
         assertThat(json).doesNotContain("\"qty\":\"1\"")
     }
 
     @Test
-    fun `AddOrderItemDto null notes is omitted from JSON`() {
-        val dto = AddOrderItemDto(
+    fun `SyncOrderItemDto null notes is omitted from JSON`() {
+        val dto = SyncOrderItemDto(
             itemId = 1L,
             qty = 1,
             notes = null
         )
-        val json = moshi.adapter(AddOrderItemDto::class.java).toJson(dto)
+        val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(dto)
         // KotlinJsonAdapterFactory omits fields that equal their default value (null).
         assertThat(json).doesNotContain("notes")
     }
@@ -238,14 +238,14 @@ class AdapterSerializationTest {
     }
 
     @Test
-    fun `AddOrderItemDto round-trips faithfully`() {
-        val original = AddOrderItemDto(
+    fun `SyncOrderItemDto round-trips faithfully`() {
+        val original = SyncOrderItemDto(
             itemId = 100L,
             qty = 5,
             notes = "no onions"
         )
-        val json = moshi.adapter(AddOrderItemDto::class.java).toJson(original)
-        val roundTripped = moshi.adapter(AddOrderItemDto::class.java).fromJson(json)
+        val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(original)
+        val roundTripped = moshi.adapter(SyncOrderItemDto::class.java).fromJson(json)
         assertThat(roundTripped).isNotNull()
         assertThat(roundTripped!!.itemId).isEqualTo(original.itemId)
         assertThat(roundTripped.qty).isEqualTo(original.qty)

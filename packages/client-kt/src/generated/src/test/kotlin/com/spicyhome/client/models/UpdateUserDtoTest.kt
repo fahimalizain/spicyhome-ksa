@@ -49,7 +49,7 @@ class UpdateUserDtoTest : ShouldSpec() {
             //modelInstance.androidLogin shouldBe ("TODO")
         }
 
-        // to test the property `pin` - New PIN (4-6 digits)
+        // to test the property `pin` - New PIN (1-6 digits)
         should("test pin") {
             // uncomment below to test the property
             //modelInstance.pin shouldBe ("TODO")

@@ -43,5 +43,11 @@ class CreateOrderResponseTest : ShouldSpec() {
             //modelInstance.orderNo shouldBe ("TODO")
         }
 
+        // to test the property `documentId` - ZATCA root cbc:ID — the business invoice number
+        should("test documentId") {
+            // uncomment below to test the property
+            //modelInstance.documentId shouldBe ("TODO")
+        }
+
     }
 }

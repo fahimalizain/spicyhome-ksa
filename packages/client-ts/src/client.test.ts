@@ -1,4 +1,4 @@
-import { SpicyHomeClient, type PayOrderDto } from './client';
+import { SpicyHomeClient, type AddOrderPaymentDto, type SubmitOrderDto } from './client';
 
 describe('SpicyHomeClient', () => {
   it('can be instantiated', () => {
@@ -66,8 +66,10 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.orders.get).toBe('function');
     expect(typeof client.orders.create).toBe('function');
     expect(typeof client.orders.syncItems).toBe('function');
+    expect(typeof client.orders.sendToKitchen).toBe('function');
     expect(typeof client.orders.update).toBe('function');
-    expect(typeof client.orders.pay).toBe('function');
+    expect(typeof client.orders.addPayment).toBe('function');
+    expect(typeof client.orders.submit).toBe('function');
     expect(typeof client.orders.void).toBe('function');
     expect(typeof client.orders.refund).toBe('function');
     expect(typeof client.orders.getRefunds).toBe('function');
@@ -125,11 +127,20 @@ describe('SpicyHomeClient', () => {
     expect(client).toBeDefined();
   });
 
-  it('PayOrderDto type is constructable', () => {
-    const dto: PayOrderDto = {
-      payments: [{ methodId: 'cash', amountHalalas: 4600 }],
+  it('SubmitOrderDto type is constructable', () => {
+    const dto: SubmitOrderDto = {
+      baseUpdatedAt: 123,
+      isStandardInvoice: false,
     };
-    expect(dto.payments).toHaveLength(1);
+    expect(dto.isStandardInvoice).toBe(false);
+  });
+
+  it('AddOrderPaymentDto type is constructable', () => {
+    const dto: AddOrderPaymentDto = {
+      methodId: 'cash',
+      amountHalalas: 4600,
+    };
+    expect(dto.amountHalalas).toBe(4600);
   });
 });
 

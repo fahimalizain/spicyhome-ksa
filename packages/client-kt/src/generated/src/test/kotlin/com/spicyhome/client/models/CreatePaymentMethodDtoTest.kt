@@ -31,5 +31,11 @@ class CreatePaymentMethodDtoTest : ShouldSpec() {
             //modelInstance.title shouldBe ("TODO")
         }
 
+        // to test the property `zatcaPaymentMeansCode` - ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)
+        should("test zatcaPaymentMeansCode") {
+            // uncomment below to test the property
+            //modelInstance.zatcaPaymentMeansCode shouldBe ("TODO")
+        }
+
     }
 }

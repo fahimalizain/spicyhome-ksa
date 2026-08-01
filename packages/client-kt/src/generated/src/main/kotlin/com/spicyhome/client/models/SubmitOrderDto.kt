@@ -15,7 +15,6 @@
 
 package com.spicyhome.client.models
 
-import com.spicyhome.client.models.PaymentLineDto
 import com.spicyhome.client.models.ZatcaBuyerDetailsDto
 
 import com.squareup.moshi.Json
@@ -24,17 +23,17 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param payments Payment lines (at least one required)
+ * @param baseUpdatedAt Order updated_at observed by the client; if present it must match the current value or the submit is rejected with 409.
  * @param isStandardInvoice Enable standard invoice with buyer details for ZATCA
  * @param zatcaBuyerDetails ZATCA standard invoice buyer details (required when isStandardInvoice is true)
  */
 
 
-data class PayOrderDto (
+data class SubmitOrderDto (
 
-    /* Payment lines (at least one required) */
-    @Json(name = "payments")
-    val payments: kotlin.collections.List<PaymentLineDto>,
+    /* Order updated_at observed by the client; if present it must match the current value or the submit is rejected with 409. */
+    @Json(name = "baseUpdatedAt")
+    val baseUpdatedAt: kotlin.Long? = null,
 
     /* Enable standard invoice with buyer details for ZATCA */
     @Json(name = "isStandardInvoice")

@@ -20,7 +20,7 @@ export type ZatcaClearanceModalProps = {
   documentType?: 'invoice' | 'credit_note';
   /** Required when documentType === 'credit_note' */
   refundId?: number;
-  /** Required for invoice mode — seeded from PayModal buyer form. */
+  /** Required for invoice mode — seeded from the Summary-tab buyer form. */
   initialBuyer?: ZatcaBuyerDetails;
   /**
    * Called when user dismisses after payment/refund is already committed,

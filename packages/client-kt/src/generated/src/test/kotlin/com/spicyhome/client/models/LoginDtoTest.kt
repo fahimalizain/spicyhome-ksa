@@ -37,5 +37,11 @@ class LoginDtoTest : ShouldSpec() {
             //modelInstance.pin shouldBe ("TODO")
         }
 
+        // to test the property `clientType`
+        should("test clientType") {
+            // uncomment below to test the property
+            //modelInstance.clientType shouldBe ("TODO")
+        }
+
     }
 }

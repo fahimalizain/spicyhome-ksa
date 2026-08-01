@@ -39,6 +39,13 @@ class ZatcaApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test zatcaControllerGetCreditNote
+        should("test zatcaControllerGetCreditNote") {
+            // uncomment below to test zatcaControllerGetCreditNote
+            //val id : kotlin.String = id_example // kotlin.String | 
+            //apiInstance.zatcaControllerGetCreditNote(id)
+        }
+
         // to test zatcaControllerGetInvoice
         should("test zatcaControllerGetInvoice") {
             // uncomment below to test zatcaControllerGetInvoice
@@ -50,6 +57,14 @@ class ZatcaApiTest : ShouldSpec() {
         should("test zatcaControllerGetStatus") {
             // uncomment below to test zatcaControllerGetStatus
             //apiInstance.zatcaControllerGetStatus()
+        }
+
+        // to test zatcaControllerListCreditNotes
+        should("test zatcaControllerListCreditNotes") {
+            // uncomment below to test zatcaControllerListCreditNotes
+            //val limit : kotlin.Int = 56 // kotlin.Int | 
+            //val offset : kotlin.Int = 56 // kotlin.Int | 
+            //apiInstance.zatcaControllerListCreditNotes(limit, offset)
         }
 
         // to test zatcaControllerListInvoices

@@ -6,9 +6,18 @@ import { useCart } from '../hooks/useCart';
 import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
-import { PayModal } from '../components/orders/PayModal';
+import { AddPaymentModal } from '../components/orders/AddPaymentModal';
+import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
+import {
+  StandardInvoiceBuyerForm,
+  emptyStandardInvoiceBuyer,
+  validateStandardBuyer,
+  type ZatcaBuyerDetails,
+} from '../components/orders/StandardInvoiceBuyerForm';
 import { ConfirmActionButton } from '../components/ConfirmActionButton';
 import { filterMenuItems } from '../lib/filterMenuItems';
+import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
+import { calcOutstandingHalalas } from '../lib/order-payments';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
@@ -16,7 +25,25 @@ import type {
   TableResponse,
   OrderResponse,
   OrderSummaryResponse,
+  OrderPaymentResponse,
+  OrderEventResponse,
 } from '@spicyhome/client-ts';
+
+type OrderTab = 'items' | 'payments' | 'summary';
+
+const TAB_LABELS: Record<OrderTab, string> = {
+  items: 'Items',
+  payments: 'Payments',
+  summary: 'Summary',
+};
+
+/** Compact HH:MM (browser-local) from a Unix-seconds epoch. */
+function formatPaymentTime(epochSeconds: number): string {
+  const d = new Date(epochSeconds * 1000);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
 
 /**
  * Guard dialog shown when navigating away while dirty.
@@ -100,7 +127,30 @@ export function OrderPage() {
   const [dayOpen, setDayOpen] = useState<boolean | null>(null);
   const [openingCash, setOpeningCash] = useState('');
   const [dayLoading, setDayLoading] = useState(false);
-  const [showPayModal, setShowPayModal] = useState(false);
+
+  // ADR 0006: server-side money / ledger view (last hydrated order)
+  const [payments, setPayments] = useState<OrderPaymentResponse[]>([]);
+  const [orderEvents, setOrderEvents] = useState<OrderEventResponse[]>([]);
+  const [serverTotals, setServerTotals] = useState({
+    subtotalHalalas: 0,
+    vatHalalas: 0,
+    totalHalalas: 0,
+  });
+
+  // Right panel tabs + payment modal
+  const [activeTab, setActiveTab] = useState<OrderTab>('items');
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [sendingKitchen, setSendingKitchen] = useState(false);
+
+  // Standard invoice state (Summary tab)
+  const [isStandardInvoice, setIsStandardInvoice] = useState(false);
+  const [buyer, setBuyer] = useState<ZatcaBuyerDetails>(emptyStandardInvoiceBuyer());
+  const [buyerErrors, setBuyerErrors] = useState<Partial<Record<keyof ZatcaBuyerDetails, string>>>(
+    {},
+  );
+  const [showClearance, setShowClearance] = useState(false);
+
   const [itemSearch, setItemSearch] = useState('');
 
   // Category scroll fades
@@ -135,6 +185,35 @@ export function OrderPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tableParamApplied = useRef(false);
 
+  /**
+   * Hydrate cart + server-side ledger state from one OrderResponse (ADR 0006).
+   * Call this everywhere an order is (re)fetched so payments/events/server
+   * totals always reflect the last server snapshot.
+   */
+  function hydrateOrder(order: OrderResponse) {
+    cart.loadOrder(order);
+    setPayments(order.payments || []);
+    setOrderEvents(order.events || []);
+    setServerTotals({
+      subtotalHalalas: order.subtotalHalalas,
+      vatHalalas: order.vatHalalas,
+      totalHalalas: order.totalHalalas,
+    });
+    setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+  }
+
+  /** Refetch + hydrate the current order (used after submit/refund/conflict). */
+  async function refreshOrder() {
+    if (!currentOrder) return;
+    try {
+      const order = await client.orders.get(currentOrder.id);
+      hydrateOrder(order);
+      loadOpenOrders();
+    } catch {
+      // Keep current state — the caller surfaces the error
+    }
+  }
+
   useEffect(() => {
     if (tableParamApplied.current) return;
     tableParamApplied.current = true;
@@ -147,8 +226,7 @@ export function OrderPage() {
       client.orders
         .get(orderId)
         .then((order) => {
-          cart.loadOrder(order);
-          setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+          hydrateOrder(order);
         })
         .catch(() => {
           setError('Failed to load order');
@@ -207,9 +285,8 @@ export function OrderPage() {
         // Decision A: remote type/table (or item) changes while the cart is
         // clean are hydrated silently so the controls reflect the server.
         if (!cart.isDirty && order.updatedAt !== cart.serverUpdatedAt) {
-          cart.loadOrder(order);
+          hydrateOrder(order);
           loadOpenOrders();
-          setCurrentOrder((prev) => (prev ? { ...prev, status: order.status } : null));
         }
       } catch {
         // Ignore poll errors
@@ -320,6 +397,15 @@ export function OrderPage() {
     setShowRefundModal(false);
     setRefundOrder(null);
     setItemSearch('');
+    setPayments([]);
+    setOrderEvents([]);
+    setServerTotals({ subtotalHalalas: 0, vatHalalas: 0, totalHalalas: 0 });
+    setActiveTab('items');
+    setShowAddPaymentModal(false);
+    setIsStandardInvoice(false);
+    setBuyer(emptyStandardInvoiceBuyer());
+    setBuyerErrors({});
+    setShowClearance(false);
     setSearchParams({}, { replace: true });
   }
 
@@ -357,9 +443,9 @@ export function OrderPage() {
             notes: item.notes || undefined,
           })),
         });
-        cart.loadOrder(syncRes);
+        hydrateOrder(syncRes);
       } else {
-        cart.loadOrder(fetchedOrder);
+        hydrateOrder(fetchedOrder);
       }
     } catch (e: any) {
       // If create succeeded but sync failed, keep orderId for retry
@@ -369,9 +455,9 @@ export function OrderPage() {
     }
   }
 
-  // ── Send to Kitchen (D3: bulk sync) ──
+  // ── Save Items (ADR 0006: syncItems persists the cart, never kitchen-prints) ──
 
-  async function handleSendToKitchen() {
+  async function handleSaveItems() {
     if (!currentOrder || currentOrder.status !== 'open') return;
 
     setSyncing(true);
@@ -387,20 +473,20 @@ export function OrderPage() {
           notes: item.notes || undefined,
         })),
       });
-      cart.loadOrder(syncRes);
+      hydrateOrder(syncRes);
     } catch (e: any) {
       // Check for 409 conflict
       if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
         // Refetch and hydrate
         try {
           const order = await client.orders.get(currentOrder.id);
-          cart.loadOrder(order);
+          hydrateOrder(order);
           setError('Order was modified elsewhere. Your local changes have been reset.');
         } catch {
-          setError(e.message || 'Failed to sync items');
+          setError(e.message || 'Failed to save items');
         }
       } else {
-        setError(e.message || 'Failed to send to kitchen');
+        setError(e.message || 'Failed to save items');
       }
     } finally {
       setSyncing(false);
@@ -413,17 +499,88 @@ export function OrderPage() {
     cart.discard();
   }
 
-  // ── Pay / Void ──
+  // ── Send to Kitchen (ADR 0006: explicit differential print, Items tab) ──
 
-  function handleOpenPayModal() {
-    if (!currentOrder) return;
-    setShowPayModal(true);
+  async function handleSendToKitchen() {
+    if (!currentOrder || currentOrder.status !== 'open') return;
+    if (cart.isDirty) return; // mutually exclusive with Save Items
+
+    setSendingKitchen(true);
+    setError('');
+    try {
+      const res = await client.orders.sendToKitchen(currentOrder.id);
+      // Events now carry kitchen_print_enqueued lines → unsent deltas drop
+      hydrateOrder(res);
+    } catch (e: any) {
+      setError(e.message || 'Failed to send to kitchen');
+    } finally {
+      setSendingKitchen(false);
+    }
   }
 
-  function handlePaid() {
-    setShowPayModal(false);
-    setCurrentOrder((prev) => (prev ? { ...prev, status: 'paid' } : null));
+  // ── Payments (ADR 0006: append-only ledger, Payments tab) ──
+
+  /** Server view: total − SUM(payments). Negative = temporary overpay. */
+  const outstandingHalalas = calcOutstandingHalalas(serverTotals.totalHalalas, payments);
+  /** Kitchen delta view over the current (clean) cart vs the event ledger. */
+  const hasUnsentKitchen = hasUnsentKitchenDeltas(cart.items, orderEvents);
+
+  function handlePaymentAdded(order: OrderResponse) {
+    hydrateOrder(order);
+    loadOpenOrders();
   }
+
+  // ── Submit (ADR 0006: the only open → paid path, Summary tab) ──
+
+  async function handleSubmit() {
+    if (!currentOrder || currentOrder.status !== 'open') return;
+    if (cart.isDirty || outstandingHalalas !== 0) return;
+    if (cart.serverUpdatedAt == null || cart.items.length === 0) return;
+
+    // Validate buyer if standard invoice is enabled
+    if (isStandardInvoice) {
+      const fieldErrors = validateStandardBuyer(buyer);
+      if (Object.keys(fieldErrors).length > 0) {
+        setBuyerErrors(fieldErrors);
+        return;
+      }
+    }
+
+    setSubmittingOrder(true);
+    setError('');
+    setBuyerErrors({});
+    try {
+      const payload: {
+        baseUpdatedAt: number;
+        isStandardInvoice?: boolean;
+        zatcaBuyerDetails?: ZatcaBuyerDetails;
+      } = { baseUpdatedAt: cart.serverUpdatedAt };
+      if (isStandardInvoice) {
+        payload.isStandardInvoice = true;
+        payload.zatcaBuyerDetails = buyer;
+      }
+      await client.orders.submit(currentOrder.id, payload);
+
+      if (isStandardInvoice) {
+        // Delegate to the clearance modal; it refreshes on done
+        setShowClearance(true);
+      } else {
+        // Simplified: paid + receipt — hydrate the authoritative state
+        await refreshOrder();
+      }
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        await refreshOrder();
+        setError('Order was modified elsewhere. Your local changes have been reset.');
+      } else {
+        setError(e.message || 'Failed to submit order');
+      }
+    } finally {
+      setSubmittingOrder(false);
+    }
+  }
+
+  // ── Void ──
 
   async function handleVoid() {
     if (!currentOrder) return;
@@ -433,6 +590,7 @@ export function OrderPage() {
       await client.orders.void(currentOrder.id);
       setCurrentOrder((prev) => (prev ? { ...prev, status: 'voided' } : null));
     } catch (e: any) {
+      // Server rejects when payments net ≠ 0 — surface the guidance
       setError(e.message || 'Failed to void order');
     } finally {
       setLoading(false);
@@ -480,9 +638,8 @@ export function OrderPage() {
         type,
         ...(tableId !== undefined ? { tableId } : {}),
       });
-      cart.loadOrder(res);
+      hydrateOrder(res);
       loadOpenOrders();
-      setCurrentOrder({ id: res.id, status: res.status, documentId: res.documentId });
       return true;
     } catch (e: any) {
       // 409 occupied or stale: keep the previous type/table. Refetch + hydrate
@@ -493,7 +650,7 @@ export function OrderPage() {
           if (order.status !== 'open') {
             setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
           } else if (!cart.isDirty) {
-            cart.loadOrder(order);
+            hydrateOrder(order);
             loadOpenOrders();
           }
         } catch {
@@ -583,7 +740,7 @@ export function OrderPage() {
           if (order.status !== 'open') {
             setCurrentOrder((prev) => (prev ? { ...prev, status: order.status } : null));
           } else {
-            cart.loadOrder(order);
+            hydrateOrder(order);
           }
         })
         .catch(() => {});
@@ -596,6 +753,7 @@ export function OrderPage() {
   const permissionsReadonly = currentOrder ? !permissions.updateOrder : false;
   const cartDisabled = orderReadonly || permissionsReadonly || loading || syncing;
   const canCreateOrder = !currentOrder && permissions.createOrder;
+  const openOrder = currentOrder ? currentOrder.status === 'open' : false;
 
   // Type toggle + table button enablement (#109):
   // - Pre-create (no currentOrder): editable as today (local staging) —
@@ -611,13 +769,48 @@ export function OrderPage() {
       ? true // pre-create: local staging only (unchanged from pre-#109)
       : permissions.updateOrder && !cart.isDirty);
 
-  // Dirty state: hide Pay/Void (D15), show Send + Discard
-  const showPayVoid =
-    currentOrder &&
-    currentOrder.status === 'open' &&
+  // ADR 0006 gating (matrix in the ADR):
+  // - Add Payment: open + clean + items + payOrder + not busy
+  const canAddPayment =
+    openOrder &&
     !cart.isDirty &&
-    !orderReadonly &&
-    !permissionsReadonly;
+    cart.items.length > 0 &&
+    permissions.payOrder &&
+    !loading &&
+    !syncing &&
+    !metaUpdating;
+
+  // - Submit: open + clean + exact balance + items + payOrder + not busy
+  const canSubmit =
+    openOrder &&
+    !cart.isDirty &&
+    outstandingHalalas === 0 &&
+    cart.items.length > 0 &&
+    permissions.payOrder &&
+    !loading &&
+    !syncing &&
+    !submittingOrder;
+
+  // - Send to Kitchen: open + clean + unsent deltas + updateOrder + not busy
+  const canSendToKitchen =
+    openOrder &&
+    !cart.isDirty &&
+    hasUnsentKitchen &&
+    permissions.updateOrder &&
+    !loading &&
+    !syncing;
+
+  // - Void: open + clean + voidOrder (server rejects when payments net ≠ 0)
+  const canVoid = openOrder && !cart.isDirty && permissions.voidOrder && !loading;
+
+  // Summary totals: prefer server totals when clean; local + warning when dirty
+  const summaryTotals = cart.isDirty
+    ? cart.totals
+    : {
+        subtotalHalalas: serverTotals.subtotalHalalas,
+        vatHalalas: serverTotals.vatHalalas,
+        totalHalalas: serverTotals.totalHalalas,
+      };
 
   if (dayOpen === null) {
     return (
@@ -809,7 +1002,7 @@ export function OrderPage() {
         </div>
       </div>
 
-      {/* Right: Cart */}
+      {/* Right: Cart (tabbed panel, ADR 0006) */}
       <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0 min-h-0">
         {/* Header — pinned */}
         <div className="shrink-0 px-3 pt-3 pb-2 border-b border-gray-700/80">
@@ -824,169 +1017,358 @@ export function OrderPage() {
           </h2>
         </div>
 
-        {/* Items — only this scrolls */}
+        {/* Tabs — pinned, only for existing orders (pre-create stays Items-only) */}
+        {currentOrder && (
+          <div className="shrink-0 flex border-b border-gray-700">
+            {(Object.keys(TAB_LABELS) as OrderTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`touch-target flex-1 py-2 text-sm font-medium ${
+                  activeTab === tab
+                    ? 'text-brand-500 border-b-2 border-brand-500'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Tab body — only this scrolls */}
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
-          {cart.items.length === 0 ? (
-            <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
-          ) : (
-            <div className="space-y-2">
-              {cart.items.map((item, idx) => (
-                <div
-                  key={
-                    item.orderItemId != null ? `oi-${item.orderItemId}` : `mi-${item.itemId}-${idx}`
-                  }
-                  className="bg-gray-800 rounded-lg p-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white flex-1">{item.name}</span>
-                    <span className="text-xs text-gray-400 ml-2">
-                      {halalasToSar(item.unitPriceHalalas * item.qty)}
-                    </span>
-                  </div>
-                  {!orderReadonly && !permissionsReadonly && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <button
-                        onClick={() => handleUpdateQty(item, item.qty - 1)}
-                        disabled={cartDisabled}
-                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                      >
-                        -
-                      </button>
-                      <span className="text-sm text-gray-300 w-7 text-center">{item.qty}</span>
-                      <button
-                        onClick={() => handleUpdateQty(item, item.qty + 1)}
-                        disabled={cartDisabled}
-                        className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                      >
-                        +
-                      </button>
-                      {(currentOrder ? permissions.deleteOrderItem : true) && (
-                        <button
-                          onClick={() => handleRemove(item)}
-                          disabled={cartDisabled}
-                          className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded text-xs text-white ml-auto"
-                        >
-                          ✕
-                        </button>
+          {/* ── Items tab ── */}
+          {(!currentOrder || activeTab === 'items') && (
+            <>
+              {cart.items.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
+              ) : (
+                <div className="space-y-2">
+                  {cart.items.map((item, idx) => (
+                    <div
+                      key={
+                        item.orderItemId != null
+                          ? `oi-${item.orderItemId}`
+                          : `mi-${item.itemId}-${idx}`
+                      }
+                      className="bg-gray-800 rounded-lg p-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-white flex-1">{item.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">
+                          {halalasToSar(item.unitPriceHalalas * item.qty)}
+                        </span>
+                      </div>
+                      {!orderReadonly && !permissionsReadonly && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <button
+                            onClick={() => handleUpdateQty(item, item.qty - 1)}
+                            disabled={cartDisabled}
+                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
+                          >
+                            -
+                          </button>
+                          <span className="text-sm text-gray-300 w-7 text-center">{item.qty}</span>
+                          <button
+                            onClick={() => handleUpdateQty(item, item.qty + 1)}
+                            disabled={cartDisabled}
+                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
+                          >
+                            +
+                          </button>
+                          {(currentOrder ? permissions.deleteOrderItem : true) && (
+                            <button
+                              onClick={() => handleRemove(item)}
+                              disabled={cartDisabled}
+                              className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded text-xs text-white ml-auto"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Payments tab ── */}
+          {currentOrder && activeTab === 'payments' && (
+            <>
+              {/* Outstanding — from SERVER totals and SERVER payment ledger */}
+              <div className="mb-3">
+                <div className="text-xs text-gray-500 mb-1">Outstanding</div>
+                <div
+                  className={`text-2xl font-bold ${
+                    outstandingHalalas === 0
+                      ? 'text-green-400'
+                      : outstandingHalalas < 0
+                        ? 'text-red-400'
+                        : 'text-amber-400'
+                  }`}
+                >
+                  {halalasToSar(Math.abs(outstandingHalalas))} SAR
+                  {outstandingHalalas < 0 && (
+                    <span className="text-xs text-red-400 ml-2">(overpaid)</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Append-only log, oldest-first (server returns payments by id) */}
+              {payments.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center mt-8">No payments yet</div>
+              ) : (
+                <div className="space-y-1">
+                  {payments.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+                    >
+                      <div className="min-w-0 mr-2">
+                        <div className="text-sm text-white truncate">{p.methodTitle}</div>
+                        <div className="text-xs text-gray-500">
+                          {formatPaymentTime(p.createdAt)}
+                          {p.tenderedHalalas != null &&
+                            ` · Tendered ${halalasToSar(p.tenderedHalalas)}`}
+                          {p.changeHalalas != null &&
+                            p.changeHalalas > 0 &&
+                            ` · Change ${halalasToSar(p.changeHalalas)}`}
+                        </div>
+                      </div>
+                      <div
+                        className={`text-sm font-mono shrink-0 ${
+                          p.amountHalalas < 0 ? 'text-red-400' : 'text-white'
+                        }`}
+                      >
+                        {p.amountHalalas < 0 ? '−' : ''}
+                        {halalasToSar(Math.abs(p.amountHalalas))} SAR
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Summary tab ── */}
+          {currentOrder && activeTab === 'summary' && (
+            <>
+              {cart.isDirty && (
+                <div className="text-amber-400 text-xs mb-3">
+                  Cart has unsent changes — totals below are from your local cart and may be stale.
+                  Save items first.
+                </div>
+              )}
+              <div className="space-y-1 text-sm mb-3">
+                <div className="flex justify-between text-gray-400">
+                  <span>Subtotal</span>
+                  <span>{halalasToSar(summaryTotals.subtotalHalalas)} SAR</span>
+                </div>
+                <div className="flex justify-between text-gray-400">
+                  <span>VAT (15%)</span>
+                  <span>{halalasToSar(summaryTotals.vatHalalas)} SAR</span>
+                </div>
+                <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-gray-700">
+                  <span>Total</span>
+                  <span>{halalasToSar(summaryTotals.totalHalalas)} SAR</span>
+                </div>
+                <div className="flex justify-between text-gray-400 pt-1">
+                  <span>Outstanding</span>
+                  <span
+                    className={
+                      outstandingHalalas === 0
+                        ? 'text-green-400 font-bold'
+                        : outstandingHalalas < 0
+                          ? 'text-red-400 font-bold'
+                          : 'text-amber-400 font-bold'
+                    }
+                  >
+                    {halalasToSar(outstandingHalalas)} SAR
+                  </span>
+                </div>
+              </div>
+
+              {/* Standard invoice toggle + buyer form (open orders only) */}
+              {openOrder && (
+                <div className="mb-3">
+                  <label className="flex items-center gap-2 touch-target cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={isStandardInvoice}
+                      onChange={(e) => {
+                        setIsStandardInvoice(e.target.checked);
+                        if (!e.target.checked) {
+                          setBuyerErrors({});
+                        }
+                      }}
+                      className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-brand-500 focus:ring-brand-500"
+                    />
+                    <span className="text-sm text-gray-300">Issue ZATCA Standard Invoice</span>
+                  </label>
+
+                  {isStandardInvoice && (
+                    <div className="mt-2 border-t border-gray-700 pt-3">
+                      <StandardInvoiceBuyerForm
+                        value={buyer}
+                        onChange={(next) => {
+                          setBuyer(next);
+                          // Clear individual field error on change
+                          if (buyerErrors) {
+                            setBuyerErrors({});
+                          }
+                        }}
+                        disabled={submittingOrder}
+                        errors={buyerErrors}
+                      />
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Totals & Actions */}
+        {/* Tab footer — pinned, tab-specific actions */}
         <div className="border-t border-gray-700 p-3 shrink-0">
-          <div className="space-y-1 text-sm mb-3">
-            <div className="flex justify-between text-gray-400">
-              <span>Subtotal</span>
-              <span>{halalasToSar(cart.totals.subtotalHalalas)} SAR</span>
-            </div>
-            <div className="flex justify-between text-gray-400">
-              <span>VAT (15%)</span>
-              <span>{halalasToSar(cart.totals.vatHalalas)} SAR</span>
-            </div>
-            <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-gray-700">
-              <span>Total</span>
-              <span>{halalasToSar(cart.totals.totalHalalas)} SAR</span>
-            </div>
-          </div>
-
           {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
 
-          <div className="space-y-2">
-            {/* Pre-order: Create Order */}
-            {canCreateOrder && (
-              <button
-                onClick={handleCreateOrder}
-                disabled={cart.items.length === 0 || loading}
-                className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-              >
-                {loading ? 'Creating...' : 'Create Order'}
-              </button>
-            )}
-
-            {/* Open + Dirty: Send to Kitchen + Discard (D12, D14) */}
-            {currentOrder && currentOrder.status === 'open' && cart.isDirty && (
-              <>
-                <button
-                  onClick={handleSendToKitchen}
-                  disabled={syncing || loading}
-                  className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  {syncing ? 'Syncing...' : 'Send to Kitchen'}
-                </button>
-                <button
-                  onClick={handleDiscard}
-                  disabled={syncing || loading}
-                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                >
-                  Discard
-                </button>
-              </>
-            )}
-
-            {/* Open + Clean: Pay / Void (D15) */}
-            {showPayVoid && (
-              <>
-                {permissions.payOrder && (
+          {/* ── Items footer ── */}
+          {(!currentOrder || activeTab === 'items') && (
+            <>
+              <div className="flex justify-between text-sm text-gray-400 mb-2">
+                <span>Total</span>
+                <span className="text-white font-bold">
+                  {halalasToSar(cart.totals.totalHalalas)} SAR
+                </span>
+              </div>
+              <div className="space-y-2">
+                {/* Pre-order: Create Order */}
+                {canCreateOrder && (
                   <button
-                    onClick={handleOpenPayModal}
-                    disabled={loading || cart.items.length === 0}
-                    className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                    onClick={handleCreateOrder}
+                    disabled={cart.items.length === 0 || loading}
+                    className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
                   >
-                    Pay
+                    {loading ? 'Creating...' : 'Create Order'}
                   </button>
                 )}
-                {permissions.voidOrder && (
-                  <ConfirmActionButton
-                    textContent="Void Order"
-                    confirmTextContent="Confirm Void Order"
-                    onConfirm={handleVoid}
-                    disabled={loading}
-                    busy={loading}
-                    busyTextContent="Voiding..."
-                    className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                    confirmClassName="w-full touch-target bg-red-900 hover:bg-red-800 rounded-lg text-sm font-bold text-red-100 py-3"
-                  />
+
+                {/* Open + Dirty: Save Items + Discard (D12, D14; ADR 0006) */}
+                {openOrder && cart.isDirty && (
+                  <>
+                    <button
+                      onClick={handleSaveItems}
+                      disabled={syncing || loading}
+                      className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                    >
+                      {syncing ? 'Syncing...' : 'Save Items'}
+                    </button>
+                    <button
+                      onClick={handleDiscard}
+                      disabled={syncing || loading}
+                      className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
+                    >
+                      Discard
+                    </button>
+                  </>
                 )}
-              </>
-            )}
 
-            {currentOrder && currentOrder.status === 'paid' && permissions.refundOrder && (
-              <button
-                onClick={handleOpenRefund}
-                disabled={loading || refundLoading}
-                className="w-full touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-              >
-                Refund
-              </button>
-            )}
-
-            {/* OrderActionBar for reprints */}
-            {currentOrder && (
-              <div className="pt-1">
-                <OrderActionBar orderId={currentOrder.id} status={currentOrder.status} />
+                {/* Open + Clean + unsent kitchen deltas: Send to Kitchen (ADR 0006) */}
+                {canSendToKitchen && (
+                  <button
+                    onClick={handleSendToKitchen}
+                    disabled={sendingKitchen || loading || syncing}
+                    className="w-full touch-target bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                  >
+                    {sendingKitchen ? 'Sending...' : 'Send to Kitchen'}
+                  </button>
+                )}
               </div>
-            )}
+            </>
+          )}
 
-            {currentOrder && !cart.isDirty && (
-              <button
-                onClick={() => guardedNavigate(handleNewOrder)}
-                className={
-                  currentOrder.status === 'paid' ||
-                  currentOrder.status === 'voided' ||
-                  currentOrder.status === 'refunded'
-                    ? 'w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3'
-                    : 'w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3'
-                }
-              >
-                New Order
-              </button>
-            )}
-          </div>
+          {/* ── Payments footer ── */}
+          {currentOrder && activeTab === 'payments' && (
+            <div className="space-y-2">
+              {openOrder && (
+                <>
+                  {cart.isDirty && (
+                    <div className="text-amber-400 text-xs">Save items before adding payments</div>
+                  )}
+                  <button
+                    onClick={() => setShowAddPaymentModal(true)}
+                    disabled={!canAddPayment}
+                    className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                  >
+                    Add Payment
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Summary footer ── */}
+          {currentOrder && activeTab === 'summary' && (
+            <div className="space-y-2">
+              {/* Submit: the only open → paid path (ADR 0006) */}
+              {openOrder && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="w-full touch-target bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                >
+                  {submittingOrder ? 'Submitting...' : 'Submit'}
+                </button>
+              )}
+              {openOrder && canVoid && (
+                <ConfirmActionButton
+                  textContent="Void Order"
+                  confirmTextContent="Confirm Void Order"
+                  onConfirm={handleVoid}
+                  disabled={loading}
+                  busy={loading}
+                  busyTextContent="Voiding..."
+                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
+                  confirmClassName="w-full touch-target bg-red-900 hover:bg-red-800 rounded-lg text-sm font-bold text-red-100 py-3"
+                />
+              )}
+
+              {currentOrder && currentOrder.status === 'paid' && permissions.refundOrder && (
+                <button
+                  onClick={handleOpenRefund}
+                  disabled={loading || refundLoading}
+                  className="w-full touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                >
+                  Refund
+                </button>
+              )}
+
+              {/* OrderActionBar for reprints */}
+              {currentOrder && (
+                <div className="pt-1">
+                  <OrderActionBar orderId={currentOrder.id} status={currentOrder.status} />
+                </div>
+              )}
+
+              {currentOrder && !cart.isDirty && (
+                <button
+                  onClick={() => guardedNavigate(handleNewOrder)}
+                  className={
+                    currentOrder.status === 'paid' ||
+                    currentOrder.status === 'voided' ||
+                    currentOrder.status === 'refunded'
+                      ? 'w-full touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-3'
+                      : 'w-full touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3'
+                  }
+                >
+                  New Order
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1062,17 +1444,7 @@ export function OrderPage() {
                 onClose={handleCloseRefund}
                 onRefunded={() => {
                   handleCloseRefund();
-                  client.orders
-                    .get(currentOrder!.id)
-                    .then((order) => {
-                      cart.loadOrder(order);
-                      setCurrentOrder({
-                        id: order.id,
-                        status: order.status,
-                        documentId: order.documentId,
-                      });
-                    })
-                    .catch(() => {});
+                  void refreshOrder();
                 }}
               />
             )}
@@ -1088,13 +1460,27 @@ export function OrderPage() {
       {/* Realtime conflict dialog (D8) */}
       {showRealtimeConflict && <RealtimeConflictDialog onDismiss={handleRealtimeConflictDismiss} />}
 
-      {/* Pay modal */}
-      {showPayModal && currentOrder && (
-        <PayModal
+      {/* Add payment modal (ADR 0006) — appends one line, never submits */}
+      {showAddPaymentModal && currentOrder && (
+        <AddPaymentModal
           orderId={currentOrder.id}
-          orderTotalHalalas={cart.totals.totalHalalas}
-          onPaid={handlePaid}
-          onClose={() => setShowPayModal(false)}
+          orderTotalHalalas={serverTotals.totalHalalas}
+          outstandingHalalas={outstandingHalalas}
+          onAdded={handlePaymentAdded}
+          onClose={() => setShowAddPaymentModal(false)}
+        />
+      )}
+
+      {/* ZATCA clearance modal — after submit with standard invoice */}
+      {showClearance && currentOrder && (
+        <ZatcaClearanceModal
+          orderId={currentOrder.id}
+          orderTotalHalalas={serverTotals.totalHalalas}
+          initialBuyer={buyer}
+          onDone={() => {
+            setShowClearance(false);
+            void refreshOrder();
+          }}
         />
       )}
     </div>

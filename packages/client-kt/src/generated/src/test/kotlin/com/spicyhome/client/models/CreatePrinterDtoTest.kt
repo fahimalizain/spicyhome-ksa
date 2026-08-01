@@ -19,6 +19,7 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.models.CreatePrinterDto
+import com.spicyhome.client.models.PrinterConfigDto
 
 class CreatePrinterDtoTest : ShouldSpec() {
     init {
@@ -31,22 +32,40 @@ class CreatePrinterDtoTest : ShouldSpec() {
             //modelInstance.name shouldBe ("TODO")
         }
 
-        // to test the property `ip`
-        should("test ip") {
-            // uncomment below to test the property
-            //modelInstance.ip shouldBe ("TODO")
-        }
-
         // to test the property `role`
         should("test role") {
             // uncomment below to test the property
             //modelInstance.role shouldBe ("TODO")
         }
 
+        // to test the property `connectionType` - How to connect to the printer: TCP/IP network or Windows spooler queue.
+        should("test connectionType") {
+            // uncomment below to test the property
+            //modelInstance.connectionType shouldBe ("TODO")
+        }
+
+        // to test the property `windowsPrinterName` - Windows printer queue name. Required when connectionType is \"windows\".
+        should("test windowsPrinterName") {
+            // uncomment below to test the property
+            //modelInstance.windowsPrinterName shouldBe ("TODO")
+        }
+
+        // to test the property `ip` - IP address or hostname. Required when connectionType is \"tcp\" (default). Can be empty string for windows.
+        should("test ip") {
+            // uncomment below to test the property
+            //modelInstance.ip shouldBe ("TODO")
+        }
+
         // to test the property `port`
         should("test port") {
             // uncomment below to test the property
             //modelInstance.port shouldBe ("TODO")
+        }
+
+        // to test the property `config` - Per-printer configuration (Arabic encoding etc.).
+        should("test config") {
+            // uncomment below to test the property
+            //modelInstance.config shouldBe ("TODO")
         }
 
         // to test the property `isActive`

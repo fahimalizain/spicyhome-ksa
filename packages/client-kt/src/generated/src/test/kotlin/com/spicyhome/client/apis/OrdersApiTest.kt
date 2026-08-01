@@ -19,8 +19,7 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.apis.OrdersApi
-import com.spicyhome.client.models.AddOrderItemDto
-import com.spicyhome.client.models.AddOrderItemResponse
+import com.spicyhome.client.models.AddOrderPaymentDto
 import com.spicyhome.client.models.AuditVerifyResponse
 import com.spicyhome.client.models.CreateOrderDto
 import com.spicyhome.client.models.CreateOrderResponse
@@ -29,25 +28,28 @@ import com.spicyhome.client.models.OrderEventResponse
 import com.spicyhome.client.models.OrderRefundResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
-import com.spicyhome.client.models.PayOrderDto
 import com.spicyhome.client.models.PrintResponse
 import com.spicyhome.client.models.RefundResponse
 import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
-import com.spicyhome.client.models.SuccessResponse
-import com.spicyhome.client.models.UpdateOrderItemDto
+import com.spicyhome.client.models.SubmitOrderDto
+import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.UpdateOrderMetaDto
+import com.spicyhome.client.models.ZatcaInvoiceReissueDto
+import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
+import com.spicyhome.client.models.ZatcaReissueResultDto
 
 class OrdersApiTest : ShouldSpec() {
     init {
         // uncomment below to create an instance of OrdersApi
         //val apiInstance = OrdersApi()
 
-        // to test ordersControllerAddItem
-        should("test ordersControllerAddItem") {
-            // uncomment below to test ordersControllerAddItem
+        // to test ordersControllerAddOrderPayment
+        should("test ordersControllerAddOrderPayment") {
+            // uncomment below to test ordersControllerAddOrderPayment
             //val id : kotlin.Long = 789 // kotlin.Long | 
-            //val addOrderItemDto : AddOrderItemDto =  // AddOrderItemDto | 
-            //val result : AddOrderItemResponse = apiInstance.ordersControllerAddItem(id, addOrderItemDto)
+            //val addOrderPaymentDto : AddOrderPaymentDto =  // AddOrderPaymentDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerAddOrderPayment(id, addOrderPaymentDto)
             //result shouldBe ("TODO")
         }
 
@@ -83,21 +85,29 @@ class OrdersApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test ordersControllerGetZatcaCreditNoteStatus
+        should("test ordersControllerGetZatcaCreditNoteStatus") {
+            // uncomment below to test ordersControllerGetZatcaCreditNoteStatus
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val refundId : kotlin.Long = 789 // kotlin.Long | 
+            //val result : ZatcaInvoiceStatusResponse = apiInstance.ordersControllerGetZatcaCreditNoteStatus(id, refundId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerGetZatcaInvoiceStatus
+        should("test ordersControllerGetZatcaInvoiceStatus") {
+            // uncomment below to test ordersControllerGetZatcaInvoiceStatus
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : ZatcaInvoiceStatusResponse = apiInstance.ordersControllerGetZatcaInvoiceStatus(id)
+            //result shouldBe ("TODO")
+        }
+
         // to test ordersControllerListOrders
         should("test ordersControllerListOrders") {
             // uncomment below to test ordersControllerListOrders
             //val status : kotlin.String = status_example // kotlin.String | 
             //val date : kotlin.String = date_example // kotlin.String | 
             //val result : kotlin.collections.List<OrderSummaryResponse> = apiInstance.ordersControllerListOrders(status, date)
-            //result shouldBe ("TODO")
-        }
-
-        // to test ordersControllerPayOrder
-        should("test ordersControllerPayOrder") {
-            // uncomment below to test ordersControllerPayOrder
-            //val id : kotlin.Long = 789 // kotlin.Long | 
-            //val payOrderDto : PayOrderDto =  // PayOrderDto | 
-            //val result : StatusResponse = apiInstance.ordersControllerPayOrder(id, payOrderDto)
             //result shouldBe ("TODO")
         }
 
@@ -110,12 +120,21 @@ class OrdersApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
-        // to test ordersControllerRemoveItem
-        should("test ordersControllerRemoveItem") {
-            // uncomment below to test ordersControllerRemoveItem
-            //val orderId : kotlin.Long = 789 // kotlin.Long | 
-            //val itemId : kotlin.Long = 789 // kotlin.Long | 
-            //val result : SuccessResponse = apiInstance.ordersControllerRemoveItem(orderId, itemId)
+        // to test ordersControllerReissueZatcaCreditNote
+        should("test ordersControllerReissueZatcaCreditNote") {
+            // uncomment below to test ordersControllerReissueZatcaCreditNote
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val refundId : kotlin.Long = 789 // kotlin.Long | 
+            //val result : ZatcaReissueResultDto = apiInstance.ordersControllerReissueZatcaCreditNote(id, refundId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerReissueZatcaInvoice
+        should("test ordersControllerReissueZatcaInvoice") {
+            // uncomment below to test ordersControllerReissueZatcaInvoice
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val zatcaInvoiceReissueDto : ZatcaInvoiceReissueDto =  // ZatcaInvoiceReissueDto | 
+            //val result : ZatcaReissueResultDto = apiInstance.ordersControllerReissueZatcaInvoice(id, zatcaInvoiceReissueDto)
             //result shouldBe ("TODO")
         }
 
@@ -128,13 +147,64 @@ class OrdersApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
-        // to test ordersControllerUpdateItem
-        should("test ordersControllerUpdateItem") {
-            // uncomment below to test ordersControllerUpdateItem
+        // to test ordersControllerReprintRefundReceipt
+        should("test ordersControllerReprintRefundReceipt") {
+            // uncomment below to test ordersControllerReprintRefundReceipt
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val refundId : kotlin.Long = 789 // kotlin.Long | 
+            //val result : PrintResponse = apiInstance.ordersControllerReprintRefundReceipt(id, refundId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerRetryZatcaClearance
+        should("test ordersControllerRetryZatcaClearance") {
+            // uncomment below to test ordersControllerRetryZatcaClearance
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : ZatcaReissueResultDto = apiInstance.ordersControllerRetryZatcaClearance(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerRetryZatcaCreditNoteClearance
+        should("test ordersControllerRetryZatcaCreditNoteClearance") {
+            // uncomment below to test ordersControllerRetryZatcaCreditNoteClearance
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val refundId : kotlin.Long = 789 // kotlin.Long | 
+            //val result : ZatcaReissueResultDto = apiInstance.ordersControllerRetryZatcaCreditNoteClearance(id, refundId)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerSendToKitchen
+        should("test ordersControllerSendToKitchen") {
+            // uncomment below to test ordersControllerSendToKitchen
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val result : OrderResponse = apiInstance.ordersControllerSendToKitchen(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerSubmitOrder
+        should("test ordersControllerSubmitOrder") {
+            // uncomment below to test ordersControllerSubmitOrder
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val submitOrderDto : SubmitOrderDto =  // SubmitOrderDto | 
+            //val result : StatusResponse = apiInstance.ordersControllerSubmitOrder(id, submitOrderDto)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerSyncItems
+        should("test ordersControllerSyncItems") {
+            // uncomment below to test ordersControllerSyncItems
             //val orderId : kotlin.Long = 789 // kotlin.Long | 
-            //val itemId : kotlin.Long = 789 // kotlin.Long | 
-            //val updateOrderItemDto : UpdateOrderItemDto =  // UpdateOrderItemDto | 
-            //val result : SuccessResponse = apiInstance.ordersControllerUpdateItem(orderId, itemId, updateOrderItemDto)
+            //val syncOrderItemsDto : SyncOrderItemsDto =  // SyncOrderItemsDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerSyncItems(orderId, syncOrderItemsDto)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerUpdateOrderMeta
+        should("test ordersControllerUpdateOrderMeta") {
+            // uncomment below to test ordersControllerUpdateOrderMeta
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val updateOrderMetaDto : UpdateOrderMetaDto =  // UpdateOrderMetaDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerUpdateOrderMeta(id, updateOrderMetaDto)
             //result shouldBe ("TODO")
         }
 

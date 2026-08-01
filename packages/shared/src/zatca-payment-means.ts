@@ -83,8 +83,47 @@ function methodDisplayName(methodId: string, methodTitle: string): string {
 }
 
 /**
- * Build one `cac:PaymentMeans` per invoice payment line (BT-81 cardinality
- * `1..n`), sorted by `methodId` ASC for deterministic (C14N-stable) output.
+ * Net payment lines by `methodId` (ADR 0006): sums `amountHalalas` per
+ * method, keeps the `methodTitle` / `zatcaPaymentMeansCode` snapshot of the
+ * **latest** line for that method (original input order), and drops nets
+ * `<= 0` — zero nets are redundant and negative nets must never reach an
+ * invoice (Submit rejects them; the overall sum equals the order total, so a
+ * fully-paid order always has at least one positive net).
+ *
+ * Output is sorted by `methodId` ASC for deterministic (C14N-stable) XML.
+ */
+export function netPaymentMeansLines(
+  lines: ReadonlyArray<PaymentMeansLineInput>,
+): PaymentMeansLineInput[] {
+  const nets = new Map<string, PaymentMeansLineInput>();
+  for (const line of lines) {
+    const prev = nets.get(line.methodId);
+    nets.set(line.methodId, {
+      methodId: line.methodId,
+      // Latest line wins for the snapshot fields (append order = oldest first)
+      methodTitle: line.methodTitle,
+      zatcaPaymentMeansCode: line.zatcaPaymentMeansCode,
+      amountHalalas: (prev?.amountHalalas ?? 0) + line.amountHalalas,
+    });
+  }
+
+  return [...nets.values()]
+    .filter((line) => line.amountHalalas > 0)
+    .sort((a, b) => {
+      if (a.methodId < b.methodId) return -1;
+      if (a.methodId > b.methodId) return 1;
+      return 0;
+    });
+}
+
+/**
+ * Build one `cac:PaymentMeans` per **netted** payment method (BT-81
+ * cardinality `1..n`), sorted by `methodId` ASC for deterministic
+ * (C14N-stable) output.
+ *
+ * Multi-line / correction payments are netted per `methodId` first (see
+ * `netPaymentMeansLines`): a method paid in two lines (+100 / −20) emits a
+ * single block for the net (80). Zero or negative nets are dropped.
  *
  * InstructionNote format (tax invoices): `{methodTitle} | {amount} SAR`.
  * Invalid codes are coerced per line to `10` but the line is still emitted
@@ -95,13 +134,7 @@ function methodDisplayName(methodId: string, methodTitle: string): string {
 export function buildInvoicePaymentMeans(
   lines: ReadonlyArray<PaymentMeansLineInput>,
 ): BuiltPaymentMeans[] {
-  const sorted = [...lines].sort((a, b) => {
-    if (a.methodId < b.methodId) return -1;
-    if (a.methodId > b.methodId) return 1;
-    return 0;
-  });
-
-  return sorted.map((line) => ({
+  return netPaymentMeansLines(lines).map((line) => ({
     code: isZatcaPaymentMeansCode(line.zatcaPaymentMeansCode)
       ? line.zatcaPaymentMeansCode
       : DEFAULT_ZATCA_PAYMENT_MEANS_CODE,

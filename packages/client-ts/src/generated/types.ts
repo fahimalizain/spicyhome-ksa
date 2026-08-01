@@ -374,7 +374,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/orders/{id}/pay': {
+  '/orders/{id}/send-to-kitchen': {
     parameters: {
       query?: never;
       header?: never;
@@ -383,8 +383,42 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Mark order as paid with payment methods (open → paid) */
-    post: operations['OrdersController_payOrder'];
+    /** Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent) */
+    post: operations['OrdersController_sendToKitchen'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt */
+    post: operations['OrdersController_submitOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/orders/{id}/payments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Append one payment line to an open order (status stays open) */
+    post: operations['OrdersController_addOrderPayment'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1849,6 +1883,12 @@ export interface components {
     };
     OrderPaymentResponse: {
       /**
+       * Format: int64
+       * @description Payment line id
+       * @example 1
+       */
+      id: number;
+      /**
        * @description Payment method slug
        * @example card
        */
@@ -1881,6 +1921,12 @@ export interface components {
        * @example 0
        */
       changeHalalas: number | null;
+      /**
+       * Format: int64
+       * @description Payment line creation time
+       * @example 1700000000
+       */
+      createdAt: number;
     };
     OrderResponse: {
       /**
@@ -2048,28 +2094,12 @@ export interface components {
       /** @description Full desired cart — missing existing lines are removed */
       items: components['schemas']['SyncOrderItemDto'][];
     };
-    PaymentLineDto: {
-      /**
-       * @description Payment method slug
-       * @example card
-       */
-      methodId: string;
+    SubmitOrderDto: {
       /**
        * Format: int64
-       * @description Amount in halalas
-       * @example 5000
+       * @description Order updated_at observed by the client; if present it must match the current value or the submit is rejected with 409.
        */
-      amountHalalas: number;
-      /**
-       * Format: int64
-       * @description Cash tendered amount in halalas (cash only)
-       * @example 10000
-       */
-      tenderedHalalas?: number | null;
-    };
-    PayOrderDto: {
-      /** @description Payment lines (at least one required) */
-      payments: components['schemas']['PaymentLineDto'][];
+      baseUpdatedAt?: number;
       /**
        * @description Enable standard invoice with buyer details for ZATCA
        * @example false
@@ -2083,6 +2113,25 @@ export interface components {
       success: boolean;
       /** @example paid */
       status: string;
+    };
+    AddOrderPaymentDto: {
+      /**
+       * @description Payment method slug
+       * @example card
+       */
+      methodId: string;
+      /**
+       * Format: int64
+       * @description Amount in halalas. Signed integer: positive lines are payments, negative lines are corrections. Zero is rejected.
+       * @example 5000
+       */
+      amountHalalas: number;
+      /**
+       * Format: int64
+       * @description Cash tendered amount in halalas (positive cash lines only)
+       * @example 10000
+       */
+      tenderedHalalas?: number | null;
     };
     ReprintOrderDto: {
       /**
@@ -3372,7 +3421,29 @@ export interface operations {
       };
     };
   };
-  OrdersController_payOrder: {
+  OrdersController_sendToKitchen: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_submitOrder: {
     parameters: {
       query?: never;
       header?: never;
@@ -3383,7 +3454,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['PayOrderDto'];
+        'application/json': components['schemas']['SubmitOrderDto'];
       };
     };
     responses: {
@@ -3394,6 +3465,32 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['StatusResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_addOrderPayment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddOrderPaymentDto'];
+      };
+    };
+    responses: {
+      /** @description Order with the appended payment line */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
         };
       };
     };

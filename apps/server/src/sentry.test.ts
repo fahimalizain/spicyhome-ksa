@@ -32,6 +32,7 @@ describe('Health endpoint', () => {
 
     app = moduleFixture.createNestApplication();
     app.useWebSocketAdapter(new WsAdapter(app));
+    await app.listen(0);
     await app.init();
 
     // Restore DSN
@@ -79,6 +80,7 @@ describe('Sentry exception filter', () => {
 
     app = moduleFixture.createNestApplication();
     app.useWebSocketAdapter(new WsAdapter(app));
+    await app.listen(0);
     await app.init();
 
     if (originalDsn) process.env.SENTRY_DSN = originalDsn;

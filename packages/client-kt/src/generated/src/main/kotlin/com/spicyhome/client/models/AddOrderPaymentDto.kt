@@ -23,22 +23,22 @@ import com.squareup.moshi.JsonClass
  * 
  *
  * @param methodId Payment method slug
- * @param amountHalalas Amount in halalas
- * @param tenderedHalalas Cash tendered amount in halalas (cash only)
+ * @param amountHalalas Amount in halalas. Signed integer: positive lines are payments, negative lines are corrections. Zero is rejected.
+ * @param tenderedHalalas Cash tendered amount in halalas (positive cash lines only)
  */
 
 
-data class PaymentLineDto (
+data class AddOrderPaymentDto (
 
     /* Payment method slug */
     @Json(name = "methodId")
     val methodId: kotlin.String,
 
-    /* Amount in halalas */
+    /* Amount in halalas. Signed integer: positive lines are payments, negative lines are corrections. Zero is rejected. */
     @Json(name = "amountHalalas")
     val amountHalalas: kotlin.Long,
 
-    /* Cash tendered amount in halalas (cash only) */
+    /* Cash tendered amount in halalas (positive cash lines only) */
     @Json(name = "tenderedHalalas")
     val tenderedHalalas: kotlin.Long? = null
 

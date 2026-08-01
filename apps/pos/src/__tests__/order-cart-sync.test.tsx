@@ -11,7 +11,7 @@ const mockTablesList = vi.fn();
 const mockOrdersGet = vi.fn();
 const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
-const mockOrdersPay = vi.fn();
+const mockOrdersSendToKitchen = vi.fn();
 const mockOrdersVoid = vi.fn();
 
 vi.mock('../api', () => ({
@@ -29,7 +29,7 @@ vi.mock('../api', () => ({
       create: (...args: any[]) => mockOrdersCreate(...args),
       syncItems: (...args: any[]) => mockOrdersSyncItems(...args),
       get: (...args: any[]) => mockOrdersGet(...args),
-      pay: (...args: any[]) => mockOrdersPay(...args),
+      sendToKitchen: (...args: any[]) => mockOrdersSendToKitchen(...args),
       void: (...args: any[]) => mockOrdersVoid(...args),
       refund: vi.fn(),
       getRefunds: vi.fn(),
@@ -209,8 +209,8 @@ describe('OrderPage — staged cart', () => {
     });
   });
 
-  // ---- Test 2: Send to Kitchen calls syncItems ----
-  it('open order: Send to Kitchen calls syncItems with full cart snapshot', async () => {
+  // ---- Test 2: Save Items calls syncItems ----
+  it('open order: Save Items calls syncItems with full cart snapshot', async () => {
     mockGetReturns(makeOrder());
 
     // Sync succeeds and returns updated order
@@ -245,13 +245,13 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Unsent changes')).toBeInTheDocument();
     });
 
-    // Send to Kitchen should be visible
+    // Save Items should be visible
     await waitFor(() => {
-      expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+      expect(screen.getByText('Save Items')).toBeInTheDocument();
     });
 
-    // Click Send to Kitchen
-    fireEvent.click(screen.getByText('Send to Kitchen'));
+    // Click Save Items
+    fireEvent.click(screen.getByText('Save Items'));
 
     await waitFor(() => {
       expect(mockOrdersSyncItems).toHaveBeenCalledTimes(1);
@@ -307,8 +307,8 @@ describe('OrderPage — staged cart', () => {
     });
   });
 
-  // ---- Test 4: Pay/Void hidden when dirty (D15) ----
-  it('open order: Pay and Void hidden when dirty', async () => {
+  // ---- Test 4: Send to Kitchen hidden when dirty; Save Items shown (ADR 0006) ----
+  it('open order: Send to Kitchen hidden when dirty, Save Items shown', async () => {
     mockGetReturns(makeOrder());
 
     renderOrderPage();
@@ -317,19 +317,19 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    // Clean — Pay/Void visible
-    expect(screen.queryByText('Pay')).toBeInTheDocument();
-    expect(screen.queryByText('Void Order')).toBeInTheDocument();
+    // Clean with unsent kitchen deltas (qty 2, nothing printed) — Send shown,
+    // Save Items hidden (mutual exclusion)
+    expect(screen.queryByText('Send to Kitchen')).toBeInTheDocument();
+    expect(screen.queryByText('Save Items')).not.toBeInTheDocument();
 
     // Make a change
     const plusButtons = screen.getAllByText('+');
     fireEvent.click(plusButtons[0]);
 
-    // Dirty — Pay/Void hidden, Send/Discard visible
+    // Dirty — Send hidden, Save Items + Discard shown
     await waitFor(() => {
-      expect(screen.queryByText('Pay')).not.toBeInTheDocument();
-      expect(screen.queryByText('Void Order')).not.toBeInTheDocument();
-      expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+      expect(screen.queryByText('Send to Kitchen')).not.toBeInTheDocument();
+      expect(screen.getByText('Save Items')).toBeInTheDocument();
       expect(screen.getByText('Discard')).toBeInTheDocument();
     });
   });
@@ -437,8 +437,8 @@ describe('OrderPage — staged cart', () => {
     // Add Fries
     fireEvent.click(screen.getAllByText('Fries')[0]);
 
-    // Send to Kitchen — triggers 409
-    fireEvent.click(screen.getByText('Send to Kitchen'));
+    // Save Items — triggers 409
+    fireEvent.click(screen.getByText('Save Items'));
 
     await waitFor(() => {
       // Error shown
@@ -480,20 +480,27 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    // Clean: New Order visible
-    expect(screen.getByText('New Order')).toBeInTheDocument();
+    // Clean: New Order visible on the Summary tab
+    fireEvent.click(screen.getByText('Summary'));
+    await waitFor(() => {
+      expect(screen.getByText('New Order')).toBeInTheDocument();
+    });
 
-    // Make a change to get dirty
+    // Back to Items; make a change to get dirty
+    fireEvent.click(screen.getByText('Items'));
     fireEvent.click(screen.getAllByText('Burger')[0]);
 
     await waitFor(() => {
       expect(screen.getByText('Unsent changes')).toBeInTheDocument();
     });
 
-    // Dirty: New Order hidden, Send/Discard present
-    expect(screen.queryByText('New Order')).not.toBeInTheDocument();
-    expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+    // Dirty: Save/Discard present on Items
+    expect(screen.getByText('Save Items')).toBeInTheDocument();
     expect(screen.getByText('Discard')).toBeInTheDocument();
+
+    // Dirty: New Order hidden on Summary
+    fireEvent.click(screen.getByText('Summary'));
+    expect(screen.queryByText('New Order')).not.toBeInTheDocument();
   });
 
   // ---- Test 9b: New Order on clean open order clears immediately ----
@@ -506,11 +513,13 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    // No dirty state — Pay and Void visible
-    expect(screen.getByText('Pay')).toBeInTheDocument();
-    expect(screen.getByText('Void Order')).toBeInTheDocument();
+    // Clean — Send to Kitchen visible, tabs shown
+    expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+    expect(screen.getByText('Payments')).toBeInTheDocument();
+    expect(screen.getByText('Summary')).toBeInTheDocument();
 
-    // New Order visible for open orders
+    // New Order lives on the Summary tab for open orders
+    fireEvent.click(screen.getByText('Summary'));
     const newOrderBtn = screen.getByText('New Order');
     expect(newOrderBtn).toBeInTheDocument();
 
@@ -522,11 +531,50 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('New Order')).toBeInTheDocument();
       expect(screen.getByText('Create Order')).toBeInTheDocument();
       expect(screen.queryByText('Order #42')).not.toBeInTheDocument();
+      // Tabs disappear without an order
+      expect(screen.queryByText('Payments')).not.toBeInTheDocument();
+      expect(screen.queryByText('Summary')).not.toBeInTheDocument();
     });
 
-    // No API pay/void calls — order remains open on server
-    expect(mockOrdersPay).not.toHaveBeenCalled();
+    // No API void call — order remains open on server
     expect(mockOrdersVoid).not.toHaveBeenCalled();
+  });
+
+  // ---- Test 10b: Save Items → Send to Kitchen mutual exclusion (ADR 0006) ----
+  it('open order: Save Items and Send to Kitchen are mutually exclusive', async () => {
+    mockGetReturns(makeOrder());
+
+    // Save resolves to a clean cart with qty 3 and no kitchen events
+    mockOrdersSyncItems.mockResolvedValue(
+      makeOrder({
+        updatedAt: 6000,
+        items: [makeOrderItem({ id: 101, itemId: 1, qty: 3 })],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Clean + unsent deltas: Send only
+    expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+    expect(screen.queryByText('Save Items')).not.toBeInTheDocument();
+
+    // Dirty: Save only
+    fireEvent.click(screen.getAllByText('+')[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Save Items')).toBeInTheDocument();
+      expect(screen.queryByText('Send to Kitchen')).not.toBeInTheDocument();
+    });
+
+    // Save: back to clean — Send returns, Save disappears
+    fireEvent.click(screen.getByText('Save Items'));
+    await waitFor(() => {
+      expect(screen.queryByText('Save Items')).not.toBeInTheDocument();
+      expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
+    });
   });
 
   // ---- Test 10: D8 — Realtime conflict dialog triggered by remote change ----

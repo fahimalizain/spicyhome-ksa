@@ -25,6 +25,7 @@ import {
   decomposeVat,
   parseZatcaBuyerDetails,
   formatZatcaBuyerDetailsErrors,
+  AuditAction,
 } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
@@ -80,7 +81,6 @@ export class OrdersService {
 
   async createOrder(dto: { type: string; tableId?: number }, userId: number) {
     const now = Math.floor(Date.now() / 1000);
-
     if (dto.type === 'dine_in') {
       if (!dto.tableId) throw new BadRequestException('Table is required for dine-in orders');
       const table = this.db.select().from(tables).where(eq(tables.id, dto.tableId)).get();
@@ -351,25 +351,6 @@ export class OrdersService {
   ) {
     const now = Math.floor(Date.now() / 1000);
 
-    // Resolve kitchen printers pre-transaction (read-only, stable data)
-    // We'll map itemId → printer for new lines; for existing lines, get from order_items.itemId
-    const printerCache = new Map<number, PrinterRecord | null>();
-    const getPrinter = (menuItemId: number): PrinterRecord | null => {
-      if (!printerCache.has(menuItemId)) {
-        printerCache.set(menuItemId, this.printJobService.getKitchenPrinterForItem(menuItemId));
-      }
-      return printerCache.get(menuItemId) ?? null;
-    };
-
-    // Kitchen deltas collected during transaction
-    const kitchenDeltasByPrinter = new Map<
-      string, // printer name
-      {
-        printer: PrinterRecord;
-        items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
-      }
-    >();
-
     // Track whether any mutation (remove/update/insert) occurred
     let anyMutation = false;
 
@@ -491,13 +472,9 @@ export class OrdersService {
 
           tx.update(orderItems).set(updates).where(eq(orderItems.id, line.orderItemId)).run();
 
-          // Kitchen delta: only if qty increased
-          let kitchenPrintedQty = 0;
-          if (qtyChanged && newQty > oldQty && oi.itemId) {
-            const previousPrinted = this.orderEvents.getPrintedQty(tx, line.orderItemId);
-            kitchenPrintedQty = newQty > previousPrinted ? newQty - previousPrinted : 0;
-          }
-
+          // ADR 0006: item mutations NEVER kitchen-print. The ledger records
+          // kitchenPrintedQty: 0; send-to-kitchen is the only path that
+          // enqueues kitchen prints (computing deltas against this ledger).
           this.orderEvents.createEvent(
             tx,
             orderId,
@@ -510,29 +487,11 @@ export class OrdersService {
               newQty,
               oldTotal,
               newTotal,
-              kitchenPrintedQty,
+              kitchenPrintedQty: 0,
               ...(notesChanged ? { notes: desiredNotes } : {}),
             },
             now,
           );
-
-          // Accumulate kitchen delta
-          if (kitchenPrintedQty > 0 && oi.itemId) {
-            const printer = getPrinter(oi.itemId);
-            if (printer) {
-              const key = printer.name;
-              let entry = kitchenDeltasByPrinter.get(key);
-              if (!entry) {
-                entry = { printer, items: [] };
-                kitchenDeltasByPrinter.set(key, entry);
-              }
-              entry.items.push({
-                orderItemId: line.orderItemId,
-                itemName: oi.itemName,
-                printedQty: kitchenPrintedQty,
-              });
-            }
-          }
         } else {
           // New line — must have itemId
           if (line.itemId == null) {
@@ -568,7 +527,9 @@ export class OrdersService {
 
           const orderItemId = Number(insertResult.lastInsertRowid);
 
-          // item_added event with full payload (kitchenPrintedQty = qty for new lines)
+          // ADR 0006: item mutations NEVER kitchen-print. The item_added event
+          // records kitchenPrintedQty: 0; send-to-kitchen is the only path
+          // that enqueues kitchen prints.
           this.orderEvents.createEvent(
             tx,
             orderId,
@@ -581,27 +542,11 @@ export class OrdersService {
               qty: line.qty,
               unitPriceHalalas: item.priceHalalas,
               totalHalalas,
-              kitchenPrintedQty: line.qty,
+              kitchenPrintedQty: 0,
               ...(normalizedNotes ? { notes: normalizedNotes } : {}),
             },
             now,
           );
-
-          // Accumulate kitchen delta for new line
-          const printer = getPrinter(item.id);
-          if (printer) {
-            const key = printer.name;
-            let entry = kitchenDeltasByPrinter.get(key);
-            if (!entry) {
-              entry = { printer, items: [] };
-              kitchenDeltasByPrinter.set(key, entry);
-            }
-            entry.items.push({
-              orderItemId,
-              itemName: item.name,
-              printedQty: line.qty,
-            });
-          }
         }
       }
 
@@ -621,8 +566,134 @@ export class OrdersService {
           .run();
       }
 
-      // Write kitchen_print_enqueued events grouped by printer
-      for (const [, entry] of kitchenDeltasByPrinter) {
+      // Return the updated order
+      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      const refreshedItems = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      const logs = this.orderEvents.getEvents(tx, orderId);
+      return { ...refreshedOrder, items: refreshedItems, events: logs };
+    });
+
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse:
+    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+    return this.getOrder(orderId);
+  }
+
+  /**
+   * Explicit, differential kitchen print (ADR 0006).
+   *
+   * Item mutations NEVER kitchen-print — this endpoint is the ONLY path that
+   * enqueues/runs kitchen prints. It computes, per order item with `qty > 0`,
+   * the delta between the current qty and the ledger's printed total
+   * (`getPrintedQty`: legacy `kitchenPrintedQty` on item events +
+   * `items[].printedQty` on `kitchen_print_enqueued` events), groups the
+   * deltas by kitchen printer, and inside a transaction:
+   *
+   * - bumps `orders.updated_at` (so the POS can detect the change)
+   * - writes one `kitchen_print_enqueued` event per printer
+   *   (`{ printer, printerId, items: [{ orderItemId, itemName, printedQty }] }`)
+   * - does NOT write fake `item_updated` events
+   *
+   * After the transaction: non-blocking `runKitchenPrint` per printer
+   * (→ `kitchen_print_succeeded`) and emits `order.updated`.
+   *
+   * No deltas at all (or no kitchen printer configured) → 200 no-op: no
+   * events, no print, no `updated_at` bump, no domain event. The response is
+   * the current order (same shape as every other order endpoint).
+   *
+   * Permission: `update_order` (see ADR 0006 permission note).
+   */
+  async sendToKitchen(orderId: number, userId: number) {
+    const now = Math.floor(Date.now() / 1000);
+
+    // Fast pre-check outside the transaction (same pattern as syncItems) —
+    // the authoritative status check is repeated inside the transaction.
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status !== 'open') {
+      throw new BadRequestException('Order is not open');
+    }
+
+    // Printer groups hoisted from the transaction for the post-commit prints.
+    let groups: Array<{
+      printer: PrinterRecord;
+      items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+    }> = [];
+
+    const anySent = this.db.transaction((tx: any) => {
+      // Re-check inside the tx to close the TOCTOU window
+      const fresh = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!fresh) throw new NotFoundException('Order not found');
+      if (fresh.status !== 'open') throw new BadRequestException('Order is not open');
+
+      const itemRows = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+
+      // Differential math vs the immutable ledger — only unsent qty prints
+      const deltas: Array<{
+        orderItemId: number;
+        itemId: number;
+        itemName: string;
+        printedQty: number;
+      }> = [];
+      for (const oi of itemRows) {
+        if (oi.itemId == null || oi.qty <= 0) continue;
+        const previousPrinted = this.orderEvents.getPrintedQty(tx, oi.id);
+        const delta = oi.qty - previousPrinted;
+        if (delta > 0) {
+          deltas.push({
+            orderItemId: oi.id,
+            itemId: oi.itemId,
+            itemName: oi.itemName,
+            printedQty: delta,
+          });
+        }
+      }
+
+      // No deltas → 200 no-op (no events, no print)
+      if (deltas.length === 0) return false;
+
+      // Group deltas by kitchen printer via existing menu-item routing
+      const byPrinter = new Map<
+        string,
+        {
+          printer: PrinterRecord;
+          items: Array<{ orderItemId: number; itemName: string; printedQty: number }>;
+        }
+      >();
+      for (const d of deltas) {
+        const printer = this.printJobService.getKitchenPrinterForItem(d.itemId);
+        if (!printer) continue;
+        const key = printer.name;
+        let entry = byPrinter.get(key);
+        if (!entry) {
+          entry = { printer, items: [] };
+          byPrinter.set(key, entry);
+        }
+        entry.items.push({
+          orderItemId: d.orderItemId,
+          itemName: d.itemName,
+          printedQty: d.printedQty,
+        });
+      }
+
+      // Deltas exist but no kitchen printer configured → nothing to enqueue
+      if (byPrinter.size === 0) return false;
+
+      // Bump order audit fields so concurrent terminals (POS) see the change
+      tx.update(orders)
+        .set({ ...updateAuditFields(userId, now) })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      // One kitchen_print_enqueued per printer (same payload shape as the
+      // pre-ADR syncItems path — getPrintedQty feeds off these)
+      for (const [, entry] of byPrinter) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -637,29 +708,19 @@ export class OrdersService {
         );
       }
 
-      // Return the updated order
-      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
-      const refreshedItems = tx
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .all();
-      const logs = this.orderEvents.getEvents(tx, orderId);
-      return { ...refreshedOrder, items: refreshedItems, events: logs };
+      groups = [...byPrinter.values()];
+      return true;
     });
 
     // After transaction: non-blocking kitchen prints — one ticket per printer
-    for (const [, entry] of kitchenDeltasByPrinter) {
-      if (entry.items.length > 0) {
+    if (anySent) {
+      for (const entry of groups) {
         this.runKitchenPrint(orderId, entry.printer, entry.items, userId);
       }
-    }
-
-    if (anyMutation) {
       this.emitDomainEvent('order.updated', orderId, userId);
     }
-    // Reuse getOrder's mapping so the response always matches OrderResponse:
-    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+
+    // Reuse getOrder's mapping so the response always matches OrderResponse
     return this.getOrder(orderId);
   }
 
@@ -685,11 +746,38 @@ export class OrdersService {
     return parsed.data as unknown as Record<string, unknown>;
   }
 
-  async payOrder(
+  /**
+   * Finalize an open order (ADR 0006) — the ONLY `open → paid` path.
+   *
+   * Payments are appended separately via `addOrderPayment`; this method
+   * validates the ADR preconditions inside a transaction and, on success,
+   * transitions the order to `paid`, writes the `paid` ledger event, and
+   * triggers receipt print / cash drawer kick:
+   *
+   * - order exists and status is `open` (else 400)
+   * - optional `baseUpdatedAt` concurrency check (stale → 409, same shape as
+   *   syncItems / updateOrderMeta)
+   * - ≥ 1 order item (else 400)
+   * - `SUM(order_payments.amount_halalas) === order.total_halalas` — the
+   *   outstanding must be exactly 0 (else 400)
+   * - every payment method nets ≥ 0 — a negative method net is rejected
+   *   (else 400); the ZATCA PaymentMeans are netted per method, zero nets
+   *   dropped
+   *
+   * Receipt logic (unchanged from the old pay flow):
+   * - `hasCashPayment` = any payment line with `methodId === 'cash'` and a
+   *   positive amount (drawer kick if any positive cash line exists)
+   * - simplified: enqueue + run receipt print with `kickDrawer = hasCashPayment`
+   * - standard: deferred receipt (prints on ZATCA clearance); immediate
+   *   cash drawer kick when `hasCashPayment`
+   *
+   * Emits `order.paid` and returns `{ success, status: 'paid', invoiceType }`.
+   */
+  async submitOrder(
     orderId: number,
     userId: number,
     dto: {
-      payments: Array<{ methodId: string; amountHalalas: number; tenderedHalalas?: number }>;
+      baseUpdatedAt?: number;
       isStandardInvoice?: boolean;
       zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
     },
@@ -701,7 +789,7 @@ export class OrdersService {
     const validatedBuyer = this.validateStandardInvoiceBuyer(dto);
     const isStandardInvoice = dto.isStandardInvoice === true;
 
-    // Payment validation happens inside the transaction
+    // Set inside the transaction from the payment lines actually on the order
     let hasCashPayment = false;
 
     this.db.transaction((tx: any) => {
@@ -710,123 +798,63 @@ export class OrdersService {
 
       if (order.status !== 'open') {
         throw new BadRequestException(
-          `Cannot pay order in '${order.status}' status. Only open orders can be paid.`,
+          `Cannot submit order in '${order.status}' status. Only open orders can be submitted.`,
         );
       }
 
-      // ADR 0002: payments key is required — no implicit cash fallback
-      if (!dto.payments || dto.payments.length === 0) {
-        throw new BadRequestException('Payment lines array is required and must not be empty');
+      // Optional concurrency check — same 409 shape as syncItems / updateOrderMeta
+      if (dto.baseUpdatedAt !== undefined && dto.baseUpdatedAt !== null) {
+        if (order.updatedAt !== dto.baseUpdatedAt) {
+          throw new ConflictException({
+            message: 'Order was modified by another terminal. Please refresh your cart.',
+            updatedAt: order.updatedAt,
+          });
+        }
       }
 
-      const paymentLines = dto.payments;
-
-      // Validate and process each payment line
-      const paymentRecords: Array<{
-        methodId: string;
-        methodTitle: string;
-        zatcaPaymentMeansCode: string;
-        amountHalalas: number;
-        tenderedHalalas?: number;
-        changeHalalas?: number;
-      }> = [];
-      const seenMethods = new Set<string>();
-
-      let sumAmounts = 0;
-
-      for (const line of paymentLines) {
-        // Amount must be positive
-        if (line.amountHalalas <= 0) {
-          throw new BadRequestException(
-            `Payment amount for method "${line.methodId}" must be positive`,
-          );
-        }
-
-        // No duplicate methods
-        if (seenMethods.has(line.methodId)) {
-          throw new BadRequestException(
-            `Duplicate payment method "${line.methodId}" — only one entry per method allowed`,
-          );
-        }
-        seenMethods.add(line.methodId);
-
-        // Validate method exists and is enabled
-        const pm = tx
-          .select()
-          .from(paymentMethods)
-          .where(eq(paymentMethods.id, line.methodId))
-          .get();
-        if (!pm) {
-          throw new BadRequestException(`Unknown payment method "${line.methodId}"`);
-        }
-        if (!pm.enabled) {
-          throw new BadRequestException(`Payment method "${line.methodId}" is disabled`);
-        }
-
-        // Non-cash: tenderedHalalas must be absent
-        if (line.methodId !== 'cash') {
-          if (line.tenderedHalalas !== undefined && line.tenderedHalalas !== null) {
-            throw new BadRequestException(
-              `Tendered amount is only valid for cash payments (method "${line.methodId}")`,
-            );
-          }
-        }
-
-        // Cash: tendered must be >= amount if present
-        let tendered: number | undefined;
-        let change: number | undefined;
-        if (line.methodId === 'cash') {
-          if (line.tenderedHalalas !== undefined && line.tenderedHalalas !== null) {
-            if (line.tenderedHalalas < line.amountHalalas) {
-              throw new BadRequestException(
-                `Cash tendered amount (${line.tenderedHalalas}) must be >= payment amount (${line.amountHalalas})`,
-              );
-            }
-            tendered = line.tenderedHalalas;
-            change = tendered! - line.amountHalalas;
-          } else {
-            tendered = line.amountHalalas;
-            change = 0;
-          }
-          if (line.amountHalalas > 0) {
-            hasCashPayment = true;
-          }
-        }
-
-        sumAmounts += line.amountHalalas;
-        paymentRecords.push({
-          methodId: line.methodId,
-          methodTitle: pm.title,
-          zatcaPaymentMeansCode: pm.zatcaPaymentMeansCode,
-          amountHalalas: line.amountHalalas,
-          tenderedHalalas: tendered ?? undefined,
-          changeHalalas: change ?? undefined,
-        });
+      // ADR 0006 precondition: ≥ 1 order item
+      const itemRows = tx
+        .select({ id: orderItems.id })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      if (itemRows.length === 0) {
+        throw new BadRequestException('Cannot submit an order without items');
       }
 
-      // Sum must equal order total
+      // Load all payment lines (append ledger — nothing is inserted here)
+      const paymentRows = tx
+        .select()
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, orderId))
+        .orderBy(orderPayments.id)
+        .all();
+
+      // ADR 0006 precondition: outstanding must be exactly 0
+      const sumAmounts = paymentRows.reduce((sum: number, r: any) => sum + r.amountHalalas, 0);
       if (sumAmounts !== order.totalHalalas) {
+        const outstanding = order.totalHalalas - sumAmounts;
         throw new BadRequestException(
-          `Payment sum (${sumAmounts}) does not equal order total (${order.totalHalalas})`,
+          `Payment sum (${sumAmounts}) does not equal order total (${order.totalHalalas}). Outstanding ${outstanding} halalas.`,
         );
       }
 
-      // Insert order_payments rows
-      for (const pr of paymentRecords) {
-        tx.insert(orderPayments)
-          .values({
-            orderId,
-            methodId: pr.methodId,
-            methodTitle: pr.methodTitle,
-            zatcaPaymentMeansCode: pr.zatcaPaymentMeansCode,
-            amountHalalas: pr.amountHalalas,
-            tenderedHalalas: pr.tenderedHalalas ?? null,
-            changeHalalas: pr.changeHalalas ?? null,
-            createdAt: now,
-            createdBy: userId,
-          })
-          .run();
+      // ADR 0006 precondition: every method must net ≥ 0 (negative nets are
+      // rejected here; ZATCA PaymentMeans net per method, zeros dropped)
+      const netsByMethod = new Map<string, number>();
+      for (const p of paymentRows) {
+        netsByMethod.set(p.methodId, (netsByMethod.get(p.methodId) ?? 0) + p.amountHalalas);
       }
+      for (const [methodId, net] of netsByMethod) {
+        if (net < 0) {
+          throw new BadRequestException(
+            `Payment method "${methodId}" nets negative (${net} halalas). Add balancing lines before submitting.`,
+          );
+        }
+      }
+
+      // Drawer kick if any POSITIVE cash line exists (card-only stays closed)
+      hasCashPayment = paymentRows.some((p: any) => p.methodId === 'cash' && p.amountHalalas > 0);
 
       // Update order status (plus buyer fields if standard invoice)
       const orderUpdate: Record<string, any> = {
@@ -839,19 +867,24 @@ export class OrdersService {
       }
       tx.update(orders).set(orderUpdate).where(eq(orders.id, orderId)).run();
 
-      // Write paid event with payment breakdown (and standard invoice flag if applicable)
+      // Write paid event with the FULL raw payment ledger (audit) plus the
+      // netted per-method breakdown and standard invoice flag if applicable
       const paidPayload: Record<string, any> = {
         fromStatus: 'open',
         toStatus: 'paid',
-        payments: paymentRecords.map((pr) => ({
-          methodId: pr.methodId,
-          methodTitle: pr.methodTitle,
-          zatcaPaymentMeansCode: pr.zatcaPaymentMeansCode,
-          amountHalalas: pr.amountHalalas,
-          ...(pr.tenderedHalalas !== undefined
-            ? { tenderedHalalas: pr.tenderedHalalas, changeHalalas: pr.changeHalalas }
+        payments: paymentRows.map((p: any) => ({
+          paymentId: p.id,
+          methodId: p.methodId,
+          methodTitle: p.methodTitle,
+          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
+          amountHalalas: p.amountHalalas,
+          ...(p.tenderedHalalas !== null && p.tenderedHalalas !== undefined
+            ? { tenderedHalalas: p.tenderedHalalas, changeHalalas: p.changeHalalas }
             : {}),
         })),
+        netPayments: [...netsByMethod.entries()]
+          .map(([methodId, amountHalalas]) => ({ methodId, amountHalalas }))
+          .filter((n) => n.amountHalalas > 0),
       };
       if (isStandardInvoice) {
         paidPayload.isStandardInvoice = true;
@@ -882,7 +915,7 @@ export class OrdersService {
       }
 
       // For standard invoices with cash payment: kick cash drawer immediately
-      // on pay (ops requirement). The tax receipt with QR prints later on
+      // on submit (ops requirement). The tax receipt with QR prints later on
       // clearance, with kickDrawer:false since we already kicked here.
       if (isStandardInvoice && hasCashPayment && receiptPrinter) {
         this.orderEvents.createEvent(
@@ -915,6 +948,151 @@ export class OrdersService {
       status: 'paid',
       ...(isStandardInvoice ? { invoiceType: 'standard' } : { invoiceType: 'simplified' }),
     };
+  }
+
+  /**
+   * Append ONE payment line to an open order (ADR 0006).
+   *
+   * The order stays `open` — no status change, no invoice, no receipt.
+   * `amountHalalas` is a signed integer: negative lines are corrections
+   * (balancing lines). Rules enforced inside the transaction:
+   *
+   * - order must exist, be `open`, and have ≥ 1 order item
+   * - `amountHalalas !== 0`
+   * - payment method must exist and be enabled
+   * - cash tendered/change only on positive cash lines (same semantics as pay)
+   * - after the append, `SUM(order_payments.amount_halalas) >= 0`
+   *
+   * Emits `order.updated` (not `order.paid`) so other terminals refresh.
+   */
+  async addOrderPayment(
+    orderId: number,
+    userId: number,
+    dto: { methodId: string; amountHalalas: number; tenderedHalalas?: number },
+  ): Promise<any> {
+    const now = Math.floor(Date.now() / 1000);
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      if (order.status !== 'open') {
+        throw new BadRequestException(
+          `Cannot add payment to order in '${order.status}' status. Only open orders accept payments.`,
+        );
+      }
+
+      // ADR 0006: ≥ 1 order item required to add a payment
+      const itemRows = tx
+        .select({ id: orderItems.id })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      if (itemRows.length === 0) {
+        throw new BadRequestException('Cannot add a payment to an order without items');
+      }
+
+      const amount = dto.amountHalalas;
+      if (amount === 0) {
+        throw new BadRequestException('Payment amount must be non-zero');
+      }
+
+      // Payment method must exist and be enabled
+      const pm = tx.select().from(paymentMethods).where(eq(paymentMethods.id, dto.methodId)).get();
+      if (!pm) {
+        throw new BadRequestException(`Unknown payment method "${dto.methodId}"`);
+      }
+      if (!pm.enabled) {
+        throw new BadRequestException(`Payment method "${dto.methodId}" is disabled`);
+      }
+
+      // Cash / non-cash tendered rules (same semantics as the removed /pay flow)
+      let tendered: number | null = null;
+      let change: number | null = null;
+      if (dto.methodId !== 'cash') {
+        if (dto.tenderedHalalas !== undefined && dto.tenderedHalalas !== null) {
+          throw new BadRequestException(
+            `Tendered amount is only valid for cash payments (method "${dto.methodId}")`,
+          );
+        }
+      } else if (amount > 0) {
+        // Positive cash: tendered optional; if present must be >= amount
+        if (dto.tenderedHalalas !== undefined && dto.tenderedHalalas !== null) {
+          if (dto.tenderedHalalas < amount) {
+            throw new BadRequestException(
+              `Cash tendered amount (${dto.tenderedHalalas}) must be >= payment amount (${amount})`,
+            );
+          }
+          tendered = dto.tenderedHalalas;
+          change = tendered - amount;
+        } else {
+          tendered = amount;
+          change = 0;
+        }
+      } else if (dto.tenderedHalalas !== undefined && dto.tenderedHalalas !== null) {
+        // Negative cash correction lines carry no tendered/change
+        throw new BadRequestException(
+          'Tendered amount is not allowed on negative cash payment lines',
+        );
+      }
+
+      // Net-sum guard: after append, SUM(all amounts) must be >= 0
+      const paymentRows = tx
+        .select({ amountHalalas: orderPayments.amountHalalas })
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, orderId))
+        .all();
+      const existingSum = paymentRows.reduce((sum: number, r: any) => sum + r.amountHalalas, 0);
+      if (existingSum + amount < 0) {
+        throw new BadRequestException(
+          `Payment would bring the order to a net negative balance (net ${existingSum + amount} halalas).`,
+        );
+      }
+
+      // Append the immutable payment line
+      const insertResult = tx
+        .insert(orderPayments)
+        .values({
+          orderId,
+          methodId: dto.methodId,
+          methodTitle: pm.title,
+          zatcaPaymentMeansCode: pm.zatcaPaymentMeansCode,
+          amountHalalas: amount,
+          tenderedHalalas: tendered,
+          changeHalalas: change,
+          createdAt: now,
+          createdBy: userId,
+        })
+        .run();
+      const paymentId = Number(insertResult.lastInsertRowid);
+
+      // Bump order audit fields so concurrent terminals see the change
+      tx.update(orders)
+        .set({ ...updateAuditFields(userId, now) })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      // Immutable ledger entry with the line details
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.PAYMENT_ADDED,
+        {
+          paymentId,
+          methodId: dto.methodId,
+          methodTitle: pm.title,
+          zatcaPaymentMeansCode: pm.zatcaPaymentMeansCode,
+          amountHalalas: amount,
+          ...(tendered !== null ? { tenderedHalalas: tendered, changeHalalas: change } : {}),
+        },
+        now,
+      );
+    });
+
+    this.emitDomainEvent('order.updated', orderId, userId);
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
   }
 
   /**
@@ -1049,6 +1227,20 @@ export class OrdersService {
       if (order.status !== 'open') {
         throw new BadRequestException(
           `Cannot void order in '${order.status}' status. Only open orders can be voided.`,
+        );
+      }
+
+      // ADR 0006: void is only allowed once payments net to exactly 0. Staff
+      // first append negative balancing lines, then void.
+      const paymentRows = tx
+        .select({ amountHalalas: orderPayments.amountHalalas })
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, orderId))
+        .all();
+      const netPayments = paymentRows.reduce((sum: number, r: any) => sum + r.amountHalalas, 0);
+      if (netPayments !== 0) {
+        throw new BadRequestException(
+          `Cannot void order with outstanding payments (net ${netPayments} halalas). Append balancing payment lines until net is 0.`,
         );
       }
 
@@ -1605,12 +1797,14 @@ export class OrdersService {
         items: itemsList,
         events: logs,
         payments: payments.map((p) => ({
+          id: p.id,
           methodId: p.methodId,
           methodTitle: p.methodTitle,
           zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
           amountHalalas: p.amountHalalas,
           tenderedHalalas: p.tenderedHalalas,
           changeHalalas: p.changeHalalas,
+          createdAt: p.createdAt,
         })),
         zatcaBuyerDetails: this.parseOrderBuyerDetails(order),
         documentId: order.documentId,

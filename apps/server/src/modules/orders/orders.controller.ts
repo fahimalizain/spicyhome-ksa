@@ -8,6 +8,7 @@ import {
   Body,
   ParseIntPipe,
   Query,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,7 +22,8 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
-import { PayOrderDto } from './dto/pay-order.dto';
+import { SubmitOrderDto } from './dto/submit-order.dto';
+import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
 import { OrderSummaryResponse } from './dto/order-summary-response.dto';
@@ -91,17 +93,47 @@ export class OrdersController {
     return this.ordersService.syncItems(orderId, dto, user.sub, user.clientType);
   }
 
-  @Post(':id/pay')
+  @Post(':id/send-to-kitchen')
+  @HttpCode(200)
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary:
+      'Send unsent item quantities to the kitchen (explicit differential print; 200 no-op when nothing unsent)',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Order with items and events', type: OrderResponse })
+  sendToKitchen(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
+    return this.ordersService.sendToKitchen(orderId, user.sub);
+  }
+
+  @Post(':id/submit')
   @RequiresPermission('pay_order')
-  @ApiOperation({ summary: 'Mark order as paid with payment methods (open → paid)' })
+  @ApiOperation({
+    summary: 'Submit an open order: finalize payment (open → paid) with ZATCA invoice + receipt',
+  })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Order paid', type: StatusResponse })
-  payOrder(
+  submitOrder(
     @Param('id', ParseIntPipe) orderId: number,
-    @Body() dto: PayOrderDto,
+    @Body() dto: SubmitOrderDto,
     @CurrentUser() user: any,
   ) {
-    return this.ordersService.payOrder(orderId, user.sub, dto);
+    return this.ordersService.submitOrder(orderId, user.sub, dto);
+  }
+
+  @Post(':id/payments')
+  @RequiresPermission('pay_order')
+  @ApiOperation({
+    summary: 'Append one payment line to an open order (status stays open)',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiCreatedResponse({ description: 'Order with the appended payment line', type: OrderResponse })
+  addOrderPayment(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: AddOrderPaymentDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.addOrderPayment(orderId, user.sub, dto);
   }
 
   @Post(':id/void')
