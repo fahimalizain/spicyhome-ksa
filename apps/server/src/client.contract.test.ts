@@ -68,7 +68,7 @@ describe('Client contract test', () => {
   let orderId: number;
 
   it('login succeeds with correct credentials', async () => {
-    const res = await client.auth.login({ username: 'admin', pin: '771133' });
+    const res = await client.auth.login({ username: 'admin', pin: '771133', clientType: 'pos' });
     expect(res.accessToken).toBeDefined();
     expect(typeof res.accessToken).toBe('string');
     token = res.accessToken;
@@ -85,7 +85,9 @@ describe('Client contract test', () => {
   });
 
   it('login fails with wrong credentials', async () => {
-    await expect(client.auth.login({ username: 'admin', pin: '0000' })).rejects.toThrow();
+    await expect(
+      client.auth.login({ username: 'admin', pin: '0000', clientType: 'pos' }),
+    ).rejects.toThrow();
   });
 
   it('createRole returns camelCase shape matching listRoles', async () => {

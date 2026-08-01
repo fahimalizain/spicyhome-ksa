@@ -198,7 +198,7 @@ export class OrdersService {
     // syncItems).
     let anyMutation = false;
 
-    const updatedOrder = this.db.transaction((tx: any) => {
+    this.db.transaction((tx: any) => {
       // Load order; 404 if missing
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
@@ -286,7 +286,9 @@ export class OrdersService {
     if (anyMutation) {
       this.emitDomainEvent('order.updated', orderId, userId);
     }
-    return mapBools(updatedOrder, ['isStandardInvoice']);
+    // Reuse getOrder's mapping so the response always matches OrderResponse:
+    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+    return this.getOrder(orderId);
   }
 
   private emitDomainEvent(
@@ -345,6 +347,7 @@ export class OrdersService {
       }>;
     },
     userId: number,
+    clientType?: string,
   ) {
     const now = Math.floor(Date.now() / 1000);
 
@@ -370,7 +373,7 @@ export class OrdersService {
     // Track whether any mutation (remove/update/insert) occurred
     let anyMutation = false;
 
-    const updatedOrder = this.db.transaction((tx: any) => {
+    this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       if (!order) throw new NotFoundException('Order not found');
       if (order.status !== 'open') throw new BadRequestException('Order is not open');
@@ -403,6 +406,27 @@ export class OrdersService {
       for (const line of desiredLines) {
         if (line.orderItemId != null) {
           desiredIds.add(line.orderItemId);
+        }
+      }
+
+      // ADR 0005: Android cannot reduce qty below the current DB qty or
+      // remove server lines. Compare against the DB inside the transaction
+      // (after the concurrency check) and reject the ENTIRE sync — no
+      // partial apply. POS (or tokens without a clientType claim) keep
+      // full decrease/remove power.
+      if (clientType === 'android') {
+        for (const existing of existingItems) {
+          if (!desiredIds.has(existing.id)) {
+            throw new BadRequestException('Kitchen items can only be reduced at the cashier.');
+          }
+        }
+        for (const line of desiredLines) {
+          if (line.orderItemId != null) {
+            const oi = existingMap.get(line.orderItemId);
+            if (oi && line.qty < oi.qty) {
+              throw new BadRequestException('Kitchen items can only be reduced at the cashier.');
+            }
+          }
         }
       }
 
@@ -634,7 +658,9 @@ export class OrdersService {
     if (anyMutation) {
       this.emitDomainEvent('order.updated', orderId, userId);
     }
-    return updatedOrder;
+    // Reuse getOrder's mapping so the response always matches OrderResponse:
+    // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
+    return this.getOrder(orderId);
   }
 
   private validateStandardInvoiceBuyer(dto: {

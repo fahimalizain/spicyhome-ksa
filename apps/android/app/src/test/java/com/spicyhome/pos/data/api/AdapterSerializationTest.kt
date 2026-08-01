@@ -364,4 +364,71 @@ class AdapterSerializationTest {
             moshi.adapter(OrderResponse::class.java).fromJson(json)
         }
     }
+
+    @Test
+    fun `OrderResponse deserializes with isStandardInvoice as boolean`() {
+        // Minimal valid open-order response — server contract: isStandardInvoice
+        // must be a real JSON boolean (SQLite 0/1 is mapped via mapBools)
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "takeaway",
+                "tableId": null,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 0,
+                "vatHalalas": 0,
+                "totalHalalas": 0,
+                "discountHalalas": 0,
+                "documentId": "INV26-1",
+                "isStandardInvoice": false,
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1,
+                "items": [],
+                "events": [],
+                "payments": []
+            }
+        """.trimIndent()
+        val response = moshi.adapter(OrderResponse::class.java).fromJson(json)
+        assertThat(response).isNotNull()
+        assertThat(response!!.isStandardInvoice).isFalse()
+        assertThat(response.payments).isEmpty()
+    }
+
+    @Test
+    fun `OrderResponse rejects isStandardInvoice as number`() {
+        // Regression guard: server must never emit SQLite 0/1 for
+        // isStandardInvoice — Moshi fails on boolean-typed field with a number.
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "takeaway",
+                "tableId": null,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 0,
+                "vatHalalas": 0,
+                "totalHalalas": 0,
+                "discountHalalas": 0,
+                "documentId": "INV26-1",
+                "isStandardInvoice": 0,
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1,
+                "items": [],
+                "events": [],
+                "payments": []
+            }
+        """.trimIndent()
+        assertThrows(JsonDataException::class.java) {
+            moshi.adapter(OrderResponse::class.java).fromJson(json)
+        }
+    }
 }

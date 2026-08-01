@@ -94,7 +94,7 @@ beforeAll(async () => {
   // Login
   const loginRes = await request(app.getHttpServer())
     .post('/auth/login')
-    .send({ username: 'admin', pin: '771133' });
+    .send({ username: 'admin', pin: '771133', clientType: 'pos' });
   jwtToken = loginRes.body.accessToken;
 
   // Open business day (required for order creation)
@@ -1737,6 +1737,11 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     expect(res.body.updatedAt).toBeGreaterThan(before.updatedAt);
     expect(res.body.updatedBy).not.toBeNull();
 
+    // OrderResponse contract: boolean isStandardInvoice + payments array
+    expect(typeof res.body.isStandardInvoice).toBe('boolean');
+    expect(res.body.isStandardInvoice).toBe(false);
+    expect(Array.isArray(res.body.payments)).toBe(true);
+
     // Persisted in DB
     const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
     expect(dbOrder.type).toBe('dine_in');
@@ -2007,6 +2012,15 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Totals correct (2×2300 + 1×575 = 5175)
     expect(syncRes.body.totalHalalas).toBe(5175);
+
+    // Android/Moshi contract: isStandardInvoice must be a real JSON boolean,
+    // never the SQLite integer 0/1
+    expect(typeof syncRes.body.isStandardInvoice).toBe('boolean');
+    expect(syncRes.body.isStandardInvoice).toBe(false);
+
+    // OrderResponse shape: payments always present as an array (empty for open orders)
+    expect(Array.isArray(syncRes.body.payments)).toBe(true);
+    expect(syncRes.body.payments).toHaveLength(0);
 
     // item_added events
     const events = syncRes.body.events;
@@ -2538,5 +2552,256 @@ describe('syncItems (bulk cart sync)', () => {
     // No item_updated events
     const updateEvents = res2.body.events.filter((e: any) => e.type === 'item_updated');
     expect(updateEvents.length).toBe(0);
+  });
+
+  // --- ADR 0005: Android qty floor + clientType enforcement ---
+
+  async function createOpenOrderWithToken(token: string): Promise<{
+    orderId: number;
+    updatedAt: number;
+  }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  it('android sync that decreases qty below server qty returns 400 and leaves order unchanged', async () => {
+    // waiter is seeded with android_login=1 (tablet floor user)
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
+
+    // POS adds 3 zingers
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 3 }],
+      })
+      .expect(200);
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Android tries to decrease to 1 — must be rejected entirely
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 1 }],
+      })
+      .expect(400);
+
+    expect(res.body.message).toBe('Kitchen items can only be reduced at the cashier.');
+
+    // Order unchanged
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(getRes.body.items).toHaveLength(1);
+    expect(getRes.body.items[0].qty).toBe(3);
+  });
+
+  it('android sync that omits a server line (remove) returns 400 and leaves order unchanged', async () => {
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1 }],
+      })
+      .expect(200);
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Android sends an empty cart — the existing line is missing → remove
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [],
+      })
+      .expect(400);
+
+    expect(res.body.message).toBe('Kitchen items can only be reduced at the cashier.');
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(getRes.body.items).toHaveLength(1);
+    expect(getRes.body.items[0].qty).toBe(1);
+  });
+
+  it('android sync that increases qty, adds new lines, or edits notes returns 200', async () => {
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 1 }],
+      })
+      .expect(200);
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Android: increase qty 1→2, add a new Pepsi line, and change notes
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [
+          { orderItemId: itemId, qty: 2, notes: 'no onions' },
+          { itemId: pepsiItemId, qty: 1 },
+        ],
+      })
+      .expect(200);
+
+    expect(res2.body.items).toHaveLength(2);
+    const zinger = res2.body.items.find((i: any) => i.itemId === zingerItemId);
+    expect(zinger.qty).toBe(2);
+    expect(zinger.notes).toBe('no onions');
+    const pepsi = res2.body.items.find((i: any) => i.itemId === pepsiItemId);
+    expect(pepsi.qty).toBe(1);
+  });
+
+  it('android sync with qty equal to server qty (no-op or notes-only) returns 200', async () => {
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 2 }],
+      })
+      .expect(200);
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Same qty, notes change — allowed (qty equals the floor)
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: itemId, qty: 2, notes: 'extra spicy' }],
+      })
+      .expect(200);
+
+    expect(res2.body.items[0].qty).toBe(2);
+    expect(res2.body.items[0].notes).toBe('extra spicy');
+  });
+
+  it('mixed android payload with one illegal decrease rejects the entire sync (no partial apply)', async () => {
+    const androidLogin = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ username: 'waiter', pin: '2', clientType: 'android' })
+      .expect(201);
+    const androidToken = androidLogin.body.accessToken;
+
+    const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [{ itemId: zingerItemId, qty: 3 }],
+      })
+      .expect(200);
+    const itemId = res1.body.items[0].id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // Decrease (illegal) + add a new line (valid) — the whole sync must fail
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${androidToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [
+          { orderItemId: itemId, qty: 1 },
+          { itemId: pepsiItemId, qty: 2 },
+        ],
+      })
+      .expect(400);
+
+    // Nothing applied: still 1 line, qty 3, no Pepsi
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    expect(getRes.body.items).toHaveLength(1);
+    expect(getRes.body.items[0].qty).toBe(3);
+  });
+
+  it('pos sync that decreases or removes lines still works (regression)', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+
+    const res1 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt,
+        items: [
+          { itemId: zingerItemId, qty: 3 },
+          { itemId: pepsiItemId, qty: 1 },
+        ],
+      })
+      .expect(200);
+    const zingerId = res1.body.items.find((i: any) => i.itemId === zingerItemId).id;
+    const updatedAt2 = res1.body.updatedAt;
+
+    // POS decreases zinger 3→1 and removes pepsi entirely
+    const res2 = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: updatedAt2,
+        items: [{ orderItemId: zingerId, qty: 1 }],
+      })
+      .expect(200);
+
+    expect(res2.body.items).toHaveLength(1);
+    expect(res2.body.items[0].qty).toBe(1);
   });
 });

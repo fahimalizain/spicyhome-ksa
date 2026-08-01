@@ -116,8 +116,10 @@ beforeAll(async () => {
   // Login
   const loginRes = await request(app.getHttpServer())
     .post('/auth/login')
-    .send({ username: 'admin', pin: '771133' });
+    .send({ username: 'admin', pin: '771133', clientType: 'pos' })
+    .expect(201);
   jwtToken = loginRes.body.accessToken;
+  expect(jwtToken).toBeTruthy();
 
   // Open business day (required for order creation)
   await request(app.getHttpServer())
@@ -138,7 +140,7 @@ describe('Print Integration', () => {
     const listRes = await request(app.getHttpServer())
       .get('/orders?status=open')
       .set('Authorization', `Bearer ${jwtToken}`);
-    const openOrders = listRes.body || [];
+    const openOrders = Array.isArray(listRes.body) ? listRes.body : [];
     for (const order of openOrders) {
       if (order.tableId != null) {
         try {

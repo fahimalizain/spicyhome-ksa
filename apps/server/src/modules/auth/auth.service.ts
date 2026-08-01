@@ -56,13 +56,23 @@ export class AuthService {
     return { usernames: rows.map((r) => r.username) };
   }
 
-  async login(username: string, pin: string): Promise<{ accessToken: string }> {
+  async login(
+    username: string,
+    pin: string,
+    clientType: 'android' | 'pos',
+  ): Promise<{ accessToken: string }> {
     const user = this.db.select().from(users).where(eq(users.username, username)).get();
     if (!user) throw new UnauthorizedException('Invalid credentials');
     if (!user.isActive) throw new UnauthorizedException('Account is inactive');
 
     const valid = compareSync(pin, user.pinHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    // ADR 0005: Android logins require users.android_login = 1. Use the same
+    // generic message as bad credentials to avoid user enumeration.
+    if (clientType === 'android' && user.androidLogin !== 1) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     // User context for Sentry is now set per-request by SentryUserInterceptor
     // (apps/server/src/common/interceptors/sentry-user.interceptor.ts).
@@ -73,6 +83,7 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       roleId: user.roleId,
+      clientType,
       exp: getNextServiceDayBoundaryUnix(nowMs),
     };
     const accessToken = this.jwtService.sign(payload);

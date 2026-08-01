@@ -173,7 +173,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234' });
+      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234', clientType: 'pos' });
     });
   });
 
@@ -216,7 +216,11 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '771133' });
+      expect(mockLogin).toHaveBeenCalledWith({
+        username: 'admin',
+        pin: '771133',
+        clientType: 'pos',
+      });
     });
   });
 
@@ -254,7 +258,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'cashier', pin: '1' });
+      expect(mockLogin).toHaveBeenCalledWith({ username: 'cashier', pin: '1', clientType: 'pos' });
     });
   });
 
@@ -296,7 +300,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234' });
+      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234', clientType: 'pos' });
     });
   });
 
@@ -458,7 +462,7 @@ describe('LoginPage keyboard input', () => {
     fireEvent.keyDown(window, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234' });
+      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', pin: '1234', clientType: 'pos' });
     });
   });
 

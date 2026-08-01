@@ -50,6 +50,21 @@ VALID_TRANSITIONS:
 
 > **Rule**: The Android tablet is exclusively for order item management. All payment, refund, void, and administrative operations happen on the POS SPA only. The Android app must not expose payment, refund, void, or admin endpoints in its UI.
 
+### Android qty floor (ADR 0005)
+
+The tablet may **add items, increase qty, and edit notes** on any line. It may
+**not decrease qty or remove lines that already exist on the server**
+(`orderItemId != null`) — reducing or removing kitchen-known quantity is a
+cashier (POS) operation, because qty-down prints nothing and the kitchen cooks
+what was printed. New never-synced local lines (`orderItemId == null`) remain
+fully editable (including decrease and remove) until Send to Kitchen.
+
+The floor is the **current server/DB line qty** from the last successful sync
+snapshot, not `printedQty`. The server enforces the same rule for Android JWT
+sessions on `PUT /orders/:orderId/items/sync` (entire sync rejected with
+`Kitchen items can only be reduced at the cashier.`); POS sync keeps full
+decrease/remove power. See `docs/adr/0005-android-qty-floor-client-type.md`.
+
 ## Item Lifecycle & Mutation Tracking
 
 ### Items Are Mutable While `open`

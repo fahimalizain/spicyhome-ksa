@@ -107,13 +107,14 @@ describe('AuthService — JWT expiry', () => {
   describe('login', () => {
     it('issues a JWT with exp matching next service-day boundary', async () => {
       const loginNow = Date.now();
-      const { accessToken } = await service.login('admin', '1234');
+      const { accessToken } = await service.login('admin', '1234', 'pos');
 
       // Decode and verify
       const decoded = jwtService.verify(accessToken) as any;
       expect(decoded.sub).toBe(1);
       expect(decoded.username).toBe('admin');
       expect(decoded.roleId).toBe(1);
+      expect(decoded.clientType).toBe('pos');
 
       // exp must be a number (Unix seconds)
       expect(typeof decoded.exp).toBe('number');
@@ -123,12 +124,34 @@ describe('AuthService — JWT expiry', () => {
       expect(decoded.exp).toBe(expectedExp);
     });
 
+    it('includes android clientType in the JWT payload', async () => {
+      const { accessToken } = await service.login('admin', '1234', 'android');
+
+      const decoded = jwtService.verify(accessToken) as any;
+      expect(decoded.clientType).toBe('android');
+    });
+
     it('rejects invalid credentials', async () => {
-      await expect(service.login('admin', '0000')).rejects.toThrow('Invalid credentials');
+      await expect(service.login('admin', '0000', 'pos')).rejects.toThrow('Invalid credentials');
     });
 
     it('rejects unknown username', async () => {
-      await expect(service.login('nonexistent', '1234')).rejects.toThrow('Invalid credentials');
+      await expect(service.login('nonexistent', '1234', 'pos')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+
+    it('rejects android login for a user with android_login=0 (generic message)', async () => {
+      await expect(service.login('manager', '1234', 'android')).rejects.toThrow(
+        'Invalid credentials',
+      );
+    });
+
+    it('allows pos login for a user with android_login=0', async () => {
+      const { accessToken } = await service.login('manager', '1234', 'pos');
+      const decoded = jwtService.verify(accessToken) as any;
+      expect(decoded.username).toBe('manager');
+      expect(decoded.clientType).toBe('pos');
     });
   });
 

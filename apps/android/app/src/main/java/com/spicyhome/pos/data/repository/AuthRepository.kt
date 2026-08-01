@@ -10,7 +10,10 @@ import retrofit2.Call
 class AuthRepository(private val authApi: AuthApi) {
 
     fun login(username: String, pin: String): Call<LoginResponse> {
-        return authApi.authControllerLogin(LoginDto(username = username, pin = pin))
+        // ADR 0005: Android always logs in with clientType = android.
+        return authApi.authControllerLogin(
+            LoginDto(username = username, pin = pin, clientType = LoginDto.ClientType.android)
+        )
     }
 
     fun getMe(): Call<MeResponse> {

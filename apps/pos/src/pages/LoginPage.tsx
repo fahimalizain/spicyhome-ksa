@@ -78,7 +78,11 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await client.auth.login({ username: username.trim(), pin });
+      const res = await client.auth.login({
+        username: username.trim(),
+        pin,
+        clientType: 'pos',
+      });
       setToken(res.accessToken);
       const me = await client.auth.me();
       setMe(me);

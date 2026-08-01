@@ -2820,11 +2820,20 @@
           "pin": {
             "type": "string",
             "example": "771133"
+          },
+          "clientType": {
+            "type": "string",
+            "enum": [
+              "android",
+              "pos"
+            ],
+            "example": "pos"
           }
         },
         "required": [
           "username",
-          "pin"
+          "pin",
+          "clientType"
         ]
       },
       "LoginResponse": {

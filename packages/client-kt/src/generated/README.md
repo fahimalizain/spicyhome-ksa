@@ -80,6 +80,7 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerReissueZatcaCreditNote**](docs/OrdersApi.md#orderscontrollerreissuezatcacreditnote) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/reissue | Reissue a credit note after rejection (new attempt) |
 | *OrdersApi* | [**ordersControllerReissueZatcaInvoice**](docs/OrdersApi.md#orderscontrollerreissuezatcainvoice) | **POST** orders/{id}/zatca-invoice/reissue | Reissue a standard invoice after rejection (new attempt) |
 | *OrdersApi* | [**ordersControllerReprintOrder**](docs/OrdersApi.md#orderscontrollerreprintorder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
+| *OrdersApi* | [**ordersControllerReprintRefundReceipt**](docs/OrdersApi.md#orderscontrollerreprintrefundreceipt) | **POST** orders/{id}/refunds/{refundId}/print | Reprint a specific refund receipt |
 | *OrdersApi* | [**ordersControllerRetryZatcaClearance**](docs/OrdersApi.md#orderscontrollerretryzatcaclearance) | **POST** orders/{id}/zatca-invoice/retry-clearance | Retry ZATCA clearance for an invoice in error status |
 | *OrdersApi* | [**ordersControllerRetryZatcaCreditNoteClearance**](docs/OrdersApi.md#orderscontrollerretryzatcacreditnoteclearance) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance | Retry ZATCA clearance for a credit note in error status |
 | *OrdersApi* | [**ordersControllerSyncItems**](docs/OrdersApi.md#orderscontrollersyncitems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |

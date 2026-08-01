@@ -88,7 +88,7 @@ export class OrdersController {
     @Body() dto: SyncOrderItemsDto,
     @CurrentUser() user: any,
   ) {
-    return this.ordersService.syncItems(orderId, dto, user.sub);
+    return this.ordersService.syncItems(orderId, dto, user.sub, user.clientType);
   }
 
   @Post(':id/pay')

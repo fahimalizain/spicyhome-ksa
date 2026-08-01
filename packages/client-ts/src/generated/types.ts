@@ -1066,6 +1066,11 @@ export interface components {
       username: string;
       /** @example 771133 */
       pin: string;
+      /**
+       * @example pos
+       * @enum {string}
+       */
+      clientType: 'android' | 'pos';
     };
     LoginResponse: {
       /** @example eyJhbGciOiJIUzI1NiIs... */

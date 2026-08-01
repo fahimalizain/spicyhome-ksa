@@ -16,6 +16,7 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerReissueZatcaCreditNote**](OrdersApi.md#ordersControllerReissueZatcaCreditNote) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/reissue | Reissue a credit note after rejection (new attempt) |
 | [**ordersControllerReissueZatcaInvoice**](OrdersApi.md#ordersControllerReissueZatcaInvoice) | **POST** orders/{id}/zatca-invoice/reissue | Reissue a standard invoice after rejection (new attempt) |
 | [**ordersControllerReprintOrder**](OrdersApi.md#ordersControllerReprintOrder) | **POST** orders/{id}/print | Reprint receipt or kitchen ticket for an order |
+| [**ordersControllerReprintRefundReceipt**](OrdersApi.md#ordersControllerReprintRefundReceipt) | **POST** orders/{id}/refunds/{refundId}/print | Reprint a specific refund receipt |
 | [**ordersControllerRetryZatcaClearance**](OrdersApi.md#ordersControllerRetryZatcaClearance) | **POST** orders/{id}/zatca-invoice/retry-clearance | Retry ZATCA clearance for an invoice in error status |
 | [**ordersControllerRetryZatcaCreditNoteClearance**](OrdersApi.md#ordersControllerRetryZatcaCreditNoteClearance) | **POST** orders/{id}/refunds/{refundId}/zatca-credit-note/retry-clearance | Retry ZATCA clearance for a credit note in error status |
 | [**ordersControllerSyncItems**](OrdersApi.md#ordersControllerSyncItems) | **PUT** orders/{orderId}/items/sync | Bulk sync cart items (add, update, remove) for an open order |
@@ -491,6 +492,46 @@ Configure bearer:
 ### HTTP request headers
 
  - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
+Reprint a specific refund receipt
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(OrdersApi::class.java)
+val id : kotlin.Long = 789 // kotlin.Long | 
+val refundId : kotlin.Long = 789 // kotlin.Long | 
+
+val result : PrintResponse = webService.ordersControllerReprintRefundReceipt(id, refundId)
+```
+
+### Parameters
+| **id** | **kotlin.Long**|  | |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **refundId** | **kotlin.Long**|  | |
+
+### Return type
+
+[**PrintResponse**](PrintResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
  - **Accept**: application/json
 
 

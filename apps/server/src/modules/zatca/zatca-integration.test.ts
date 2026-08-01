@@ -94,7 +94,7 @@ describe('ZATCA Integration', () => {
 
     const loginRes = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ username: 'admin', pin: '771133' });
+      .send({ username: 'admin', pin: '771133', clientType: 'pos' });
     jwtToken = loginRes.body.accessToken;
 
     // Open business day (required for order creation)
@@ -1102,7 +1102,7 @@ describe('ZATCA Integration', () => {
 
       const loginRes = await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ username: 'staff', pin: '1234' })
+        .send({ username: 'staff', pin: '1234', clientType: 'pos' })
         .expect(201);
       const staffToken = loginRes.body.accessToken;
       expect(staffToken).toBeDefined();

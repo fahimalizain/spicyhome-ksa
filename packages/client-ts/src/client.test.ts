@@ -166,9 +166,9 @@ describe('SpicyHomeClient onUnauthorized', () => {
       onUnauthorized,
     });
 
-    await expect(client.auth.login({ username: 'admin', pin: '0000' })).rejects.toThrow(
-      'HTTP 401 Unauthorized',
-    );
+    await expect(
+      client.auth.login({ username: 'admin', pin: '0000', clientType: 'pos' }),
+    ).rejects.toThrow('HTTP 401 Unauthorized');
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
