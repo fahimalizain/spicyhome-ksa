@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 10 rows after apply', () => {
+    it('__drizzle_migrations has exactly 11 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(10);
+      expect(rows.cnt).toBe(11);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(10);
+      expect(after).toBe(11);
 
       sqlite.close();
     });
@@ -117,6 +117,7 @@ describe('schema — invariants', () => {
       'settings',
       'payment_methods',
       'order_payments',
+      'delivery_partners',
     ];
 
     for (const table of expectedTables) {
@@ -241,6 +242,118 @@ describe('schema — invariants', () => {
         .prepare('SELECT COUNT(*) as cnt FROM order_items WHERE order_id = ?')
         .get(orderId) as any;
       expect(items.cnt).toBe(0);
+    });
+  });
+
+  describe('delivery partners', () => {
+    it('delivery_partners table has expected columns (ADR 0007)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(delivery_partners)').all() as any[];
+      const cols = info.map((c: any) => c.name);
+      expect(cols).toEqual(
+        expect.arrayContaining([
+          'id',
+          'title',
+          'enabled',
+          'sort_order',
+          'created_at',
+          'updated_at',
+          'created_by',
+          'updated_by',
+        ]),
+      );
+
+      // id is the TEXT primary key (slug)
+      const id = info.find((c: any) => c.name === 'id') as any;
+      expect(id.type.toLowerCase()).toBe('text');
+      expect(id.pk).toBe(1);
+
+      // enabled is NOT NULL with default 1
+      const enabled = info.find((c: any) => c.name === 'enabled') as any;
+      expect(enabled.notnull).toBe(1);
+      expect(enabled.dflt_value).toBe('1');
+
+      // sort_order is NOT NULL with default 0
+      const sortOrder = info.find((c: any) => c.name === 'sort_order') as any;
+      expect(sortOrder.notnull).toBe(1);
+      expect(sortOrder.dflt_value).toBe('0');
+
+      // Audit refs are nullable FKs to users
+      const createdBy = info.find((c: any) => c.name === 'created_by') as any;
+      expect(createdBy.notnull).toBe(0);
+    });
+
+    it('enabled defaults to 1 and sort_order to 0 on insert', () => {
+      const now = Math.floor(Date.now() / 1000);
+      sqlite.exec(`
+        INSERT INTO delivery_partners (id, title, created_at, updated_at)
+        VALUES ('hungerstation', 'HungerStation', ${now}, ${now})
+      `);
+      const row = sqlite
+        .prepare("SELECT * FROM delivery_partners WHERE id = 'hungerstation'")
+        .get() as any;
+      expect(row.title).toBe('HungerStation');
+      expect(row.enabled).toBe(1);
+      expect(row.sort_order).toBe(0);
+    });
+
+    it('orders has delivery_partner_id and delivery_external_ref columns (nullable)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(orders)').all() as any[];
+      const partnerId = info.find((c: any) => c.name === 'delivery_partner_id') as any;
+      expect(partnerId).toBeDefined();
+      expect(partnerId.type.toLowerCase()).toBe('text');
+      expect(partnerId.notnull).toBe(0);
+
+      const extRef = info.find((c: any) => c.name === 'delivery_external_ref') as any;
+      expect(extRef).toBeDefined();
+      expect(extRef.type.toLowerCase()).toBe('text');
+      expect(extRef.notnull).toBe(0);
+    });
+
+    it('idx_orders_delivery_partner index exists on orders(delivery_partner_id)', () => {
+      const row = sqlite
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_orders_delivery_partner'",
+        )
+        .get();
+      expect(row).toBeDefined();
+    });
+
+    it('orders.delivery_partner_id FK to delivery_partners is enforced', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // Unknown partner slug must fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, delivery_partner_id, created_at, updated_at)
+          VALUES (800, 'uuid-dp-fk', 'takeaway', ${doId}, 'open', 'nonexistent', ${now}, ${now})
+        `),
+      ).toThrow();
+
+      // Known partner round-trips together with the external ref
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, delivery_partner_id, delivery_external_ref, created_at, updated_at)
+        VALUES (801, 'uuid-dp-ok', 'takeaway', ${doId}, 'open', 'hungerstation', 'HS-883129', ${now}, ${now})
+      `);
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 801').get() as any;
+      expect(row.delivery_partner_id).toBe('hungerstation');
+      expect(row.delivery_external_ref).toBe('HS-883129');
+    });
+
+    it('walk-in takeaway insert without partner still works (nullable columns)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+          VALUES (802, 'uuid-dp-null', 'takeaway', ${doId}, 'open', ${now}, ${now})
+        `),
+      ).not.toThrow();
+
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 802').get() as any;
+      expect(row.delivery_partner_id).toBeNull();
+      expect(row.delivery_external_ref).toBeNull();
     });
   });
 

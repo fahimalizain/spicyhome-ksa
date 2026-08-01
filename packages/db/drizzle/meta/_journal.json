@@ -71,6 +71,13 @@
       "when": 1785556145570,
       "tag": "0009_drop_order_payments_order_method_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1785568521448,
+      "tag": "0010_delivery_partners",
+      "breakpoints": true
     }
   ]
 }
