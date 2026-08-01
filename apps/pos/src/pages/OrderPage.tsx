@@ -1336,22 +1336,29 @@ export function OrderPage() {
                 />
               )}
 
-              {currentOrder && currentOrder.status === 'paid' && permissions.refundOrder && (
-                <button
-                  onClick={handleOpenRefund}
-                  disabled={loading || refundLoading}
-                  className="w-full touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
-                >
-                  Refund
-                </button>
-              )}
-
-              {/* OrderActionBar for reprints */}
-              {currentOrder && (
-                <div className="pt-1">
-                  <OrderActionBar orderId={currentOrder.id} status={currentOrder.status} />
-                </div>
-              )}
+              {/* Paid/refunded secondary actions: Refund + Reprint side-by-side */}
+              {currentOrder &&
+                (currentOrder.status === 'paid' || currentOrder.status === 'refunded') &&
+                (permissions.refundOrder || permissions.updateOrder) && (
+                  <div className="flex gap-2">
+                    {currentOrder.status === 'paid' && permissions.refundOrder && (
+                      <button
+                        onClick={handleOpenRefund}
+                        disabled={loading || refundLoading}
+                        className="flex-1 touch-target bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-bold text-white py-3"
+                      >
+                        Refund
+                      </button>
+                    )}
+                    {permissions.updateOrder && (
+                      <OrderActionBar
+                        orderId={currentOrder.id}
+                        status={currentOrder.status}
+                        className="flex-1 min-w-0"
+                      />
+                    )}
+                  </div>
+                )}
 
               {currentOrder && !cart.isDirty && (
                 <button
