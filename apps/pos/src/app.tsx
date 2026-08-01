@@ -8,6 +8,7 @@ import { DayPage } from './pages/DayPage';
 import { AdminPage } from './pages/AdminPage';
 import { ItemsPage } from './pages/admin/ItemsPage';
 import { CategoriesPage } from './pages/admin/CategoriesPage';
+import { SubcategoriesPage } from './pages/admin/SubcategoriesPage';
 import { PrintersPage } from './pages/admin/PrintersPage';
 import { TablesPage } from './pages/admin/TablesPage';
 import { UsersPage } from './pages/admin/UsersPage';
@@ -36,6 +37,7 @@ export function App() {
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/admin/items" element={<ItemsPage />} />
               <Route path="/admin/categories" element={<CategoriesPage />} />
+              <Route path="/admin/subcategories" element={<SubcategoriesPage />} />
               <Route path="/admin/printers" element={<PrintersPage />} />
               <Route path="/admin/tables" element={<TablesPage />} />
               <Route path="/admin/users" element={<UsersPage />} />

@@ -22,6 +22,7 @@ import { calcOutstandingHalalas } from '../lib/order-payments';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
+  SubcategoryResponse,
   ItemResponse,
   TableResponse,
   OrderResponse,
@@ -109,11 +110,13 @@ export function OrderPage() {
   const cart = useCart();
   const permissions = usePermissions();
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [subcategories, setSubcategories] = useState<SubcategoryResponse[]>([]);
   const [items, setItems] = useState<ItemResponse[]>([]);
   // Full catalog (incl. inactive items) — the override floor applies even
   // when an item is inactive (ADR 0007), so the price modal needs it.
   const [catalogItems, setCatalogItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartnerResponse[]>([]);
   const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
@@ -358,13 +361,24 @@ export function OrderPage() {
 
   async function loadMenu() {
     try {
-      const [cats, allItems] = await Promise.all([
+      const [cats, subs, allItems] = await Promise.all([
         client.menu.listCategories(),
+        client.menu.listSubcategories(),
         client.menu.listItems(),
       ]);
-      setCategories(cats.filter((c) => c.isActive));
+      const activeCats = cats.filter((c) => c.isActive);
+      setCategories(activeCats);
+      setSubcategories(subs.filter((s) => s.isActive));
       setItems(allItems.filter((i) => i.isActive));
       setCatalogItems(allItems);
+      // Default browse selection: first active category by sortOrder with
+      // its "All" subcategory chip (shows every item in that category).
+      setSelectedCategory((prev) => {
+        if (prev != null) return prev;
+        const first = [...activeCats].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+        return first ? first.id : null;
+      });
+      setSelectedSubcategory(null);
     } catch {
       setError('Failed to load menu');
     }
@@ -406,8 +420,20 @@ export function OrderPage() {
     );
   }
 
+  // Active subcategories of the selected category (sorted by sortOrder).
+  const categorySubcategories = subcategories
+    .filter((s) => s.categoryId === selectedCategory)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+
+  /** Select a category; subcategory resets to "All" (null) within it. */
+  function handleSelectCategory(categoryId: number | null) {
+    setSelectedCategory(categoryId);
+    setSelectedSubcategory(null);
+  }
+
   const filteredItems = filterMenuItems(items, {
     categoryId: selectedCategory,
+    subcategoryId: selectedSubcategory,
     query: itemSearch,
   });
 
@@ -1273,107 +1299,142 @@ export function OrderPage() {
           )}
         </div>
 
-        {/* Category tabs + inline search */}
-        <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2">
-          {/* Scroll region wrapper for category tabs */}
-          <div className="relative min-w-0 flex-1">
-            <div
-              ref={categoryScrollRef}
-              onScroll={updateCategoryScrollFades}
-              className="flex overflow-x-auto overflow-y-hidden scrollbar-none"
+        {/* Menu area: vertical category rail | subcategory chips + items */}
+        <div className="flex flex-1 min-h-0">
+          {/* Vertical category rail — "All" clears category + subcategory */}
+          <div className="w-36 shrink-0 bg-gray-850 border-r border-gray-700 overflow-y-auto scrollbar-thin py-1">
+            <button
+              onClick={() => handleSelectCategory(null)}
+              className={`touch-target w-full text-left px-3 py-3 text-sm font-medium whitespace-nowrap ${
+                selectedCategory === null
+                  ? 'text-brand-500 border-l-2 border-brand-500 bg-gray-800/60'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+              }`}
             >
-              {/* Inner track — prevents children from being squeezed to container width */}
-              <div className="inline-flex flex-nowrap items-center">
-                <button
-                  onClick={() => setSelectedCategory(null)}
-                  className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
-                    selectedCategory === null
-                      ? 'text-brand-500 border-b-2 border-brand-500'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleSelectCategory(cat.id)}
+                className={`touch-target w-full text-left px-3 py-3 text-sm font-medium whitespace-nowrap ${
+                  selectedCategory === cat.id
+                    ? 'text-brand-500 border-l-2 border-brand-500 bg-gray-800/60'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Right of the rail: subcategory chips + search, then item grid */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Subcategory chips + inline search */}
+            <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2">
+              {/* Scroll region wrapper for subcategory chips */}
+              <div className="relative min-w-0 flex-1">
+                <div
+                  ref={categoryScrollRef}
+                  onScroll={updateCategoryScrollFades}
+                  className="flex overflow-x-auto overflow-y-hidden scrollbar-none"
                 >
-                  All
-                </button>
-                {categories.map((cat) => (
+                  {/* Inner track — prevents children from being squeezed to container width */}
+                  <div className="inline-flex flex-nowrap items-center">
+                    {selectedCategory !== null && (
+                      <button
+                        onClick={() => setSelectedSubcategory(null)}
+                        className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
+                          selectedSubcategory === null
+                            ? 'text-brand-500 border-b-2 border-brand-500'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        All
+                      </button>
+                    )}
+                    {categorySubcategories.map((sub) => (
+                      <button
+                        key={sub.id}
+                        onClick={() => setSelectedSubcategory(sub.id)}
+                        className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
+                          selectedSubcategory === sub.id
+                            ? 'text-brand-500 border-b-2 border-brand-500'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {sub.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Left fade — only when scrolled past start */}
+                {canScrollLeft && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-gray-850 to-transparent"
+                  />
+                )}
+
+                {/* Right fade — toward search; only when more content to the right */}
+                {canScrollRight && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-gray-850 to-transparent"
+                  />
+                )}
+              </div>
+
+              {/* Right: compact search, fixed width */}
+              <div className="relative shrink-0 w-40 sm:w-48 md:w-56">
+                <input
+                  type="text"
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setItemSearch('');
+                  }}
+                  placeholder="Search…"
+                  className="w-full pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+                />
+                {itemSearch && (
                   <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`touch-target shrink-0 px-4 py-2 text-sm whitespace-nowrap ${
-                      selectedCategory === cat.id
-                        ? 'text-brand-500 border-b-2 border-brand-500'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
+                    onClick={() => setItemSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-lg leading-none px-1"
+                    aria-label="Clear search"
                   >
-                    {cat.name}
+                    ×
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
-            {/* Left fade — only when scrolled past start */}
-            {canScrollLeft && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-gray-850 to-transparent"
-              />
-            )}
-
-            {/* Right fade — toward search; only when more content to the right */}
-            {canScrollRight && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-gray-850 to-transparent"
-              />
-            )}
-          </div>
-
-          {/* Right: compact search, fixed width */}
-          <div className="relative shrink-0 w-40 sm:w-48 md:w-56">
-            <input
-              type="text"
-              value={itemSearch}
-              onChange={(e) => setItemSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setItemSearch('');
-              }}
-              placeholder="Search…"
-              className="w-full pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
-            />
-            {itemSearch && (
-              <button
-                onClick={() => setItemSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-lg leading-none px-1"
-                aria-label="Clear search"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Item grid */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
-          {filteredItems.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-sm text-gray-500">No items match</div>
+            {/* Item grid */}
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
+              {filteredItems.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-sm text-gray-500">No items match</div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                  {filteredItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleAddItem(item)}
+                      disabled={cartDisabled}
+                      className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
+                    >
+                      <span className="text-sm font-medium text-white">{item.name}</span>
+                      <span className="text-xs text-brand-400 mt-1">
+                        {halalasToSar(item.priceHalalas)} SAR
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-              {filteredItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => handleAddItem(item)}
-                  disabled={cartDisabled}
-                  className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
-                >
-                  <span className="text-sm font-medium text-white">{item.name}</span>
-                  <span className="text-xs text-brand-400 mt-1">
-                    {halalasToSar(item.priceHalalas)} SAR
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
