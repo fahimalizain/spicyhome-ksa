@@ -30,6 +30,20 @@ const defaultMethods = [
   { id: 'card', title: 'Card', enabled: true, sortOrder: 1 },
 ];
 
+// ADR 0007: partner-owned methods carry the derived isDeliveryPartner flag.
+const partnerMethods = [
+  { id: 'cash', title: 'Cash', enabled: true, sortOrder: 0, isDeliveryPartner: false },
+  { id: 'card', title: 'Card', enabled: true, sortOrder: 1, isDeliveryPartner: false },
+  {
+    id: 'hungerstation',
+    title: 'HungerStation',
+    enabled: true,
+    sortOrder: 2,
+    isDeliveryPartner: true,
+  },
+  { id: 'keeta', title: 'Keeta', enabled: true, sortOrder: 3, isDeliveryPartner: true },
+];
+
 const mockOrder: OrderResponse = {
   id: 1,
   orderNo: 42,
@@ -107,6 +121,17 @@ const mockStandardOrder: OrderResponse = {
     postalCode: '12271',
     country: 'SA',
   },
+};
+
+const mockPartnerOrder: OrderResponse = {
+  ...mockOrder,
+  id: 3,
+  orderNo: 44,
+  documentId: 'INV26-0044',
+  type: 'takeaway',
+  deliveryPartnerId: 'hungerstation',
+  deliveryPartnerTitle: 'HungerStation',
+  deliveryExternalRef: 'HS-123',
 };
 
 describe('RefundPanel', () => {
@@ -200,6 +225,45 @@ describe('RefundPanel', () => {
       expect(screen.getByText('Refund Total')).toBeInTheDocument();
       expect(screen.getByText('23.00 SAR')).toBeInTheDocument();
     });
+  });
+
+  it('hides delivery-partner methods on a walk-in (no-partner) order (ADR 0007)', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(partnerMethods);
+    render(<RefundPanel order={mockOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Select 1 item to reveal the method section
+    fireEvent.click(screen.getAllByText('+')[0]);
+
+    // Normal methods are visible…
+    expect(await screen.findByText('Cash')).toBeInTheDocument();
+    expect(screen.getByText('Card')).toBeInTheDocument();
+    // …but partner-owned methods (HungerStation, Keeta) are hidden
+    expect(screen.queryByText('HungerStation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
+  });
+
+  it('shows only the partner-owned method on a delivery-partner order (ADR 0007)', async () => {
+    mockGetRefunds.mockResolvedValue(emptyRefunds);
+    mockListEnabled.mockResolvedValue(partnerMethods);
+    render(<RefundPanel order={mockPartnerOrder} onClose={vi.fn()} onRefunded={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Refund for Order INV26-0044')).toBeInTheDocument();
+    });
+
+    // Select 1 item to reveal the method section
+    fireEvent.click(screen.getAllByText('+')[0]);
+
+    // Only the partner's own method is visible
+    expect(await screen.findByText('HungerStation')).toBeInTheDocument();
+    expect(screen.queryByText('Cash')).not.toBeInTheDocument();
+    expect(screen.queryByText('Card')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
   });
 
   it('processes refund and calls onRefunded on success', async () => {

@@ -3367,6 +3367,195 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
   });
 });
 
+describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0007)', () => {
+  // Partner catalog + their owned payment methods (1:1, shared slug
+  // namespace). OR IGNORE: earlier describes seed the same rows already.
+  beforeAll(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.exec(`
+      INSERT OR IGNORE INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+      INSERT OR IGNORE INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 1, ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 3, '30', ${now}, ${now});
+      INSERT OR IGNORE INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 4, '30', ${now}, ${now});
+    `);
+  });
+
+  let orderIds: number[];
+
+  beforeEach(() => {
+    orderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of orderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  // Open takeaway order with 2× Zinger Burger (total 4600 halalas).
+  async function createOpenOrderWithItems(): Promise<{ orderId: number; totalHalalas: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+    orderIds.push(orderId);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
+      .expect(200);
+
+    const fetched = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, totalHalalas: fetched.body.totalHalalas };
+  }
+
+  // Link the order to HungerStation via PATCH /orders/:id/partner.
+  async function setPartner(orderId: number): Promise<void> {
+    const before = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/orders/${orderId}/partner`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: before.body.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+  }
+
+  // Pay the order fully and submit (walk-in: cash; partner order: own method).
+  async function payAndSubmit(
+    orderId: number,
+    totalHalalas: number,
+    methodId: string,
+  ): Promise<void> {
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId, amountHalalas: totalHalalas })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    // Wait for receipt print
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  async function firstOrderItemId(orderId: number): Promise<number> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body.items[0].id;
+  }
+
+  it('paid walk-in order (no partner) + refund with a partner-owned method → 400', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await payAndSubmit(orderId, totalHalalas, 'cash');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'hungerstation',
+      })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+  });
+
+  it('paid partner order + refund with cash → 400 with partner guidance', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }], methodId: 'cash' })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+    expect(res.body.message).toContain('cash');
+  });
+
+  it('paid partner order + refund with a DIFFERENT partner method (keeta) → 400', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'keeta',
+      })
+      .expect(400);
+
+    expect(res.body.message).toContain('delivery partner');
+    expect(res.body.message).toContain('hungerstation');
+    expect(res.body.message).toContain('keeta');
+  });
+
+  it('paid partner order + refund with the partner own method → 201, partner code snapshot', async () => {
+    const { orderId, totalHalalas } = await createOpenOrderWithItems();
+    await setPartner(orderId);
+    await payAndSubmit(orderId, totalHalalas, 'hungerstation');
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
+        methodId: 'hungerstation',
+      })
+      .expect(201);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('paid');
+
+    // Refund row snapshots the partner method's ZATCA code (30, Credit/On Account)
+    const refundRow = db
+      .select()
+      .from(schema.orderRefunds)
+      .where(eq(schema.orderRefunds.orderId, orderId))
+      .get() as any;
+    expect(refundRow.methodId).toBe('hungerstation');
+    expect(refundRow.methodTitle).toBe('HungerStation');
+    expect(refundRow.zatcaPaymentMeansCode).toBe('30');
+  });
+});
+
 describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-price (ADR 0007, Phase 7)', () => {
   let priceOrderIds: number[];
 
