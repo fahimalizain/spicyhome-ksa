@@ -504,7 +504,9 @@ class OrderViewModel(
                         baseUpdatedAt = serverUpdatedAt,
                         type = state.orderType.value,
                         tableId = state.selectedTableId,
-                        notes = notes.trim().ifBlank { null },
+                        // Empty string (not null) — Moshi omits null fields, so a
+                        // null here would be treated as "keep current" by the server.
+                        notes = notes.trim(),
                     ).execute()
                 }
                 if (response.isSuccessful) {
@@ -641,7 +643,9 @@ class OrderViewModel(
                 SyncOrderItemDto(
                     itemId = ci.item.id,
                     qty = ci.qty,
-                    notes = if (ci.notes.isBlank()) null else ci.notes,
+                    // Blank → "" (never null): Moshi omits null, so null would be
+                    // "keep current" on the server instead of clearing the notes.
+                    notes = ci.notes.trim(),
                 )
             }
             val response = withContext(ioDispatcher) {
@@ -690,13 +694,15 @@ class OrderViewModel(
                         SyncOrderItemDto(
                             orderItemId = ci.orderItemId,
                             qty = ci.qty,
-                            notes = if (ci.notes.isBlank()) null else ci.notes,
+                            // Blank → "" (never null): null would be omitted by
+                            // Moshi and treated as "keep current" by the server.
+                            notes = ci.notes.trim(),
                         )
                     } else {
                         SyncOrderItemDto(
                             itemId = ci.item.id,
                             qty = ci.qty,
-                            notes = if (ci.notes.isBlank()) null else ci.notes,
+                            notes = ci.notes.trim(),
                         )
                     }
                 }

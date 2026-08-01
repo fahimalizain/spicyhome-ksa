@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { OrdersPage } from '../pages/OrdersPage';
 import type { OrderRefundResponse } from '@spicyhome/client-ts';
@@ -586,6 +586,107 @@ describe('OrdersPage — refunds list and modal', () => {
     });
 
     expect(screen.queryByText(/^Previous:/)).not.toBeInTheDocument();
+  });
+});
+
+describe('OrdersPage — realtime detail refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList.mockResolvedValue([orderSummary]);
+    mockGet.mockResolvedValue(paidOrder);
+    mockGetRefunds.mockResolvedValue([]);
+    mockGetEvents.mockResolvedValue([]);
+    mockVerifyEvents.mockResolvedValue({ valid: true });
+    mockRealtimeSubscribe.mockReturnValue(vi.fn());
+  });
+
+  function realtimeHandler(event: string): () => Promise<void> {
+    const calls = mockRealtimeSubscribe.mock.calls as unknown as [string, () => Promise<void>][];
+    const sub = calls.find(([e]) => e === event);
+    expect(sub).toBeDefined();
+    return sub![1];
+  }
+
+  it('live-refreshes selected order detail on order.updated without the loading spinner', async () => {
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // The server now has notes on the order (e.g. another terminal saved them)
+    const updatedOrder = { ...paidOrder, notes: 'extra napkins' };
+    mockGet.mockResolvedValue(updatedOrder);
+
+    await act(async () => {
+      await realtimeHandler('order.updated')();
+    });
+
+    // Detail pane shows the live notes without a full-page loading flash
+    expect(screen.getByText('extra napkins')).toBeInTheDocument();
+    expect(screen.queryByText('Loading orders...')).not.toBeInTheDocument();
+  });
+
+  it('live-refreshes selected order notes when cleared to empty string', async () => {
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Another terminal cleared the notes → server returns null
+    const clearedOrder = { ...paidOrder, notes: null };
+    mockGet.mockResolvedValue(clearedOrder);
+
+    await act(async () => {
+      await realtimeHandler('order.updated')();
+    });
+
+    // Notes paragraph disappears, detail stays mounted
+    expect(screen.queryByText('extra napkins')).not.toBeInTheDocument();
+    expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    expect(screen.queryByText('Loading orders...')).not.toBeInTheDocument();
+  });
+
+  it('refreshes list and detail on order.item.updated for the selected order', async () => {
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Server returns a newer order: qty 2 → 3
+    const updatedOrder = {
+      ...paidOrder,
+      items: [{ ...paidOrder.items[0], qty: 3, totalHalalas: 6900 }],
+      totalHalalas: 6900,
+    };
+    mockGet.mockResolvedValue(updatedOrder);
+
+    await act(async () => {
+      await realtimeHandler('order.item.updated')();
+    });
+
+    expect(screen.getByText('3 × 23.00')).toBeInTheDocument();
+    expect(screen.queryByText('Loading orders...')).not.toBeInTheDocument();
   });
 });
 

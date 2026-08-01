@@ -345,7 +345,7 @@ class OrderViewModelTest {
     }
 
     @Test
-    fun `updateOrderNotes blank input sends null and clears`() = runTest(testDispatcher) {
+    fun `updateOrderNotes blank input sends empty string and clears`() = runTest(testDispatcher) {
         val oi = OrderItemResponse(
             id = 200L, orderId = 1L, itemId = 10L,
             itemName = "Pizza", unitPriceHalalas = 2000L, vatRateBp = 1500,
@@ -367,7 +367,7 @@ class OrderViewModelTest {
         verify {
             ordersApi.ordersControllerUpdateOrderMeta(
                 1L,
-                match { dto -> dto.notes == null }
+                match { dto -> dto.notes == "" }
             )
         }
         assertThat(vm.uiState.value.orderNotes).isEmpty()
@@ -1022,6 +1022,47 @@ class OrderViewModelTest {
         assertThat(state.isSyncing).isFalse()
         assertThat(state.cart).hasSize(2)
         assertThat(state.isDirty).isFalse()
+    }
+
+    @Test
+    fun `sendToKitchen with blank item notes sends empty string not null`() = runTest(testDispatcher) {
+        val menuItem = createItem(10, "Burger", 1500, 1500)
+        stubMenuItems(listOf(menuItem))
+
+        val oi = OrderItemResponse(
+            id = 200L, orderId = 1L, itemId = 10L,
+            itemName = "Burger", unitPriceHalalas = 1500L, vatRateBp = 1500,
+            qty = 2, totalHalalas = 3000L, notes = "original",
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(1L, 100L, "open", listOf(oi), updatedAt = 5000L)
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        // User clears the item notes
+        vm.updateItemNotes(0, "   ")
+
+        // Stub syncItems
+        val syncCall = mockk<Call<OrderResponse>>(relaxed = true)
+        every { ordersApi.ordersControllerSyncItems(any(), any()) } returns syncCall
+        val syncedOrder = createOrderResponse(1L, 100L, "open", listOf(oi.copy(notes = null)), updatedAt = 6000L)
+        every { syncCall.execute() } returns Response.success(syncedOrder)
+
+        vm.sendToKitchen()
+
+        // "" (not null) — null is omitted by Moshi and would keep the server notes
+        verify {
+            ordersApi.ordersControllerSyncItems(
+                1L,
+                match { dto ->
+                    dto.items.size == 1 &&
+                        dto.items[0].orderItemId == 200L &&
+                        dto.items[0].notes == ""
+                }
+            )
+        }
+        assertThat(vm.uiState.value.cart[0].notes).isEmpty()
     }
 
     @Test

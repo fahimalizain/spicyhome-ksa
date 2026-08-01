@@ -492,7 +492,9 @@ export function OrderPage() {
           items: cart.items.map((item) => ({
             itemId: item.itemId,
             qty: item.qty,
-            notes: item.notes || undefined,
+            // Send '' (not undefined) for blank notes — undefined is omitted
+            // by JSON.stringify and the server would keep the current notes.
+            notes: item.notes,
           })),
         });
 
@@ -552,7 +554,9 @@ export function OrderPage() {
             ? { orderItemId: item.orderItemId }
             : { itemId: item.itemId }),
           qty: item.qty,
-          notes: item.notes || undefined,
+          // Send '' (not undefined) for blank notes — undefined is omitted
+          // by JSON.stringify and the server would keep the current notes.
+          notes: item.notes,
         })),
       });
       hydrateOrder(syncRes);
