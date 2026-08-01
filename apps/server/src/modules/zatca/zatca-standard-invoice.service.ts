@@ -245,6 +245,37 @@ export class ZatcaStandardInvoiceService {
           .run();
       }
 
+      // On cleared: append immutable approval event for the accepted document.
+      // document_id was never rotated on this path, so the current
+      // order.document_id matches the one accepted by ZATCA.
+      if (storeStatus === 'cleared') {
+        const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+        if (!order?.documentId) {
+          throw new Error(`Order ${orderId} is missing document_id`);
+        }
+        const acceptedDocumentId = order.documentId;
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_approved',
+          {
+            documentKind: 'invoice',
+            zatcaRecordId: latest.id,
+            attemptNo: latest.attemptNo || 1,
+            icv: latest.icv,
+            uuid: latest.uuid,
+            cbcId: acceptedDocumentId,
+            documentId: acceptedDocumentId,
+            orderId,
+            httpStatus: clearance.httpStatus,
+            warnings: clearance.warnings,
+          },
+          now,
+        );
+      }
+
       return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, latest.id)).get() as any;
     });
 
@@ -458,6 +489,38 @@ export class ZatcaStandardInvoiceService {
           .set({ documentId: newDocumentId, updatedAt: now })
           .where(eq(orderRefunds.id, refundId))
           .run();
+      }
+
+      // On cleared: append immutable approval event for the accepted document.
+      // The refund document_id was never rotated on this path, so the current
+      // refund.document_id matches the one accepted by ZATCA.
+      if (storeStatus === 'cleared') {
+        const refund = tx.select().from(orderRefunds).where(eq(orderRefunds.id, refundId)).get();
+        if (!refund?.documentId) {
+          throw new Error(`Refund ${refundId} is missing document_id`);
+        }
+        const acceptedDocumentId = refund.documentId;
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_approved',
+          {
+            documentKind: 'credit_note',
+            zatcaRecordId: latest.id,
+            attemptNo: latest.attemptNo || 1,
+            icv: latest.icv,
+            uuid: latest.uuid,
+            cbcId: acceptedDocumentId,
+            documentId: acceptedDocumentId,
+            orderId,
+            refundId,
+            httpStatus: clearance.httpStatus,
+            warnings: clearance.warnings,
+          },
+          now,
+        );
       }
 
       return tx
@@ -872,6 +935,33 @@ export class ZatcaStandardInvoiceService {
           .run();
       }
 
+      // On cleared: append immutable approval event for the accepted document.
+      // The in-scope order variable holds the document_id that was signed
+      // into the XML (cleared does NOT rotate it).
+      if (storeStatus === 'cleared') {
+        const acceptedDocumentId = order.documentId;
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_approved',
+          {
+            documentKind: 'invoice',
+            zatcaRecordId: invoiceId,
+            attemptNo,
+            icv,
+            uuid: invUuid,
+            cbcId: acceptedDocumentId,
+            documentId: acceptedDocumentId,
+            orderId,
+            httpStatus: clearance.httpStatus,
+            warnings: clearance.warnings,
+          },
+          now,
+        );
+      }
+
       return tx.select().from(zatcaInvoices).where(eq(zatcaInvoices.id, invoiceId)).get() as any;
     });
 
@@ -1092,6 +1182,34 @@ export class ZatcaStandardInvoiceService {
           .set({ documentId: newDocumentId, updatedAt: now })
           .where(eq(orderRefunds.id, refundId))
           .run();
+      }
+
+      // On cleared: append immutable approval event for the accepted document.
+      // The in-scope refund variable holds the document_id that was signed
+      // into the XML (cleared does NOT rotate it).
+      if (storeStatus === 'cleared') {
+        const acceptedDocumentId = refund.documentId;
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          'zatca_clearance_approved',
+          {
+            documentKind: 'credit_note',
+            zatcaRecordId: cnId,
+            attemptNo,
+            icv,
+            uuid: invUuid,
+            cbcId: acceptedDocumentId,
+            documentId: acceptedDocumentId,
+            orderId,
+            refundId,
+            httpStatus: clearance.httpStatus,
+            warnings: clearance.warnings,
+          },
+          now,
+        );
       }
 
       return tx.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, cnId)).get() as any;

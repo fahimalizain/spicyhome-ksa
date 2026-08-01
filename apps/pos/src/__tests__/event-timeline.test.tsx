@@ -262,6 +262,139 @@ describe('OrderEventTimeline', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders ZATCA clearance approved label and payload for invoice', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'zatca_clearance_approved',
+        payload: JSON.stringify({
+          documentKind: 'invoice',
+          zatcaRecordId: 9,
+          attemptNo: 2,
+          icv: 3,
+          uuid: 'uuid-1',
+          documentId: 'INV26-0001',
+          cbcId: 'INV26-0001',
+          orderId: 1,
+          httpStatus: 200,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('ZATCA Clearance Approved')).toBeInTheDocument();
+    expect(screen.getByText('Invoice INV26-0001 cleared (ICV 3)')).toBeInTheDocument();
+  });
+
+  it('renders ZATCA clearance approved label and payload for credit note', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'zatca_clearance_approved',
+        payload: JSON.stringify({
+          documentKind: 'credit_note',
+          icv: 4,
+          documentId: 'REF26-0001',
+          cbcId: 'REF26-0001',
+          orderId: 1,
+          refundId: 7,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('ZATCA Clearance Approved')).toBeInTheDocument();
+    expect(screen.getByText('Credit note REF26-0001 cleared (ICV 4)')).toBeInTheDocument();
+  });
+
+  it('renders ZATCA clearance rejected label and payload with short error snippet', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'zatca_clearance_rejected',
+        payload: JSON.stringify({
+          documentKind: 'credit_note',
+          icv: 5,
+          documentId: 'REF26-0002',
+          cbcId: 'REF26-0002',
+          orderId: 1,
+          refundId: 8,
+          httpStatus: 400,
+          errors: ['Invalid credit note'],
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('ZATCA Clearance Rejected')).toBeInTheDocument();
+    expect(
+      screen.getByText('Credit note REF26-0002 rejected (ICV 5) — Invalid credit note'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders ZATCA clearance rejected payload without error snippet when errors are long', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'zatca_clearance_rejected',
+        payload: JSON.stringify({
+          documentKind: 'invoice',
+          icv: 6,
+          documentId: 'INV26-0003',
+          cbcId: 'INV26-0003',
+          orderId: 1,
+          errors: [
+            'This is a very long ZATCA validation error message that exceeds sixty characters in length',
+          ],
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('ZATCA Clearance Rejected')).toBeInTheDocument();
+    expect(screen.getByText('Invoice INV26-0003 rejected (ICV 6)')).toBeInTheDocument();
+  });
+
+  it('renders ZATCA clearance rejected payload with cbcId fallback when documentId is missing', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'zatca_clearance_rejected',
+        payload: JSON.stringify({ icv: 7, cbcId: 'INV26-0004', orderId: 1, errors: [] }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('ZATCA Clearance Rejected')).toBeInTheDocument();
+    // Missing documentKind is treated as invoice
+    expect(screen.getByText('Invoice INV26-0004 rejected (ICV 7)')).toBeInTheDocument();
+  });
+
   it('shows warning for broken print chain', async () => {
     mockGetEvents.mockResolvedValue([
       makeEvent({

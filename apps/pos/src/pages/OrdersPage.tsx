@@ -8,6 +8,7 @@ import { OrderEventTimeline } from '../components/OrderEventTimeline';
 import { RefundPanel } from '../components/RefundPanel';
 import { RefundDetailModal } from '../components/RefundDetailModal';
 import { OrderActionBar } from '../components/OrderActionBar';
+import { getPreviousInvoiceDocumentIds } from '../lib/order-events';
 import type {
   OrderResponse,
   OrderSummaryResponse,
@@ -30,6 +31,7 @@ export function OrdersPage() {
   const [showRefund, setShowRefund] = useState(false);
   const [refunds, setRefunds] = useState<OrderRefundResponse[]>([]);
   const [selectedRefund, setSelectedRefund] = useState<OrderRefundResponse | null>(null);
+  const [previousDocumentIds, setPreviousDocumentIds] = useState<string[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -94,12 +96,14 @@ export function OrdersPage() {
 
   async function viewOrder(id: number) {
     try {
-      const [order, refundsResult] = await Promise.all([
+      const [order, refundsResult, events] = await Promise.all([
         client.orders.get(id),
         client.orders.getRefunds(id),
+        client.orders.getEvents(id),
       ]);
       setSelectedOrder(order);
       setRefunds(refundsResult);
+      setPreviousDocumentIds(getPreviousInvoiceDocumentIds(events, order.documentId));
       setShowRefund(false);
       setSelectedRefund(null);
     } catch {
@@ -187,6 +191,11 @@ export function OrdersPage() {
               <p>{selectedOrder.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</p>
               <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
             </div>
+            {previousDocumentIds.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                Previous: {previousDocumentIds.join(', ')}
+              </p>
+            )}
           </div>
 
           {/* Scrollable body */}

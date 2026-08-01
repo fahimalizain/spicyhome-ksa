@@ -511,6 +511,82 @@ describe('OrdersPage — refunds list and modal', () => {
     const truncated = 'This is a very long reason str...';
     expect(screen.getByText(truncated, { exact: false })).toBeInTheDocument();
   });
+
+  it('shows previous burned invoice document IDs in the detail header', async () => {
+    mockGetRefunds.mockResolvedValue([]);
+    mockGetEvents.mockResolvedValue([
+      {
+        id: 1,
+        orderId: 1,
+        eventIdx: 1,
+        userId: 1,
+        type: 'zatca_clearance_rejected',
+        payload: JSON.stringify({
+          documentKind: 'invoice',
+          documentId: 'INV26-0041',
+          cbcId: 'INV26-0041',
+          orderId: 1,
+          errors: ['Invalid buyer'],
+        }),
+        prevHash: '',
+        hash: 'abc123',
+        createdAt: 1700000000,
+      },
+      {
+        id: 2,
+        orderId: 1,
+        eventIdx: 2,
+        userId: 1,
+        type: 'zatca_clearance_approved',
+        payload: JSON.stringify({
+          documentKind: 'invoice',
+          documentId: 'INV26-0042',
+          cbcId: 'INV26-0042',
+          orderId: 1,
+        }),
+        prevHash: 'abc123',
+        hash: 'def456',
+        createdAt: 1700000100,
+      },
+    ]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Previous burned document ID shown in muted header text; current
+    // document (INV26-0042) is not listed
+    await waitFor(() => {
+      expect(screen.getByText('Previous: INV26-0041')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Previous: INV26-0041, INV26-0042')).not.toBeInTheDocument();
+  });
+
+  it('does not show Previous line when no burned invoice document IDs exist', async () => {
+    mockGetRefunds.mockResolvedValue([sampleRefund]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/^Previous:/)).not.toBeInTheDocument();
+  });
 });
 
 describe('OrdersPage — Open Order pinned footer', () => {

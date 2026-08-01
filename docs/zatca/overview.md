@@ -212,7 +212,14 @@ Each clearance attempt follows these rules:
     UUID, `cbcId` and `documentId` (= burned business document_id),
     `zatcaRecordId` (= PK of the zatca row), `orderId`, `errors`, and
     `httpStatus`. This provides a permanent audit trail of burned document
-    numbers for operator recovery.
+    numbers for operator recovery. Symmetrically, on `status = 'cleared'`
+    (success), an immutable `order_events` row of type
+    `zatca_clearance_approved` is written with the **accepted** document
+    identifiers (`cbcId`/`documentId` = the current, non-rotated business
+    document_id), the ICV/UUID, `zatcaRecordId`, `orderId` (and `refundId`
+    for credit notes), `httpStatus`, and any `warnings`. Both rows are
+    written atomically with the status update inside the same transaction;
+    neither is written for `error` / retryable status.
 
 11. **Document ID counters**: allocated by `DocumentIdService` — see
     [Document ID section](#document-id-document_id--ubl-invoice-cbcid) above

@@ -177,9 +177,10 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 
 #### ZATCA Clearance Events
 
-| Type                       | Trigger                                                                                                         | Payload                                                                                                                                                                                                                                                                                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `zatca_clearance_rejected` | Standard invoice/credit note clearance returns business rejection (4xx HTTP / `NOT_CLEARED` / validation ERROR) | `{ documentKind: 'invoice' \| 'credit_note', zatcaRecordId: number, attemptNo: number, icv: number, uuid: string, cbcId: string (burned business document_id), documentId: string (same as cbcId — business document number INV…/REF…), orderId: number, refundId?: number, httpStatus: number \| null, errors: string[] }` |
+| Type                       | Trigger                                                                                                         | Payload                                                                                                                                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zatca_clearance_rejected` | Standard invoice/credit note clearance returns business rejection (4xx HTTP / `NOT_CLEARED` / validation ERROR) | `{ documentKind: 'invoice' \| 'credit_note', zatcaRecordId: number, attemptNo: number, icv: number, uuid: string, cbcId: string (burned business document_id), documentId: string (same as cbcId — business document number INV…/REF…), orderId: number, refundId?: number, httpStatus: number \| null, errors: string[] }`     |
+| `zatca_clearance_approved` | Standard invoice/credit note clearance succeeds (`status = 'cleared'`)                                          | `{ documentKind: 'invoice' \| 'credit_note', zatcaRecordId: number, attemptNo: number, icv: number, uuid: string, cbcId: string (accepted business document_id), documentId: string (same as cbcId — business document number INV…/REF…), orderId: number, refundId?: number, httpStatus: number \| null, warnings: string[] }` |
 
 > **Burn semantics**: A `zatca_clearance_rejected` event signals that the ICV
 > associated with this attempt is permanently burned — the invoice cannot be
@@ -191,7 +192,16 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 > `reissue()` (or `reissueCreditNote()`) which allocates a new
 > ICV+UUID+document_id. These events are written atomically with the DB
 > status update + document_id rotation inside a single transaction. They are
-> **not** emitted for `error` status (network/5xx — retryable) or `cleared`
+> **not** emitted for `error` status (network/5xx — retryable).
+>
+> **Approval semantics**: a `zatca_clearance_approved` event is the
+> success-side audit mirror. When clearance returns `cleared`, one approved
+> event is written atomically with the `status = 'cleared'` update in the
+> same transaction. The `cbcId`/`documentId` fields record the **accepted**
+> business document number — it is **not** rotated on success, so it always
+> matches the current `orders.document_id` / `order_refunds.document_id`.
+> The `warnings` field carries any ZATCA acceptance warnings (e.g. minor
+> schema deviations). Approved events are also **not** emitted for `error`
 > status.
 
 ### Payload Fields for Item Mutations
