@@ -5038,7 +5038,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('5 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 5x');
 
     // Second send with no changes → 200 no-op, no new enqueued events
     const res2 = await sendToKitchen(orderId);
@@ -5077,7 +5078,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 3x');
   });
 
   it('qty decrease: send does not print negative; printed total stays high', async () => {
