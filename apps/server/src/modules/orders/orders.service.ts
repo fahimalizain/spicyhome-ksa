@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
@@ -16,6 +16,7 @@ import {
   orderRefundItems,
   orderPayments,
   paymentMethods,
+  deliveryPartners,
   tables,
   dayOpenings,
   settings,
@@ -64,6 +65,12 @@ function todayInRiyadh(): string {
 function normalizeNotes(n: string | null | undefined): string | null {
   if (n == null || n === '') return null;
   return n;
+}
+
+function normalizeExternalRef(r: string | null | undefined): string | null {
+  if (r == null) return null;
+  const trimmed = r.trim();
+  return trimmed === '' ? null : trimmed;
 }
 
 @Injectable()
@@ -272,6 +279,52 @@ export class OrdersService {
         now,
       );
 
+      // ADR 0007: takeaway → dine_in (and any other patch that ends up
+      // dine_in) clears the delivery partner + external ref and resets every
+      // line price to the live catalog — a dine-in order is always at menu
+      // prices. The existing type_changed payload is unchanged; the partner
+      // clear and price resets are recorded as their own events.
+      if (toType === 'dine_in') {
+        const hadPartner = order.deliveryPartnerId != null;
+        if (hadPartner || order.deliveryExternalRef != null) {
+          tx.update(orders)
+            .set({
+              deliveryPartnerId: null,
+              deliveryExternalRef: null,
+              ...updateAuditFields(userId, now),
+            })
+            .where(eq(orders.id, orderId))
+            .run();
+        }
+
+        const resetItemCount = this.resetLinePricesToCatalog(
+          tx,
+          orderId,
+          userId,
+          'type_changed_to_dine_in',
+          now,
+        );
+
+        if (hadPartner) {
+          this.orderEvents.createEvent(
+            tx,
+            orderId,
+            userId,
+            AuditAction.DELIVERY_PARTNER_CHANGED,
+            {
+              fromPartnerId: order.deliveryPartnerId,
+              toPartnerId: null,
+              fromPartnerTitle: this.getPartnerTitle(tx, order.deliveryPartnerId),
+              toPartnerTitle: null,
+              fromExternalRef: order.deliveryExternalRef ?? null,
+              toExternalRef: null,
+              resetItemCount,
+            },
+            now,
+          );
+        }
+      }
+
       const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
       const refreshedItems = tx
         .select()
@@ -289,6 +342,472 @@ export class OrdersService {
     // Reuse getOrder's mapping so the response always matches OrderResponse:
     // isStandardInvoice as a real boolean, payments array, zatcaBuyerDetails.
     return this.getOrder(orderId);
+  }
+
+  /**
+   * PATCH /orders/:id/partner — set / clear / change the delivery partner
+   * and external ref on an open order (ADR 0007).
+   *
+   * Rules (implemented exactly as the ADR table):
+   *
+   * - open orders only → else 400
+   * - set/change partner: order type must be `takeaway` (dine_in → 400 with
+   *   guidance) and the partner must exist and be enabled (else 400);
+   *   line prices are NEVER touched on set/change
+   * - clear partner (`deliveryPartnerId: null`): resets every line's
+   *   `unit_price_halalas` to the live catalog and recomputes totals; the
+   *   external ref is force-nulled; lines with `item_id` NULL keep their
+   *   current price and get no reset event
+   * - ref-only edit (`deliveryPartnerId` omitted): allowed when a partner is
+   *   already set; without a partner the ref is ignored/force-nulled (no-op)
+   * - stale `baseUpdatedAt` → 409 `{ message, updatedAt }`
+   *
+   * Audit: writes `delivery_partner_changed` (set/change/clear/ref-only) and,
+   * on clear, one `item_price_reset` per actually-changed line with
+   * `reason: 'partner_cleared'`. Emits `order.updated` on mutation.
+   */
+  async updateOrderPartner(
+    orderId: number,
+    dto: {
+      baseUpdatedAt: number;
+      deliveryPartnerId?: string | null;
+      deliveryExternalRef?: string | null;
+    },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+    let anyMutation = false;
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Status gate — open orders only (ADR 0007)
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can change the delivery partner');
+      }
+
+      // Concurrency — same 409 shape as syncItems / updateOrderMeta
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      const fromPartnerId = order.deliveryPartnerId ?? null;
+      const fromExternalRef = order.deliveryExternalRef ?? null;
+      const snapshot = () => {
+        const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+        const refreshedItems = tx
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, orderId))
+          .all();
+        const logs = this.orderEvents.getEvents(tx, orderId);
+        return { ...refreshedOrder, items: refreshedItems, events: logs };
+      };
+
+      // ── Clear the partner (deliveryPartnerId: null) ──────────────────────
+      if (dto.deliveryPartnerId === null) {
+        // Already clear → no-op (the ref is always null without a partner).
+        if (fromPartnerId === null) return snapshot();
+
+        anyMutation = true;
+
+        // Clear partner + force-null the external ref (a ref has no meaning
+        // without a partner).
+        tx.update(orders)
+          .set({
+            deliveryPartnerId: null,
+            deliveryExternalRef: null,
+            ...updateAuditFields(userId, now),
+          })
+          .where(eq(orders.id, orderId))
+          .run();
+
+        // Reset every line price to the live catalog + recompute totals.
+        const resetItemCount = this.resetLinePricesToCatalog(
+          tx,
+          orderId,
+          userId,
+          'partner_cleared',
+          now,
+        );
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          AuditAction.DELIVERY_PARTNER_CHANGED,
+          {
+            fromPartnerId,
+            toPartnerId: null,
+            fromPartnerTitle: this.getPartnerTitle(tx, fromPartnerId),
+            toPartnerTitle: null,
+            fromExternalRef,
+            toExternalRef: null,
+            resetItemCount,
+          },
+          now,
+        );
+
+        return snapshot();
+      }
+
+      // ── Set / change the partner (deliveryPartnerId: <slug>) ─────────────
+      if (dto.deliveryPartnerId !== undefined) {
+        const toPartnerId = dto.deliveryPartnerId;
+
+        // A partner only makes sense on a takeaway order (ADR 0007).
+        if (order.type !== 'takeaway') {
+          throw new BadRequestException('Set order type to takeaway first');
+        }
+
+        // Partner must exist and be enabled.
+        const partner = tx
+          .select()
+          .from(deliveryPartners)
+          .where(eq(deliveryPartners.id, toPartnerId))
+          .get();
+        if (!partner) {
+          throw new BadRequestException(`Unknown delivery partner "${toPartnerId}"`);
+        }
+        if (!partner.enabled) {
+          throw new BadRequestException(`Delivery partner "${toPartnerId}" is disabled`);
+        }
+
+        const toExternalRef =
+          dto.deliveryExternalRef === undefined
+            ? fromExternalRef
+            : normalizeExternalRef(dto.deliveryExternalRef);
+
+        // No-op: same partner and same ref.
+        if (toPartnerId === fromPartnerId && toExternalRef === fromExternalRef) {
+          return snapshot();
+        }
+
+        anyMutation = true;
+
+        // Set/change NEVER touches line prices (ADR 0007). The ref is
+        // updated only when the body actually carries it.
+        tx.update(orders)
+          .set({
+            deliveryPartnerId: toPartnerId,
+            ...(dto.deliveryExternalRef !== undefined
+              ? { deliveryExternalRef: toExternalRef }
+              : {}),
+            ...updateAuditFields(userId, now),
+          })
+          .where(eq(orders.id, orderId))
+          .run();
+
+        this.orderEvents.createEvent(
+          tx,
+          orderId,
+          userId,
+          AuditAction.DELIVERY_PARTNER_CHANGED,
+          {
+            fromPartnerId,
+            toPartnerId,
+            fromPartnerTitle: this.getPartnerTitle(tx, fromPartnerId),
+            toPartnerTitle: partner.title,
+            fromExternalRef,
+            toExternalRef,
+            resetItemCount: 0,
+          },
+          now,
+        );
+
+        return snapshot();
+      }
+
+      // ── Ref-only edit (deliveryPartnerId omitted) ────────────────────────
+      // No ref in the body → nothing was requested at all → no-op.
+      if (dto.deliveryExternalRef === undefined) {
+        return snapshot();
+      }
+
+      const toExternalRef = normalizeExternalRef(dto.deliveryExternalRef);
+      if (toExternalRef === fromExternalRef) {
+        // No change → no-op.
+        return snapshot();
+      }
+
+      // A ref without a partner is meaningless — ignore/force-null (it is
+      // already null here) and treat as a no-op (ADR 0007).
+      if (fromPartnerId === null) return snapshot();
+
+      anyMutation = true;
+
+      tx.update(orders)
+        .set({ deliveryExternalRef: toExternalRef, ...updateAuditFields(userId, now) })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.DELIVERY_PARTNER_CHANGED,
+        {
+          fromPartnerId,
+          toPartnerId: fromPartnerId,
+          fromPartnerTitle: this.getPartnerTitle(tx, fromPartnerId),
+          toPartnerTitle: this.getPartnerTitle(tx, fromPartnerId),
+          fromExternalRef,
+          toExternalRef,
+          resetItemCount: 0,
+        },
+        now,
+      );
+
+      return snapshot();
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
+  }
+
+  /**
+   * PATCH /orders/:id/items/:orderItemId/unit-price — per-line partner price
+   * override (ADR 0007). `orderItemId` is the `order_items.id` (line id),
+   * NOT the catalog item id.
+   *
+   * Rules (implemented exactly as the ADR):
+   *
+   * - open orders only → else 400
+   * - the order must have a delivery partner set → else 400
+   * - the line must belong to the order → else 404
+   * - lines with `item_id` NULL (catalog item deleted) cannot be overridden
+   *   → else 400
+   * - `unitPriceHalalas` must be an integer ≥ the LIVE catalog
+   *   `items.price_halalas` read inside the transaction (the floor applies
+   *   even when the item is inactive) → else 400 with the floor in the
+   *   message; a catalog row that no longer exists (hard-deleted item) also
+   *   has no floor → 400
+   * - stale `baseUpdatedAt` → 409 `{ message, updatedAt }`
+   * - identical price → 200 no-op: no event, no `updated_at` bump, no emit
+   *
+   * Writes one `item_price_overridden` event with
+   * `{ orderItemId, itemId, fromUnitPriceHalalas, toUnitPriceHalalas,
+   * floorPriceHalalas }`, recomputes the line total (`unit_price × qty`) and
+   * the order totals via the existing VAT path, and emits `order.updated`.
+   */
+  async updateOrderItemUnitPrice(
+    orderId: number,
+    orderItemId: number,
+    dto: { baseUpdatedAt: number; unitPriceHalalas: number },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+    let anyMutation = false;
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Status gate — open orders only (ADR 0007)
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can override line prices');
+      }
+
+      // Partner gate — overrides exist only on linked delivery orders
+      if (order.deliveryPartnerId == null) {
+        throw new BadRequestException(
+          'Line price overrides require a delivery partner on the order',
+        );
+      }
+
+      // Concurrency — same 409 shape as syncItems / updateOrderMeta
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      // The line must exist AND belong to this order (orderItemId is the
+      // global order_items.id PK — same ownership check as syncItems).
+      const oi = tx.select().from(orderItems).where(eq(orderItems.id, orderItemId)).get();
+      if (!oi || oi.orderId !== orderId) {
+        throw new NotFoundException(`Order item ${orderItemId} not found on order ${orderId}`);
+      }
+
+      // Lines without a catalog link cannot be overridden (no floor).
+      if (oi.itemId == null) {
+        throw new BadRequestException(
+          `Order item ${orderItemId} has no catalog item — cannot override its price`,
+        );
+      }
+
+      // Floor = live catalog price, read fresh inside the transaction. The
+      // floor applies even when the item is inactive (ADR 0007).
+      const catalogRow = tx
+        .select({ priceHalalas: items.priceHalalas })
+        .from(items)
+        .where(eq(items.id, oi.itemId))
+        .get();
+      if (!catalogRow) {
+        throw new BadRequestException(
+          `Cannot override price: catalog item ${oi.itemId} no longer exists`,
+        );
+      }
+      const floorPriceHalalas = catalogRow.priceHalalas;
+      if (!Number.isInteger(dto.unitPriceHalalas) || dto.unitPriceHalalas < floorPriceHalalas) {
+        throw new BadRequestException(
+          `Unit price must be at least the catalog price of ${floorPriceHalalas} halalas (floor)`,
+        );
+      }
+
+      const fromUnitPriceHalalas = oi.unitPriceHalalas;
+      const toUnitPriceHalalas = dto.unitPriceHalalas;
+
+      // No-op: identical price → return the current order without bumping
+      // updated_at or writing an event (same as updateOrderMeta's no-op).
+      if (toUnitPriceHalalas === fromUnitPriceHalalas) {
+        const snapshot = () => {
+          const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+          const refreshedItems = tx
+            .select()
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId))
+            .all();
+          const logs = this.orderEvents.getEvents(tx, orderId);
+          return { ...refreshedOrder, items: refreshedItems, events: logs };
+        };
+        return snapshot();
+      }
+
+      anyMutation = true;
+
+      tx.update(orderItems)
+        .set({
+          unitPriceHalalas: toUnitPriceHalalas,
+          totalHalalas: toUnitPriceHalalas * oi.qty,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orderItems.id, orderItemId))
+        .run();
+
+      // Recompute order totals (existing VAT-inclusive path).
+      this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.ITEM_PRICE_OVERRIDDEN,
+        {
+          orderItemId,
+          itemId: oi.itemId,
+          fromUnitPriceHalalas,
+          toUnitPriceHalalas,
+          floorPriceHalalas,
+        },
+        now,
+      );
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
+  }
+
+  /**
+   * ADR 0007 price reset — set every order line's `unit_price_halalas` to
+   * the live catalog price (`items.price_halalas`) and recompute the order
+   * totals. Shared by the clear-partner endpoint and the takeaway → dine_in
+   * type-change path.
+   *
+   * - Lines whose `item_id` is NULL keep their current unit price (there is
+   *   no catalog price to reset to) and get no reset event.
+   * - Lines already at the catalog price are untouched.
+   * - One `item_price_reset` event is written per actually-changed line.
+   *
+   * Returns the number of lines actually changed (the caller reports it as
+   * `resetItemCount` in the `delivery_partner_changed` payload).
+   */
+  private resetLinePricesToCatalog(
+    tx: any,
+    orderId: number,
+    userId: number,
+    reason: 'partner_cleared' | 'type_changed_to_dine_in',
+    now: number,
+  ): number {
+    const rows: Array<any> = tx
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId))
+      .all();
+
+    const itemIds = [...new Set(rows.map((r) => r.itemId).filter((x): x is number => x != null))];
+    const catalogPrices = new Map<number, number>();
+    if (itemIds.length > 0) {
+      const catalogRows = tx
+        .select({ id: items.id, priceHalalas: items.priceHalalas })
+        .from(items)
+        .where(inArray(items.id, itemIds))
+        .all();
+      for (const c of catalogRows) catalogPrices.set(c.id, c.priceHalalas);
+    }
+
+    let changed = 0;
+    for (const oi of rows) {
+      if (oi.itemId == null) continue;
+      const catalogPrice = catalogPrices.get(oi.itemId);
+      // Missing catalog row (item hard-deleted after the line snapshot) →
+      // keep the current price, same as item_id NULL.
+      if (catalogPrice === undefined || catalogPrice === oi.unitPriceHalalas) continue;
+
+      tx.update(orderItems)
+        .set({
+          unitPriceHalalas: catalogPrice,
+          totalHalalas: catalogPrice * oi.qty,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orderItems.id, oi.id))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.ITEM_PRICE_RESET,
+        {
+          orderItemId: oi.id,
+          itemId: oi.itemId,
+          fromUnitPriceHalalas: oi.unitPriceHalalas,
+          toUnitPriceHalalas: catalogPrice,
+          reason,
+        },
+        now,
+      );
+      changed++;
+    }
+
+    if (changed > 0) {
+      this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
+    }
+    return changed;
+  }
+
+  /** Look up a delivery partner's title by slug (null when unset/unknown). */
+  private getPartnerTitle(tx: any, partnerId: string | null): string | null {
+    if (!partnerId) return null;
+    const partner = tx
+      .select({ title: deliveryPartners.title })
+      .from(deliveryPartners)
+      .where(eq(deliveryPartners.id, partnerId))
+      .get();
+    return partner?.title ?? null;
   }
 
   private emitDomainEvent(
@@ -1036,6 +1555,38 @@ export class OrdersService {
       }
       if (!pm.enabled) {
         throw new BadRequestException(`Payment method "${dto.methodId}" is disabled`);
+      }
+
+      // ADR 0007: delivery-partner payment restriction.
+      // - Partner order: ONLY the partner's own method is allowed (method id
+      //   === partner id, shared slug namespace).
+      // - Non-partner order: partner-owned methods are rejected — a partner
+      //   method may only be used on an order linked to that partner.
+      if (order.deliveryPartnerId != null) {
+        if (dto.methodId !== order.deliveryPartnerId) {
+          const partner = tx
+            .select({ title: deliveryPartners.title })
+            .from(deliveryPartners)
+            .where(eq(deliveryPartners.id, order.deliveryPartnerId))
+            .get();
+          const partnerLabel = partner
+            ? `"${order.deliveryPartnerId}" (${partner.title})`
+            : `"${order.deliveryPartnerId}"`;
+          throw new BadRequestException(
+            `Order has delivery partner ${partnerLabel}; only that partner's payment method "${order.deliveryPartnerId}" is allowed (got "${dto.methodId}").`,
+          );
+        }
+      } else {
+        const isPartnerOwned = !!tx
+          .select({ id: deliveryPartners.id })
+          .from(deliveryPartners)
+          .where(eq(deliveryPartners.id, dto.methodId))
+          .get();
+        if (isPartnerOwned) {
+          throw new BadRequestException(
+            `Payment method "${dto.methodId}" belongs to a delivery partner and may only be used on orders linked to that partner.`,
+          );
+        }
       }
 
       // Cash / non-cash tendered rules (same semantics as the removed /pay flow)
@@ -1893,7 +2444,31 @@ export class OrdersService {
     if (filters?.status) {
       query = query.where(eq(orders.status, filters.status)) as any;
     }
-    return query.orderBy(orders.id).all();
+    const rows: any[] = query.orderBy(orders.id).all();
+    return this.attachDeliveryPartnerTitles(rows);
+  }
+
+  /**
+   * Attach `deliveryPartnerTitle` to order rows (ADR 0007) — one batched
+   * lookup for all distinct partner ids instead of an N+1 join.
+   */
+  private attachDeliveryPartnerTitles(rows: any[]): any[] {
+    const ids = [
+      ...new Set(rows.map((r) => r.deliveryPartnerId).filter((x): x is string => x != null)),
+    ];
+    const titles = new Map<string, string>();
+    if (ids.length > 0) {
+      const partners = this.db
+        .select({ id: deliveryPartners.id, title: deliveryPartners.title })
+        .from(deliveryPartners)
+        .where(inArray(deliveryPartners.id, ids))
+        .all();
+      for (const p of partners) titles.set(p.id, p.title);
+    }
+    return rows.map((r) => ({
+      ...r,
+      deliveryPartnerTitle: r.deliveryPartnerId ? (titles.get(r.deliveryPartnerId) ?? null) : null,
+    }));
   }
 
   getOrder(id: number): any {
@@ -1922,6 +2497,7 @@ export class OrdersService {
           changeHalalas: p.changeHalalas,
           createdAt: p.createdAt,
         })),
+        deliveryPartnerTitle: this.getPartnerTitle(this.db, order.deliveryPartnerId ?? null),
         zatcaBuyerDetails: this.parseOrderBuyerDetails(order),
         documentId: order.documentId,
       },

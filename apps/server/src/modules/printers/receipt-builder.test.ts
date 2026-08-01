@@ -172,6 +172,44 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).not.toContain('Table:');
   });
 
+  // ── Delivery partner (ADR 0007) ─────────────────────────────────────────────
+
+  it('renders Delivery title and App order # when partner and ref are set', () => {
+    const opts = {
+      ...baseOpts,
+      orderType: 'takeaway' as const,
+      deliveryPartnerTitle: 'HungerStation',
+      deliveryExternalRef: 'HS-883129',
+    };
+    const buf = builder.build(opts);
+    const s = str(buf);
+    expect(s).toContain('Delivery: HungerStation');
+    expect(s).toContain('App order #: HS-883129');
+    // Near the order type / order ref header section
+    expect(s.indexOf('Type: Takeaway')).toBeLessThan(s.indexOf('Delivery: HungerStation'));
+    expect(s.indexOf('Delivery: HungerStation')).toBeLessThan(s.indexOf('App order #: HS-883129'));
+    expect(s.indexOf('App order #: HS-883129')).toBeLessThan(s.indexOf('Order ref: #42'));
+  });
+
+  it('renders Delivery title but no App order # when ref is omitted', () => {
+    const opts = {
+      ...baseOpts,
+      orderType: 'takeaway' as const,
+      deliveryPartnerTitle: 'Keeta',
+    };
+    const buf = builder.build(opts);
+    const s = str(buf);
+    expect(s).toContain('Delivery: Keeta');
+    expect(s).not.toContain('App order #:');
+  });
+
+  it('omits Delivery and App order # lines without a partner', () => {
+    const buf = builder.build({ ...baseOpts, orderType: 'takeaway' as const });
+    const s = str(buf);
+    expect(s).not.toContain('Delivery:');
+    expect(s).not.toContain('App order #:');
+  });
+
   it('renders Arabic item name as primary line with configured encoding', () => {
     const buf = builder.build({
       ...baseOpts,

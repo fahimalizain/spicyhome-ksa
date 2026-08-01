@@ -15,6 +15,29 @@
 export interface PaymentMethod {
   id: string;
   title: string;
+  /**
+   * Derived server flag (ADR 0007): true when this method is owned by a
+   * delivery partner (its id exists in delivery_partners).
+   */
+  isDeliveryPartner?: boolean;
+}
+
+/**
+ * ADR 0007: restrict the enabled payment methods shown for an order.
+ *
+ * - Order has a delivery partner: only that partner's own method is visible
+ *   (method id === partner id — shared slug namespace).
+ * - Order has no partner: partner-owned methods are hidden; the normal
+ *   methods only.
+ */
+export function filterMethodsForOrder(
+  methods: PaymentMethod[],
+  deliveryPartnerId: string | null,
+): PaymentMethod[] {
+  if (deliveryPartnerId != null) {
+    return methods.filter((m) => m.id === deliveryPartnerId);
+  }
+  return methods.filter((m) => !m.isDeliveryPartner);
 }
 
 export interface AddPaymentDraft {

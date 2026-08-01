@@ -11,6 +11,7 @@ import {
   tables,
   zatcaInvoices,
   zatcaCreditNotes,
+  deliveryPartners,
 } from '@spicyhome/db';
 import { PrinterRole, safeParsePrinterConfig } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
@@ -161,6 +162,8 @@ export class PrintJobService {
       sellerCountry,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
       items: receiptItems,
       subtotalHalalas: order.subtotalHalalas,
       vatHalalas: order.vatHalalas,
@@ -237,6 +240,8 @@ export class PrintJobService {
       vatNumber: '',
       orderType: order.type as 'dine_in' | 'takeaway',
       tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
       items: receiptItems,
       subtotalHalalas: order.subtotalHalalas,
       vatHalalas: order.vatHalalas,
@@ -357,6 +362,8 @@ export class PrintJobService {
       sellerCountry,
       orderType: order.type as 'dine_in' | 'takeaway',
       tableName,
+      deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+      deliveryExternalRef: order.deliveryExternalRef ?? undefined,
       items: receiptItems,
       subtotalHalalas: refund.subtotalHalalas,
       vatHalalas: refund.vatHalalas,
@@ -443,6 +450,8 @@ export class PrintJobService {
         createdAt: order.createdAt,
         orderType: order.type as 'dine_in' | 'takeaway',
         tableName,
+        deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+        deliveryExternalRef: order.deliveryExternalRef ?? undefined,
         items: ticketItems,
       });
 
@@ -525,6 +534,8 @@ export class PrintJobService {
         createdAt: order.createdAt,
         orderType: order.type as 'dine_in' | 'takeaway',
         tableName,
+        deliveryPartnerTitle: this.getDeliveryPartnerTitle(order),
+        deliveryExternalRef: order.deliveryExternalRef ?? undefined,
         items: ticketItems,
       });
 
@@ -594,5 +605,20 @@ export class PrintJobService {
     if (rateBps.length === 0) return undefined;
     const first = rateBps[0];
     return rateBps.every((r) => r === first) ? first : undefined;
+  }
+
+  /**
+   * Resolve the delivery partner title for an order row (ADR 0007), or
+   * undefined when the order has no partner. Print paths load raw order rows
+   * directly (no joined partner title), so the title is joined here.
+   */
+  private getDeliveryPartnerTitle(order: { deliveryPartnerId: string | null }): string | undefined {
+    if (!order.deliveryPartnerId) return undefined;
+    const partner = this.db
+      .select({ title: deliveryPartners.title })
+      .from(deliveryPartners)
+      .where(eq(deliveryPartners.id, order.deliveryPartnerId))
+      .get();
+    return partner?.title ?? undefined;
   }
 }

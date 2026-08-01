@@ -98,6 +98,8 @@ describe('ReportsService', () => {
         is_standard_invoice INTEGER NOT NULL DEFAULT 0,
         zatca_buyer_details TEXT,
         document_id TEXT NOT NULL DEFAULT '',
+        delivery_partner_id TEXT,
+        delivery_external_ref TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),

@@ -8,6 +8,8 @@ interface PaymentMethod {
   zatcaPaymentMeansCode: string;
   enabled: boolean;
   sortOrder: number;
+  /** Derived on the server: this method is owned by a delivery partner (ADR 0007). */
+  isDeliveryPartner: boolean;
 }
 
 export function PaymentMethodsPage() {
@@ -84,12 +86,20 @@ export function PaymentMethodsPage() {
     if (!editSlug) return;
     setError('');
     try {
-      await client.paymentMethods.update(editSlug, {
-        title: editForm.title,
-        sortOrder: editForm.sortOrder,
-        enabled: editForm.enabled,
-        zatcaPaymentMeansCode: editForm.zatcaPaymentMeansCode,
-      });
+      const m = methods.find((x) => x.id === editSlug);
+      if (m?.isDeliveryPartner) {
+        // Partner-owned methods are managed via Delivery Partners — only
+        // sort_order is adjustable here (ADR 0007); sending title/enabled
+        // would 403 on the server.
+        await client.paymentMethods.update(editSlug, { sortOrder: editForm.sortOrder });
+      } else {
+        await client.paymentMethods.update(editSlug, {
+          title: editForm.title,
+          sortOrder: editForm.sortOrder,
+          enabled: editForm.enabled,
+          zatcaPaymentMeansCode: editForm.zatcaPaymentMeansCode,
+        });
+      }
       cancelEdit();
       await loadData();
     } catch (e: any) {
@@ -181,7 +191,7 @@ export function PaymentMethodsPage() {
                     value={editForm.title}
                     onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                     required
-                    disabled={m.id === 'cash'}
+                    disabled={m.id === 'cash' || m.isDeliveryPartner}
                   />
                 </div>
                 <div>
@@ -194,7 +204,7 @@ export function PaymentMethodsPage() {
                     onChange={(e) =>
                       setEditForm((f) => ({ ...f, zatcaPaymentMeansCode: e.target.value }))
                     }
-                    disabled={m.id === 'cash'}
+                    disabled={m.id === 'cash' || m.isDeliveryPartner}
                   >
                     {ZATCA_PAYMENT_MEANS_CODES.map((code) => (
                       <option key={code} value={code}>
@@ -205,6 +215,10 @@ export function PaymentMethodsPage() {
                   {m.id === 'cash' ? (
                     <p className="text-xs text-amber-500 mt-1">
                       Cash is locked to code 10 (In cash).
+                    </p>
+                  ) : m.isDeliveryPartner ? (
+                    <p className="text-xs text-amber-500 mt-1">
+                      Managed via Delivery Partners — only sort order is editable here.
                     </p>
                   ) : (
                     <p className="text-xs text-gray-500 mt-1">
@@ -229,7 +243,7 @@ export function PaymentMethodsPage() {
                       type="checkbox"
                       checked={editForm.enabled}
                       onChange={(e) => setEditForm((f) => ({ ...f, enabled: e.target.checked }))}
-                      disabled={m.id === 'cash'}
+                      disabled={m.id === 'cash' || m.isDeliveryPartner}
                       className="rounded"
                     />
                     Enabled
@@ -271,6 +285,14 @@ export function PaymentMethodsPage() {
                       🔒
                     </span>
                   )}
+                  {m.isDeliveryPartner && (
+                    <span
+                      className="text-xs bg-gray-700 text-amber-400 px-1.5 py-0.5 rounded"
+                      title="Managed via Delivery Partners — title and enabled state are edited there"
+                    >
+                      Delivery partner
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-1 text-sm">
@@ -278,7 +300,7 @@ export function PaymentMethodsPage() {
                       type="checkbox"
                       checked={m.enabled}
                       onChange={() => toggleEnabled(m)}
-                      disabled={m.id === 'cash'}
+                      disabled={m.id === 'cash' || m.isDeliveryPartner}
                       className="rounded"
                     />
                     <span className={`text-xs ${m.enabled ? 'text-green-400' : 'text-gray-500'}`}>

@@ -48,6 +48,16 @@ describe('PaymentMethodsService', () => {
         created_by INTEGER REFERENCES users(id),
         updated_by INTEGER REFERENCES users(id)
       );
+      CREATE TABLE IF NOT EXISTS delivery_partners (
+        id TEXT PRIMARY KEY NOT NULL,
+        title TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id)
+      );
     `);
 
     now = Math.floor(Date.now() / 1000);
@@ -78,6 +88,16 @@ describe('PaymentMethodsService', () => {
     sqlite.close();
   });
 
+  /** Seed a delivery partner + its owned method (ADR 0007 coupling). */
+  const seedPartner = (id: string, title: string) => {
+    sqlite.exec(`
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('${id}', '${title}', 1, 0, ${now}, ${now});
+      INSERT INTO payment_methods (id, title, zatca_payment_means_code, enabled, sort_order, created_at, updated_at)
+      VALUES ('${id}', '${title}', '30', 1, 0, ${now}, ${now});
+    `);
+  };
+
   describe('list', () => {
     it('returns all payment methods sorted by sort_order then title', () => {
       const methods = service.list();
@@ -87,6 +107,16 @@ describe('PaymentMethodsService', () => {
       expect(methods[2].id).toBe('mada');
       // Verify enabled is a boolean after mapBools
       expect(typeof methods[0].enabled).toBe('boolean');
+    });
+
+    it('derives isDeliveryPartner from delivery_partners membership', () => {
+      seedPartner('hungerstation', 'HungerStation');
+      const methods = service.list();
+      const byId = new Map(methods.map((m: any) => [m.id, m]));
+      expect(byId.get('hungerstation').isDeliveryPartner).toBe(true);
+      expect(byId.get('hungerstation').zatcaPaymentMeansCode).toBe('30');
+      expect(byId.get('cash').isDeliveryPartner).toBe(false);
+      expect(byId.get('card').isDeliveryPartner).toBe(false);
     });
   });
 
@@ -107,6 +137,22 @@ describe('PaymentMethodsService', () => {
       const methods = service.listEnabled();
       expect(methods).toHaveLength(1);
       expect(methods[0].id).toBe('cash');
+    });
+
+    it('derives isDeliveryPartner on enabled methods too', () => {
+      seedPartner('hungerstation', 'HungerStation');
+      // Disable the partner-owned method → it must disappear from the list.
+      sqlite.exec(`UPDATE payment_methods SET enabled = 0 WHERE id = 'hungerstation'`);
+      const methods = service.listEnabled();
+      expect(methods.map((m: any) => m.id)).not.toContain('hungerstation');
+    });
+
+    it('returns isDeliveryPartner true for an enabled partner-owned method', () => {
+      seedPartner('hungerstation', 'HungerStation');
+      const methods = service.listEnabled();
+      const hs = methods.find((m: any) => m.id === 'hungerstation');
+      expect(hs).toBeDefined();
+      expect(hs.isDeliveryPartner).toBe(true);
     });
   });
 
@@ -191,6 +237,21 @@ describe('PaymentMethodsService', () => {
       expect(() => service.create({ title: 'Cash', zatcaPaymentMeansCode: '10' }, 1)).toThrow(
         'A payment method with slug "cash" already exists',
       );
+    });
+
+    it('rejects slug that exists as a delivery partner (409, shared namespace)', () => {
+      // Partner row only (no owned method yet) — isolates the partner-collision
+      // branch from the payment-methods duplicate check.
+      sqlite.exec(`
+        INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+        VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+      `);
+      expect(() =>
+        service.create({ title: 'HungerStation', zatcaPaymentMeansCode: '30' }, 1),
+      ).toThrow(ConflictException);
+      expect(() =>
+        service.create({ title: 'HungerStation', zatcaPaymentMeansCode: '30' }, 1),
+      ).toThrow('A delivery partner with slug "hungerstation" already exists');
     });
 
     it('trims whitespace from title', () => {
@@ -286,6 +347,59 @@ describe('PaymentMethodsService', () => {
       const method = service.update('mada', {}, 1);
       expect(method.id).toBe('mada');
       expect(method.title).toBe('mada');
+    });
+  });
+
+  describe('partner-owned method locks (ADR 0007)', () => {
+    beforeEach(() => {
+      seedPartner('hungerstation', 'HungerStation');
+    });
+
+    it('rejects title change on a partner-owned method (403)', () => {
+      expect(() => service.update('hungerstation', { title: 'HS App' }, 1)).toThrow(
+        ForbiddenException,
+      );
+      expect(() => service.update('hungerstation', { title: 'HS App' }, 1)).toThrow(
+        'managed via Delivery Partners',
+      );
+    });
+
+    it('rejects enabled change on a partner-owned method (403)', () => {
+      expect(() => service.update('hungerstation', { enabled: false }, 1)).toThrow(
+        ForbiddenException,
+      );
+      expect(() => service.update('hungerstation', { enabled: false }, 1)).toThrow(
+        'managed via Delivery Partners',
+      );
+      expect(() => service.update('hungerstation', { enabled: true }, 1)).toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('rejects zatca code change away from 30 on a partner-owned method (403)', () => {
+      expect(() => service.update('hungerstation', { zatcaPaymentMeansCode: '48' }, 1)).toThrow(
+        ForbiddenException,
+      );
+      expect(() => service.update('hungerstation', { zatcaPaymentMeansCode: '48' }, 1)).toThrow(
+        'cannot be changed from 30',
+      );
+    });
+
+    it('allows keeping the zatca code at 30 (no-op)', () => {
+      const method = service.update('hungerstation', { zatcaPaymentMeansCode: '30' }, 1);
+      expect(method.zatcaPaymentMeansCode).toBe('30');
+    });
+
+    it('allows sortOrder changes on a partner-owned method (divergent field)', () => {
+      const method = service.update('hungerstation', { sortOrder: 7 }, 1);
+      expect(method.sortOrder).toBe(7);
+    });
+
+    it('allows combined sortOrder-only updates', () => {
+      const method = service.update('hungerstation', { sortOrder: 2 }, 1);
+      expect(method.sortOrder).toBe(2);
+      expect(method.title).toBe('HungerStation');
+      expect(method.enabled).toBe(true);
     });
   });
 });

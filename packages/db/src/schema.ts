@@ -148,6 +148,12 @@ export const orders = sqliteTable(
     isStandardInvoice: integer('is_standard_invoice').notNull().default(0),
     zatcaBuyerDetails: text('zatca_buyer_details'),
     documentId: text('document_id').notNull().unique(),
+    // Delivery partner linking (ADR 0007): nullable, only meaningful for
+    // type = 'takeaway' orders. A walk-in takeaway has NULL.
+    deliveryPartnerId: text('delivery_partner_id').references(() => deliveryPartners.id),
+    // The delivery app's order number for reconciliation (e.g. HungerStation
+    // order ID). Free text, only meaningful alongside deliveryPartnerId.
+    deliveryExternalRef: text('delivery_external_ref'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     createdBy: integer('created_by').references(() => users.id),
@@ -157,6 +163,7 @@ export const orders = sqliteTable(
     idxOrdersDayOpening: index('idx_orders_day_opening').on(t.dayOpeningId),
     idxOrdersStatus: index('idx_orders_status').on(t.status),
     idxOrdersType: index('idx_orders_type').on(t.type),
+    idxOrdersDeliveryPartner: index('idx_orders_delivery_partner').on(t.deliveryPartnerId),
   }),
 );
 
@@ -348,6 +355,23 @@ export const paymentMethods = sqliteTable('payment_methods', {
   // source that order_payments / order_refunds snapshot at pay/refund time.
   zatcaPaymentMeansCode: text('zatca_payment_means_code').notNull(),
   enabled: integer('enabled').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  createdBy: integer('created_by').references((): any => users.id),
+  updatedBy: integer('updated_by').references((): any => users.id),
+});
+
+// ── delivery_partners ──────────────────────────────────────────────────────────
+//
+// Delivery app catalog (HungerStation, Keeta, ...). Each partner owns exactly
+// one payment_methods row sharing the same slug id (ADR 0007). Soft-disable
+// only — no DELETE endpoint.
+
+export const deliveryPartners = sqliteTable('delivery_partners', {
+  id: text('id').primaryKey(), // slug (kebab-case), immutable
+  title: text('title').notNull(),
+  enabled: integer('enabled').notNull().default(1), // 0/1, soft-disable only
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

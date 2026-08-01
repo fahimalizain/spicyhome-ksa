@@ -22,6 +22,8 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
+import { UpdateOrderPartnerDto } from './dto/update-order-partner.dto';
+import { UpdateOrderItemUnitPriceDto } from './dto/update-order-item-unit-price.dto';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
@@ -70,6 +72,45 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.updateOrderMeta(id, dto, user.sub);
+  }
+
+  @Patch(':id/partner')
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary:
+      'Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderPartner(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderPartnerDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderPartner(id, dto, user.sub);
+  }
+
+  @Patch(':id/items/:orderItemId/unit-price')
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary:
+      'Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiParam({
+    name: 'orderItemId',
+    type: 'integer',
+    format: 'int64',
+    description: 'order_items.id — the LINE id, not the catalog item id',
+  })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderItemUnitPrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('orderItemId', ParseIntPipe) orderItemId: number,
+    @Body() dto: UpdateOrderItemUnitPriceDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderItemUnitPrice(id, orderItemId, dto, user.sub);
   }
 
   @Post()

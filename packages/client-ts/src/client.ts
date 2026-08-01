@@ -18,10 +18,14 @@ export type UpdatePrinterDto = Schemas['UpdatePrinterDto'];
 export type CreateOrderDto = Schemas['CreateOrderDto'];
 export type SubmitOrderDto = Schemas['SubmitOrderDto'];
 export type AddOrderPaymentDto = Schemas['AddOrderPaymentDto'];
+export type CreateDeliveryPartnerDto = Schemas['CreateDeliveryPartnerDto'];
+export type UpdateDeliveryPartnerDto = Schemas['UpdateDeliveryPartnerDto'];
 
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
 export type UpdateOrderMetaDto = Schemas['UpdateOrderMetaDto'];
+export type UpdateOrderPartnerDto = Schemas['UpdateOrderPartnerDto'];
+export type UpdateOrderItemUnitPriceDto = Schemas['UpdateOrderItemUnitPriceDto'];
 
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
@@ -50,6 +54,7 @@ export type TableResponse = Schemas['TableResponse'];
 export type PrinterResponse = Schemas['PrinterResponse'];
 export type PrinterStatusResponse = Schemas['PrinterStatusResponse'];
 export type WindowsPrinterQueuesResponse = Schemas['WindowsPrinterQueuesResponse'];
+export type DeliveryPartnerResponse = Schemas['DeliveryPartnerResponse'];
 
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
@@ -331,6 +336,28 @@ export class SpicyHomeClient {
     update: (orderId: number, dto: UpdateOrderMetaDto) =>
       request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}`, dto),
 
+    /**
+     * Set / change / clear the delivery partner + external ref on an open
+     * order (ADR 0007). `deliveryPartnerId: null` clears the partner and
+     * resets line prices to the live catalog.
+     */
+    updatePartner: (orderId: number, dto: UpdateOrderPartnerDto) =>
+      request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}/partner`, dto),
+
+    /**
+     * Override one order LINE unit price on a delivery-partner order
+     * (ADR 0007). `orderItemId` is `order_items.id` (line id), not the
+     * catalog item id. `unitPriceHalalas` is floored at the live catalog
+     * price (server 400 below the floor).
+     */
+    updateItemUnitPrice: (orderId: number, orderItemId: number, dto: UpdateOrderItemUnitPriceDto) =>
+      request<OrderResponse>(
+        this.config,
+        'PATCH',
+        `/orders/${orderId}/items/${orderItemId}/unit-price`,
+        dto,
+      ),
+
     /** Append ONE payment line to an open order (ADR 0006 — status stays open). */
     addPayment: (orderId: number, dto: AddOrderPaymentDto) =>
       request<OrderResponse>(this.config, 'POST', `/orders/${orderId}/payments`, dto),
@@ -459,6 +486,19 @@ export class SpicyHomeClient {
         zatcaPaymentMeansCode?: string;
       },
     ) => request<any>(this.config, 'PATCH', `/payment-methods/${id}`, dto),
+  };
+
+  deliveryPartners = {
+    list: () => request<DeliveryPartnerResponse[]>(this.config, 'GET', '/delivery-partners'),
+
+    listEnabled: () =>
+      request<DeliveryPartnerResponse[]>(this.config, 'GET', '/delivery-partners/enabled'),
+
+    create: (dto: CreateDeliveryPartnerDto) =>
+      request<DeliveryPartnerResponse>(this.config, 'POST', '/delivery-partners', dto),
+
+    update: (id: string, dto: Partial<UpdateDeliveryPartnerDto>) =>
+      request<DeliveryPartnerResponse>(this.config, 'PATCH', `/delivery-partners/${id}`, dto),
   };
 
   reports = {

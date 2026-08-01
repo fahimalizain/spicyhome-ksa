@@ -21,6 +21,7 @@ export type {
   CreateTableDto,
   UpdateTableDto,
   TableResponse,
+  DeliveryPartnerResponse,
   CreatePrinterDto,
   UpdatePrinterDto,
   PrinterResponse,

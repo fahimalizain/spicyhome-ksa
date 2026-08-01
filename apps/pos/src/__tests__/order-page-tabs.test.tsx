@@ -427,6 +427,115 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     expect(cashIdx).toBeLessThan(correctionIdx);
   });
 
+  // ---- ADR 0007: delivery-partner payment method filtering ----
+
+  it('payments tab: partner order modal shows ONLY the partner method, auto-selected', async () => {
+    mockGetReturns(
+      makeOrder({
+        type: 'takeaway',
+        tableId: null,
+        deliveryPartnerId: 'hungerstation',
+        deliveryPartnerTitle: 'HungerStation',
+        deliveryExternalRef: 'HS-1',
+      }),
+    );
+    mockPaymentMethodsListEnabled.mockResolvedValue([
+      { id: 'cash', title: 'Cash', isDeliveryPartner: false },
+      { id: 'card', title: 'Card', isDeliveryPartner: false },
+      { id: 'hungerstation', title: 'HungerStation', isDeliveryPartner: true },
+      { id: 'keeta', title: 'Keeta', isDeliveryPartner: true },
+    ]);
+    mockOrdersAddPayment.mockResolvedValue(
+      makeOrder({
+        type: 'takeaway',
+        tableId: null,
+        deliveryPartnerId: 'hungerstation',
+        deliveryPartnerTitle: 'HungerStation',
+        deliveryExternalRef: 'HS-1',
+        updatedAt: 6000,
+        payments: [
+          makePayment({
+            methodId: 'hungerstation',
+            methodTitle: 'HungerStation',
+            zatcaPaymentMeansCode: '30',
+            tenderedHalalas: null,
+            changeHalalas: null,
+          }),
+        ],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Payments'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add Payment' })).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
+    });
+
+    // Partner method chip is present (the order header also shows the
+    // partner title + ref as one combined text node); non-partner and
+    // other-partner methods are NOT rendered.
+    expect(screen.getByText('HungerStation')).toBeInTheDocument(); // modal chip
+    expect(screen.getByText('HungerStation · Ref HS-1')).toBeInTheDocument(); // header
+    expect(screen.queryByText('Cash')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
+
+    // The sole partner method is auto-selected: confirming sends its id.
+    const amountNumpad = within(screen.getByTestId('amount-numpad'));
+    fireEvent.click(amountNumpad.getByText('4'));
+    fireEvent.click(amountNumpad.getByText('6'));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Add Payment' });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockOrdersAddPayment).toHaveBeenCalledWith(1, {
+        methodId: 'hungerstation',
+        amountHalalas: 4600,
+      });
+    });
+  });
+
+  it('payments tab: no-partner order hides partner-owned methods (ADR 0007)', async () => {
+    mockGetReturns(makeOrder());
+    mockPaymentMethodsListEnabled.mockResolvedValue([
+      { id: 'cash', title: 'Cash', isDeliveryPartner: false },
+      { id: 'card', title: 'Card', isDeliveryPartner: false },
+      { id: 'hungerstation', title: 'HungerStation', isDeliveryPartner: true },
+      { id: 'keeta', title: 'Keeta', isDeliveryPartner: true },
+    ]);
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Payments'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add Payment' })).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Payment' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('amount-numpad')).toBeInTheDocument();
+    });
+
+    // Normal methods remain visible; partner-owned methods are hidden.
+    expect(screen.getByText('Cash')).toBeInTheDocument();
+    expect(screen.getByText('Card')).toBeInTheDocument();
+    expect(screen.queryByText('HungerStation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
+  });
+
   // ---- Summary tab ----
 
   it('summary tab: Submit disabled while outstanding', async () => {

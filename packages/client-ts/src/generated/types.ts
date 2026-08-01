@@ -357,6 +357,40 @@ export interface paths {
     patch: operations['OrdersController_updateOrderMeta'];
     trace?: never;
   };
+  '/orders/{id}/partner': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) */
+    patch: operations['OrdersController_updateOrderPartner'];
+    trace?: never;
+  };
+  '/orders/{id}/items/{orderItemId}/unit-price': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 */
+    patch: operations['OrdersController_updateOrderItemUnitPrice'];
+    trace?: never;
+  };
   '/orders/{orderId}/items/sync': {
     parameters: {
       query?: never;
@@ -1091,6 +1125,58 @@ export interface paths {
     patch: operations['PaymentMethodsController_update'];
     trace?: never;
   };
+  '/delivery-partners': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all delivery partners (including disabled) */
+    get: operations['DeliveryPartnersController_list'];
+    put?: never;
+    /** Create a delivery partner (atomically creates its owned payment method) */
+    post: operations['DeliveryPartnersController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/delivery-partners/enabled': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List enabled delivery partners (no special permission required) */
+    get: operations['DeliveryPartnersController_listEnabled'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/delivery-partners/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method) */
+    patch: operations['DeliveryPartnersController_update'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1742,6 +1828,21 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+       * @example hungerstation
+       */
+      deliveryPartnerId: string | null;
+      /**
+       * @description Delivery partner title (joined from delivery_partners when a partner is set).
+       * @example HungerStation
+       */
+      deliveryPartnerTitle: string | null;
+      /**
+       * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
+       * @example HS-883129
+       */
+      deliveryExternalRef: string | null;
+      /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
        */
@@ -1976,6 +2077,21 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
+       * @example hungerstation
+       */
+      deliveryPartnerId: string | null;
+      /**
+       * @description Delivery partner title (joined from delivery_partners when a partner is set).
+       * @example HungerStation
+       */
+      deliveryPartnerTitle: string | null;
+      /**
+       * @description Delivery app's order number for reconciliation (only meaningful alongside a partner).
+       * @example HS-883129
+       */
+      deliveryExternalRef: string | null;
+      /**
        * @description ZATCA root cbc:ID — the business invoice number
        * @example INV26-0001
        */
@@ -2029,6 +2145,38 @@ export interface components {
        * @example 1
        */
       tableId?: number;
+    };
+    UpdateOrderPartnerDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @description Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner.
+       * @example hungerstation
+       */
+      deliveryPartnerId?: string | null;
+      /**
+       * @description Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent.
+       * @example HS-883129
+       */
+      deliveryExternalRef?: string | null;
+    };
+    UpdateOrderItemUnitPriceDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * Format: int64
+       * @description New VAT-inclusive unit price in halalas (SAR × 100). Must be an integer ≥ the live catalog items.price_halalas (the floor).
+       * @example 2500
+       */
+      unitPriceHalalas: number;
     };
     CreateOrderDto: {
       /**
@@ -2583,6 +2731,11 @@ export interface components {
        */
       sortOrder: number;
       /**
+       * @description Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column.
+       * @example false
+       */
+      isDeliveryPartner: boolean;
+      /**
        * Format: int64
        * @example 1700000000
        */
@@ -2620,6 +2773,56 @@ export interface components {
        * @example 30
        */
       zatcaPaymentMeansCode?: string;
+      /** @default true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+    };
+    DeliveryPartnerResponse: {
+      /** @example hungerstation */
+      id: string;
+      /** @example HungerStation */
+      title: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateDeliveryPartnerDto: {
+      /** @example HungerStation */
+      title: string;
+    };
+    UpdateDeliveryPartnerDto: {
+      /** @description Immutable slug — sending a different value is rejected */
+      id?: string;
+      /** @example HungerStation */
+      title?: string;
       /** @default true */
       enabled: boolean;
       /**
@@ -3381,6 +3584,60 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['UpdateOrderMetaDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderPartner: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderItemUnitPrice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+        /** @description order_items.id — the LINE id, not the catalog item id */
+        orderItemId: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderItemUnitPriceDto'];
       };
     };
     responses: {
@@ -4409,6 +4666,97 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PaymentMethodResponse'];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of delivery partners */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'][];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateDeliveryPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Created delivery partner */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_listEnabled: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of enabled delivery partners */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'][];
+        };
+      };
+    };
+  };
+  DeliveryPartnersController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Delivery partner slug */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateDeliveryPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated delivery partner */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryPartnerResponse'];
         };
       };
     };

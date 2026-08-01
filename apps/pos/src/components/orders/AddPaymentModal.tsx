@@ -6,6 +6,7 @@ import {
   buildAddPaymentDraft,
   calcCashChange,
   canConfirmAddPayment,
+  filterMethodsForOrder,
   signedAmountHalalas,
   tenderedToHalalas,
   type AddPaymentDraft,
@@ -45,6 +46,11 @@ interface AddPaymentModalProps {
   orderTotalHalalas: number;
   /** Outstanding from server totals minus server payments. */
   outstandingHalalas: number;
+  /**
+   * ADR 0007: delivery partner linked to this order (null for walk-in /
+   * dine-in). Restricts the visible methods to the partner's own method.
+   */
+  deliveryPartnerId: string | null;
   /** Called with the returned OrderResponse — parent hydrates and closes. */
   onAdded: (order: OrderResponse) => void;
   onClose: () => void;
@@ -59,6 +65,7 @@ export function AddPaymentModal({
   orderId,
   orderTotalHalalas,
   outstandingHalalas,
+  deliveryPartnerId,
   onAdded,
   onClose,
 }: AddPaymentModalProps) {
@@ -81,9 +88,12 @@ export function AddPaymentModal({
     setLoading(true);
     try {
       const res = await client.paymentMethods.listEnabled();
-      setMethods(res);
-      // Preselect the first enabled method for fast cashier flow
-      if (res.length > 0) setSelectedMethodId(res[0].id);
+      // ADR 0007: restrict the visible methods for delivery partner orders.
+      const visible = filterMethodsForOrder(res, deliveryPartnerId);
+      setMethods(visible);
+      // Preselect the first visible method for fast cashier flow; for a
+      // partner order this is the sole partner method.
+      if (visible.length > 0) setSelectedMethodId(visible[0].id);
     } catch {
       setError('Failed to load payment methods');
     } finally {

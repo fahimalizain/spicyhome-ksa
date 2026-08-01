@@ -442,4 +442,119 @@ describe('OrderEventTimeline', () => {
     // No warning icon
     expect(screen.queryByText('\u26a0')).not.toBeInTheDocument();
   });
+
+  it('renders delivery_partner_changed with titles, refs and reset count', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'delivery_partner_changed',
+        payload: JSON.stringify({
+          fromPartnerId: 'hungerstation',
+          toPartnerId: 'keeta',
+          fromPartnerTitle: 'HungerStation',
+          toPartnerTitle: 'Keeta',
+          fromExternalRef: 'HS-1',
+          toExternalRef: 'K-2',
+          resetItemCount: 0,
+        }),
+      }),
+      makeEvent({
+        id: 2,
+        eventIdx: 2,
+        type: 'delivery_partner_changed',
+        payload: JSON.stringify({
+          fromPartnerId: 'keeta',
+          toPartnerId: null,
+          fromPartnerTitle: 'Keeta',
+          toPartnerTitle: null,
+          fromExternalRef: 'K-2',
+          toExternalRef: null,
+          resetItemCount: 3,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Delivery Partner Changed')).toHaveLength(2);
+    expect(
+      screen.getByText('Delivery Partner Changed. HungerStation → Keeta · Ref HS-1 → K-2'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Delivery Partner Changed. Keeta → None · Ref K-2 → — · 3 prices reset'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders item_price_reset with prices and reason', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'item_price_reset',
+        payload: JSON.stringify({
+          orderItemId: 101,
+          itemId: 5,
+          fromUnitPriceHalalas: 2500,
+          toUnitPriceHalalas: 2300,
+          reason: 'partner_cleared',
+        }),
+      }),
+      makeEvent({
+        id: 2,
+        eventIdx: 2,
+        type: 'item_price_reset',
+        payload: JSON.stringify({
+          orderItemId: 102,
+          itemId: 6,
+          fromUnitPriceHalalas: 3000,
+          toUnitPriceHalalas: 2300,
+          reason: 'type_changed_to_dine_in',
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Item Price Reset')).toHaveLength(2);
+    expect(
+      screen.getByText('Item Price Reset: 25.00 → 23.00 SAR (partner cleared)'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Item Price Reset: 30.00 → 23.00 SAR (order type changed to dine-in)'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders item_price_overridden with from/to prices and the catalog floor', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'item_price_overridden',
+        payload: JSON.stringify({
+          orderItemId: 101,
+          itemId: 1,
+          fromUnitPriceHalalas: 2300,
+          toUnitPriceHalalas: 2500,
+          floorPriceHalalas: 2300,
+        }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Item Price Overridden')).toBeInTheDocument();
+    expect(
+      screen.getByText('Item Price Overridden: 23.00 → 25.00 SAR (floor 23.00 SAR)'),
+    ).toBeInTheDocument();
+  });
 });

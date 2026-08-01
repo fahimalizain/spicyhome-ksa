@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { eq, asc } from 'drizzle-orm';
-import { paymentMethods } from '@spicyhome/db';
+import { paymentMethods, deliveryPartners } from '@spicyhome/db';
 import { isZatcaPaymentMeansCode, ZATCA_PAYMENT_MEANS_CODES } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
@@ -32,25 +32,50 @@ function slugify(title: string): string {
 export class PaymentMethodsService {
   constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {}
 
+  /**
+   * Ids of delivery-partner-owned methods (ADR 0007): the shared slug
+   * namespace means a method id that exists in delivery_partners is owned by
+   * that partner. Used to derive the isDeliveryPartner flag on list responses.
+   */
+  private partnerIdSet(): Set<string> {
+    return new Set(
+      this.db
+        .select({ id: deliveryPartners.id })
+        .from(deliveryPartners)
+        .all()
+        .map((r) => r.id),
+    );
+  }
+
   /** List all payment methods, ordered by sort_order ASC then title ASC. */
   list(): any[] {
+    const partnerIds = this.partnerIdSet();
     return this.db
       .select()
       .from(paymentMethods)
       .orderBy(asc(paymentMethods.sortOrder), asc(paymentMethods.title))
       .all()
-      .map((r) => mapBools(r, ['enabled']));
+      .map((r) => ({
+        ...mapBools(r, ['enabled']),
+        // Derived view over delivery_partners — not a stored column (ADR 0007).
+        isDeliveryPartner: partnerIds.has(r.id),
+      }));
   }
 
   /** List only enabled payment methods, ordered by sort_order ASC then title ASC. */
   listEnabled(): any[] {
+    const partnerIds = this.partnerIdSet();
     return this.db
       .select()
       .from(paymentMethods)
       .where(eq(paymentMethods.enabled, 1))
       .orderBy(asc(paymentMethods.sortOrder), asc(paymentMethods.title))
       .all()
-      .map((r) => mapBools(r, ['enabled']));
+      .map((r) => ({
+        ...mapBools(r, ['enabled']),
+        // Derived view over delivery_partners — not a stored column (ADR 0007).
+        isDeliveryPartner: partnerIds.has(r.id),
+      }));
   }
 
   /** Get a single payment method by slug */
@@ -78,6 +103,18 @@ export class PaymentMethodsService {
     const existing = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, slug)).get();
     if (existing) {
       throw new ConflictException(`A payment method with slug "${slug}" already exists`);
+    }
+
+    // Shared slug namespace with delivery partners (ADR 0007): each partner
+    // owns a payment method with the same slug, so a method cannot claim a
+    // partner's slug.
+    const partner = this.db
+      .select()
+      .from(deliveryPartners)
+      .where(eq(deliveryPartners.id, slug))
+      .get();
+    if (partner) {
+      throw new ConflictException(`A delivery partner with slug "${slug}" already exists`);
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -109,6 +146,32 @@ export class PaymentMethodsService {
   ): any {
     const method = this.db.select().from(paymentMethods).where(eq(paymentMethods.id, id)).get();
     if (!method) throw new NotFoundException('Payment method not found');
+
+    // Partner-owned method lock (ADR 0007): title/enabled/zatca are managed
+    // exclusively via the delivery partner (mirrored in the same transaction);
+    // sort_order stays independently adjustable.
+    const isPartnerOwned = !!this.db
+      .select()
+      .from(deliveryPartners)
+      .where(eq(deliveryPartners.id, id))
+      .get();
+    if (isPartnerOwned) {
+      if (dto.title !== undefined) {
+        throw new ForbiddenException(
+          'This payment method is managed via Delivery Partners — change its title there',
+        );
+      }
+      if (dto.enabled !== undefined) {
+        throw new ForbiddenException(
+          'This payment method is managed via Delivery Partners — change its enabled state there',
+        );
+      }
+      if (dto.zatcaPaymentMeansCode !== undefined && dto.zatcaPaymentMeansCode !== '30') {
+        throw new ForbiddenException(
+          'This payment method is managed via Delivery Partners — its ZATCA payment means code cannot be changed from 30',
+        );
+      }
+    }
 
     // Cash lock: reject title change, enabled=false, and ZATCA code change away from 10
     if (id === 'cash') {

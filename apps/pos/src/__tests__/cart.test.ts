@@ -41,6 +41,9 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     discountHalalas: 0,
     isStandardInvoice: false,
     zatcaBuyerDetails: null,
+    deliveryPartnerId: null,
+    deliveryPartnerTitle: null,
+    deliveryExternalRef: null,
     createdAt: 1000,
     updatedAt: 1000,
     createdBy: null,
@@ -220,6 +223,143 @@ describe('useCart', () => {
     expect(result.current.items[0].orderItemId).toBe(101);
     expect(result.current.isDirty).toBe(false);
     expect(result.current.serverUpdatedAt).toBe(order.updatedAt);
+  });
+
+  // ---- Delivery partner (ADR 0007) ----
+
+  it('loadOrder hydrates delivery partner fields from the order', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      type: 'takeaway',
+      tableId: null,
+      deliveryPartnerId: 'hungerstation',
+      deliveryPartnerTitle: 'HungerStation',
+      deliveryExternalRef: 'HS-883129',
+    });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    expect(result.current.deliveryPartnerId).toBe('hungerstation');
+    expect(result.current.deliveryPartnerTitle).toBe('HungerStation');
+    expect(result.current.deliveryExternalRef).toBe('HS-883129');
+  });
+
+  it('loadOrder with no partner hydrates null partner fields', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setDeliveryPartner('keeta', 'Keeta', 'K-1');
+    });
+
+    act(() => {
+      result.current.loadOrder(makeOrderResponse({ type: 'takeaway', tableId: null }));
+    });
+
+    expect(result.current.deliveryPartnerId).toBeNull();
+    expect(result.current.deliveryPartnerTitle).toBeNull();
+    expect(result.current.deliveryExternalRef).toBeNull();
+  });
+
+  it('setDeliveryPartner stages a pre-create selection', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setDeliveryPartner('hungerstation', 'HungerStation', 'HS-42');
+    });
+    expect(result.current.deliveryPartnerId).toBe('hungerstation');
+    expect(result.current.deliveryPartnerTitle).toBe('HungerStation');
+    expect(result.current.deliveryExternalRef).toBe('HS-42');
+  });
+
+  it('setDeliveryPartner with null clears partner and ref', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setDeliveryPartner('hungerstation', 'HungerStation', 'HS-42');
+    });
+    act(() => {
+      result.current.setDeliveryPartner(null, null, null);
+    });
+    expect(result.current.deliveryPartnerId).toBeNull();
+    expect(result.current.deliveryPartnerTitle).toBeNull();
+    expect(result.current.deliveryExternalRef).toBeNull();
+  });
+
+  it('setDeliveryExternalRef stages only the ref', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setDeliveryPartner('hungerstation', 'HungerStation', null);
+    });
+    act(() => {
+      result.current.setDeliveryExternalRef('HS-99');
+    });
+    expect(result.current.deliveryPartnerId).toBe('hungerstation');
+    expect(result.current.deliveryPartnerTitle).toBe('HungerStation');
+    expect(result.current.deliveryExternalRef).toBe('HS-99');
+  });
+
+  it('switching the pre-create cart to dine_in clears the staged partner', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setOrderType('takeaway', null);
+    });
+    act(() => {
+      result.current.setDeliveryPartner('hungerstation', 'HungerStation', 'HS-42');
+    });
+    act(() => {
+      result.current.setOrderType('dine_in', 3);
+    });
+    expect(result.current.orderType).toBe('dine_in');
+    expect(result.current.tableId).toBe(3);
+    expect(result.current.deliveryPartnerId).toBeNull();
+    expect(result.current.deliveryPartnerTitle).toBeNull();
+    expect(result.current.deliveryExternalRef).toBeNull();
+  });
+
+  it('switching to takeaway keeps the staged partner (no auto-set)', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setOrderType('takeaway', null);
+    });
+    expect(result.current.deliveryPartnerId).toBeNull();
+  });
+
+  it('clear resets delivery partner fields', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setDeliveryPartner('hungerstation', 'HungerStation', 'HS-42');
+    });
+    act(() => {
+      result.current.clear();
+    });
+    expect(result.current.deliveryPartnerId).toBeNull();
+    expect(result.current.deliveryPartnerTitle).toBeNull();
+    expect(result.current.deliveryExternalRef).toBeNull();
+  });
+
+  it('discard preserves hydrated delivery partner fields', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      type: 'takeaway',
+      tableId: null,
+      deliveryPartnerId: 'hungerstation',
+      deliveryPartnerTitle: 'HungerStation',
+      deliveryExternalRef: 'HS-883129',
+      items: [makeOrderItem({ id: 101, itemId: 1, qty: 2 })],
+    });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+    act(() => {
+      result.current.updateQty(1, 5);
+    });
+    act(() => {
+      result.current.discard();
+    });
+
+    expect(result.current.deliveryPartnerId).toBe('hungerstation');
+    expect(result.current.deliveryPartnerTitle).toBe('HungerStation');
+    expect(result.current.deliveryExternalRef).toBe('HS-883129');
   });
 
   // ---- isDirty detection ----

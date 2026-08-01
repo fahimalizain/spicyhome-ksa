@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { AddPaymentModal } from '../components/orders/AddPaymentModal';
+import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
 import {
   StandardInvoiceBuyerForm,
@@ -27,6 +28,7 @@ import type {
   OrderSummaryResponse,
   OrderPaymentResponse,
   OrderEventResponse,
+  DeliveryPartnerResponse,
 } from '@spicyhome/client-ts';
 
 type OrderTab = 'items' | 'payments' | 'summary';
@@ -108,10 +110,17 @@ export function OrderPage() {
   const permissions = usePermissions();
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [items, setItems] = useState<ItemResponse[]>([]);
+  // Full catalog (incl. inactive items) — the override floor applies even
+  // when an item is inactive (ADR 0007), so the price modal needs it.
+  const [catalogItems, setCatalogItems] = useState<ItemResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [tables, setTables] = useState<TableResponse[]>([]);
+  const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartnerResponse[]>([]);
   const [openOrders, setOpenOrders] = useState<OrderSummaryResponse[]>([]);
   const [showTablePicker, setShowTablePicker] = useState(false);
+  const [showPartnerPicker, setShowPartnerPicker] = useState(false);
+  const [showPartnerPriceModal, setShowPartnerPriceModal] = useState(false);
+  const [externalRefDraft, setExternalRefDraft] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
   const [refundLoading, setRefundLoading] = useState(false);
@@ -244,8 +253,15 @@ export function OrderPage() {
     checkDay();
     loadMenu();
     loadTables();
+    loadDeliveryPartners();
     loadOpenOrders();
   }, []);
+
+  // Keep the external-ref draft in sync with the cart (hydration / new order).
+  // The PATCH only fires on blur/Enter, never per keystroke.
+  useEffect(() => {
+    setExternalRefDraft(cart.deliveryExternalRef ?? '');
+  }, [cart.deliveryExternalRef]);
 
   // Refresh open orders whenever the table picker opens so occupancy is fresh
   useEffect(() => {
@@ -336,6 +352,7 @@ export function OrderPage() {
       ]);
       setCategories(cats.filter((c) => c.isActive));
       setItems(allItems.filter((i) => i.isActive));
+      setCatalogItems(allItems);
     } catch {
       setError('Failed to load menu');
     }
@@ -347,6 +364,15 @@ export function OrderPage() {
       setTables(res.filter((t) => t.isActive));
     } catch {
       // tables optional
+    }
+  }
+
+  async function loadDeliveryPartners() {
+    try {
+      const res = await client.deliveryPartners.listEnabled();
+      setDeliveryPartners(res);
+    } catch {
+      // partner picker optional — the order still works without it
     }
   }
 
@@ -398,6 +424,9 @@ export function OrderPage() {
     cart.clear();
     setCurrentOrder(null);
     setShowTablePicker(false);
+    setShowPartnerPicker(false);
+    setShowPartnerPriceModal(false);
+    setExternalRefDraft('');
     setShowRefundModal(false);
     setRefundOrder(null);
     setItemSearch('');
@@ -428,11 +457,14 @@ export function OrderPage() {
 
     setLoading(true);
     setError('');
+    let createdId: number | null = null;
+    let partnerPatchFailed = false;
     try {
       const res = await client.orders.create({
         type: cart.orderType,
         tableId: cart.orderType === 'dine_in' ? cart.tableId || undefined : undefined,
       });
+      createdId = res.id;
       setCurrentOrder({ id: res.id, status: 'open', documentId: res.documentId });
 
       // B6: Refetch to get real updatedAt before syncing (create response lacks updatedAt)
@@ -449,12 +481,42 @@ export function OrderPage() {
             notes: item.notes || undefined,
           })),
         });
-        hydrateOrder(syncRes);
+
+        // ADR 0007: POST /orders does not accept deliveryPartnerId, so a
+        // partner staged pre-create is applied via PATCH /orders/:id/partner
+        // right after create+sync — the same write path as existing orders.
+        const stagedPartnerId = cart.deliveryPartnerId;
+        if (stagedPartnerId) {
+          try {
+            const partnerRes = await client.orders.updatePartner(res.id, {
+              baseUpdatedAt: syncRes.updatedAt,
+              deliveryPartnerId: stagedPartnerId,
+              deliveryExternalRef: cart.deliveryExternalRef ?? undefined,
+            });
+            hydrateOrder(partnerRes);
+          } catch (e) {
+            partnerPatchFailed = true;
+            throw e;
+          }
+        } else {
+          hydrateOrder(syncRes);
+        }
       } else {
         hydrateOrder(fetchedOrder);
       }
     } catch (e: any) {
-      // If create succeeded but sync failed, keep orderId for retry
+      // If create+sync succeeded but the partner patch failed, hydrate the
+      // server truth (partner null) so the UI never shows a partner the
+      // order does not have. If the sync itself failed, keep the cart for
+      // retry (orderId stays for retry).
+      if (partnerPatchFailed && createdId != null) {
+        try {
+          const order = await client.orders.get(createdId);
+          hydrateOrder(order);
+        } catch {
+          // keep the error message below
+        }
+      }
       setError(e.message || 'Failed to create order');
     } finally {
       setLoading(false);
@@ -735,6 +797,134 @@ export function OrderPage() {
     if (ok) setShowTablePicker(false);
   }
 
+  // ── Delivery partner (ADR 0007) ──
+
+  /**
+   * PATCH the open order's delivery partner via /orders/:id/partner.
+   * `deliveryPartnerId: null` clears the partner (server resets line prices
+   * to the live catalog and force-nulls the external ref). Returns true on
+   * success; on 409 (stale) the order is refetched and hydrated when the
+   * cart is clean — same conflict UX as the type/table change.
+   */
+  async function handleUpdatePartner(partnerId: string | null): Promise<boolean> {
+    if (!currentOrder || currentOrder.status !== 'open') return false;
+    if (cart.serverUpdatedAt == null) return false;
+
+    setMetaUpdating(true);
+    setError('');
+    try {
+      const res = await client.orders.updatePartner(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        deliveryPartnerId: partnerId,
+        // Keep an existing ref when swapping partners; the server force-nulls
+        // it when the partner is cleared.
+        ...(partnerId != null && cart.deliveryExternalRef != null
+          ? { deliveryExternalRef: cart.deliveryExternalRef }
+          : {}),
+      });
+      hydrateOrder(res);
+      loadOpenOrders();
+      return true;
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          if (order.status !== 'open') {
+            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+          } else if (!cart.isDirty) {
+            hydrateOrder(order);
+            loadOpenOrders();
+          }
+        } catch {
+          // Ignore refetch errors — the error message below is the source of truth
+        }
+      }
+      setError(e.message || 'Failed to update delivery partner');
+      return false;
+    } finally {
+      setMetaUpdating(false);
+    }
+  }
+
+  /** Picker option handler: local staging pre-create, PATCH on open orders. */
+  async function handleSelectPartner(partnerId: string | null): Promise<boolean> {
+    if (!currentOrder) {
+      // Pre-create: local-only staging, sent on create (create → sync → PATCH).
+      if (partnerId == null) {
+        // None clears the partner and the ref (mirrors server force-null).
+        cart.setDeliveryPartner(null, null, null);
+      } else {
+        const partner = deliveryPartners.find((p) => p.id === partnerId);
+        cart.setDeliveryPartner(partnerId, partner?.title ?? null, cart.deliveryExternalRef);
+      }
+      return true;
+    }
+    if (currentOrder.status !== 'open') return false;
+    return handleUpdatePartner(partnerId);
+  }
+
+  /**
+   * Save the external-ref draft. Explicit save on blur/Enter only — never per
+   * keystroke, so the PATCH is not spammed. Empty input sends null (server
+   * force-nulls a ref without a partner).
+   */
+  async function handleSaveExternalRef(): Promise<void> {
+    const ref = externalRefDraft.trim();
+    const currentRef = cart.deliveryExternalRef ?? '';
+    if (ref === currentRef) return; // unchanged → no PATCH
+
+    if (!currentOrder) {
+      cart.setDeliveryExternalRef(ref || null);
+      return;
+    }
+    if (currentOrder.status !== 'open' || cart.serverUpdatedAt == null) return;
+
+    setMetaUpdating(true);
+    setError('');
+    try {
+      const res = await client.orders.updatePartner(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        deliveryExternalRef: ref || null,
+      });
+      hydrateOrder(res);
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          if (order.status !== 'open') {
+            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+          } else if (!cart.isDirty) {
+            hydrateOrder(order);
+            loadOpenOrders();
+          }
+        } catch {
+          // Ignore refetch errors — the error message below is the source of truth
+        }
+      }
+      setError(e.message || 'Failed to save external ref');
+    } finally {
+      setMetaUpdating(false);
+    }
+  }
+
+  // ── Partner price overrides (ADR 0007, Phase 7) ──
+
+  /**
+   * Live catalog floor by item id for the price modal — built from the FULL
+   * menu response (incl. inactive items, whose catalog price still floors
+   * overrides server-side).
+   */
+  const floorByItemId: Record<number, number> = Object.fromEntries(
+    catalogItems.map((i) => [i.id, i.priceHalalas]),
+  );
+
+  /** On final save success: hydrate the cart from the returned order. */
+  function handlePartnerPricesSaved(order: OrderResponse) {
+    hydrateOrder(order);
+    loadOpenOrders();
+    setShowPartnerPriceModal(false);
+  }
+
   // ── Navigation guard (D7) ──
 
   function guardedNavigate(navigateFn: () => void) {
@@ -849,6 +1039,20 @@ export function OrderPage() {
   // - Void: open + clean + voidOrder (server rejects when payments net ≠ 0)
   const canVoid = openOrder && !cart.isDirty && permissions.voidOrder && !loading;
 
+  /**
+   * "Edit partner prices" button gate (ADR 0007, Phase 7): open order +
+   * partner set + update permission + clean cart (the modal edits server
+   * lines, so a dirty cart must be saved first) + not busy.
+   */
+  const canEditPartnerPrices =
+    openOrder &&
+    cart.deliveryPartnerId != null &&
+    permissions.updateOrder &&
+    !cart.isDirty &&
+    !loading &&
+    !syncing &&
+    !metaUpdating;
+
   // Summary footer secondary actions: Print Open Receipt + Void Order row
   const showPrint = canPrintOpenReceipt || printingOpenReceipt;
   const showVoid = openOrder && canVoid;
@@ -945,6 +1149,49 @@ export function OrderPage() {
                 ? `Table: ${tables.find((t) => t.id === cart.tableId)?.name || `#${cart.tableId}`}`
                 : 'Select table…'}
             </button>
+          )}
+          {/* Delivery partner (ADR 0007) — takeaway only; dine-in hides it */}
+          {cart.orderType === 'takeaway' && (
+            <>
+              <button
+                onClick={() => setShowPartnerPicker(true)}
+                disabled={!canEditTypeTable}
+                className={`touch-target px-3 py-1.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                  cart.deliveryPartnerId
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-brand-700/50 text-brand-300 border border-brand-600/50 hover:bg-brand-700'
+                }`}
+              >
+                {cart.deliveryPartnerId
+                  ? `Partner: ${cart.deliveryPartnerTitle || cart.deliveryPartnerId}`
+                  : 'Delivery partner…'}
+              </button>
+              {cart.deliveryPartnerId && (
+                <input
+                  type="text"
+                  value={externalRefDraft}
+                  onChange={(e) => setExternalRefDraft(e.target.value)}
+                  onBlur={() => void handleSaveExternalRef()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  disabled={!canEditTypeTable}
+                  placeholder="App order #"
+                  className="w-44 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                />
+              )}
+              {/* ADR 0007 Phase 7: explicit per-line price override modal */}
+              {canEditPartnerPrices && (
+                <button
+                  onClick={() => setShowPartnerPriceModal(true)}
+                  className="touch-target px-3 py-1.5 bg-brand-700/40 text-brand-200 border border-brand-600/50 hover:bg-brand-700 rounded-lg text-sm whitespace-nowrap"
+                >
+                  Edit partner prices
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -1065,6 +1312,12 @@ export function OrderPage() {
             )}
             {cart.isDirty && <span className="ml-2 text-xs text-amber-400">Unsent changes</span>}
           </h2>
+          {cart.deliveryPartnerTitle && (
+            <div className="text-xs text-gray-500 mt-1">
+              {cart.deliveryPartnerTitle}
+              {cart.deliveryExternalRef ? ` · Ref ${cart.deliveryExternalRef}` : ''}
+            </div>
+          )}
         </div>
 
         {/* Tabs — pinned, only for existing orders (pre-create stays Items-only) */}
@@ -1501,6 +1754,60 @@ export function OrderPage() {
         </div>
       )}
 
+      {/* Delivery partner picker modal (ADR 0007) */}
+      {showPartnerPicker && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setShowPartnerPicker(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-4 w-[32rem] max-w-[90vw] max-h-[70vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-white mb-3">Select Delivery Partner</h3>
+            {deliveryPartners.length === 0 ? (
+              <p className="text-sm text-gray-500 py-2">
+                No delivery partners configured. Add them in Admin → Delivery Partners.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    void handleSelectPartner(null).then((ok) => {
+                      if (ok) setShowPartnerPicker(false);
+                    });
+                  }}
+                  className={`touch-target flex items-center justify-center px-3 py-3 rounded-lg text-sm font-bold ${
+                    cart.deliveryPartnerId == null
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  None
+                </button>
+                {deliveryPartners.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      void handleSelectPartner(p.id).then((ok) => {
+                        if (ok) setShowPartnerPicker(false);
+                      });
+                    }}
+                    className={`touch-target flex items-center justify-center px-3 py-3 rounded-lg text-sm font-bold ${
+                      cart.deliveryPartnerId === p.id
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {p.title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Refund modal */}
       {showRefundModal && (
         <div
@@ -1541,8 +1848,30 @@ export function OrderPage() {
           orderId={currentOrder.id}
           orderTotalHalalas={serverTotals.totalHalalas}
           outstandingHalalas={outstandingHalalas}
+          deliveryPartnerId={cart.deliveryPartnerId}
           onAdded={handlePaymentAdded}
           onClose={() => setShowAddPaymentModal(false)}
+        />
+      )}
+
+      {/* Partner price override modal (ADR 0007, Phase 7) */}
+      {showPartnerPriceModal && currentOrder && (
+        <PartnerPriceModal
+          orderId={currentOrder.id}
+          baseUpdatedAt={cart.serverUpdatedAt ?? 0}
+          items={cart.items
+            .filter((i) => i.orderItemId != null)
+            .map((i) => ({
+              orderItemId: i.orderItemId!,
+              itemId: i.itemId || null,
+              name: i.name,
+              unitPriceHalalas: i.unitPriceHalalas,
+              qty: i.qty,
+            }))}
+          floorByItemId={floorByItemId}
+          partnerTitle={cart.deliveryPartnerTitle}
+          onSaved={handlePartnerPricesSaved}
+          onClose={() => setShowPartnerPriceModal(false)}
         />
       )}
 

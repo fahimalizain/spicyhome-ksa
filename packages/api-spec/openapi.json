@@ -1216,6 +1216,110 @@
         ]
       }
     },
+    "/orders/{id}/partner": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderPartner",
+        "summary": "Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/items/{orderItemId}/unit-price": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderItemUnitPrice",
+        "summary": "Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "orderItemId",
+            "required": true,
+            "in": "path",
+            "description": "order_items.id — the LINE id, not the catalog item id",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderItemUnitPriceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders/{orderId}/items/sync": {
       "put": {
         "operationId": "OrdersController_syncItems",
@@ -2834,6 +2938,148 @@
           }
         ]
       }
+    },
+    "/delivery-partners": {
+      "get": {
+        "operationId": "DeliveryPartnersController_list",
+        "summary": "List all delivery partners (including disabled)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of delivery partners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "DeliveryPartnersController_create",
+        "summary": "Create a delivery partner (atomically creates its owned payment method)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeliveryPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created delivery partner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/delivery-partners/enabled": {
+      "get": {
+        "operationId": "DeliveryPartnersController_listEnabled",
+        "summary": "List enabled delivery partners (no special permission required)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of enabled delivery partners",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/delivery-partners/{id}": {
+      "patch": {
+        "operationId": "DeliveryPartnersController_update",
+        "summary": "Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Delivery partner slug",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeliveryPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated delivery partner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPartnerResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "delivery-partners"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -2882,6 +3128,10 @@
     {
       "name": "payment-methods",
       "description": "Payment method configuration"
+    },
+    {
+      "name": "delivery-partners",
+      "description": "Delivery partner catalog"
     }
   ],
   "servers": [],
@@ -4052,6 +4302,24 @@
             "format": "int64",
             "example": 0
           },
+          "deliveryPartnerId": {
+            "type": "string",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
+          },
+          "deliveryPartnerTitle": {
+            "type": "string",
+            "example": "HungerStation",
+            "nullable": true,
+            "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
+          },
+          "deliveryExternalRef": {
+            "type": "string",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
+          },
           "documentId": {
             "type": "string",
             "description": "ZATCA root cbc:ID — the business invoice number",
@@ -4092,6 +4360,9 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "deliveryPartnerId",
+          "deliveryPartnerTitle",
+          "deliveryExternalRef",
           "documentId",
           "createdAt",
           "updatedAt",
@@ -4407,6 +4678,24 @@
             "format": "int64",
             "example": 0
           },
+          "deliveryPartnerId": {
+            "type": "string",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null."
+          },
+          "deliveryPartnerTitle": {
+            "type": "string",
+            "example": "HungerStation",
+            "nullable": true,
+            "description": "Delivery partner title (joined from delivery_partners when a partner is set)."
+          },
+          "deliveryExternalRef": {
+            "type": "string",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation (only meaningful alongside a partner)."
+          },
           "documentId": {
             "type": "string",
             "description": "ZATCA root cbc:ID — the business invoice number",
@@ -4479,6 +4768,9 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "deliveryPartnerId",
+          "deliveryPartnerTitle",
+          "deliveryExternalRef",
           "documentId",
           "isStandardInvoice",
           "createdAt",
@@ -4517,6 +4809,53 @@
         "required": [
           "baseUpdatedAt",
           "type"
+        ]
+      },
+      "UpdateOrderPartnerDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "deliveryPartnerId": {
+            "type": "string",
+            "example": "hungerstation",
+            "nullable": true,
+            "description": "Delivery partner slug to set, or null to clear the partner (resets line prices to the live catalog). Omit to keep the current partner."
+          },
+          "deliveryExternalRef": {
+            "type": "string",
+            "example": "HS-883129",
+            "nullable": true,
+            "description": "Delivery app's order number for reconciliation. Optional; may be sent alone to edit the ref of an already-linked order. Force-nulled when the partner is cleared or absent."
+          }
+        },
+        "required": [
+          "baseUpdatedAt"
+        ]
+      },
+      "UpdateOrderItemUnitPriceDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "unitPriceHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2500,
+            "description": "New VAT-inclusive unit price in halalas (SAR × 100). Must be an integer ≥ the live catalog items.price_halalas (the floor)."
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "unitPriceHalalas"
         ]
       },
       "CreateOrderDto": {
@@ -5573,6 +5912,11 @@
             "format": "int32",
             "example": 0
           },
+          "isDeliveryPartner": {
+            "type": "boolean",
+            "example": false,
+            "description": "Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column."
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -5602,6 +5946,7 @@
           "zatcaPaymentMeansCode",
           "enabled",
           "sortOrder",
+          "isDeliveryPartner",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -5637,6 +5982,94 @@
             "type": "string",
             "example": "30",
             "description": "ZATCA UN/ECE 4461 Payment Means code (allow-list: 10, 30, 42, 48, 1)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        }
+      },
+      "DeliveryPartnerResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "hungerstation"
+          },
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "enabled",
+          "sortOrder",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreateDeliveryPartnerDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdateDeliveryPartnerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Immutable slug — sending a different value is rejected"
+          },
+          "title": {
+            "type": "string",
+            "example": "HungerStation"
           },
           "enabled": {
             "type": "boolean",
