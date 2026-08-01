@@ -37,7 +37,10 @@ data class OrdersUiState(
     val showDetail: Boolean = false,
     val detailLoading: Boolean = false,
     // ── Filters (server-side) ────────────────────────────────────────────
-    /** YYYY-MM-DD Asia/Riyadh calendar day. Default: today. */
+    /**
+     * YYYY-MM-DD Asia/Riyadh calendar day. Fixed to today — the Android UI
+     * has no date picker, so this is never user-changed.
+     */
     val date: String = todayInRiyadhDate(),
     /** Selected statuses. Empty set → no status filter (all statuses). Default: open only. */
     val statuses: Set<String> = setOf("open"),
@@ -158,12 +161,6 @@ class OrdersViewModel(
             }
         }
         loadTables()
-    }
-
-    /** Set the date filter (YYYY-MM-DD) and reload. */
-    fun setDate(date: String) {
-        _uiState.value = _uiState.value.copy(date = date)
-        loadOrders()
     }
 
     /** Toggle one status in the multiselect; clearing all → no status filter. */

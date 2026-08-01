@@ -369,18 +369,6 @@ class OrdersViewModelTest {
     }
 
     @Test
-    fun `setDate issues a new list call with the new date`() = runTest(testDispatcher) {
-        val vm = createViewModel()
-
-        vm.setDate("2026-07-20")
-
-        assertThat(vm.uiState.value.date).isEqualTo("2026-07-20")
-        verify {
-            ordersApi.ordersControllerListOrders("open", "2026-07-20", 1L)
-        }
-    }
-
-    @Test
     fun `toggleStatus adds and removes statuses - empty set means no status filter`() = runTest(testDispatcher) {
         val vm = createViewModel()
 
