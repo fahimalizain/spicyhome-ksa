@@ -73,6 +73,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/active-users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List active users (id, username, name) for filter dropdowns — no manage_users required */
+    get: operations['AuthController_listActiveUsers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/users/{id}': {
     parameters: {
       query?: never;
@@ -1286,6 +1303,17 @@ export interface components {
        * @example 1
        */
       updatedBy: number | null;
+    };
+    UserOptionResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example cashier1 */
+      username: string;
+      /** @example Ahmed */
+      name: string;
     };
     CreateUserDto: {
       /** @example cashier1 */
@@ -2971,6 +2999,26 @@ export interface operations {
       };
     };
   };
+  AuthController_listActiveUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of active users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserOptionResponse'][];
+        };
+      };
+    };
+  };
   AuthController_getUser: {
     parameters: {
       query?: never;
@@ -3525,9 +3573,13 @@ export interface operations {
   };
   OrdersController_listOrders: {
     parameters: {
-      query: {
-        status: string;
-        date: string;
+      query?: {
+        /** @description Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter. */
+        status?: string;
+        /** @description YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter. */
+        date?: string;
+        /** @description Filter by orders.created_by (user id). Omit → no user filter. */
+        userId?: number;
       };
       header?: never;
       path?: never;

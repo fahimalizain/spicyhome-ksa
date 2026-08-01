@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost*
 | [**authControllerCreateUser**](AuthApi.md#authControllerCreateUser) | **POST** auth/users | Create a new user |
 | [**authControllerGetMe**](AuthApi.md#authControllerGetMe) | **GET** auth/me | Get current user info with role permissions |
 | [**authControllerGetUser**](AuthApi.md#authControllerGetUser) | **GET** auth/users/{id} | Get user by ID |
+| [**authControllerListActiveUsers**](AuthApi.md#authControllerListActiveUsers) | **GET** auth/active-users | List active users (id, username, name) for filter dropdowns — no manage_users required |
 | [**authControllerListRoles**](AuthApi.md#authControllerListRoles) | **GET** auth/roles | List all roles |
 | [**authControllerListUsernames**](AuthApi.md#authControllerListUsernames) | **GET** auth/usernames | List active usernames for login dropdown |
 | [**authControllerListUsers**](AuthApi.md#authControllerListUsers) | **GET** auth/users | List all users |
@@ -153,6 +154,41 @@ val result : UserResponse = webService.authControllerGetUser(id)
 ### Return type
 
 [**UserResponse**](UserResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+
+List active users (id, username, name) for filter dropdowns — no manage_users required
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(AuthApi::class.java)
+
+val result : kotlin.collections.List<UserOptionResponse> = webService.authControllerListActiveUsers()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**kotlin.collections.List&lt;UserOptionResponse&gt;**](UserOptionResponse.md)
 
 ### Authorization
 

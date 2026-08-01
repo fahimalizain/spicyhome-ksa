@@ -27,6 +27,7 @@ import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.RoleResponse
 import com.spicyhome.client.models.UpdateRoleDto
 import com.spicyhome.client.models.UpdateUserDto
+import com.spicyhome.client.models.UserOptionResponse
 import com.spicyhome.client.models.UserResponse
 import com.spicyhome.client.models.UsernamesResponse
 
@@ -63,6 +64,13 @@ class AuthApiTest : ShouldSpec() {
             // uncomment below to test authControllerGetUser
             //val id : kotlin.Long = 789 // kotlin.Long | 
             //val result : UserResponse = apiInstance.authControllerGetUser(id)
+            //result shouldBe ("TODO")
+        }
+
+        // to test authControllerListActiveUsers
+        should("test authControllerListActiveUsers") {
+            // uncomment below to test authControllerListActiveUsers
+            //val result : kotlin.collections.List<UserOptionResponse> = apiInstance.authControllerListActiveUsers()
             //result shouldBe ("TODO")
         }
 

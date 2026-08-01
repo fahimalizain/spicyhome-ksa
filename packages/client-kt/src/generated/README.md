@@ -49,6 +49,7 @@ All URIs are relative to *http://localhost*
 | *AuthApi* | [**authControllerCreateUser**](docs/AuthApi.md#authcontrollercreateuser) | **POST** auth/users | Create a new user |
 | *AuthApi* | [**authControllerGetMe**](docs/AuthApi.md#authcontrollergetme) | **GET** auth/me | Get current user info with role permissions |
 | *AuthApi* | [**authControllerGetUser**](docs/AuthApi.md#authcontrollergetuser) | **GET** auth/users/{id} | Get user by ID |
+| *AuthApi* | [**authControllerListActiveUsers**](docs/AuthApi.md#authcontrollerlistactiveusers) | **GET** auth/active-users | List active users (id, username, name) for filter dropdowns — no manage_users required |
 | *AuthApi* | [**authControllerListRoles**](docs/AuthApi.md#authcontrollerlistroles) | **GET** auth/roles | List all roles |
 | *AuthApi* | [**authControllerListUsernames**](docs/AuthApi.md#authcontrollerlistusernames) | **GET** auth/usernames | List active usernames for login dropdown |
 | *AuthApi* | [**authControllerListUsers**](docs/AuthApi.md#authcontrollerlistusers) | **GET** auth/users | List all users |
@@ -195,6 +196,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)
  - [com.spicyhome.client.models.UpdateUserDto](docs/UpdateUserDto.md)
+ - [com.spicyhome.client.models.UserOptionResponse](docs/UserOptionResponse.md)
  - [com.spicyhome.client.models.UserResponse](docs/UserResponse.md)
  - [com.spicyhome.client.models.UsernamesResponse](docs/UsernamesResponse.md)
  - [com.spicyhome.client.models.WindowsPrinterQueuesResponse](docs/WindowsPrinterQueuesResponse.md)

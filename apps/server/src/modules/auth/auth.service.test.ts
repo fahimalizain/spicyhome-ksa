@@ -157,10 +157,10 @@ describe('AuthService — JWT expiry', () => {
 
   describe('listUsernames', () => {
     it('returns all active usernames when no platform is given', () => {
-      const { usernames } = service.listUsernames();
-      expect(usernames).toContain('admin');
-      expect(usernames).toContain('cashier');
-      expect(usernames).toContain('manager');
+      const result = service.listUsernames();
+      expect(result.usernames).toContain('admin');
+      expect(result.usernames).toContain('cashier');
+      expect(result.usernames).toContain('manager');
     });
 
     it('returns active usernames for unknown platform values (treated as no platform)', () => {
@@ -194,6 +194,55 @@ describe('AuthService — JWT expiry', () => {
       const { usernames } = service.listUsernames();
       const sorted = [...usernames].sort();
       expect(usernames).toEqual(sorted);
+    });
+  });
+
+  describe('listActiveUsers', () => {
+    it('returns active users with exactly {id, username, name}', () => {
+      const result = service.listActiveUsers();
+      expect(result.length).toBeGreaterThanOrEqual(3);
+      for (const u of result) {
+        expect(Object.keys(u).sort()).toEqual(['id', 'name', 'username']);
+        expect(typeof u.id).toBe('number');
+        expect(typeof u.username).toBe('string');
+        expect(typeof u.name).toBe('string');
+      }
+      const usernames = result.map((u) => u.username);
+      expect(usernames).toContain('admin');
+      expect(usernames).toContain('cashier');
+      expect(usernames).toContain('manager');
+    });
+
+    it('excludes inactive users', () => {
+      const now = Math.floor(Date.now() / 1000);
+      sqlite.exec(`
+        INSERT INTO users (username, pin_hash, name, role_id, is_active, created_at, updated_at)
+        VALUES ('inactive_option', '${hashSync('0000', 10)}', 'Aaa Inactive', 1, 0, ${now}, ${now});
+      `);
+
+      const usernames = service.listActiveUsers().map((u) => u.username);
+      expect(usernames).not.toContain('inactive_option');
+    });
+
+    it('sorts by name then username', () => {
+      const result = service.listActiveUsers();
+      const names = result.map((u) => u.name);
+      const sortedByName = [...names].sort();
+      expect(names).toEqual(sortedByName);
+      // Ties (same name) must be ordered by username — force one by inserting
+      // a user sharing an existing name.
+      const now = Math.floor(Date.now() / 1000);
+      sqlite.exec(`
+        INSERT INTO users (username, pin_hash, name, role_id, is_active, created_at, updated_at)
+        VALUES ('a_admin', '${hashSync('0000', 10)}', 'Administrator', 1, 1, ${now}, ${now});
+        INSERT INTO users (username, pin_hash, name, role_id, is_active, created_at, updated_at)
+        VALUES ('z_admin', '${hashSync('0000', 10)}', 'Administrator', 1, 1, ${now}, ${now});
+      `);
+
+      const again = service.listActiveUsers();
+      const adminEntries = again.filter((u) => u.name === 'Administrator');
+      const usernames = adminEntries.map((u) => u.username);
+      expect(usernames).toEqual(['a_admin', 'admin', 'z_admin']);
     });
   });
 

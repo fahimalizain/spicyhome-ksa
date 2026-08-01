@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte, lt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
@@ -27,7 +27,10 @@ import {
   parseZatcaBuyerDetails,
   formatZatcaBuyerDetailsErrors,
   AuditAction,
+  ALL_ORDER_STATUSES,
+  riyadhCalendarDayBoundsUnix,
 } from '@spicyhome/shared';
+import type { OrderStatus } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { mapBools } from '../../common/bool-mapper.helper';
@@ -2469,11 +2472,60 @@ export class OrdersService {
       .run();
   }
 
-  listOrders(filters?: { status?: string; date?: string }): any[] {
-    let query = this.db.select().from(orders);
+  /**
+   * List orders, newest first (`ORDER BY orders.id DESC`), with optional
+   * filters — all dimensions are independent and ANDed together:
+   *
+   * - `status`: single status or comma-separated list → `status IN (...)`;
+   *   empty/omit → no status filter; invalid token → 400.
+   * - `date`: `YYYY-MM-DD` Asia/Riyadh **calendar** day on `orders.created_at`
+   *   (`[start, end)` Unix seconds); invalid format → 400.
+   * - `userId`: `orders.created_by = userId`.
+   *
+   * NOTE: drizzle `.where()` **replaces** a previous where clause, so all
+   * conditions are ANDed into a single `.where(and(...))` call.
+   */
+  listOrders(filters?: { status?: string; date?: string; userId?: number }): any[] {
+    const conditions: any[] = [];
+
     if (filters?.status) {
-      query = query.where(eq(orders.status, filters.status)) as any;
+      const statuses = filters.status
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (statuses.length === 0) {
+        throw new BadRequestException('Invalid status filter');
+      }
+      for (const s of statuses) {
+        if (!ALL_ORDER_STATUSES.includes(s as OrderStatus)) {
+          throw new BadRequestException(`Invalid status: ${s}`);
+        }
+      }
+      conditions.push(
+        statuses.length === 1 ? eq(orders.status, statuses[0]) : inArray(orders.status, statuses),
+      );
     }
+
+    if (filters?.date) {
+      const bounds = riyadhCalendarDayBoundsUnix(filters.date);
+      if (!bounds) {
+        throw new BadRequestException(`Invalid date: ${filters.date} (expected YYYY-MM-DD)`);
+      }
+      conditions.push(
+        gte(orders.createdAt, bounds.startUnix),
+        lt(orders.createdAt, bounds.endUnix),
+      );
+    }
+
+    if (filters?.userId !== undefined) {
+      conditions.push(eq(orders.createdBy, filters.userId));
+    }
+
+    let query = this.db.select().from(orders);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
     const rows: any[] = query.orderBy(desc(orders.id)).all();
     return this.attachDeliveryPartnerTitles(rows);
   }

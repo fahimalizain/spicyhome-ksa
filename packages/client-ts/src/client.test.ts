@@ -39,6 +39,7 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.auth.me).toBe('function');
     expect(typeof client.auth.listUsernames).toBe('function');
     expect(typeof client.auth.listUsers).toBe('function');
+    expect(typeof client.auth.listActiveUsers).toBe('function');
     expect(typeof client.auth.getUser).toBe('function');
     expect(typeof client.auth.createUser).toBe('function');
     expect(typeof client.auth.updateUser).toBe('function');
@@ -196,6 +197,90 @@ describe('SpicyHomeClient', () => {
     expect(url).toBe('http://localhost:3000/orders/7/items/101/unit-price');
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ baseUpdatedAt: 1720000000, unitPriceHalalas: 2500 });
+  });
+});
+
+describe('SpicyHomeClient orders.list filters', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function okFetch(): jest.Mock {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify([]),
+    });
+    globalThis.fetch = fetchMock as any;
+    return fetchMock;
+  }
+
+  function listUrl(call: unknown[]): string {
+    return (call[0] as string).replace('http://localhost:3000', '');
+  }
+
+  it('legacy list(status) sends only status', async () => {
+    const fetchMock = okFetch();
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.orders.list('open');
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe('/orders?status=open');
+  });
+
+  it('legacy list(status, date) sends both', async () => {
+    const fetchMock = okFetch();
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.orders.list('open', '2026-07-27');
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe('/orders?status=open&date=2026-07-27');
+  });
+
+  it('object form sends all filters, stringifying userId', async () => {
+    const fetchMock = okFetch();
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.orders.list({ status: 'open,paid', date: '2026-07-27', userId: 3 });
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe(
+      '/orders?status=open%2Cpaid&date=2026-07-27&userId=3',
+    );
+  });
+
+  it('object form omits undefined fields (no filter on that dimension)', async () => {
+    const fetchMock = okFetch();
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.orders.list({});
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe('/orders');
+
+    await client.orders.list({ date: '2026-07-27' });
+    expect(listUrl(fetchMock.mock.calls[1])).toBe('/orders?date=2026-07-27');
+  });
+
+  it('listActiveUsers hits GET /auth/active-users', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify([{ id: 1, username: 'admin', name: 'Administrator' }]),
+    });
+    globalThis.fetch = fetchMock as any;
+
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => 'token',
+    });
+
+    const users = await client.auth.listActiveUsers();
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe('/auth/active-users');
+    expect(users).toEqual([{ id: 1, username: 'admin', name: 'Administrator' }]);
   });
 });
 

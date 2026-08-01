@@ -17,6 +17,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
@@ -49,8 +50,30 @@ export class OrdersController {
   @Get()
   @ApiOperation({ summary: 'List orders with optional filters' })
   @ApiOkResponse({ description: 'List of orders', type: [OrderSummaryResponse] })
-  listOrders(@Query('status') status?: string, @Query('date') date?: string) {
-    return this.ordersService.listOrders({ status, date });
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description:
+      'Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter.',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    description:
+      'YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter.',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    schema: { type: 'integer', format: 'int64' },
+    description: 'Filter by orders.created_by (user id). Omit → no user filter.',
+  })
+  listOrders(
+    @Query('status') status?: string,
+    @Query('date') date?: string,
+    @Query('userId', new ParseIntPipe({ optional: true })) userId?: number,
+  ) {
+    return this.ordersService.listOrders({ status, date, userId });
   }
 
   @Get(':id')
