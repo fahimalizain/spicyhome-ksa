@@ -16,7 +16,7 @@ class MenuRepository(private val menuApi: MenuApi) {
         return menuApi.menuControllerListSubcategories(categoryId ?: "")
     }
 
-    fun listItems(categoryId: String? = null): Call<List<ItemResponse>> {
-        return menuApi.menuControllerListItems(categoryId ?: "")
+    fun listItems(categoryId: String? = null, subcategoryId: String? = null): Call<List<ItemResponse>> {
+        return menuApi.menuControllerListItems(categoryId ?: "", subcategoryId ?: "")
     }
 }

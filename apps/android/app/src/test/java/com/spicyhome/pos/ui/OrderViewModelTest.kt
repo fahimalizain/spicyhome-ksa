@@ -14,6 +14,7 @@ import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.SubcategoryResponse
 import com.spicyhome.client.models.SyncOrderItemsDto
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
@@ -93,8 +94,12 @@ class OrderViewModelTest {
         every { menuApi.menuControllerListCategories() } returns catCall
         every { catCall.execute() } returns Response.success(emptyList())
 
+        val subCall = mockk<Call<List<SubcategoryResponse>>>(relaxed = true)
+        every { menuApi.menuControllerListSubcategories(any()) } returns subCall
+        every { subCall.execute() } returns Response.success(emptyList())
+
         val itemCall = mockk<Call<List<ItemResponse>>>(relaxed = true)
-        every { menuApi.menuControllerListItems(any()) } returns itemCall
+        every { menuApi.menuControllerListItems(any(), any()) } returns itemCall
         every { itemCall.execute() } returns Response.success(emptyList())
 
         val tblCall = mockk<Call<List<TableResponse>>>(relaxed = true)
@@ -516,6 +521,91 @@ class OrderViewModelTest {
 
         assertThat(state.selectedCategoryId).isNull()
         assertThat(state.filteredItems).containsExactly(item1, item2).inOrder()
+    }
+
+    @Test
+    fun `subcategories are loaded from the menu repository`() = runTest(testDispatcher) {
+        stubMenuSubcategories(
+            listOf(
+                createSubcategory(1, "Veg", categoryId = 1),
+                createSubcategory(2, "Non Veg", categoryId = 1),
+            )
+        )
+
+        val vm = createViewModel()
+
+        assertThat(vm.uiState.value.subcategories).hasSize(2)
+        assertThat(vm.uiState.value.subcategories.map { it.name })
+            .containsExactly("Veg", "Non Veg")
+            .inOrder()
+    }
+
+    @Test
+    fun `selectSubcategory filters to that subcategory items`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Veg Soup", 1000, 1500, categoryId = 1, subcategoryId = 1)
+        val item2 = createItem(2, "Prawn Soup", 2000, 1500, categoryId = 1, subcategoryId = 2)
+        val item3 = createItem(3, "Seafood Soup", 800, 1500, categoryId = 1, subcategoryId = 2)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        assertThat(vm.uiState.value.filteredItems).hasSize(3)
+
+        vm.selectSubcategory(2)
+        val state = vm.uiState.value
+
+        assertThat(state.selectedSubcategoryId).isEqualTo(2)
+        assertThat(state.filteredItems).containsExactly(item2, item3).inOrder()
+    }
+
+    @Test
+    fun `selectSubcategory null shows all items in the category again`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Veg Soup", 1000, 1500, categoryId = 1, subcategoryId = 1)
+        val item2 = createItem(2, "Prawn Soup", 2000, 1500, categoryId = 1, subcategoryId = 2)
+        stubMenuItems(listOf(item1, item2))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.selectSubcategory(2)
+        assertThat(vm.uiState.value.filteredItems).hasSize(1)
+
+        vm.selectSubcategory(null)
+        assertThat(vm.uiState.value.filteredItems).containsExactly(item1, item2).inOrder()
+    }
+
+    @Test
+    fun `selectSubcategory takes precedence over the selected category`() = runTest(testDispatcher) {
+        // Subcategory 2 lives under category 2 but the user has category 1
+        // selected — the subcategory filter wins (mirrors the POS).
+        val item1 = createItem(1, "Burger", 1000, 1500, categoryId = 1, subcategoryId = 1)
+        val item2 = createItem(2, "Pizza", 2000, 1500, categoryId = 2, subcategoryId = 2)
+        stubMenuItems(listOf(item1, item2))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.selectSubcategory(2)
+
+        assertThat(vm.uiState.value.filteredItems).containsExactly(item2)
+    }
+
+    @Test
+    fun `selectCategory resets the selected subcategory`() = runTest(testDispatcher) {
+        val item1 = createItem(1, "Veg Soup", 1000, 1500, categoryId = 1, subcategoryId = 1)
+        val item2 = createItem(2, "Prawn Soup", 2000, 1500, categoryId = 1, subcategoryId = 2)
+        val item3 = createItem(3, "Chicken Rice", 800, 1500, categoryId = 2, subcategoryId = 3)
+        stubMenuItems(listOf(item1, item2, item3))
+
+        val vm = createViewModel()
+        vm.selectCategory(1)
+        vm.selectSubcategory(2)
+        assertThat(vm.uiState.value.selectedSubcategoryId).isEqualTo(2)
+
+        vm.selectCategory(2)
+        val state = vm.uiState.value
+
+        assertThat(state.selectedCategoryId).isEqualTo(2)
+        assertThat(state.selectedSubcategoryId).isNull()
+        assertThat(state.filteredItems).containsExactly(item3)
     }
 
     @Test
@@ -1449,7 +1539,7 @@ class OrderViewModelTest {
 
         // init loadMenu + refresh loadMenu
         verify(atLeast = 2) { menuApi.menuControllerListCategories() }
-        verify(atLeast = 2) { menuApi.menuControllerListItems(any()) }
+        verify(atLeast = 2) { menuApi.menuControllerListItems(any(), any()) }
     }
 
     @Test
@@ -1613,9 +1703,31 @@ class OrderViewModelTest {
 
     private fun stubMenuItems(items: List<ItemResponse>) {
         val call = mockk<Call<List<ItemResponse>>>(relaxed = true)
-        every { menuApi.menuControllerListItems(any()) } returns call
+        every { menuApi.menuControllerListItems(any(), any()) } returns call
         every { call.execute() } returns Response.success(items)
     }
+
+    private fun stubMenuSubcategories(subcategories: List<SubcategoryResponse>) {
+        val call = mockk<Call<List<SubcategoryResponse>>>(relaxed = true)
+        every { menuApi.menuControllerListSubcategories(any()) } returns call
+        every { call.execute() } returns Response.success(subcategories)
+    }
+
+    private fun createSubcategory(
+        id: Long,
+        name: String,
+        categoryId: Long,
+    ): SubcategoryResponse = SubcategoryResponse(
+        id = id,
+        categoryId = categoryId,
+        name = name,
+        sortOrder = 0,
+        isActive = true,
+        createdAt = 0L,
+        updatedAt = 0L,
+        createdBy = null,
+        updatedBy = null,
+    )
 
     private fun createItem(
         id: Long,
@@ -1623,11 +1735,13 @@ class OrderViewModelTest {
         priceHalalas: Long,
         vatRateBp: Int,
         categoryId: Long = 1,
+        subcategoryId: Long = 1,
         isActive: Boolean = true,
         nameAr: String? = null,
     ): ItemResponse = ItemResponse(
         id = id,
         categoryId = categoryId,
+        subcategoryId = subcategoryId,
         name = name,
         nameAr = nameAr,
         priceHalalas = priceHalalas,
