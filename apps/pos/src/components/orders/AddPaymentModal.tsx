@@ -13,6 +13,8 @@ import {
 } from './add-payment-modal-logic';
 import type { OrderResponse } from '@spicyhome/client-ts';
 
+type NumpadTarget = 'amount' | 'tendered';
+
 const NUMPAD_KEYS = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['C', '0', '.'], ['⌫']];
 
 /** Reusable numpad grid — renders 5 rows of keys. */
@@ -68,6 +70,7 @@ export function AddPaymentModal({
   const [amountInput, setAmountInput] = useState('');
   const [sign, setSign] = useState<1 | -1>(1);
   const [tenderedInput, setTenderedInput] = useState('');
+  const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>('amount');
 
   useEffect(() => {
     loadMethods();
@@ -92,6 +95,15 @@ export function AddPaymentModal({
   const isCashSelected = selectedMethodId === 'cash';
   // Tendered only on positive cash lines
   const showTendered = isCashSelected && amountHalalas > 0;
+
+  // Force numpadTarget back to 'amount' when the tendered section is not
+  // relevant (non-cash method, zero amount, or negative sign).
+  useEffect(() => {
+    if (!showTendered) {
+      setNumpadTarget('amount');
+    }
+  }, [showTendered]);
+
   const tenderedHalalas = tenderedToHalalas(tenderedInput);
   const changeDue = showTendered ? calcCashChange(amountHalalas, tenderedHalalas) : 0;
   const draft: AddPaymentDraft | null = buildAddPaymentDraft({
@@ -221,10 +233,18 @@ export function AddPaymentModal({
               </button>
             </div>
 
-            {/* Amount display */}
-            <div className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 text-center">
+            {/* Amount display — tapping focuses the amount numpad */}
+            <button
+              type="button"
+              onClick={() => setNumpadTarget('amount')}
+              className={`w-full touch-target bg-gray-700 border rounded px-3 py-3 text-left transition-colors ${
+                numpadTarget === 'amount'
+                  ? 'border-brand-500'
+                  : 'border-gray-700 hover:border-gray-600'
+              }`}
+            >
               <span
-                className={`block text-2xl font-mono ${
+                className={`block text-2xl font-mono text-center ${
                   amountHalalas < 0 ? 'text-red-400' : 'text-white'
                 }`}
               >
@@ -232,10 +252,17 @@ export function AddPaymentModal({
                   ? `${amountHalalas < 0 ? '−' : ''}${halalasToSar(Math.abs(amountHalalas))} SAR`
                   : '0.00 SAR'}
               </span>
-            </div>
+            </button>
 
-            {/* Numpad */}
-            <div className="mt-3" data-testid="amount-numpad">
+            {/* Collapsible amount numpad */}
+            <div
+              className={`overflow-hidden transition-all duration-200 ease-in-out mt-3 ${
+                numpadTarget === 'amount'
+                  ? 'max-h-64 opacity-100'
+                  : 'max-h-0 opacity-0 pointer-events-none'
+              }`}
+              data-testid="amount-numpad"
+            >
               <Numpad onKey={handleNumpadKey} />
             </div>
           </div>
@@ -246,11 +273,18 @@ export function AddPaymentModal({
           <div className="bg-gray-800 rounded-lg p-3 mb-3 space-y-2">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Tendered (SAR)</label>
-              <div className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-center">
-                <span className="text-lg font-mono text-white">
-                  {tenderedInput || <span className="text-gray-500">0.00</span>}
-                </span>
-              </div>
+              {/* Tendered display — tapping focuses the tendered numpad */}
+              <button
+                type="button"
+                onClick={() => setNumpadTarget('tendered')}
+                className={`w-full bg-gray-700 border rounded px-3 py-2 text-sm text-left ${
+                  numpadTarget === 'tendered'
+                    ? 'border-brand-500 text-white'
+                    : 'border-gray-600 text-gray-400'
+                }`}
+              >
+                {tenderedInput || <span className="text-gray-500">0.00</span>}
+              </button>
             </div>
 
             {tenderedHalalas !== undefined && tenderedHalalas > amountHalalas && (
@@ -264,7 +298,15 @@ export function AddPaymentModal({
                 <div className="text-sm text-red-400">Insufficient tendered amount</div>
               )}
 
-            <div data-testid="tendered-numpad">
+            {/* Collapsible tendered numpad */}
+            <div
+              className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                numpadTarget === 'tendered'
+                  ? 'max-h-64 opacity-100'
+                  : 'max-h-0 opacity-0 pointer-events-none'
+              }`}
+              data-testid="tendered-numpad"
+            >
               <Numpad onKey={handleTenderedNumpadKey} />
             </div>
           </div>
