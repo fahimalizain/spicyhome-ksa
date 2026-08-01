@@ -304,6 +304,28 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Like emitDomainEvent, but awaits all async @OnEvent listeners.
+   *
+   * Used on the simplified invoice path BEFORE the auto receipt print:
+   * `order.paid` / `order.refund.issued` listeners create the ZATCA invoice /
+   * credit note (inserting qr_tlv with status `signed`), and the receipt
+   * print looks that QR up in the DB. Awaiting guarantees the QR exists on
+   * the FIRST print — without it, the fire-and-forget event races the print.
+   */
+  private async emitDomainEventAsync(
+    event: string,
+    orderId: number,
+    userId: number,
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await this.eventEmitter.emitAsync(event, { orderId, userId, ...extra });
+    } catch {
+      // Swallow — domain events never fail the operation
+    }
+  }
+
   private getNextOrderNo(tx: any, now: number): number {
     const today = new Date(now * 1000).toISOString().slice(0, 10);
 
@@ -764,14 +786,17 @@ export class OrdersService {
    *   (else 400); the ZATCA PaymentMeans are netted per method, zero nets
    *   dropped
    *
-   * Receipt logic (unchanged from the old pay flow):
+   * Receipt logic:
    * - `hasCashPayment` = any payment line with `methodId === 'cash'` and a
    *   positive amount (drawer kick if any positive cash line exists)
-   * - simplified: enqueue + run receipt print with `kickDrawer = hasCashPayment`
+   * - simplified: awaits the `order.paid` listeners (ZATCA signing finishes,
+   *   QR ready) BEFORE the non-blocking receipt print starts — the first
+   *   auto-print includes the QR; `kickDrawer = hasCashPayment`
    * - standard: deferred receipt (prints on ZATCA clearance); immediate
    *   cash drawer kick when `hasCashPayment`
    *
-   * Emits `order.paid` and returns `{ success, status: 'paid', invoiceType }`.
+   * Emits `order.paid` (awaited on the simplified path) and returns
+   * `{ success, status: 'paid', invoiceType }`.
    */
   async submitOrder(
     orderId: number,
@@ -932,17 +957,24 @@ export class OrdersService {
       }
     });
 
-    // After transaction: non-blocking receipt print (simplified only)
-    if (receiptPrinter && !isStandardInvoice) {
-      this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
-    }
+    // After transaction (simplified only): await the `order.paid` listeners so
+    // ZATCA signing finishes (createInvoice inserts qr_tlv with status
+    // `signed`) BEFORE the non-blocking receipt print looks the QR up — the
+    // FIRST auto-print must include the QR. The standard path must NOT use
+    // emitAsync: clearance is network-bound and the receipt is deferred to
+    // zatca.invoice.cleared.
+    if (!isStandardInvoice) {
+      await this.emitDomainEventAsync('order.paid', orderId, userId);
 
-    // For standard invoices: kick cash drawer immediately if needed
-    if (isStandardInvoice && hasCashPayment && receiptPrinter) {
-      this.kickCashDrawer(receiptPrinter, orderId, userId);
+      if (receiptPrinter) {
+        this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
+      }
+    } else {
+      if (isStandardInvoice && hasCashPayment && receiptPrinter) {
+        this.kickCashDrawer(receiptPrinter, orderId, userId);
+      }
+      this.emitDomainEvent('order.paid', orderId, userId);
     }
-
-    this.emitDomainEvent('order.paid', orderId, userId);
     return {
       success: true,
       status: 'paid',
@@ -1503,15 +1535,28 @@ export class OrdersService {
       }
     });
 
-    // ── After transaction: non-blocking refund receipt print ───────────────────
-    if (receiptPrinter && order.isStandardInvoice !== 1) {
-      this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId, isCashRefund);
-    }
-
-    // ── Emit WebSocket events ───────────────────────────────────────────────────
-    this.emitDomainEvent('order.refund.issued', orderId, userId, { refundId, userId });
-    if (isFullyRefunded) {
-      this.emitDomainEvent('order.refunded', orderId, userId);
+    // ── After transaction ───────────────────────────────────────────────────────
+    // Simplified: await the `order.refund.issued` listeners so the credit note
+    // is signed (qr_tlv set) BEFORE the non-blocking refund receipt print
+    // looks it up — the FIRST auto-print must include the QR. The standard
+    // path must NOT use emitAsync: clearance is network-bound and the print is
+    // deferred to zatca.credit_note.cleared.
+    if (order.isStandardInvoice !== 1) {
+      await this.emitDomainEventAsync('order.refund.issued', orderId, userId, {
+        refundId,
+        userId,
+      });
+      if (receiptPrinter) {
+        this.runRefundReceiptPrint(orderId, refundId, receiptPrinter, userId, isCashRefund);
+      }
+      if (isFullyRefunded) {
+        this.emitDomainEvent('order.refunded', orderId, userId);
+      }
+    } else {
+      this.emitDomainEvent('order.refund.issued', orderId, userId, { refundId, userId });
+      if (isFullyRefunded) {
+        this.emitDomainEvent('order.refunded', orderId, userId);
+      }
     }
 
     const updatedOrder = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
