@@ -136,6 +136,40 @@ describe('PrintJobService', () => {
     return orderId;
   }
 
+  /** Like createBasicOrder but with an open (unpaid) order — for open receipts. */
+  function createOpenOrder(): number {
+    orderSeq++;
+    const uuid = `test-open-order-uuid-${orderSeq}`;
+    const orderNo = 200 + orderSeq;
+    const businessDate = `2024-07-${String(15 + orderSeq).padStart(2, '0')}`;
+
+    sqlite.exec(`
+      INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+      VALUES ('${businessDate}', 'open', ${now}, 1, ${now}, ${now})
+    `);
+    const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+    sqlite.exec(`
+      INSERT INTO orders (
+        order_no, uuid, type, day_opening_id, status,
+        subtotal_halalas, vat_halalas, total_halalas,
+        document_id, created_at, updated_at
+      ) VALUES (
+        ${orderNo}, '${uuid}', 'takeaway', ${doId}, 'open',
+        10000, 1500, 11500,
+        NULL, ${now}, ${now}
+      )
+    `);
+    const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+    sqlite.exec(`
+      INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+      VALUES (${orderId}, 'Test Item', 11500, 1500, 1, 11500, ${now}, ${now})
+    `);
+
+    return orderId;
+  }
+
   function createRefundForOrder(orderId: number): number {
     const refundDocumentId = `REF26-TEST-${orderSeq}`;
     sqlite.exec(`
@@ -160,6 +194,30 @@ describe('PrintJobService', () => {
       }
     }
     return false;
+  }
+
+  /**
+   * ASCII text with ESC/POS command bytes stripped, so column lines start at
+   * their label (the bold-on ESC E prefix of AMOUNT DUE is removed).
+   */
+  function plainText(buf: Buffer): string {
+    const bytes = Array.from(buf);
+    let out = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      if (b === 0x1b) {
+        // ESC command: ESC @ has 1 parameter byte; ESC n x has 2.
+        i += bytes[i + 1] === 0x40 ? 1 : 2;
+        continue;
+      }
+      if (b === 0x1d) {
+        // GS command (partial cut here: GS V B n = 4 bytes total).
+        i += 3;
+        continue;
+      }
+      out += String.fromCharCode(b);
+    }
+    return out;
   }
 
   // ── printReceipt — QR fallback from zatca_invoices ─────────────────────
@@ -439,6 +497,122 @@ describe('PrintJobService', () => {
       const buf = transport.sent[0].data;
       // QR print command should NOT be present
       expect(buf.toString('hex')).not.toContain('315130');
+    });
+  });
+
+  // ── printOpenOrderReceipt — non-ZATCA open order slip ──────────────────
+
+  describe('printOpenOrderReceipt', () => {
+    it('builds a non-ZATCA open order receipt buffer', async () => {
+      const orderId = createOpenOrder();
+      await printJobService.printOpenOrderReceipt(orderId);
+
+      expect(transport.sent.length).toBe(1);
+      const buf = transport.sent[0].data;
+      const s = buf.toString('ascii');
+      expect(s).toContain('OPEN ORDER RECEIPT');
+      expect(s).toContain('Order #:');
+      expect(s).toContain('TOTAL (incl. VAT)');
+      expect(s).toContain('AMOUNT DUE');
+      expect(s).toContain('NOT A TAX INVOICE');
+      expect(s).toContain('Please collect your Simplified Tax Invoice');
+
+      // No ZATCA framing
+      expect(s).not.toContain('SIMPLIFIED TAX INVOICE');
+      expect(s).not.toContain('CREDIT NOTE');
+      expect(s).not.toContain('Invoice #');
+      expect(s).not.toContain('Amount includes VAT');
+
+      // No QR, no drawer kick
+      expect(buf.toString('hex')).not.toContain('1d286b');
+      expect(buf.toString('hex')).not.toContain('1b70');
+    });
+
+    it('uses restaurant_name for the display name (never the ZATCA seller name)', async () => {
+      // Distinctive seller_name so it cannot collide with item names.
+      sqlite.exec(`UPDATE settings SET value = 'SellerXYZ' WHERE key = 'seller_name'`);
+      try {
+        const orderId = createOpenOrder();
+        await printJobService.printOpenOrderReceipt(orderId);
+
+        expect(transport.sent.length).toBe(1);
+        const s = transport.sent[0].data.toString('ascii');
+        expect(s).toContain('SpicyHome'); // settings.restaurant_name
+        expect(s).not.toContain('SellerXYZ'); // settings.seller_name must NOT be used
+        expect(s).not.toContain('Main St 1234'); // seller address must NOT be used
+        expect(s).not.toContain('300123456789003'); // settings.vat_number must NOT be used
+      } finally {
+        sqlite.exec(`UPDATE settings SET value = 'Test' WHERE key = 'seller_name'`);
+      }
+    });
+
+    it('throws when the order does not exist', async () => {
+      await expect(printJobService.printOpenOrderReceipt(999999)).rejects.toThrow(
+        'Order 999999 not found',
+      );
+      expect(transport.sent.length).toBe(0);
+    });
+
+    it('renders AMOUNT DUE equal to the total when no payments exist (no PAID line)', async () => {
+      const orderId = createOpenOrder(); // total 115.00
+      await printJobService.printOpenOrderReceipt(orderId);
+
+      expect(transport.sent.length).toBe(1);
+      const buf = transport.sent[0].data;
+      const dueLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      expect(dueLine).toContain('115.00');
+      const paidLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('PAID'));
+      expect(paidLine).toBeUndefined();
+    });
+
+    it('shows PAID and reduced AMOUNT DUE when the order has a partial payment', async () => {
+      const orderId = createOpenOrder(); // total 115.00
+      // Partial payment — 20.00 of 115.00 (ADR 0006: payment before food)
+      sqlite.exec(`
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at, created_by)
+        VALUES (${orderId}, 'cash', 'Cash', '10', 2000, ${now}, 1)
+      `);
+
+      await printJobService.printOpenOrderReceipt(orderId);
+
+      expect(transport.sent.length).toBe(1);
+      const buf = transport.sent[0].data;
+      const paidLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('PAID'));
+      expect(paidLine).toBeDefined();
+      expect(paidLine).toContain('20.00');
+      const dueLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      expect(dueLine).toContain('95.00'); // 115.00 − 20.00
+    });
+
+    it('prints item lines with Arabic snapshot when configured', async () => {
+      sqlite.exec(`
+        UPDATE printers SET config = '{"arabic":{"encoding":"pc864","codePage":22,"visualRtl":false}}' WHERE id = 1
+      `);
+      try {
+        const orderId = createOpenOrder();
+        const itemNameAr = '\u0628\u0646\u062F \u0627\u062E\u062A\u0628\u0627\u0631';
+        sqlite.exec(`
+          UPDATE order_items SET item_name_ar = '${itemNameAr}' WHERE order_id = ${orderId}
+        `);
+
+        await printJobService.printOpenOrderReceipt(orderId);
+
+        expect(transport.sent.length).toBe(1);
+        const buf = transport.sent[0].data;
+        expect(findSequence(buf, encodePc864(`1x ${itemNameAr}`))).toBe(true);
+      } finally {
+        sqlite.exec(`UPDATE printers SET config = '{}' WHERE id = 1`);
+      }
     });
   });
 

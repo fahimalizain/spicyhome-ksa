@@ -143,6 +143,10 @@ export function OrderPage() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [sendingKitchen, setSendingKitchen] = useState(false);
 
+  // Open order receipt (non-ZATCA guest slip, Summary tab)
+  const [printingOpenReceipt, setPrintingOpenReceipt] = useState(false);
+  const [openReceiptMessage, setOpenReceiptMessage] = useState('');
+
   // Standard invoice state (Summary tab)
   const [isStandardInvoice, setIsStandardInvoice] = useState(false);
   const [buyer, setBuyer] = useState<ZatcaBuyerDetails>(emptyStandardInvoiceBuyer());
@@ -406,6 +410,8 @@ export function OrderPage() {
     setBuyer(emptyStandardInvoiceBuyer());
     setBuyerErrors({});
     setShowClearance(false);
+    setPrintingOpenReceipt(false);
+    setOpenReceiptMessage('');
     setSearchParams({}, { replace: true });
   }
 
@@ -577,6 +583,32 @@ export function OrderPage() {
       }
     } finally {
       setSubmittingOrder(false);
+    }
+  }
+
+  // ── Open order receipt (non-ZATCA guest slip) ──
+
+  /**
+   * Print the non-ZATCA "Open Order Receipt" so the guest can pay at the
+   * table with a portable ATM-POS. Only meaningful while the order is open,
+   * clean, and non-empty (see canPrintOpenReceipt).
+   */
+  async function handlePrintOpenReceipt() {
+    if (!currentOrder || currentOrder.status !== 'open') return;
+    setPrintingOpenReceipt(true);
+    setError('');
+    setOpenReceiptMessage('');
+    try {
+      const res = await client.orders.reprint(currentOrder.id, { target: 'open_receipt' });
+      if (res && res.success === false) {
+        setError((res.errors || []).join(' ') || 'Failed to print open receipt');
+      } else {
+        setOpenReceiptMessage('Open receipt printed');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to print open receipt');
+    } finally {
+      setPrintingOpenReceipt(false);
     }
   }
 
@@ -799,6 +831,20 @@ export function OrderPage() {
     permissions.updateOrder &&
     !loading &&
     !syncing;
+
+  // - Print Open Receipt: open + clean + non-empty + updateOrder + not busy.
+  //   Non-ZATCA guest slip — the button stays visible (disabled) while the
+  //   print is in flight so the "Printing..." state is shown.
+  const canPrintOpenReceipt =
+    openOrder &&
+    !cart.isDirty &&
+    cart.items.length > 0 &&
+    permissions.updateOrder &&
+    !loading &&
+    !syncing &&
+    !metaUpdating &&
+    !submittingOrder &&
+    !printingOpenReceipt;
 
   // - Void: open + clean + voidOrder (server rejects when payments net ≠ 0)
   const canVoid = openOrder && !cart.isDirty && permissions.voidOrder && !loading;
@@ -1313,6 +1359,21 @@ export function OrderPage() {
           {/* ── Summary footer ── */}
           {currentOrder && activeTab === 'summary' && (
             <div className="space-y-2">
+              {/* Print Open Receipt: non-ZATCA guest slip (pay at the table).
+                  Above Submit so the primary payment path stays Submit. */}
+              {(canPrintOpenReceipt || printingOpenReceipt) && (
+                <button
+                  onClick={handlePrintOpenReceipt}
+                  disabled={printingOpenReceipt}
+                  className="w-full touch-target bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-gray-300 py-3"
+                >
+                  {printingOpenReceipt ? 'Printing...' : 'Print Open Receipt'}
+                </button>
+              )}
+              {openReceiptMessage && (
+                <div className="text-green-400 text-xs">{openReceiptMessage}</div>
+              )}
+
               {/* Submit: the only open → paid path (ADR 0006) */}
               {openOrder && (
                 <button

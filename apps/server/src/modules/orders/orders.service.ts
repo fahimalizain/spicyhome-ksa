@@ -1559,12 +1559,15 @@ export class OrdersService {
   }
 
   async reprintOrder(orderId: number, target: string, userId: number) {
-    if (target !== 'receipt') {
-      throw new BadRequestException(
-        `Unsupported reprint target: ${target}. Only 'receipt' is supported.`,
-      );
+    if (target === 'receipt') {
+      return this.reprintReceipt(orderId, userId);
     }
-    return this.reprintReceipt(orderId, userId);
+    if (target === 'open_receipt') {
+      return this.printOpenOrderReceipt(orderId, userId);
+    }
+    throw new BadRequestException(
+      `Unsupported reprint target: ${target}. Only 'receipt' and 'open_receipt' are supported.`,
+    );
   }
 
   // ── Non-blocking print helpers ───────────────────────────────────────────────
@@ -1750,6 +1753,74 @@ export class OrdersService {
       );
     } catch (err: any) {
       const msg = `Receipt reprint: ${err.message}`;
+      this.logger.error(msg);
+      errors.push(msg);
+    }
+
+    return { success: errors.length === 0, errors };
+  }
+
+  /**
+   * Print a non-ZATCA open order receipt (guest pays at the table).
+   * Validates the order is still open and has items, then prints via
+   * printOpenOrderReceipt and writes enqueued/succeeded events tagged with
+   * kind 'open_order' so the timeline can distinguish it from tax reprints.
+   */
+  private async printOpenOrderReceipt(
+    orderId: number,
+    userId: number,
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const now = Math.floor(Date.now() / 1000);
+    const errors: string[] = [];
+
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status !== 'open') {
+      throw new BadRequestException('Open order receipt is only available for open orders');
+    }
+
+    const itemRows = this.db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId))
+      .all();
+    if (itemRows.length === 0) {
+      throw new BadRequestException('Cannot print open order receipt for an empty order');
+    }
+
+    const receiptPrinter = this.printJobService.getReceiptPrinter();
+    if (!receiptPrinter) {
+      return { success: false, errors: ['No active receipt printer configured'] };
+    }
+
+    this.orderEvents.createEvent(
+      this.db,
+      orderId,
+      userId,
+      'receipt_print_enqueued',
+      {
+        printer: receiptPrinter.name,
+        printerId: receiptPrinter.id,
+        kind: 'open_order',
+        totalHalalas: order.totalHalalas,
+        kickDrawer: false,
+      },
+      now,
+    );
+
+    try {
+      await this.printJobService.printOpenOrderReceipt(orderId);
+
+      this.orderEvents.createEvent(
+        this.db,
+        orderId,
+        userId,
+        'receipt_print_succeeded',
+        { printer: receiptPrinter.name, printerId: receiptPrinter.id, kind: 'open_order' },
+        now,
+      );
+    } catch (err: any) {
+      const msg = `Open order receipt print: ${err.message}`;
       this.logger.error(msg);
       errors.push(msg);
     }

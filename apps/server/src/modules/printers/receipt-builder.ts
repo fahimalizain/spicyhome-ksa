@@ -8,11 +8,19 @@ import { loadThermalLogo, type MonoBitmap } from './thermal-logo';
 
 export interface ReceiptOptions {
   // Document
-  /** ZATCA document kind. Defaults to 'simplified_invoice'. */
-  documentKind?: 'simplified_invoice' | 'credit_note';
-  /** ZATCA IRN BT-1, e.g. INV26-0042 / REF26-0001. Printed as "Invoice #". */
+  /**
+   * Document kind. Defaults to 'simplified_invoice'.
+   * - 'simplified_invoice' / 'credit_note': ZATCA documents (QR, VAT #, address).
+   * - 'open_order': non-ZATCA open order slip — no QR, no VAT #, no address,
+   *   no "Invoice #" line, no drawer kick.
+   */
+  documentKind?: 'simplified_invoice' | 'credit_note' | 'open_order';
+  /**
+   * ZATCA IRN BT-1, e.g. INV26-0042 / REF26-0001. Printed as "Invoice #" for
+   * ZATCA documents. Ignored for 'open_order' (never printed).
+   */
   documentId: string;
-  /** Optional internal order reference — printed as a secondary "Order ref" line. */
+  /** Optional internal order reference — printed as a secondary "Order ref" line. Required for 'open_order' (printed as "Order #"). */
   orderNo?: number;
   /** Unix epoch seconds — issue datetime, displayed in Asia/Riyadh. */
   createdAt: number;
@@ -39,6 +47,8 @@ export interface ReceiptOptions {
   totalHalalas: number;
   /** VAT rate in basis points — if set, shows "VAT (x.x%)"; if omitted shows "VAT". */
   vatRateBp?: number;
+  /** Net payments already recorded (SUM order_payments.amount_halalas). Open order only. */
+  paidHalalas?: number;
   // Credit note extras
   /** Original invoice IRN for credit notes. */
   originalDocumentId?: string;
@@ -81,6 +91,14 @@ const AR_TITLE_CREDIT_NOTE = '\u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\
 const AR_AMOUNT_INCLUDES_VAT =
   '\u0627\u0644\u0645\u0628\u0644\u063A \u0634\u0627\u0645\u0644 \u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629'; // المبلغ شامل ضريبة القيمة المضافة
 
+/** Arabic strings used on the non-ZATCA open order receipt. */
+const AR_TITLE_OPEN_ORDER =
+  '\u0625\u064A\u0635\u0627\u0644 \u0637\u0644\u0628 \u0645\u0641\u062A\u0648\u062D'; // إيصال طلب مفتوح
+const AR_NOT_TAX_INVOICE =
+  '\u0647\u0630\u0627 \u0644\u064A\u0633 \u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629'; // هذا ليس فاتورة ضريبية
+const AR_COLLECT_STI =
+  '\u064A\u0631\u062C\u0649 \u0627\u0633\u062A\u0644\u0627\u0645 \u0641\u0627\u062A\u0648\u0631\u062A\u0643 \u0627\u0644\u0636\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0645\u0628\u0633\u0637\u0629 \u0641\u064A \u0646\u0647\u0627\u064A\u0629 \u0632\u064A\u0627\u0631\u062A\u0643\u0645'; // يرجى استلام فاتورتك الضريبية المبسطة في نهاية زيارتكم
+
 export class ReceiptBuilder {
   private readonly width: number;
 
@@ -91,10 +109,12 @@ export class ReceiptBuilder {
   build(opts: ReceiptOptions): Buffer {
     const eb = new EscPosBuilder(this.width);
     const arabic = opts.arabic ?? DEFAULT_PRINTER_CONFIG.arabic;
-    const isCreditNote = (opts.documentKind ?? 'simplified_invoice') === 'credit_note';
+    const isCreditNote = opts.documentKind === 'credit_note';
+    const isOpenOrder = opts.documentKind === 'open_order';
 
-    // Drawer kick (before printing, so drawer opens on receipt cut)
-    if (opts.kickDrawer) {
+    // Drawer kick (before printing, so drawer opens on receipt cut).
+    // Never kick the drawer on a non-ZATCA open order receipt.
+    if (opts.kickDrawer && !isOpenOrder) {
       eb.cashDrawerKick();
     }
 
@@ -109,36 +129,54 @@ export class ReceiptBuilder {
     }
 
     // Document title (EN) + Arabic title
+    const titleEn = isCreditNote
+      ? 'CREDIT NOTE'
+      : isOpenOrder
+        ? 'OPEN ORDER RECEIPT'
+        : 'SIMPLIFIED TAX INVOICE';
+    const titleAr = isCreditNote
+      ? AR_TITLE_CREDIT_NOTE
+      : isOpenOrder
+        ? AR_TITLE_OPEN_ORDER
+        : AR_TITLE_SIMPLIFIED;
     eb.bold(true);
-    eb.text(isCreditNote ? 'CREDIT NOTE' : 'SIMPLIFIED TAX INVOICE');
+    eb.text(titleEn);
     eb.bold(false);
-    this.writeArabicCentered(eb, isCreditNote ? AR_TITLE_CREDIT_NOTE : AR_TITLE_SIMPLIFIED, arabic);
+    this.writeArabicCentered(eb, titleAr, arabic);
     eb.blankLine();
 
-    // Seller block
+    // Seller block — open order receipts show only the display name
+    // (restaurant_name), never the ZATCA legal name/address/VAT number.
     eb.bold(true);
     eb.text(opts.sellerName);
     eb.bold(false);
-    const street = [opts.sellerStreet, opts.sellerBuilding].filter(Boolean).join(' ');
-    if (street) eb.text(street);
-    const city = [opts.sellerCity, opts.sellerPostal].filter(Boolean).join(' ');
-    if (city) eb.text(city);
-    if (opts.sellerCountry) eb.text(opts.sellerCountry);
-    if (opts.vatNumber) {
-      eb.text(`VAT: ${opts.vatNumber}`);
+    if (!isOpenOrder) {
+      const street = [opts.sellerStreet, opts.sellerBuilding].filter(Boolean).join(' ');
+      if (street) eb.text(street);
+      const city = [opts.sellerCity, opts.sellerPostal].filter(Boolean).join(' ');
+      if (city) eb.text(city);
+      if (opts.sellerCountry) eb.text(opts.sellerCountry);
+      if (opts.vatNumber) {
+        eb.text(`VAT: ${opts.vatNumber}`);
+      }
     }
     eb.blankLine();
 
     // Document / order info
     eb.align(Align.Left);
-    eb.text(`Invoice #: ${opts.documentId}`);
+    if (isOpenOrder) {
+      // Internal order number — NOT the ZATCA IRN / documentId.
+      eb.text(`Order #: ${opts.orderNo ?? ''}`);
+    } else {
+      eb.text(`Invoice #: ${opts.documentId}`);
+    }
     const dt = this.formatDateTime(opts.createdAt);
     eb.text(`Date: ${dt.date}  Time: ${dt.time}`);
     const typeLabel = opts.orderType === 'dine_in' ? 'Dine-in' : 'Takeaway';
     let typeLine = `Type: ${typeLabel}`;
     if (opts.tableName) typeLine += `  Table: ${opts.tableName}`;
     eb.text(typeLine);
-    if (opts.orderNo != null) {
+    if (!isOpenOrder && opts.orderNo != null) {
       eb.text(`Order ref: #${opts.orderNo}`);
     }
     eb.separator();
@@ -159,13 +197,31 @@ export class ReceiptBuilder {
     eb.columnsWidth('TOTAL (incl. VAT)', halalasToSar(opts.totalHalalas), 10);
     eb.bold(false);
 
-    eb.text('Amount includes VAT');
-    this.writeArabicLine(eb, AR_AMOUNT_INCLUDES_VAT, arabic);
+    if (!isOpenOrder) {
+      eb.text('Amount includes VAT');
+      this.writeArabicLine(eb, AR_AMOUNT_INCLUDES_VAT, arabic);
+    }
     eb.align(Align.Center);
     eb.text('SAR');
     eb.align(Align.Left);
 
     eb.separator();
+
+    // Open order: payment summary for the table-side ATM-POS. AMOUNT DUE is
+    // always printed (even when it equals the total) so the amount the guest
+    // still owes is unambiguous; PAID only when payments have already been
+    // recorded on the order (ADR 0006 — payment before food).
+    if (isOpenOrder) {
+      const paidHalalas = opts.paidHalalas ?? 0;
+      const outstandingHalalas = opts.totalHalalas - paidHalalas;
+      if (paidHalalas > 0) {
+        eb.columnsWidth('PAID', halalasToSar(paidHalalas), 10);
+      }
+      eb.bold(true);
+      eb.columnsWidth('AMOUNT DUE', halalasToSar(outstandingHalalas), 10);
+      eb.bold(false);
+      eb.separator();
+    }
 
     // Credit note extras
     if (isCreditNote) {
@@ -180,13 +236,27 @@ export class ReceiptBuilder {
 
     // Footer
     eb.align(Align.Center);
-    eb.text(opts.footer ?? 'Thank you! Visit again.');
-    eb.blankLine();
-
-    // ZATCA QR (optional slot)
-    if (opts.qrTlvPayload) {
-      eb.qrCode(opts.qrTlvPayload);
+    if (isOpenOrder) {
+      // Non-ZATCA framing: NOT a tax invoice, and the guest must collect the
+      // Simplified Tax Invoice at the end of the visit. Replaces the default
+      // "Thank you" footer.
+      eb.bold(true);
+      eb.text('*** NOT A TAX INVOICE ***');
+      eb.bold(false);
+      this.writeArabicCentered(eb, AR_NOT_TAX_INVOICE, arabic);
       eb.blankLine();
+      eb.text('Please collect your Simplified Tax Invoice');
+      eb.text('at the end of your visit.');
+      this.writeArabicCentered(eb, AR_COLLECT_STI, arabic);
+    } else {
+      eb.text(opts.footer ?? 'Thank you! Visit again.');
+      eb.blankLine();
+
+      // ZATCA QR (optional slot) — never on open order receipts.
+      if (opts.qrTlvPayload) {
+        eb.qrCode(opts.qrTlvPayload);
+        eb.blankLine();
+      }
     }
 
     // Cut

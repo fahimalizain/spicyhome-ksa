@@ -2135,11 +2135,11 @@ export interface components {
     };
     ReprintOrderDto: {
       /**
-       * @description Reprint target (receipt only; kitchen reprints are not supported)
+       * @description Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip
        * @example receipt
        * @enum {string}
        */
-      target: 'receipt';
+      target: 'receipt' | 'open_receipt';
     };
     PrintResponse: {
       /** @example true */
