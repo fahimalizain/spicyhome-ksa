@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
-import type { CategoryResponse } from '@spicyhome/client-ts';
+import type { CategoryResponse, PrinterResponse, UpdateCategoryDto } from '@spicyhome/client-ts';
+
+interface CategoryForm {
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  printerId: number | null;
+}
+
+const emptyForm: CategoryForm = { name: '', sortOrder: 0, isActive: true, printerId: null };
 
 export function CategoriesPage() {
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [printers, setPrinters] = useState<PrinterResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', sortOrder: 0, isActive: true });
+  const [form, setForm] = useState<CategoryForm>(emptyForm);
 
   useEffect(() => {
     loadData();
@@ -16,8 +26,15 @@ export function CategoriesPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const res = await client.menu.listCategories();
-      setCategories(res);
+      // Printers are optional for this page: if the list fails we still show
+      // categories, and the dropdown just offers "Default kitchen printer".
+      const [cats, printerRes] = await Promise.all([
+        client.menu.listCategories(),
+        client.printers.list().catch(() => [] as PrinterResponse[]),
+      ]);
+      setCategories(cats);
+      setPrinters(printerRes);
+      setError('');
     } catch {
       setError('Failed to load');
     } finally {
@@ -26,13 +43,39 @@ export function CategoriesPage() {
   }
 
   function resetForm() {
-    setForm({ name: '', sortOrder: 0, isActive: true });
+    setForm(emptyForm);
     setEditId(null);
   }
 
   function editCat(cat: CategoryResponse) {
-    setForm({ name: cat.name, sortOrder: cat.sortOrder, isActive: cat.isActive });
+    setForm({
+      name: cat.name,
+      sortOrder: cat.sortOrder,
+      isActive: cat.isActive,
+      printerId: cat.printerId,
+    });
     setEditId(cat.id);
+  }
+
+  /** Kitchen-role printers for the dropdown, active first. */
+  function kitchenPrinterOptions(): PrinterResponse[] {
+    const options = printers
+      .filter((p) => p.role === 'kitchen')
+      .sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1));
+    // If the category is assigned to a printer that is inactive or no longer
+    // kitchen-role, keep it selectable so the edit form is not blank.
+    if (form.printerId != null && !options.some((p) => p.id === form.printerId)) {
+      const assigned = printers.find((p) => p.id === form.printerId);
+      if (assigned) options.push(assigned);
+    }
+    return options;
+  }
+
+  /** Secondary label shown under a category name in the list. */
+  function printerLabel(cat: CategoryResponse): string | null {
+    if (cat.printerId == null) return 'Default kitchen printer';
+    const printer = printers.find((p) => p.id === cat.printerId);
+    return printer ? printer.name : null;
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -40,9 +83,21 @@ export function CategoriesPage() {
     setError('');
     try {
       if (editId) {
-        await client.menu.updateCategory(editId, form);
+        // UpdateCategoryDto types printerId as optional number without null;
+        // sending null is what clears the routing, so cast the payload.
+        await client.menu.updateCategory(editId, {
+          name: form.name,
+          sortOrder: form.sortOrder,
+          isActive: form.isActive,
+          printerId: form.printerId,
+        } as UpdateCategoryDto);
       } else {
-        await client.menu.createCategory(form);
+        await client.menu.createCategory({
+          name: form.name,
+          sortOrder: form.sortOrder,
+          isActive: form.isActive,
+          ...(form.printerId != null ? { printerId: form.printerId } : {}),
+        });
       }
       resetForm();
       await loadData();
@@ -71,6 +126,24 @@ export function CategoriesPage() {
             required
           />
         </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Kitchen printer</label>
+          <select
+            data-testid="kitchen-printer-select"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+            value={form.printerId ?? ''}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, printerId: e.target.value ? Number(e.target.value) : null }))
+            }
+          >
+            <option value="">Default kitchen printer</option>
+            {kitchenPrinterOptions().map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex gap-2">
           <button
             type="submit"
@@ -91,20 +164,26 @@ export function CategoriesPage() {
       </form>
 
       <div className="space-y-1">
-        {categories.map((cat) => (
-          <div
-            key={cat.id}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
-          >
-            <span className="text-sm text-white">{cat.name}</span>
-            <button
-              onClick={() => editCat(cat)}
-              className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
+        {categories.map((cat) => {
+          const label = printerLabel(cat);
+          return (
+            <div
+              key={cat.id}
+              className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
             >
-              Edit
-            </button>
-          </div>
-        ))}
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-white">{cat.name}</span>
+                {label && <span className="text-xs text-gray-500 ml-2">{label}</span>}
+              </div>
+              <button
+                onClick={() => editCat(cat)}
+                className="touch-target text-xs text-brand-400 hover:text-brand-300 px-2 py-1"
+              >
+                Edit
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
