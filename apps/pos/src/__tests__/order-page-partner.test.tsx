@@ -642,10 +642,19 @@ describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 
       expect(screen.getByText('Partner: HungerStation')).toBeInTheDocument();
     });
 
-    const refInput = screen.getByPlaceholderText('App order #');
+    const refInput = screen.getByPlaceholderText('App order #') as HTMLInputElement;
+    // The draft is synced from the cart via an effect after hydration —
+    // wait for it instead of blurring while the draft is still '' (race under
+    // parallel test load would PATCH deliveryExternalRef: null).
+    await waitFor(() => {
+      expect(refInput.value).toBe('HS-OLD');
+    });
+
     fireEvent.focus(refInput);
     fireEvent.blur(refInput);
 
+    // The unchanged-ref guard in handleSaveExternalRef runs synchronously
+    // before any await, so the assertion right after blur is deterministic.
     expect(mockOrdersUpdatePartner).not.toHaveBeenCalled();
   });
 
