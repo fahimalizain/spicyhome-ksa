@@ -108,6 +108,14 @@ beforeAll(async () => {
     VALUES (1, 'T4', 0, 1, ${now}, ${now});
   `);
 
+  // Seed: delivery partner + its owned payment method (ADR 0007, 1:1 slug)
+  sqlite.exec(`
+    INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+    VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+    INSERT INTO payment_methods (id, title, zatca_payment_means_code, enabled, sort_order, created_at, updated_at)
+    VALUES ('hungerstation', 'HungerStation', '30', 1, 0, ${now}, ${now});
+  `);
+
   // Seed: settings
   sqlite.exec(`
     INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
@@ -569,6 +577,116 @@ describe('Print Integration', () => {
       expect(str).toContain('Zinger Burger');
       expect(str).toContain('TOTAL');
       expect(str).toContain('Thank you! Visit again.');
+    });
+  });
+
+  describe('delivery partner on prints (ADR 0007)', () => {
+    it('prints partner title + external ref on kitchen ticket and receipt', async () => {
+      // Create takeaway order
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      // Sync items (sync response carries the fresh updatedAt)
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const syncRes = await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      // Set the delivery partner + external ref
+      const patched = await request(app.getHttpServer())
+        .patch(`/orders/${orderId}/partner`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: syncRes.body.updatedAt,
+          deliveryPartnerId: 'hungerstation',
+          deliveryExternalRef: 'HS-883129',
+        })
+        .expect(200);
+      expect(patched.body.deliveryPartnerId).toBe('hungerstation');
+      expect(patched.body.deliveryPartnerTitle).toBe('HungerStation');
+      expect(patched.body.deliveryExternalRef).toBe('HS-883129');
+
+      // Kitchen: send-to-kitchen prints partner + ref
+      transport.sent = [];
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/send-to-kitchen`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      const kitchenStr = kitchenPrints[0].data.toString('ascii');
+      expect(kitchenStr).toContain('Delivery: HungerStation');
+      expect(kitchenStr).toContain('App order #: HS-883129');
+
+      // Receipt: pay through the partner's own method + submit (2 × 2300)
+      transport.sent = [];
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'hungerstation', amountHalalas: 4600 })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({})
+        .expect(201);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints.length).toBeGreaterThanOrEqual(1);
+      const receiptStr = receiptPrints[0].data.toString('ascii');
+      expect(receiptStr).toContain('Type: Takeaway');
+      expect(receiptStr).toContain('Delivery: HungerStation');
+      expect(receiptStr).toContain('App order #: HS-883129');
+    });
+
+    it('kitchen ticket omits partner lines for a walk-in takeaway', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+
+      transport.sent = [];
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/send-to-kitchen`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      const kitchenStr = kitchenPrints[0].data.toString('ascii');
+      expect(kitchenStr).not.toContain('Delivery:');
+      expect(kitchenStr).not.toContain('App order #:');
     });
   });
 

@@ -6,6 +6,10 @@ export interface KitchenTicketOptions {
   createdAt: number;
   orderType: 'dine_in' | 'takeaway';
   tableName?: string;
+  /** Delivery partner title (e.g. "HungerStation") — printed prominently when the order is linked to a delivery partner (ADR 0007). */
+  deliveryPartnerTitle?: string;
+  /** Delivery app's order number for reconciliation (e.g. "HS-883129") — printed when set (useful for packing). */
+  deliveryExternalRef?: string;
   items: KitchenTicketItem[];
 }
 
@@ -36,6 +40,19 @@ export class KitchenTicketBuilder {
     eb.doubleSize(false);
 
     eb.separator('=');
+
+    // Delivery partner (ADR 0007): bold title for kitchen hand-off + app
+    // order ref for packing, only when set.
+    if (opts.deliveryPartnerTitle) {
+      eb.align(Align.Left);
+      eb.bold(true);
+      eb.text(`Delivery: ${opts.deliveryPartnerTitle}`);
+      eb.bold(false);
+    }
+    if (opts.deliveryExternalRef) {
+      eb.align(Align.Left);
+      eb.text(`App order #: ${opts.deliveryExternalRef}`);
+    }
 
     // Order info
     eb.align(Align.Left);

@@ -38,6 +38,53 @@ describe('KitchenTicketBuilder', () => {
     expect(str).not.toContain('Table:');
   });
 
+  // ── Delivery partner (ADR 0007) ─────────────────────────────────────────────
+
+  it('renders Delivery title and App order # when partner and ref are set', () => {
+    const opts = {
+      ...baseOpts,
+      orderType: 'takeaway' as const,
+      tableName: undefined,
+      deliveryPartnerTitle: 'HungerStation',
+      deliveryExternalRef: 'HS-883129',
+    };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).toContain('Delivery: HungerStation');
+    expect(str).toContain('App order #: HS-883129');
+    // Prominent: bold on for the delivery line
+    const h = buf.toString('hex');
+    const boldOn = '1b4501';
+    const boldOff = '1b4500';
+    const idxBoldOn = h.indexOf(boldOn);
+    expect(idxBoldOn).not.toBe(-1);
+    // Bold segment wraps exactly the Delivery line
+    const asciiBefore = Buffer.from('Delivery: ', 'ascii').toString('hex');
+    expect(h.slice(idxBoldOn + boldOn.length)).toContain(asciiBefore);
+    expect(h.indexOf(boldOff)).toBeGreaterThan(idxBoldOn);
+  });
+
+  it('renders Delivery title but no App order # when ref is omitted', () => {
+    const opts = {
+      ...baseOpts,
+      orderType: 'takeaway' as const,
+      tableName: undefined,
+      deliveryPartnerTitle: 'Keeta',
+    };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).toContain('Delivery: Keeta');
+    expect(str).not.toContain('App order #:');
+  });
+
+  it('omits Delivery and App order # lines without a partner', () => {
+    const opts = { ...baseOpts, orderType: 'takeaway' as const, tableName: undefined };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).not.toContain('Delivery:');
+    expect(str).not.toContain('App order #:');
+  });
+
   it('renders time in Asia/Riyadh timezone', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');

@@ -29,6 +29,10 @@ export interface ReceiptOptions {
   // Order meta
   orderType: 'dine_in' | 'takeaway';
   tableName?: string;
+  /** Delivery partner title (e.g. "HungerStation") — printed when the order is linked to a delivery partner (ADR 0007). */
+  deliveryPartnerTitle?: string;
+  /** Delivery app's order number for reconciliation (e.g. "HS-883129") — printed when set. */
+  deliveryExternalRef?: string;
   // Lines
   items: ReceiptItem[];
   /** Line totals excluding VAT, integer halalas. */
@@ -138,6 +142,13 @@ export class ReceiptBuilder {
     let typeLine = `Type: ${typeLabel}`;
     if (opts.tableName) typeLine += `  Table: ${opts.tableName}`;
     eb.text(typeLine);
+    // Delivery partner (ADR 0007): title + app order ref, only when set.
+    if (opts.deliveryPartnerTitle) {
+      eb.text(`Delivery: ${opts.deliveryPartnerTitle}`);
+    }
+    if (opts.deliveryExternalRef) {
+      eb.text(`App order #: ${opts.deliveryExternalRef}`);
+    }
     if (opts.orderNo != null) {
       eb.text(`Order ref: #${opts.orderNo}`);
     }
