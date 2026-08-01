@@ -12,6 +12,7 @@ DEPS = [
     ":node_modules/react",
     ":node_modules/react-dom",
     ":node_modules/react-router-dom",
+    ":node_modules/react-simple-keyboard",
     ":node_modules/tailwindcss",
     ":node_modules/autoprefixer",
     ":node_modules/postcss",

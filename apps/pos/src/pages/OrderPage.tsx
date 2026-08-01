@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { AddPaymentModal } from '../components/orders/AddPaymentModal';
+import { OskDock } from '../components/on-screen-keyboard/OskDock';
 import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
 import {
@@ -1155,7 +1156,7 @@ export function OrderPage() {
   if (!dayOpen) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="bg-gray-800 rounded-xl p-8 w-96 text-center">
+        <div data-osk-scope className="bg-gray-800 rounded-xl p-8 w-[28rem] text-center">
           <h2 className="text-xl font-bold text-white mb-4">Open Business Day</h2>
           <p className="text-sm text-gray-400 mb-6">
             No business day is currently open. Enter the opening cash to start the day.
@@ -1164,14 +1165,19 @@ export function OrderPage() {
           <div className="mb-4">
             <label className="block text-sm text-gray-300 mb-2">Opening Cash (SAR)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
               value={openingCash}
               onChange={(e) => setOpeningCash(e.target.value)}
               placeholder="0.00"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl"
             />
           </div>
+
+          {/* Inline keyboard dock: the numpad portals in here while the
+              opening cash field is focused. Zero footprint otherwise. */}
+          <OskDock size="lg" className="mt-4" />
 
           {error && <div className="text-red-400 text-sm mb-4">{error}</div>}
 
