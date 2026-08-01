@@ -7,18 +7,23 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.SyncOrderItemsDto
 import com.spicyhome.client.models.SyncOrderItemDto
+import com.spicyhome.client.models.UpdateOrderMetaDto
 import retrofit2.Call
 
 class OrderRepository(private val ordersApi: OrdersApi) {
 
-    fun createOrder(type: String, tableId: Long?): Call<CreateOrderResponse> {
+    fun createOrder(type: String, tableId: Long?, notes: String? = null): Call<CreateOrderResponse> {
         val dto = if (tableId != null) {
             CreateOrderDto(
                 type = CreateOrderDto.Type.valueOf(type),
-                tableId = tableId
+                tableId = tableId,
+                notes = notes,
             )
         } else {
-            CreateOrderDto(type = CreateOrderDto.Type.valueOf(type))
+            CreateOrderDto(
+                type = CreateOrderDto.Type.valueOf(type),
+                notes = notes,
+            )
         }
         return ordersApi.ordersControllerCreateOrder(dto)
     }
@@ -41,5 +46,34 @@ class OrderRepository(private val ordersApi: OrdersApi) {
             items = items,
         )
         return ordersApi.ordersControllerSyncItems(orderId, dto)
+    }
+
+    /**
+     * PATCH /orders/:id — type/table/notes meta update on an open order.
+     * `notes` may be null to clear. Open orders only; stale `baseUpdatedAt`
+     * returns 409 (surfaced to the caller).
+     */
+    fun updateOrderMeta(
+        orderId: Long,
+        baseUpdatedAt: Long,
+        type: String,
+        tableId: Long?,
+        notes: String?,
+    ): Call<OrderResponse> {
+        val dto = if (tableId != null) {
+            UpdateOrderMetaDto(
+                baseUpdatedAt = baseUpdatedAt,
+                type = UpdateOrderMetaDto.Type.valueOf(type),
+                tableId = tableId,
+                notes = notes,
+            )
+        } else {
+            UpdateOrderMetaDto(
+                baseUpdatedAt = baseUpdatedAt,
+                type = UpdateOrderMetaDto.Type.valueOf(type),
+                notes = notes,
+            )
+        }
+        return ordersApi.ordersControllerUpdateOrderMeta(orderId, dto)
     }
 }

@@ -14,6 +14,16 @@ export class CreateOrderDto {
   @IsOptional()
   @IsInt()
   tableId?: number;
+
+  @ApiPropertyOptional({
+    type: String,
+    example: 'Call on arrival',
+    nullable: true,
+    description: 'Order-level notes ("Order notes"). An empty string is stored as null.',
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
 }
 
 export class AddOrderItemDto {

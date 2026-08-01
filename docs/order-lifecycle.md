@@ -162,13 +162,14 @@ Print events come in **enqueued/succeeded** pairs. The `_enqueued` event is writ
 
 #### Status Transition Events
 
-| Type            | Trigger                   | Payload                                                                                                                         |
-| --------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `created`       | `POST /orders`            | `{ type, tableId, orderNo, uuid, documentId }`                                                                                  |
-| `paid`          | `POST /orders/:id/submit` | `{ fromStatus: "open", toStatus: "paid", payments: [...], netPayments: [...] }`                                                 |
-| `voided`        | `POST /orders/:id/void`   | `{ fromStatus: "open", toStatus: "voided" }`                                                                                    |
-| `refund_issued` | `POST /orders/:id/refund` | `{ refundId, documentId, methodId, methodTitle, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
-| `refunded`      | Auto: when fully refunded | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                  |
+| Type            | Trigger                                                      | Payload                                                                                                                         |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `created`       | `POST /orders`                                               | `{ type, tableId, orderNo, uuid, documentId, notes? }`                                                                          |
+| `paid`          | `POST /orders/:id/submit`                                    | `{ fromStatus: "open", toStatus: "paid", payments: [...], netPayments: [...] }`                                                 |
+| `voided`        | `POST /orders/:id/void`                                      | `{ fromStatus: "open", toStatus: "voided" }`                                                                                    |
+| `refund_issued` | `POST /orders/:id/refund`                                    | `{ refundId, documentId, methodId, methodTitle, items: [{ orderItemId, itemName, qty, totalHalalas }], totalHalalas, reason? }` |
+| `refunded`      | Auto: when fully refunded                                    | `{ fromStatus: "paid", toStatus: "refunded" }`                                                                                  |
+| `notes_changed` | `PATCH /orders/:id` (order-level notes set / change / clear) | `{ fromNotes, toNotes }` (null = none; empty/whitespace normalizes to null)                                                     |
 
 #### Delivery Partner & Price Reset Events (ADR 0007)
 
@@ -525,13 +526,13 @@ floorPriceHalalas }`) event is written, and `order.updated` is emitted.
 | `GET /orders/:id`                                 | none           |     Yes      |      Yes       |
 | `GET /orders/:id/events`                          | none           |     Yes      |       No       |
 | `GET /orders/:id/events/verify`                   | none           |     Yes      |       No       |
-| `PUT /orders/:orderId/items/sync`                 | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                                  |
-| `PATCH /orders/:id`                               | `update_order` |   **Yes**    |     **No**     | Type/table change; `takeaway → dine_in` also clears partner and resets prices (ADR 0007) |
-| `PATCH /orders/:id/partner`                       | `update_order` |   **Yes**    |     **No**     | Set/change/clear delivery partner + external ref (ADR 0007)                              |
-| `PATCH /orders/:id/items/:orderItemId/unit-price` | `update_order` |   **Yes**    |     **No**     | Per-line partner price override, floored at the live catalog price (ADR 0007, Phase 7)   |
-| `POST /orders/:id/send-to-kitchen`                | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006)            |
-| `POST /orders/:id/payments`                       | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                             |
-| `POST /orders/:id/submit`                         | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                                         |
+| `PUT /orders/:orderId/items/sync`                 | `update_order` |     Yes      |      Yes       | Persist cart items; **never** kitchen-prints (ADR 0006)                                                                                                                                                                   |
+| `PATCH /orders/:id`                               | `update_order` |   **Yes**    |     **No**     | Type/table/order-notes change (`notes` optional; notes-only changes never kitchen-print — notes appear on the next send-to-kitchen/reprint ticket); `takeaway → dine_in` also clears partner and resets prices (ADR 0007) |
+| `PATCH /orders/:id/partner`                       | `update_order` |   **Yes**    |     **No**     | Set/change/clear delivery partner + external ref (ADR 0007)                                                                                                                                                               |
+| `PATCH /orders/:id/items/:orderItemId/unit-price` | `update_order` |   **Yes**    |     **No**     | Per-line partner price override, floored at the live catalog price (ADR 0007, Phase 7)                                                                                                                                    |
+| `POST /orders/:id/send-to-kitchen`                | `update_order` |   **Yes**    |     **No**     | Explicit differential kitchen print; 200 no-op when nothing unsent (ADR 0006)                                                                                                                                             |
+| `POST /orders/:id/payments`                       | `pay_order`    |   **Yes**    |     **No**     | Append one payment line (order stays `open`)                                                                                                                                                                              |
+| `POST /orders/:id/submit`                         | `pay_order`    |   **Yes**    |     **No**     | Finalize: `open → paid`, ZATCA invoice + receipt                                                                                                                                                                          |
 | `POST /orders/:id/refund`                         | `refund_order` |   **Yes**    |     **No**     |
 | `GET /orders/:id/refunds`                         | none           |     Yes      |       No       |
 | `POST /orders/:id/void`                           | `void_order`   |   **Yes**    |     **No**     |

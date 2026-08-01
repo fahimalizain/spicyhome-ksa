@@ -48,6 +48,7 @@ const mockOrder: OrderResponse = {
   deliveryPartnerId: null,
   deliveryPartnerTitle: null,
   deliveryExternalRef: null,
+  notes: null,
   createdAt: 1700000000,
   updatedAt: 1700000000,
   createdBy: null,

@@ -100,6 +100,7 @@ describe('ReportsService', () => {
         document_id TEXT NOT NULL DEFAULT '',
         delivery_partner_id TEXT,
         delivery_external_ref TEXT,
+        notes TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         created_by INTEGER REFERENCES users(id),

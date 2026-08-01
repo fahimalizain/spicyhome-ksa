@@ -8,6 +8,7 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.SyncOrderItemDto
 import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.UpdateOrderMetaDto
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -68,6 +69,84 @@ class OrderRepositoryTest {
                 dto.type == CreateOrderDto.Type.takeaway &&
                     dto.tableId == null
             })
+        }
+    }
+
+    @Test
+    fun `createOrder passes order notes`() {
+        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
+
+        repository.createOrder("takeaway", null, notes = "call on arrival")
+
+        verify {
+            ordersApi.ordersControllerCreateOrder(match { dto ->
+                dto.type == CreateOrderDto.Type.takeaway &&
+                    dto.notes == "call on arrival"
+            })
+        }
+    }
+
+    @Test
+    fun `createOrder without notes sends null`() {
+        every { ordersApi.ordersControllerCreateOrder(any()) } returns createCall
+
+        repository.createOrder("dine_in", 5, notes = null)
+
+        verify {
+            ordersApi.ordersControllerCreateOrder(match { dto ->
+                dto.type == CreateOrderDto.Type.dine_in &&
+                    dto.tableId == 5L &&
+                    dto.notes == null
+            })
+        }
+    }
+
+    @Test
+    fun `updateOrderMeta delegates type table and notes`() {
+        every { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) } returns getOrderCall
+
+        repository.updateOrderMeta(
+            orderId = 7,
+            baseUpdatedAt = 5000L,
+            type = "dine_in",
+            tableId = 3,
+            notes = "window seat",
+        )
+
+        verify {
+            ordersApi.ordersControllerUpdateOrderMeta(
+                7L,
+                match { dto ->
+                    dto.baseUpdatedAt == 5000L &&
+                        dto.type == UpdateOrderMetaDto.Type.dine_in &&
+                        dto.tableId == 3L &&
+                        dto.notes == "window seat"
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `updateOrderMeta with null table and null notes clears them`() {
+        every { ordersApi.ordersControllerUpdateOrderMeta(any(), any()) } returns getOrderCall
+
+        repository.updateOrderMeta(
+            orderId = 7,
+            baseUpdatedAt = 5000L,
+            type = "takeaway",
+            tableId = null,
+            notes = null,
+        )
+
+        verify {
+            ordersApi.ordersControllerUpdateOrderMeta(
+                7L,
+                match { dto ->
+                    dto.type == UpdateOrderMetaDto.Type.takeaway &&
+                        dto.tableId == null &&
+                        dto.notes == null
+                }
+            )
         }
     }
 

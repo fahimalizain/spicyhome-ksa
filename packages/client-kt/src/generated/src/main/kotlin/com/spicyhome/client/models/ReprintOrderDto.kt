@@ -22,26 +22,27 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param target Reprint target (receipt only; kitchen reprints are not supported)
+ * @param target Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip
  */
 
 
 data class ReprintOrderDto (
 
-    /* Reprint target (receipt only; kitchen reprints are not supported) */
+    /* Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip */
     @Json(name = "target")
     val target: ReprintOrderDto.Target
 
 ) {
 
     /**
-     * Reprint target (receipt only; kitchen reprints are not supported)
+     * Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip
      *
-     * Values: receipt
+     * Values: receipt,open_receipt
      */
     @JsonClass(generateAdapter = false)
     enum class Target(val value: kotlin.String) {
-        @Json(name = "receipt") receipt("receipt");
+        @Json(name = "receipt") receipt("receipt"),
+        @Json(name = "open_receipt") open_receipt("open_receipt");
     }
 
 }

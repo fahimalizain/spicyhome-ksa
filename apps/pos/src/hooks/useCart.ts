@@ -22,6 +22,12 @@ export interface CartState {
   deliveryPartnerTitle: string | null;
   /** Delivery app's order number for reconciliation (only with a partner). */
   deliveryExternalRef: string | null;
+  /**
+   * Order-level notes ("Order notes"). Pre-create: staged locally and sent
+   * with the create DTO. Open order: hydrated from `order.notes`; saved via
+   * immediate PATCH /orders/:id (NOT part of the item dirty comparison).
+   */
+  orderNotes: string;
   /** Server snapshot items (null = no order loaded yet). */
   snapshotItems: CartItem[] | null;
   /** Server updatedAt when last hydrated. */
@@ -34,6 +40,8 @@ type CartAction =
   | { type: 'UPDATE_QTY'; itemId: number; qty: number }
   | { type: 'UPDATE_NOTES'; itemId: number; notes: string }
   | { type: 'SET_ORDER_TYPE'; orderType: 'dine_in' | 'takeaway'; tableId: number | null }
+  /** Stage order-level notes (pre-create only; open orders PATCH immediately). */
+  | { type: 'SET_ORDER_NOTES'; notes: string }
   /**
    * ADR 0007: set/clear the delivery partner staging (pre-create only).
    * Fields may be omitted to keep the current value.
@@ -53,6 +61,7 @@ type CartAction =
       deliveryPartnerId: string | null;
       deliveryPartnerTitle: string | null;
       deliveryExternalRef: string | null;
+      orderNotes: string;
       snapshotUpdatedAt: number;
     }
   | { type: 'MARK_CLEAN' };
@@ -164,6 +173,11 @@ function cartReducer(state: CartState, action: CartAction): CartState {
           ? { deliveryExternalRef: action.deliveryExternalRef }
           : {}),
       };
+    case 'SET_ORDER_NOTES':
+      return {
+        ...state,
+        orderNotes: action.notes,
+      };
     case 'CLEAR':
       return {
         ...state,
@@ -173,6 +187,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         deliveryPartnerId: null,
         deliveryPartnerTitle: null,
         deliveryExternalRef: null,
+        orderNotes: '',
       };
     case 'LOAD_ORDER':
       return {
@@ -183,6 +198,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         deliveryPartnerId: action.deliveryPartnerId,
         deliveryPartnerTitle: action.deliveryPartnerTitle,
         deliveryExternalRef: action.deliveryExternalRef,
+        orderNotes: action.orderNotes,
         snapshotItems: action.items,
         snapshotUpdatedAt: action.snapshotUpdatedAt,
       };
@@ -226,6 +242,7 @@ const initialCart: CartState = {
   deliveryPartnerId: null,
   deliveryPartnerTitle: null,
   deliveryExternalRef: null,
+  orderNotes: '',
   snapshotItems: null,
   snapshotUpdatedAt: null,
 };
@@ -288,6 +305,11 @@ export function useCart() {
     dispatch({ type: 'SET_DELIVERY_PARTNER', deliveryExternalRef });
   }, []);
 
+  /** Stage order-level notes (pre-create cart). Open orders PATCH immediately. */
+  const setOrderNotes = useCallback((notes: string) => {
+    dispatch({ type: 'SET_ORDER_NOTES', notes });
+  }, []);
+
   const clear = useCallback(() => {
     dispatch({ type: 'CLEAR' });
   }, []);
@@ -310,6 +332,7 @@ export function useCart() {
       deliveryPartnerId: order.deliveryPartnerId ?? null,
       deliveryPartnerTitle: order.deliveryPartnerTitle ?? null,
       deliveryExternalRef: order.deliveryExternalRef ?? null,
+      orderNotes: order.notes ?? '',
       snapshotUpdatedAt: order.updatedAt,
     });
   }, []);
@@ -326,6 +349,7 @@ export function useCart() {
     deliveryPartnerId: state.deliveryPartnerId,
     deliveryPartnerTitle: state.deliveryPartnerTitle,
     deliveryExternalRef: state.deliveryExternalRef,
+    orderNotes: state.orderNotes,
     totals,
     isDirty,
     /** Last known server updatedAt, or null if no order is loaded. */
@@ -337,6 +361,7 @@ export function useCart() {
     setOrderType,
     setDeliveryPartner,
     setDeliveryExternalRef,
+    setOrderNotes,
     clear,
     loadOrder,
     /** Reset isDirty by accepting the current cart as new snapshot. */
@@ -354,6 +379,7 @@ export function useCart() {
           deliveryPartnerId: state.deliveryPartnerId,
           deliveryPartnerTitle: state.deliveryPartnerTitle,
           deliveryExternalRef: state.deliveryExternalRef,
+          orderNotes: state.orderNotes,
           snapshotUpdatedAt: state.snapshotUpdatedAt ?? 0,
         });
       }

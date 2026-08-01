@@ -154,6 +154,9 @@ export const orders = sqliteTable(
     // The delivery app's order number for reconciliation (e.g. HungerStation
     // order ID). Free text, only meaningful alongside deliveryPartnerId.
     deliveryExternalRef: text('delivery_external_ref'),
+    // Order-level notes ("Order notes" / "Remarks"). Free text, nullable —
+    // same semantics as order_items.notes.
+    notes: text('notes'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     createdBy: integer('created_by').references(() => users.id),

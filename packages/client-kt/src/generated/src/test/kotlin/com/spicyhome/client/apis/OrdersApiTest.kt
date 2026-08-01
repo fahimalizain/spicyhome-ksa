@@ -34,7 +34,9 @@ import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SubmitOrderDto
 import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.UpdateOrderItemUnitPriceDto
 import com.spicyhome.client.models.UpdateOrderMetaDto
+import com.spicyhome.client.models.UpdateOrderPartnerDto
 import com.spicyhome.client.models.ZatcaInvoiceReissueDto
 import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
 import com.spicyhome.client.models.ZatcaReissueResultDto
@@ -199,12 +201,31 @@ class OrdersApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test ordersControllerUpdateOrderItemUnitPrice
+        should("test ordersControllerUpdateOrderItemUnitPrice") {
+            // uncomment below to test ordersControllerUpdateOrderItemUnitPrice
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val orderItemId : kotlin.Long = 789 // kotlin.Long | order_items.id — the LINE id, not the catalog item id
+            //val updateOrderItemUnitPriceDto : UpdateOrderItemUnitPriceDto =  // UpdateOrderItemUnitPriceDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerUpdateOrderItemUnitPrice(id, orderItemId, updateOrderItemUnitPriceDto)
+            //result shouldBe ("TODO")
+        }
+
         // to test ordersControllerUpdateOrderMeta
         should("test ordersControllerUpdateOrderMeta") {
             // uncomment below to test ordersControllerUpdateOrderMeta
             //val id : kotlin.Long = 789 // kotlin.Long | 
             //val updateOrderMetaDto : UpdateOrderMetaDto =  // UpdateOrderMetaDto | 
             //val result : OrderResponse = apiInstance.ordersControllerUpdateOrderMeta(id, updateOrderMetaDto)
+            //result shouldBe ("TODO")
+        }
+
+        // to test ordersControllerUpdateOrderPartner
+        should("test ordersControllerUpdateOrderPartner") {
+            // uncomment below to test ordersControllerUpdateOrderPartner
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val updateOrderPartnerDto : UpdateOrderPartnerDto =  // UpdateOrderPartnerDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerUpdateOrderPartner(id, updateOrderPartnerDto)
             //result shouldBe ("TODO")
         }
 

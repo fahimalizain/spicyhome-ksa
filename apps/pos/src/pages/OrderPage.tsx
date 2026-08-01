@@ -121,6 +121,12 @@ export function OrderPage() {
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
   const [showPartnerPriceModal, setShowPartnerPriceModal] = useState(false);
   const [externalRefDraft, setExternalRefDraft] = useState('');
+  // Order notes (order-level) draft — synced with the cart, saved on blur/Enter
+  const [orderNotesDraft, setOrderNotesDraft] = useState('');
+
+  // Item-level notes editor modal (cart rows)
+  const [notesEditItem, setNotesEditItem] = useState<CartItem | null>(null);
+  const [notesEditText, setNotesEditText] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderResponse | null>(null);
   const [refundLoading, setRefundLoading] = useState(false);
@@ -262,6 +268,12 @@ export function OrderPage() {
   useEffect(() => {
     setExternalRefDraft(cart.deliveryExternalRef ?? '');
   }, [cart.deliveryExternalRef]);
+
+  // Keep the order-notes draft in sync with the cart (hydration / new order).
+  // The PATCH only fires on blur/Enter, never per keystroke.
+  useEffect(() => {
+    setOrderNotesDraft(cart.orderNotes);
+  }, [cart.orderNotes]);
 
   // Refresh open orders whenever the table picker opens so occupancy is fresh
   useEffect(() => {
@@ -427,6 +439,7 @@ export function OrderPage() {
     setShowPartnerPicker(false);
     setShowPartnerPriceModal(false);
     setExternalRefDraft('');
+    setOrderNotesDraft('');
     setShowRefundModal(false);
     setRefundOrder(null);
     setItemSearch('');
@@ -463,6 +476,7 @@ export function OrderPage() {
       const res = await client.orders.create({
         type: cart.orderType,
         tableId: cart.orderType === 'dine_in' ? cart.tableId || undefined : undefined,
+        notes: cart.orderNotes.trim() ? cart.orderNotes : undefined,
       });
       createdId = res.id;
       setCurrentOrder({ id: res.id, status: 'open', documentId: res.documentId });
@@ -478,7 +492,9 @@ export function OrderPage() {
           items: cart.items.map((item) => ({
             itemId: item.itemId,
             qty: item.qty,
-            notes: item.notes || undefined,
+            // Send '' (not undefined) for blank notes — undefined is omitted
+            // by JSON.stringify and the server would keep the current notes.
+            notes: item.notes,
           })),
         });
 
@@ -538,7 +554,9 @@ export function OrderPage() {
             ? { orderItemId: item.orderItemId }
             : { itemId: item.itemId }),
           qty: item.qty,
-          notes: item.notes || undefined,
+          // Send '' (not undefined) for blank notes — undefined is omitted
+          // by JSON.stringify and the server would keep the current notes.
+          notes: item.notes,
         })),
       });
       hydrateOrder(syncRes);
@@ -708,6 +726,20 @@ export function OrderPage() {
 
   function handleRemove(cartItem: CartItem) {
     cart.removeItem(cartItem.itemId);
+  }
+
+  // ── Item notes (cart rows) ──
+
+  function handleOpenNotesEditor(cartItem: CartItem) {
+    setNotesEditItem(cartItem);
+    setNotesEditText(cartItem.notes);
+  }
+
+  function handleSaveNotesEditor() {
+    if (notesEditItem) {
+      cart.updateNotes(notesEditItem.itemId, notesEditText);
+    }
+    setNotesEditItem(null);
   }
 
   // ── Type / Table change (#109) ──
@@ -902,6 +934,52 @@ export function OrderPage() {
         }
       }
       setError(e.message || 'Failed to save external ref');
+    } finally {
+      setMetaUpdating(false);
+    }
+  }
+
+  /**
+   * Save the order-notes draft. Explicit save on blur/Enter only — never per
+   * keystroke, so the PATCH is not spammed. Open orders PATCH meta with the
+   * current type/table + notes (notes-only change: no kitchen auto-print).
+   * Pre-create carts stage locally and send notes with the create DTO.
+   */
+  async function handleSaveOrderNotes(): Promise<void> {
+    const notes = orderNotesDraft.trim();
+    if (notes === cart.orderNotes.trim()) return; // unchanged → no PATCH
+
+    if (!currentOrder) {
+      cart.setOrderNotes(notes);
+      return;
+    }
+    if (currentOrder.status !== 'open' || cart.serverUpdatedAt == null) return;
+
+    setMetaUpdating(true);
+    setError('');
+    try {
+      const res = await client.orders.update(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        type: cart.orderType,
+        ...(cart.tableId != null ? { tableId: cart.tableId } : {}),
+        notes: notes || null,
+      });
+      hydrateOrder(res);
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        try {
+          const order = await client.orders.get(currentOrder.id);
+          if (order.status !== 'open') {
+            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+          } else if (!cart.isDirty) {
+            hydrateOrder(order);
+            loadOpenOrders();
+          }
+        } catch {
+          // Ignore refetch errors — the error message below is the source of truth
+        }
+      }
+      setError(e.message || 'Failed to save order notes');
     } finally {
       setMetaUpdating(false);
     }
@@ -1318,6 +1396,23 @@ export function OrderPage() {
               {cart.deliveryExternalRef ? ` · Ref ${cart.deliveryExternalRef}` : ''}
             </div>
           )}
+          {/* Order notes (order-level remarks) — staged pre-create, PATCHed on
+              blur/Enter for open orders. Disabled while busy / readonly / dirty
+              (same gate as the external-ref field). */}
+          <input
+            type="text"
+            value={orderNotesDraft}
+            onChange={(e) => setOrderNotesDraft(e.target.value)}
+            onBlur={() => void handleSaveOrderNotes()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            disabled={!canEditTypeTable}
+            placeholder="Order notes"
+            className="w-full mt-2 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+          />
         </div>
 
         {/* Tabs — pinned, only for existing orders (pre-create stays Items-only) */}
@@ -1363,6 +1458,9 @@ export function OrderPage() {
                           {halalasToSar(item.unitPriceHalalas * item.qty)}
                         </span>
                       </div>
+                      {item.notes && (
+                        <span className="text-xs text-gray-400 block">{item.notes}</span>
+                      )}
                       {!orderReadonly && !permissionsReadonly && (
                         <div className="flex items-center gap-1 mt-1">
                           <button
@@ -1379,6 +1477,15 @@ export function OrderPage() {
                             className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
                           >
                             +
+                          </button>
+                          {/* Item notes editor — touch-friendly pencil */}
+                          <button
+                            onClick={() => handleOpenNotesEditor(item)}
+                            disabled={cartDisabled}
+                            title={item.notes ? 'Edit notes' : 'Add notes'}
+                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs text-gray-300"
+                          >
+                            ✎
                           </button>
                           {(currentOrder ? permissions.deleteOrderItem : true) && (
                             <button
@@ -1830,6 +1937,44 @@ export function OrderPage() {
                 }}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Item notes editor modal (cart rows) */}
+      {notesEditItem && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setNotesEditItem(null)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-4 w-96 max-w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-white mb-1">{notesEditItem.name}</h3>
+            <p className="text-xs text-gray-500 mb-3">Item notes (printed on the kitchen ticket)</p>
+            <textarea
+              value={notesEditText}
+              onChange={(e) => setNotesEditText(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="e.g. no onion"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 resize-none"
+            />
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={handleSaveNotesEditor}
+                className="flex-1 touch-target bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white py-2.5"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setNotesEditItem(null)}
+                className="flex-1 touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-2.5"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

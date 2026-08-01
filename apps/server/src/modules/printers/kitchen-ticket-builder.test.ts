@@ -93,6 +93,52 @@ describe('KitchenTicketBuilder', () => {
     expect(str).toMatch(/Time: \d{2}:\d{2}/);
   });
 
+  // ── Order notes ──────────────────────────────────────────────────────────────
+
+  it('renders order notes prominently (bold) when set', () => {
+    const opts = { ...baseOpts, orderNotes: 'Call on arrival' };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).toContain('NOTES: Call on arrival');
+
+    // Prominent: bold on before the NOTES line, bold off after
+    const h = buf.toString('hex');
+    const boldOn = '1b4501';
+    const boldOff = '1b4500';
+    const idxBoldOn = h.indexOf(boldOn);
+    expect(idxBoldOn).not.toBe(-1);
+    const notesAscii = Buffer.from('NOTES: ', 'ascii').toString('hex');
+    expect(h.slice(idxBoldOn + boldOn.length)).toContain(notesAscii);
+    expect(h.indexOf(boldOff)).toBeGreaterThan(idxBoldOn);
+  });
+
+  it('omits NOTES line when orderNotes is null', () => {
+    const opts = { ...baseOpts, orderNotes: null };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).not.toContain('NOTES:');
+  });
+
+  it('omits NOTES line when orderNotes is empty/undefined', () => {
+    const opts = { ...baseOpts, orderNotes: '' };
+    const buf = builder.build(opts);
+    expect(buf.toString('ascii')).not.toContain('NOTES:');
+
+    const opts2 = { ...baseOpts };
+    expect(builder.build(opts2).toString('ascii')).not.toContain('NOTES:');
+  });
+
+  it('truncates long order notes to paper width', () => {
+    const longNotes = 'N'.repeat(100);
+    const opts = { ...baseOpts, orderNotes: longNotes };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    // Full notes must not appear; the truncated prefix does
+    expect(str).not.toContain(longNotes);
+    const text = str.replace(/[\x00-\x1f\x7f-\xff]/g, '');
+    expect(text).toContain('NOTES: ' + 'N'.repeat(35)); // 42 - len("NOTES: ")
+  });
+
   it('renders items with big qty and name', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');

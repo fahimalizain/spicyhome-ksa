@@ -69,6 +69,14 @@ export class OrderSummaryResponse {
   })
   documentId!: string;
 
+  @ApiProperty({
+    type: String,
+    example: 'Call on arrival',
+    nullable: true,
+    description: 'Order-level notes ("Order notes"). Null when none are set.',
+  })
+  notes!: string | null;
+
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 

@@ -21,7 +21,9 @@ import com.spicyhome.client.models.ReprintOrderDto
 import com.spicyhome.client.models.StatusResponse
 import com.spicyhome.client.models.SubmitOrderDto
 import com.spicyhome.client.models.SyncOrderItemsDto
+import com.spicyhome.client.models.UpdateOrderItemUnitPriceDto
 import com.spicyhome.client.models.UpdateOrderMetaDto
+import com.spicyhome.client.models.UpdateOrderPartnerDto
 import com.spicyhome.client.models.ZatcaInvoiceReissueDto
 import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
 import com.spicyhome.client.models.ZatcaReissueResultDto
@@ -273,6 +275,21 @@ interface OrdersApi {
     fun ordersControllerSyncItems(@Path("orderId") orderId: kotlin.Long, @Body syncOrderItemsDto: SyncOrderItemsDto): Call<OrderResponse>
 
     /**
+     * PATCH orders/{id}/items/{orderItemId}/unit-price
+     * Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007
+     * 
+     * Responses:
+     *  - 200: Updated order with items and events
+     *
+     * @param id 
+     * @param orderItemId order_items.id — the LINE id, not the catalog item id
+     * @param updateOrderItemUnitPriceDto 
+     * @return [Call]<[OrderResponse]>
+     */
+    @PATCH("orders/{id}/items/{orderItemId}/unit-price")
+    fun ordersControllerUpdateOrderItemUnitPrice(@Path("id") id: kotlin.Long, @Path("orderItemId") orderItemId: kotlin.Long, @Body updateOrderItemUnitPriceDto: UpdateOrderItemUnitPriceDto): Call<OrderResponse>
+
+    /**
      * PATCH orders/{id}
      * Update open order type and/or table
      * 
@@ -285,6 +302,20 @@ interface OrdersApi {
      */
     @PATCH("orders/{id}")
     fun ordersControllerUpdateOrderMeta(@Path("id") id: kotlin.Long, @Body updateOrderMetaDto: UpdateOrderMetaDto): Call<OrderResponse>
+
+    /**
+     * PATCH orders/{id}/partner
+     * Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007)
+     * 
+     * Responses:
+     *  - 200: Updated order with items and events
+     *
+     * @param id 
+     * @param updateOrderPartnerDto 
+     * @return [Call]<[OrderResponse]>
+     */
+    @PATCH("orders/{id}/partner")
+    fun ordersControllerUpdateOrderPartner(@Path("id") id: kotlin.Long, @Body updateOrderPartnerDto: UpdateOrderPartnerDto): Call<OrderResponse>
 
     /**
      * GET orders/{id}/events/verify

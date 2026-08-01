@@ -716,6 +716,133 @@ describe('Print Integration', () => {
     });
   });
 
+  describe('order notes on prints', () => {
+    it('kitchen ticket prints order notes when set at create time', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway', notes: 'call on arrival' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      expect(getRes.body.notes).toBe('call on arrival');
+
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      transport.sent = [];
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/send-to-kitchen`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      const kitchenStr = kitchenPrints[0].data.toString('ascii');
+      expect(kitchenStr).toContain('NOTES: call on arrival');
+      // Item notes still flow on the same ticket
+      expect(kitchenStr).toContain('2 Zinger Burger');
+    });
+
+    it('notes-only meta PATCH does not enqueue kitchen prints; notes appear on next send-to-kitchen', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      // Clear the transport log, then PATCH notes only (same type/table)
+      transport.sent = [];
+      const refreshed = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const patched = await request(app.getHttpServer())
+        .patch(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: refreshed.body.updatedAt,
+          type: 'takeaway',
+          notes: 'extra napkins',
+        })
+        .expect(200);
+      expect(patched.body.notes).toBe('extra napkins');
+
+      // Notes-only change must NOT print anything
+      await new Promise((r) => setTimeout(r, 200));
+      expect(transport.sent).toHaveLength(0);
+
+      // The notes ride along on the next explicit send-to-kitchen
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/send-to-kitchen`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      expect(kitchenPrints[0].data.toString('ascii')).toContain('NOTES: extra napkins');
+    });
+
+    it('kitchen ticket omits NOTES line when order has no notes', async () => {
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'takeaway' })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 1 }],
+        })
+        .expect(200);
+
+      transport.sent = [];
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/send-to-kitchen`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
+      expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
+      expect(kitchenPrints[0].data.toString('ascii')).not.toContain('NOTES:');
+    });
+  });
+
   describe('reprint endpoint', () => {
     it('POST /orders/:id/print reprints a receipt', async () => {
       const orderRes = await request(app.getHttpServer())

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
@@ -34,54 +34,66 @@ export function OrdersPage() {
   const [previousDocumentIds, setPreviousDocumentIds] = useState<string[]>([]);
   const navigate = useNavigate();
 
+  // Current selected order id, kept in a ref so realtime handlers (registered
+  // once) always refresh the order the user is currently viewing.
+  const selectedOrderIdRef = useRef<number | null>(null);
+  selectedOrderIdRef.current = selectedOrder?.id ?? null;
+
   useEffect(() => {
     loadOrders();
   }, []);
 
+  /**
+   * Background refresh used by realtime events: refreshes the list WITHOUT
+   * flipping the full-page loading spinner, and refetches the selected order
+   * detail (notes/items/payments) plus refunds and events when one is open.
+   */
+  const refreshAll = useCallback(async () => {
+    try {
+      const res = await client.orders.list();
+      setOrders(res);
+    } catch {
+      setError('Failed to load orders');
+    }
+    const id = selectedOrderIdRef.current;
+    if (id != null) {
+      try {
+        const [order, refundsResult, events] = await Promise.all([
+          client.orders.get(id),
+          client.orders.getRefunds(id),
+          client.orders.getEvents(id),
+        ]);
+        // Only apply if the user is still viewing the same order.
+        if (selectedOrderIdRef.current === id) {
+          setSelectedOrder(order);
+          setRefunds(refundsResult);
+          setPreviousDocumentIds(getPreviousInvoiceDocumentIds(events, order.documentId));
+        }
+      } catch {
+        // Keep current detail on failure
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const unsubs: (() => void)[] = [];
-    const refresh = () => {
-      loadOrders();
-    };
-    unsubs.push(realtime.subscribe('order.created', refresh));
-    unsubs.push(realtime.subscribe('order.paid', refresh));
-    unsubs.push(realtime.subscribe('order.voided', refresh));
-    unsubs.push(realtime.subscribe('order.refund.issued', refresh));
-    unsubs.push(realtime.subscribe('order.refunded', refresh));
-    unsubs.push(realtime.subscribe('order.updated', refresh));
-    unsubs.push(realtime.subscribe('order.item.added', refresh));
-    unsubs.push(realtime.subscribe('order.item.updated', refresh));
-    unsubs.push(realtime.subscribe('order.item.removed', refresh));
-    realtime.onReconnect(refresh);
+    unsubs.push(realtime.subscribe('order.created', refreshAll));
+    unsubs.push(realtime.subscribe('order.paid', refreshAll));
+    unsubs.push(realtime.subscribe('order.voided', refreshAll));
+    unsubs.push(realtime.subscribe('order.refund.issued', refreshAll));
+    unsubs.push(realtime.subscribe('order.refunded', refreshAll));
+    unsubs.push(realtime.subscribe('order.updated', refreshAll));
+    unsubs.push(realtime.subscribe('order.item.added', refreshAll));
+    unsubs.push(realtime.subscribe('order.item.updated', refreshAll));
+    unsubs.push(realtime.subscribe('order.item.removed', refreshAll));
+    realtime.onReconnect(refreshAll);
     return () => {
       for (const unsub of unsubs) unsub();
       realtime.offReconnect();
     };
-  }, []);
+  }, [refreshAll]);
 
-  // WS: refresh order detail and refunds when a refund event fires for this order
-  useEffect(() => {
-    if (!selectedOrder) return;
-    const unsubs: (() => void)[] = [];
-    const refresh = async () => {
-      try {
-        const [orderResult, refundsResult] = await Promise.all([
-          client.orders.get(selectedOrder.id),
-          client.orders.getRefunds(selectedOrder.id),
-        ]);
-        setSelectedOrder(orderResult);
-        setRefunds(refundsResult);
-      } catch {
-        // ignore — keep current state
-      }
-    };
-    unsubs.push(realtime.subscribe('order.refund.issued', refresh));
-    unsubs.push(realtime.subscribe('order.refunded', refresh));
-    return () => {
-      for (const unsub of unsubs) unsub();
-    };
-  }, [selectedOrder?.id]);
-
+  /** Initial load only — shows the full-page spinner. */
   async function loadOrders() {
     setLoading(true);
     try {
@@ -191,6 +203,12 @@ export function OrdersPage() {
               <p>{selectedOrder.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</p>
               <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
             </div>
+            {selectedOrder.notes && (
+              <p className="text-xs text-gray-400 mt-1">
+                <span className="text-gray-500">Notes:</span>{' '}
+                {selectedOrder.notes as unknown as string}
+              </p>
+            )}
             {previousDocumentIds.length > 0 && (
               <p className="text-xs text-gray-500 mt-1">
                 Previous: {previousDocumentIds.join(', ')}
@@ -342,19 +360,10 @@ export function OrdersPage() {
             <RefundPanel
               order={selectedOrder}
               onClose={() => setShowRefund(false)}
-              onRefunded={async () => {
+              onRefunded={() => {
                 setShowRefund(false);
-                try {
-                  const [updated, refundsResult] = await Promise.all([
-                    client.orders.get(selectedOrder.id),
-                    client.orders.getRefunds(selectedOrder.id),
-                  ]);
-                  setSelectedOrder(updated);
-                  setRefunds(refundsResult);
-                  loadOrders();
-                } catch {
-                  // Refetch failed, keep current state
-                }
+                // Silent refresh: no full-page loading flash, detail refetched too
+                refreshAll();
               }}
             />
           </div>

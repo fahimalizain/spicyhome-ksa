@@ -283,7 +283,8 @@ describe('OrderPage — create order with sync', () => {
         10,
         expect.objectContaining({
           baseUpdatedAt: 5000,
-          items: [{ itemId: 1, qty: 1 }],
+          // Blank notes are sent as "" (not omitted) so the server can clear
+          items: [{ itemId: 1, qty: 1, notes: '' }],
         }),
       );
     });
@@ -346,7 +347,8 @@ describe('OrderPage — create order with sync', () => {
       expect(mockOrdersSyncItems).toHaveBeenCalledWith(
         20,
         expect.objectContaining({
-          items: [{ itemId: 1, qty: 1 }],
+          // Blank notes are sent as "" (not omitted) so the server can clear
+          items: [{ itemId: 1, qty: 1, notes: '' }],
         }),
       );
     });

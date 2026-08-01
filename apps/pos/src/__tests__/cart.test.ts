@@ -44,6 +44,7 @@ function makeOrderResponse(overrides: Partial<OrderResponse> = {}): OrderRespons
     deliveryPartnerId: null,
     deliveryPartnerTitle: null,
     deliveryExternalRef: null,
+    notes: null,
     createdAt: 1000,
     updatedAt: 1000,
     createdBy: null,
@@ -313,6 +314,61 @@ describe('useCart', () => {
     expect(result.current.deliveryPartnerId).toBeNull();
     expect(result.current.deliveryPartnerTitle).toBeNull();
     expect(result.current.deliveryExternalRef).toBeNull();
+  });
+
+  // ---- Order-level notes ----
+
+  it('starts with empty order notes', () => {
+    const { result } = renderHook(() => useCart());
+    expect(result.current.orderNotes).toBe('');
+  });
+
+  it('setOrderNotes stages order notes on a pre-create cart', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setOrderNotes('Call on arrival');
+    });
+    expect(result.current.orderNotes).toBe('Call on arrival');
+    // Order notes are NOT part of the item dirty comparison
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it('loadOrder hydrates order notes from the order', () => {
+    const { result } = renderHook(() => useCart());
+    const order = makeOrderResponse({
+      type: 'takeaway',
+      tableId: null,
+      notes: 'Keep it hot',
+      items: [makeOrderItem({ id: 101, itemId: 1, qty: 1 })],
+    });
+
+    act(() => {
+      result.current.loadOrder(order);
+    });
+
+    expect(result.current.orderNotes).toBe('Keep it hot');
+  });
+
+  it('loadOrder without notes hydrates empty string', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setOrderNotes('stale staged value');
+    });
+    act(() => {
+      result.current.loadOrder(makeOrderResponse({ type: 'takeaway', tableId: null, notes: null }));
+    });
+    expect(result.current.orderNotes).toBe('');
+  });
+
+  it('clear resets order notes', () => {
+    const { result } = renderHook(() => useCart());
+    act(() => {
+      result.current.setOrderNotes('Call on arrival');
+    });
+    act(() => {
+      result.current.clear();
+    });
+    expect(result.current.orderNotes).toBe('');
   });
 
   it('switching to takeaway keeps the staged partner (no auto-set)', () => {

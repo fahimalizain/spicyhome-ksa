@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 11 rows after apply', () => {
+    it('__drizzle_migrations has exactly 12 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(11);
+      expect(rows.cnt).toBe(12);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(11);
+      expect(after).toBe(12);
 
       sqlite.close();
     });
@@ -307,6 +307,41 @@ describe('schema — invariants', () => {
       expect(extRef).toBeDefined();
       expect(extRef.type.toLowerCase()).toBe('text');
       expect(extRef.notnull).toBe(0);
+    });
+
+    it('orders has notes column (nullable, like order_items.notes)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(orders)').all() as any[];
+      const col = info.find((c: any) => c.name === 'notes') as any;
+      expect(col).toBeDefined();
+      expect(col.type.toLowerCase()).toBe('text');
+      expect(col.notnull).toBe(0);
+    });
+
+    it('orders.notes round-trips: null default, set and clear via update', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // Insert without notes → NULL
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (803, 'uuid-notes-null', 'dine_in', ${doId}, 'open', ${now}, ${now})
+      `);
+      let row = sqlite.prepare('SELECT notes FROM orders WHERE order_no = 803').get() as any;
+      expect(row.notes).toBeNull();
+
+      // Set notes
+      sqlite.exec(`
+        UPDATE orders SET notes = 'call on arrival' WHERE order_no = 803
+      `);
+      row = sqlite.prepare('SELECT notes FROM orders WHERE order_no = 803').get() as any;
+      expect(row.notes).toBe('call on arrival');
+
+      // Clear notes back to NULL
+      sqlite.exec(`
+        UPDATE orders SET notes = NULL WHERE order_no = 803
+      `);
+      row = sqlite.prepare('SELECT notes FROM orders WHERE order_no = 803').get() as any;
+      expect(row.notes).toBeNull();
     });
 
     it('idx_orders_delivery_partner index exists on orders(delivery_partner_id)', () => {

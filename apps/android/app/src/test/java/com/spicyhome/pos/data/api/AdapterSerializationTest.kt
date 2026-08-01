@@ -9,6 +9,7 @@ import com.spicyhome.client.models.CreateOrderResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.SyncOrderItemDto
+import com.spicyhome.client.models.UpdateOrderMetaDto
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
@@ -182,6 +183,46 @@ class AdapterSerializationTest {
         )
         val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(dto)
         // KotlinJsonAdapterFactory omits fields that equal their default value (null).
+        // IMPORTANT: this means clients must send "" (not null) to CLEAR notes —
+        // an omitted field keeps the server's current value.
+        assertThat(json).doesNotContain("notes")
+    }
+
+    @Test
+    fun `SyncOrderItemDto empty string notes is serialized as empty string`() {
+        val dto = SyncOrderItemDto(
+            itemId = 1L,
+            qty = 1,
+            notes = ""
+        )
+        val json = moshi.adapter(SyncOrderItemDto::class.java).toJson(dto)
+        // "" is not the default (null) so it IS emitted — the server treats it
+        // as "clear the notes".
+        assertThat(json).contains("\"notes\":\"\"")
+    }
+
+    @Test
+    fun `UpdateOrderMetaDto empty string notes is serialized as empty string`() {
+        val dto = UpdateOrderMetaDto(
+            baseUpdatedAt = 5000L,
+            type = UpdateOrderMetaDto.Type.dine_in,
+            notes = ""
+        )
+        val json = moshi.adapter(UpdateOrderMetaDto::class.java).toJson(dto)
+        // Clearing the order-level notes: "" must reach the wire (null would be
+        // omitted and interpreted as "keep current" by the server).
+        assertThat(json).contains("\"notes\":\"\"")
+    }
+
+    @Test
+    fun `UpdateOrderMetaDto null notes is omitted from JSON`() {
+        val dto = UpdateOrderMetaDto(
+            baseUpdatedAt = 5000L,
+            type = UpdateOrderMetaDto.Type.dine_in,
+            notes = null
+        )
+        val json = moshi.adapter(UpdateOrderMetaDto::class.java).toJson(dto)
+        // Same omission trap as SyncOrderItemDto — never use null to clear.
         assertThat(json).doesNotContain("notes")
     }
 

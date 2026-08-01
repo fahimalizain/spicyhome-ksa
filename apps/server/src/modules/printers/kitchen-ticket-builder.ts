@@ -10,6 +10,8 @@ export interface KitchenTicketOptions {
   deliveryPartnerTitle?: string;
   /** Delivery app's order number for reconciliation (e.g. "HS-883129") — printed when set (useful for packing). */
   deliveryExternalRef?: string;
+  /** Order-level notes ("Order notes") — printed prominently when set (bold, before the items). */
+  orderNotes?: string | null;
   items: KitchenTicketItem[];
 }
 
@@ -61,6 +63,16 @@ export class KitchenTicketBuilder {
     if (opts.tableName) typeLine += `  Table: ${opts.tableName}`;
     eb.text(typeLine);
     eb.text(`Time: ${this.formatTime(opts.createdAt)}`);
+
+    // Order-level notes — prominent (bold), truncated to paper width, right
+    // after type/time so the kitchen sees them before the items.
+    if (opts.orderNotes) {
+      eb.bold(true);
+      const notesText = `NOTES: ${opts.orderNotes}`;
+      eb.text(notesText.slice(0, this.width));
+      eb.bold(false);
+    }
+
     eb.separator();
 
     // Items — qty BIG, name, notes highlighted

@@ -43,5 +43,11 @@ class UpdateOrderMetaDtoTest : ShouldSpec() {
             //modelInstance.tableId shouldBe ("TODO")
         }
 
+        // to test the property `notes` - Order-level notes (\"Order notes\"). Send null or an empty string to clear. Omit to keep the current value.
+        should("test notes") {
+            // uncomment below to test the property
+            //modelInstance.notes shouldBe ("TODO")
+        }
+
     }
 }

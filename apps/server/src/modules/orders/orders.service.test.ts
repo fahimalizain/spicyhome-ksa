@@ -2352,6 +2352,195 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     expect(res.body.events.length).toBe(eventCountBefore);
   });
 
+  // ── Order notes (order-level remarks) ────────────────────────────────────
+
+  it('create with notes → 201, GET returns notes, created event carries notes', async () => {
+    const { id } = await createOrder({ type: 'takeaway', notes: 'call on arrival' });
+    const order = await getOrder(id);
+
+    expect(order.notes).toBe('call on arrival');
+    const createdEvent = order.events.find((e: any) => e.type === 'created');
+    const payload = JSON.parse(createdEvent.payload);
+    expect(payload.notes).toBe('call on arrival');
+
+    // Create without notes → null + no notes key in the created payload
+    const plain = await createOrder({ type: 'takeaway' });
+    const plainOrder = await getOrder(plain.id);
+    expect(plainOrder.notes).toBeNull();
+    const plainCreated = plainOrder.events.find((e: any) => e.type === 'created');
+    expect(JSON.parse(plainCreated.payload).notes).toBeUndefined();
+  });
+
+  it('PATCH notes-only (same type/table) → 200, notes_changed event, no kitchen prints', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the PATCH
+    await new Promise((r) => setTimeout(r, 1500));
+    transport.sent = [];
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      notes: 'call on arrival',
+    }).expect(200);
+
+    expect(res.body.notes).toBe('call on arrival');
+    expect(res.body.type).toBe('takeaway');
+    expect(res.body.updatedAt).toBeGreaterThan(before.updatedAt);
+    expect(res.body.updatedBy).not.toBeNull();
+
+    // DB persisted
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.notes).toBe('call on arrival');
+
+    // One notes_changed event with from/to payload; no type_changed
+    const notesChanged = res.body.events.filter((e: any) => e.type === 'notes_changed');
+    expect(notesChanged).toHaveLength(1);
+    expect(JSON.parse(notesChanged[0].payload)).toEqual({
+      fromNotes: null,
+      toNotes: 'call on arrival',
+    });
+    expect(res.body.events.filter((e: any) => e.type === 'type_changed')).toHaveLength(0);
+
+    // Notes-only change must NOT enqueue kitchen prints (ADR 0006)
+    expect(transport.sent).toHaveLength(0);
+  });
+
+  it('notes-only PATCH on dine-in: no partner clear, no line price reset events', async () => {
+    const { id } = await createOrder({ type: 'dine_in', tableId: TABLE_A, notes: null });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the PATCH
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+      notes: 'allergy',
+    }).expect(200);
+
+    // Notes saved, type/table untouched
+    expect(res.body.notes).toBe('allergy');
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.tableId).toBe(TABLE_A);
+
+    // Exactly one notes_changed; nothing else (ADR 0007 block must not run
+    // for notes-only patches — regression: it used to run on every dine_in
+    // patch and could write spurious delivery_partner_changed /
+    // item_price_reset events).
+    const notesChanged = res.body.events.filter((e: any) => e.type === 'notes_changed');
+    expect(notesChanged).toHaveLength(1);
+    expect(JSON.parse(notesChanged[0].payload)).toEqual({
+      fromNotes: null,
+      toNotes: 'allergy',
+    });
+    expect(res.body.events.filter((e: any) => e.type === 'type_changed')).toHaveLength(0);
+    expect(res.body.events.filter((e: any) => e.type === 'delivery_partner_changed')).toHaveLength(
+      0,
+    );
+    expect(res.body.events.filter((e: any) => e.type === 'item_price_reset')).toHaveLength(0);
+  });
+
+  it('clears notes via empty string → null (normalized)', async () => {
+    const { id } = await createOrder({ type: 'takeaway', notes: 'call on arrival' });
+    const before = await getOrder(id);
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      notes: '',
+    }).expect(200);
+
+    expect(res.body.notes).toBeNull();
+    const notesChanged = res.body.events.filter((e: any) => e.type === 'notes_changed');
+    expect(notesChanged).toHaveLength(1);
+    expect(JSON.parse(notesChanged[0].payload)).toEqual({
+      fromNotes: 'call on arrival',
+      toNotes: null,
+    });
+  });
+
+  it('clears notes via null → null', async () => {
+    const { id } = await createOrder({ type: 'takeaway', notes: 'call on arrival' });
+    const before = await getOrder(id);
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      notes: null,
+    }).expect(200);
+
+    expect(res.body.notes).toBeNull();
+    const notesChanged = res.body.events.filter((e: any) => e.type === 'notes_changed');
+    expect(notesChanged).toHaveLength(1);
+    expect(JSON.parse(notesChanged[0].payload)).toEqual({
+      fromNotes: 'call on arrival',
+      toNotes: null,
+    });
+  });
+
+  it('same notes value → 200 no-op (no updated_at bump, no event)', async () => {
+    const { id } = await createOrder({ type: 'takeaway', notes: 'keep' });
+    const before = await getOrder(id);
+    const eventCountBefore = before.events.length;
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      notes: 'keep',
+    }).expect(200);
+
+    expect(res.body.notes).toBe('keep');
+    expect(res.body.updatedAt).toBe(before.updatedAt);
+    expect(res.body.events.length).toBe(eventCountBefore);
+    expect(res.body.events.filter((e: any) => e.type === 'notes_changed')).toHaveLength(0);
+  });
+
+  it('notes + type change in one PATCH → 200, both events written', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the PATCH
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const res = await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'dine_in',
+      tableId: TABLE_A,
+      notes: 'window seat',
+    }).expect(200);
+
+    expect(res.body.type).toBe('dine_in');
+    expect(res.body.tableId).toBe(TABLE_A);
+    expect(res.body.notes).toBe('window seat');
+
+    const notesChanged = res.body.events.filter((e: any) => e.type === 'notes_changed');
+    expect(notesChanged).toHaveLength(1);
+    expect(JSON.parse(notesChanged[0].payload)).toEqual({
+      fromNotes: null,
+      toNotes: 'window seat',
+    });
+    const typeChanged = res.body.events.filter((e: any) => e.type === 'type_changed');
+    expect(typeChanged).toHaveLength(1);
+  });
+
+  it('notes-only PATCH on a voided order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(201);
+    const before = await getOrder(id);
+
+    await patchOrder(id, {
+      baseUpdatedAt: before.updatedAt,
+      type: 'takeaway',
+      notes: 'too late',
+    }).expect(400);
+  });
+
   it('missing order → 404', async () => {
     await patchOrder(999999, {
       baseUpdatedAt: 0,

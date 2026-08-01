@@ -385,7 +385,8 @@ describe('OrderPage — staged cart', () => {
         10,
         expect.objectContaining({
           baseUpdatedAt: 5000, // from the fetched order (not 0)
-          items: [{ itemId: 1, qty: 1 }],
+          // Blank notes are sent as "" (not omitted) so the server can clear
+          items: [{ itemId: 1, qty: 1, notes: '' }],
         }),
       );
     });

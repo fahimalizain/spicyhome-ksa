@@ -27,4 +27,15 @@ export class UpdateOrderMetaDto {
   @IsOptional()
   @IsInt()
   tableId?: number;
+
+  @ApiPropertyOptional({
+    type: String,
+    example: 'Call on arrival',
+    nullable: true,
+    description:
+      'Order-level notes ("Order notes"). Send null or an empty string to clear. Omit to keep the current value.',
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
 }

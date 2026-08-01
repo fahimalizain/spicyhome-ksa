@@ -55,6 +55,12 @@ class PaymentMethodResponseTest : ShouldSpec() {
             //modelInstance.sortOrder shouldBe ("TODO")
         }
 
+        // to test the property `isDeliveryPartner` - Derived flag: true when this method is owned by a delivery partner (its id exists in delivery_partners, ADR 0007). Not a stored column.
+        should("test isDeliveryPartner") {
+            // uncomment below to test the property
+            //modelInstance.isDeliveryPartner shouldBe ("TODO")
+        }
+
         // to test the property `createdAt`
         should("test createdAt") {
             // uncomment below to test the property

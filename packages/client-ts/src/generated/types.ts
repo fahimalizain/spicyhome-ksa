@@ -1848,6 +1848,11 @@ export interface components {
        */
       documentId: string;
       /**
+       * @description Order-level notes ("Order notes"). Null when none are set.
+       * @example Call on arrival
+       */
+      notes: string | null;
+      /**
        * Format: int64
        * @example 1700000000
        */
@@ -2097,6 +2102,11 @@ export interface components {
        */
       documentId: string;
       /**
+       * @description Order-level notes ("Order notes"). Null when none are set.
+       * @example Call on arrival
+       */
+      notes: string | null;
+      /**
        * @description Whether this order is a ZATCA standard invoice
        * @example false
        */
@@ -2145,6 +2155,11 @@ export interface components {
        * @example 1
        */
       tableId?: number;
+      /**
+       * @description Order-level notes ("Order notes"). Send null or an empty string to clear. Omit to keep the current value.
+       * @example Call on arrival
+       */
+      notes?: string | null;
     };
     UpdateOrderPartnerDto: {
       /**
@@ -2190,6 +2205,11 @@ export interface components {
        * @example 1
        */
       tableId?: number;
+      /**
+       * @description Order-level notes ("Order notes"). An empty string is stored as null.
+       * @example Call on arrival
+       */
+      notes?: string | null;
     };
     CreateOrderResponse: {
       /**
