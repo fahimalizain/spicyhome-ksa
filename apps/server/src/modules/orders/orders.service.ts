@@ -1026,13 +1026,18 @@ export class OrdersService {
   }
 
   private getNextOrderNo(tx: any, now: number): number {
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // ADR 0008: the daily sequence resets on the SERVICE-DAY label (window
+    // [D 05:00, (D+1) 05:00) Asia/Riyadh), not the UTC calendar date.
+    // Between 00:00–05:00 Asia/Riyadh the service day is the PREVIOUS
+    // calendar date — a UTC date here would flip the sequence at midnight
+    // instead of at 05:00 (and briefly mislabel it pre-05:00).
+    const serviceDay = getServiceDayString(now * 1000);
 
     const row = tx.select().from(settings).where(eq(settings.key, 'daily_order_seq')).get();
 
     if (!row) {
       tx.insert(settings)
-        .values({ key: 'daily_order_seq', value: `${today}:1` })
+        .values({ key: 'daily_order_seq', value: `${serviceDay}:1` })
         .run();
       return 1;
     }
@@ -1040,16 +1045,16 @@ export class OrdersService {
     const [storedDate, storedSeqStr] = row.value.split(':');
     const storedSeq = parseInt(storedSeqStr, 10);
 
-    if (storedDate === today) {
+    if (storedDate === serviceDay) {
       const newSeq = storedSeq + 1;
       tx.update(settings)
-        .set({ value: `${today}:${newSeq}` })
+        .set({ value: `${serviceDay}:${newSeq}` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return newSeq;
     } else {
       tx.update(settings)
-        .set({ value: `${today}:1` })
+        .set({ value: `${serviceDay}:1` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return 1;

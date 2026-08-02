@@ -5804,3 +5804,156 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     expect(transport.sent.filter((s: any) => s.ip !== '192.168.1.50').length).toBe(0);
   });
 });
+
+describe('createOrder — daily_order_seq resets on the service-day label (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // Straddle the 05:00 boundary itself: 04:59:30 vs 05:00:30.
+  const justBefore0500Ms = (currentBounds.startUnix - 30) * 1000;
+  const justAfter0500Ms = (currentBounds.startUnix + 30) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function setDailyOrderSeq(value: string): void {
+    sqlite
+      .prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('daily_order_seq', value);
+  }
+
+  function readDailyOrderSeq(): string | undefined {
+    const row = sqlite.prepare("SELECT value FROM settings WHERE key = 'daily_order_seq'").get() as
+      { value: string } | undefined;
+    return row?.value;
+  }
+
+  it('two creates in the same service day get sequential orderNos', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
+    // The counter is keyed by the SERVICE-DAY label, not the UTC date.
+    expect(readDailyOrderSeq()).toBe(`${getServiceDayString(post0500Ms)}:${second.body.orderNo}`);
+  });
+
+  it('orderNo resets to 1 when crossing the 05:00 service-day boundary', async () => {
+    // Prime the pre-05:00 service day (the previous calendar date) with a
+    // known counter so "first had N" is deterministic: N = 5 + 1 = 6.
+    const pre0500ServiceDay = getServiceDayString(justBefore0500Ms);
+    setDailyOrderSeq(`${pre0500ServiceDay}:5`);
+
+    // 04:59:30 — still the previous service day → continues at 6.
+    jest.spyOn(Date, 'now').mockReturnValue(justBefore0500Ms);
+    setOpenDayBusinessDate(pre0500ServiceDay);
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+    expect(first.body.orderNo).toBe(6);
+
+    // 05:00:30 — the service day flips to the NEW label → seq resets to 1.
+    const post0500ServiceDay = getServiceDayString(justAfter0500Ms);
+    expect(post0500ServiceDay).not.toBe(pre0500ServiceDay);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(post0500ServiceDay);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(1);
+    expect(readDailyOrderSeq()).toBe(`${post0500ServiceDay}:1`);
+  });
+
+  it('two creates both after 05:00 in the same service day get consecutive orderNos', async () => {
+    const serviceDay = getServiceDayString(justAfter0500Ms);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(serviceDay);
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    // Slightly later (12:00), still the same service day.
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
+  });
+});
