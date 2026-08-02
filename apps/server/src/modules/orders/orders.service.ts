@@ -30,7 +30,7 @@ import {
   AuditAction,
   ALL_ORDER_STATUSES,
   getServiceDayString,
-  riyadhCalendarDayBoundsUnix,
+  getServiceDayBoundsUnix,
 } from '@spicyhome/shared';
 import type { OrderStatus } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
@@ -2681,8 +2681,9 @@ export class OrdersService {
    *
    * - `status`: single status or comma-separated list → `status IN (...)`;
    *   empty/omit → no status filter; invalid token → 400.
-   * - `date`: `YYYY-MM-DD` Asia/Riyadh **calendar** day on `orders.created_at`
-   *   (`[start, end)` Unix seconds); invalid format → 400.
+   * - `date`: `YYYY-MM-DD` Asia/Riyadh **service day** (ADR 0008) on
+   *   `orders.created_at` — window `[D 05:00, (D+1) 05:00)` Unix seconds,
+   *   label D = window start date; invalid format → 400.
    * - `userId`: `orders.created_by = userId`.
    *
    * NOTE: drizzle `.where()` **replaces** a previous where clause, so all
@@ -2710,7 +2711,7 @@ export class OrdersService {
     }
 
     if (filters?.date) {
-      const bounds = riyadhCalendarDayBoundsUnix(filters.date);
+      const bounds = getServiceDayBoundsUnix(filters.date);
       if (!bounds) {
         throw new BadRequestException(`Invalid date: ${filters.date} (expected YYYY-MM-DD)`);
       }

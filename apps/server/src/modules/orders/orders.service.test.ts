@@ -6,12 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
-import {
-  todayInRiyadh,
-  riyadhCalendarDayBoundsUnix,
-  getServiceDayString,
-  getServiceDayBoundsUnix,
-} from '@spicyhome/shared';
+import { getServiceDayString, getServiceDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -3656,24 +3651,31 @@ describe('listOrders — date / user / multi-status filters', () => {
     return res.body;
   }
 
-  it('date filter returns only orders created that Riyadh calendar day (neighbors excluded)', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+  it('date filter uses the service-day window [D 05:00, (D+1) 05:00) Asia/Riyadh', async () => {
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
-    const yesterdayOrder = await createOrder({ type: 'takeaway' });
-    const todayOrder = await createOrder({ type: 'takeaway' });
-    const tomorrowOrder = await createOrder({ type: 'takeaway' });
+    const inWindow = await createOrder({ type: 'takeaway' });
+    const prevDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayNoon = await createOrder({ type: 'takeaway' });
 
-    // Yesterday 12:00 / today 12:00 / tomorrow 12:00 Asia/Riyadh.
+    // 12:00 Asia/Riyadh on D → inside the service day window.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix - 86400 + 12 * 3600, yesterdayOrder.id);
+      .run(bounds.startUnix + 12 * 3600, inWindow.id);
+    // 01:00 Asia/Riyadh on D → pre-05:00, belongs to service day D-1 → excluded.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix + 12 * 3600, todayOrder.id);
+      .run(bounds.startUnix - 4 * 3600, prevDayPreBoundary.id);
+    // 01:00 Asia/Riyadh on D+1 → pre-05:00 but still inside service day D → included.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.endUnix + 12 * 3600, tomorrowOrder.id);
+      .run(bounds.endUnix - 4 * 3600, nextDayPreBoundary.id);
+    // 12:00 Asia/Riyadh on D+1 → outside the window → excluded.
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.endUnix + 12 * 3600, nextDayNoon.id);
 
     const res = await request(app.getHttpServer())
       .get(`/orders?date=${today}`)
@@ -3681,14 +3683,15 @@ describe('listOrders — date / user / multi-status filters', () => {
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
 
-    expect(ids).toContain(todayOrder.id);
-    expect(ids).not.toContain(yesterdayOrder.id);
-    expect(ids).not.toContain(tomorrowOrder.id);
+    expect(ids).toContain(inWindow.id);
+    expect(ids).toContain(nextDayPreBoundary.id);
+    expect(ids).not.toContain(prevDayPreBoundary.id);
+    expect(ids).not.toContain(nextDayNoon.id);
   });
 
   it('date filter keeps newest-first (DESC by id) within the day', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
     const first = await createOrder({ type: 'takeaway' });
     const second = await createOrder({ type: 'takeaway' });
@@ -3794,8 +3797,8 @@ describe('listOrders — date / user / multi-status filters', () => {
   });
 
   it('combined filters (date + status + userId) and still DESC by id', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
     const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
       id: number;
     };
@@ -3812,7 +3815,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     const b = await createOrder({ type: 'takeaway' });
     // today + open + other user (fails user filter)
     const c = await createOrder({ type: 'takeaway' });
-    // yesterday + open + admin (fails date filter)
+    // 04:00 Asia/Riyadh on D (previous service day) + open + admin (fails date filter)
     const d = await createOrder({ type: 'takeaway' });
 
     sqlite
