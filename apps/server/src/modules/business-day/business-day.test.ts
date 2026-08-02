@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
+import { getServiceDayString } from '@spicyhome/shared';
 import { BusinessDayService } from './business-day.service';
 
 describe('BusinessDayService', () => {
@@ -124,6 +125,7 @@ describe('BusinessDayService', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     sqlite.close();
   });
 
@@ -144,9 +146,24 @@ describe('BusinessDayService', () => {
       );
     });
 
-    it('business_date is today in YYYY-MM-DD format', async () => {
+    it('business_date is the service-day label in YYYY-MM-DD format', async () => {
       const day = await service.openDay({ openingCashHalalas: 0 }, 1);
       expect(day!.businessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(day!.businessDate).toBe(getServiceDayString(Date.now()));
+    });
+
+    it('stamps the previous calendar date when opened before 05:00 Riyadh', async () => {
+      // 2026-08-03 04:30 Asia/Riyadh = 2026-08-03 01:30 UTC.
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 7, 3, 1, 30, 0));
+      const day = await service.openDay({ openingCashHalalas: 0 }, 1);
+      expect(day!.businessDate).toBe('2026-08-02');
+    });
+
+    it('stamps the same calendar date when opened at 05:00 Riyadh', async () => {
+      // 2026-08-03 05:00 Asia/Riyadh = 2026-08-03 02:00 UTC.
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 7, 3, 2, 0, 0));
+      const day = await service.openDay({ openingCashHalalas: 0 }, 1);
+      expect(day!.businessDate).toBe('2026-08-03');
     });
   });
 

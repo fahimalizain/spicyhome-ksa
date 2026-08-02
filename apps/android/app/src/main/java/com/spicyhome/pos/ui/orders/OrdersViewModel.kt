@@ -12,6 +12,7 @@ import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.data.repository.AuthRepository
 import com.spicyhome.pos.data.repository.OrderRepository
 import com.spicyhome.pos.data.repository.TableRepository
+import com.spicyhome.pos.util.ServiceDay
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,14 +20,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.ZoneId
 
 /** All selectable order statuses for the multiselect filter, in display order. */
 val ORDER_FILTER_STATUSES = listOf("open", "paid", "voided", "refunded")
-
-/** Today's date as YYYY-MM-DD in Asia/Riyadh (calendar day, explicit zone — no DST). */
-fun todayInRiyadhDate(): String = LocalDate.now(ZoneId.of("Asia/Riyadh")).toString()
 
 data class OrdersUiState(
     val orders: List<OrderSummaryResponse> = emptyList(),
@@ -38,10 +34,12 @@ data class OrdersUiState(
     val detailLoading: Boolean = false,
     // ── Filters (server-side) ────────────────────────────────────────────
     /**
-     * YYYY-MM-DD Asia/Riyadh calendar day. Fixed to today — the Android UI
-     * has no date picker, so this is never user-changed.
+     * YYYY-MM-DD Asia/Riyadh **service-day** label (window
+     * [D 05:00, (D+1) 05:00), per ADR 0008). Fixed to the service day at
+     * state creation — the Android UI has no date picker, so this is never
+     * user-changed.
      */
-    val date: String = todayInRiyadhDate(),
+    val date: String = ServiceDay.getServiceDayString(System.currentTimeMillis()),
     /** Selected statuses. Empty set → no status filter (all statuses). Default: open only. */
     val statuses: Set<String> = setOf("open"),
     /** orders.created_by filter. null → all users. Default: current user. */

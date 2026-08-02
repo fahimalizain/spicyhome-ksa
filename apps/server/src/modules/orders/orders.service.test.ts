@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
-import { todayInRiyadh, riyadhCalendarDayBoundsUnix } from '@spicyhome/shared';
+import { getServiceDayString, getServiceDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -113,6 +113,129 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   sqlite.close();
+});
+
+describe('createOrder — business-day gate uses the service day (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // 02:00 Asia/Riyadh of that same label — pre-05:00, so the service day is
+  // the PREVIOUS calendar date (the exact window this bugfix targets).
+  const pre0500Ms = (currentBounds.startUnix - 3 * 3600) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function closeOpenDay(): void {
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+  }
+
+  it('409 when no open business day exists', async () => {
+    closeOpenDay();
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toBe(
+      'No open business day. Open a business day before creating orders.',
+    );
+  });
+
+  it('201 when the open day matches the current service day', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
+
+  it('409 when the open day is from a previous service day (stale after 05:00)', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const currentServiceDay = getServiceDayString(post0500Ms);
+    const previousServiceDay = getServiceDayString(pre0500Ms);
+    setOpenDayBusinessDate(previousServiceDay);
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toContain(`from ${previousServiceDay}`);
+    expect(res.body.message).toContain(`today (${currentServiceDay})`);
+  });
+
+  it('201 pre-05:00 when the open day is labeled with the previous calendar date (service day)', async () => {
+    // 02:00 Asia/Riyadh — the service day is still the PREVIOUS calendar
+    // date, which is exactly the label the open day carries (stamped at open
+    // time via getServiceDayString). Creation must SUCCEED; the old
+    // calendar-day comparison rejected it as "stale" until 05:00.
+    jest.spyOn(Date, 'now').mockReturnValue(pre0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(pre0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
 });
 
 describe('Order Refunds', () => {
@@ -3528,24 +3651,31 @@ describe('listOrders — date / user / multi-status filters', () => {
     return res.body;
   }
 
-  it('date filter returns only orders created that Riyadh calendar day (neighbors excluded)', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+  it('date filter uses the service-day window [D 05:00, (D+1) 05:00) Asia/Riyadh', async () => {
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
-    const yesterdayOrder = await createOrder({ type: 'takeaway' });
-    const todayOrder = await createOrder({ type: 'takeaway' });
-    const tomorrowOrder = await createOrder({ type: 'takeaway' });
+    const inWindow = await createOrder({ type: 'takeaway' });
+    const prevDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayNoon = await createOrder({ type: 'takeaway' });
 
-    // Yesterday 12:00 / today 12:00 / tomorrow 12:00 Asia/Riyadh.
+    // 12:00 Asia/Riyadh on D → inside the service day window.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix - 86400 + 12 * 3600, yesterdayOrder.id);
+      .run(bounds.startUnix + 12 * 3600, inWindow.id);
+    // 01:00 Asia/Riyadh on D → pre-05:00, belongs to service day D-1 → excluded.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix + 12 * 3600, todayOrder.id);
+      .run(bounds.startUnix - 4 * 3600, prevDayPreBoundary.id);
+    // 01:00 Asia/Riyadh on D+1 → pre-05:00 but still inside service day D → included.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.endUnix + 12 * 3600, tomorrowOrder.id);
+      .run(bounds.endUnix - 4 * 3600, nextDayPreBoundary.id);
+    // 12:00 Asia/Riyadh on D+1 → outside the window → excluded.
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.endUnix + 12 * 3600, nextDayNoon.id);
 
     const res = await request(app.getHttpServer())
       .get(`/orders?date=${today}`)
@@ -3553,14 +3683,15 @@ describe('listOrders — date / user / multi-status filters', () => {
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
 
-    expect(ids).toContain(todayOrder.id);
-    expect(ids).not.toContain(yesterdayOrder.id);
-    expect(ids).not.toContain(tomorrowOrder.id);
+    expect(ids).toContain(inWindow.id);
+    expect(ids).toContain(nextDayPreBoundary.id);
+    expect(ids).not.toContain(prevDayPreBoundary.id);
+    expect(ids).not.toContain(nextDayNoon.id);
   });
 
   it('date filter keeps newest-first (DESC by id) within the day', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
     const first = await createOrder({ type: 'takeaway' });
     const second = await createOrder({ type: 'takeaway' });
@@ -3666,8 +3797,8 @@ describe('listOrders — date / user / multi-status filters', () => {
   });
 
   it('combined filters (date + status + userId) and still DESC by id', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
     const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
       id: number;
     };
@@ -3684,7 +3815,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     const b = await createOrder({ type: 'takeaway' });
     // today + open + other user (fails user filter)
     const c = await createOrder({ type: 'takeaway' });
-    // yesterday + open + admin (fails date filter)
+    // 04:00 Asia/Riyadh on D (previous service day) + open + admin (fails date filter)
     const d = await createOrder({ type: 'takeaway' });
 
     sqlite
@@ -5674,5 +5805,158 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     // No kitchen prints at all
     await new Promise((r) => setTimeout(r, 200));
     expect(transport.sent.filter((s: any) => s.ip !== '192.168.1.50').length).toBe(0);
+  });
+});
+
+describe('createOrder — daily_order_seq resets on the service-day label (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // Straddle the 05:00 boundary itself: 04:59:30 vs 05:00:30.
+  const justBefore0500Ms = (currentBounds.startUnix - 30) * 1000;
+  const justAfter0500Ms = (currentBounds.startUnix + 30) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function setDailyOrderSeq(value: string): void {
+    sqlite
+      .prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('daily_order_seq', value);
+  }
+
+  function readDailyOrderSeq(): string | undefined {
+    const row = sqlite.prepare("SELECT value FROM settings WHERE key = 'daily_order_seq'").get() as
+      { value: string } | undefined;
+    return row?.value;
+  }
+
+  it('two creates in the same service day get sequential orderNos', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
+    // The counter is keyed by the SERVICE-DAY label, not the UTC date.
+    expect(readDailyOrderSeq()).toBe(`${getServiceDayString(post0500Ms)}:${second.body.orderNo}`);
+  });
+
+  it('orderNo resets to 1 when crossing the 05:00 service-day boundary', async () => {
+    // Prime the pre-05:00 service day (the previous calendar date) with a
+    // known counter so "first had N" is deterministic: N = 5 + 1 = 6.
+    const pre0500ServiceDay = getServiceDayString(justBefore0500Ms);
+    setDailyOrderSeq(`${pre0500ServiceDay}:5`);
+
+    // 04:59:30 — still the previous service day → continues at 6.
+    jest.spyOn(Date, 'now').mockReturnValue(justBefore0500Ms);
+    setOpenDayBusinessDate(pre0500ServiceDay);
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+    expect(first.body.orderNo).toBe(6);
+
+    // 05:00:30 — the service day flips to the NEW label → seq resets to 1.
+    const post0500ServiceDay = getServiceDayString(justAfter0500Ms);
+    expect(post0500ServiceDay).not.toBe(pre0500ServiceDay);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(post0500ServiceDay);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(1);
+    expect(readDailyOrderSeq()).toBe(`${post0500ServiceDay}:1`);
+  });
+
+  it('two creates both after 05:00 in the same service day get consecutive orderNos', async () => {
+    const serviceDay = getServiceDayString(justAfter0500Ms);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(serviceDay);
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    // Slightly later (12:00), still the same service day.
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
   });
 });
