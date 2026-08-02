@@ -29,7 +29,8 @@ import {
   formatZatcaBuyerDetailsErrors,
   AuditAction,
   ALL_ORDER_STATUSES,
-  riyadhCalendarDayBoundsUnix,
+  getServiceDayString,
+  getServiceDayBoundsUnix,
 } from '@spicyhome/shared';
 import type { OrderStatus } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
@@ -61,11 +62,6 @@ function recomputeOrderTotals(rows: Array<{ totalHalalas: number; vatRateBp: num
   return { subtotalHalalas: subtotal, vatHalalas: vat, totalHalalas: total };
 }
 
-function todayInRiyadh(): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
-  return fmt.format(new Date());
-}
-
 function normalizeNotes(n: string | null | undefined): string | null {
   if (n == null || n === '') return null;
   return n;
@@ -94,7 +90,8 @@ export class OrdersService {
     dto: { type: string; tableId?: number; notes?: string | null },
     userId: number,
   ) {
-    const now = Math.floor(Date.now() / 1000);
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
     if (dto.type === 'dine_in') {
       if (!dto.tableId) throw new BadRequestException('Table is required for dine-in orders');
       const table = this.db.select().from(tables).where(eq(tables.id, dto.tableId)).get();
@@ -111,10 +108,15 @@ export class OrdersService {
         'No open business day. Open a business day before creating orders.',
       );
 
-    const today = todayInRiyadh();
-    if (dayOpening.businessDate !== today) {
+    // ADR 0008: the open day must be labeled with the CURRENT SERVICE DAY
+    // (getServiceDayString), not the calendar day. Between 00:00–05:00
+    // Asia/Riyadh the service day is the previous calendar date — the open
+    // day carries that label, so comparing against the calendar day would
+    // reject orders until 05:00.
+    const serviceDay = getServiceDayString(nowMs);
+    if (dayOpening.businessDate !== serviceDay) {
       throw new ConflictException(
-        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${today}).`,
+        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${serviceDay}).`,
       );
     }
 
@@ -1024,13 +1026,18 @@ export class OrdersService {
   }
 
   private getNextOrderNo(tx: any, now: number): number {
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // ADR 0008: the daily sequence resets on the SERVICE-DAY label (window
+    // [D 05:00, (D+1) 05:00) Asia/Riyadh), not the UTC calendar date.
+    // Between 00:00–05:00 Asia/Riyadh the service day is the PREVIOUS
+    // calendar date — a UTC date here would flip the sequence at midnight
+    // instead of at 05:00 (and briefly mislabel it pre-05:00).
+    const serviceDay = getServiceDayString(now * 1000);
 
     const row = tx.select().from(settings).where(eq(settings.key, 'daily_order_seq')).get();
 
     if (!row) {
       tx.insert(settings)
-        .values({ key: 'daily_order_seq', value: `${today}:1` })
+        .values({ key: 'daily_order_seq', value: `${serviceDay}:1` })
         .run();
       return 1;
     }
@@ -1038,16 +1045,16 @@ export class OrdersService {
     const [storedDate, storedSeqStr] = row.value.split(':');
     const storedSeq = parseInt(storedSeqStr, 10);
 
-    if (storedDate === today) {
+    if (storedDate === serviceDay) {
       const newSeq = storedSeq + 1;
       tx.update(settings)
-        .set({ value: `${today}:${newSeq}` })
+        .set({ value: `${serviceDay}:${newSeq}` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return newSeq;
     } else {
       tx.update(settings)
-        .set({ value: `${today}:1` })
+        .set({ value: `${serviceDay}:1` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return 1;
@@ -2674,8 +2681,9 @@ export class OrdersService {
    *
    * - `status`: single status or comma-separated list → `status IN (...)`;
    *   empty/omit → no status filter; invalid token → 400.
-   * - `date`: `YYYY-MM-DD` Asia/Riyadh **calendar** day on `orders.created_at`
-   *   (`[start, end)` Unix seconds); invalid format → 400.
+   * - `date`: `YYYY-MM-DD` Asia/Riyadh **service day** (ADR 0008) on
+   *   `orders.created_at` — window `[D 05:00, (D+1) 05:00)` Unix seconds,
+   *   label D = window start date; invalid format → 400.
    * - `userId`: `orders.created_by = userId`.
    *
    * NOTE: drizzle `.where()` **replaces** a previous where clause, so all
@@ -2703,7 +2711,7 @@ export class OrdersService {
     }
 
     if (filters?.date) {
-      const bounds = riyadhCalendarDayBoundsUnix(filters.date);
+      const bounds = getServiceDayBoundsUnix(filters.date);
       if (!bounds) {
         throw new BadRequestException(`Invalid date: ${filters.date} (expected YYYY-MM-DD)`);
       }
