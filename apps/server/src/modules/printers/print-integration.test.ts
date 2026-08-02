@@ -155,7 +155,8 @@ describe('Print Integration', () => {
         try {
           await request(app.getHttpServer())
             .post(`/orders/${order.id}/void`)
-            .set('Authorization', `Bearer ${jwtToken}`);
+            .set('Authorization', `Bearer ${jwtToken}`)
+            .send({ reason: 'test cleanup' });
         } catch {
           // ignore — order may already be closed
         }
