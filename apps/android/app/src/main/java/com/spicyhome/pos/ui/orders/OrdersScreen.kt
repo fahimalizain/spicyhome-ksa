@@ -23,6 +23,7 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
+import com.spicyhome.pos.util.OrderTypeLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -296,7 +297,11 @@ private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: 
                     color = OnDark,
                 )
                 Text(
-                    text = order.type.uppercase(),
+                    text = OrderTypeLabel.format(
+                        order.type,
+                        order.deliveryPartnerTitle,
+                        order.deliveryExternalRef,
+                    ),
                     fontSize = 13.sp,
                     color = OnDarkSecondary,
                 )
@@ -380,7 +385,15 @@ private fun OrderDetailView(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text("Type:", color = OnDarkSecondary, fontSize = 14.sp)
-                        Text(order.type, color = OnDark, fontSize = 14.sp)
+                        Text(
+                            OrderTypeLabel.format(
+                                order.type,
+                                order.deliveryPartnerTitle,
+                                order.deliveryExternalRef,
+                            ),
+                            color = OnDark,
+                            fontSize = 14.sp,
+                        )
                     }
                     if (tableName != null) {
                         Row(
