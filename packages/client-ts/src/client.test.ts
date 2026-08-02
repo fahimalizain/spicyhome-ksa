@@ -201,6 +201,30 @@ describe('SpicyHomeClient', () => {
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ baseUpdatedAt: 1720000000, unitPriceHalalas: 2500 });
   });
+
+  it('void sends POST with the reason body', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      statusText: 'Created',
+      text: async () => JSON.stringify({ status: 'voided' }),
+    });
+    globalThis.fetch = fetchMock as any;
+
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => 'token',
+    });
+
+    const res = await client.orders.void(7, { reason: 'Customer left' });
+
+    expect(res).toEqual({ status: 'voided' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:3000/orders/7/void');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ reason: 'Customer left' });
+  });
 });
 
 describe('SpicyHomeClient orders.list filters', () => {

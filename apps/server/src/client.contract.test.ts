@@ -254,19 +254,7 @@ describe('Client contract test', () => {
     const newOrder: any = await client.orders.create({
       type: 'takeaway',
     });
-    // NOTE: the generated client's void() does not take a body yet (client-ts
-    // regeneration for the required void reason lands in a later slice); use
-    // a raw fetch so this contract test still exercises the real endpoint.
-    const voidRes = await fetch(`${baseUrl}/orders/${newOrder.id}/void`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ reason: 'test cleanup' }),
-    });
-    expect(voidRes.status).toBe(201);
-    const voided = await voidRes.json();
+    const voided = await client.orders.void(newOrder.id, { reason: 'test cleanup' });
     expect(voided.status).toBe('voided');
   });
 });

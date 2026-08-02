@@ -812,7 +812,9 @@ export function OrderPage() {
     setLoading(true);
     setError('');
     try {
-      await client.orders.void(currentOrder.id);
+      // TODO(slice 3, #153): collect the reason via the OrderVoidModal.
+      // Placeholder reason keeps the API contract green until then.
+      await client.orders.void(currentOrder.id, { reason: 'Voided' });
       setCurrentOrder((prev) => (prev ? { ...prev, status: 'voided' } : null));
     } catch (e: any) {
       // Server rejects when payments net ≠ 0 — surface the guidance
