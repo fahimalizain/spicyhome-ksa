@@ -783,17 +783,12 @@ export class ZatcaStandardInvoiceService {
       hour12: false,
     });
 
-    // Allocate ICV atomically
-    const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.invoiceService.allocateNextIcv(tx, env, orgUnit);
-    });
-
-    const invUuid = require('crypto').randomUUID();
-
-    // Build unsigned XML
+    // documentId must exist BEFORE the write transaction — a missing ID is
+    // a fail-fast that must never consume an ICV.
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
+
     // One cac:PaymentMeans block per NETTED payment method (BT-81 1..n) —
     // multi-line/correction payments are summed per methodId inside
     // buildInvoicePaymentMeans; zero/negative nets are dropped. Sorted by
@@ -803,74 +798,94 @@ export class ZatcaStandardInvoiceService {
       .from(orderPayments)
       .where(eq(orderPayments.orderId, orderId))
       .all();
-    const xmlInput: InvoiceXMLInput = {
-      documentId: order.documentId,
-      icv,
-      uuid: invUuid,
-      issueDate,
-      issueTime,
-      seller,
-      items: invItems,
-      discountHalalas: order.discountHalalas || 0,
-      prevInvoiceHash,
-      invoiceProfile: 'standard',
-      buyer: this.getBuyerFromOrder(order),
-      paymentMeans: buildInvoicePaymentMeans(
-        paymentRows.map((p) => ({
-          methodId: p.methodId,
-          methodTitle: p.methodTitle,
-          amountHalalas: p.amountHalalas,
-          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
-        })),
-      ),
-    };
-    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
-    // Sign
-    const invoiceHashB64 = computeInvoiceHash(unsignedXml);
-    const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
-    const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
-    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
-    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+    const invUuid = require('crypto').randomUUID();
 
-    // QR TLV
-    const timestampIso = `${issueDate}T${issueTime}`;
-    const certSigB64 = extractCertSignature(certForXml);
-    const tlvInput: TLVInput = {
-      sellerName: seller.name,
-      vatNumber: seller.vatNumber,
-      timestamp: timestampIso,
-      totalHalalas: order.totalHalalas,
-      vatHalalas: order.vatHalalas,
-      invoiceHashBase64: invoiceHashB64,
-      signatureBase64: signatureB64,
-      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
-      certificateSignatureBase64: certSigB64,
-    };
-    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+    // ── Single atomic transaction: allocate ICV + build + sign + insert ──
+    // The `last_icv` settings bump and the zatca_invoices row commit
+    // together. The clearance API call stays AFTER this transaction commits
+    // (a pending row is intentionally burned before calling ZATCA).
+    const { invoiceId, icv, finalInvoiceHash, finalSignedXml } = this.db.transaction((tx: any) => {
+      // Allocate ICV atomically
+      const { icv, prevInvoiceHash } = this.invoiceService.allocateNextIcv(tx, env, orgUnit);
 
-    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
-    const finalInvoiceHash = invoiceHashB64;
-
-    // INSERT row with status=pending FIRST (ICV burned, XML stored)
-    const insertResult = this.db
-      .insert(zatcaInvoices)
-      .values({
-        orderId,
+      const xmlInput: InvoiceXMLInput = {
+        documentId: order.documentId,
         icv,
         uuid: invUuid,
-        documentId: order.documentId,
-        invoiceHash: finalInvoiceHash,
+        issueDate,
+        issueTime,
+        seller,
+        items: invItems,
+        discountHalalas: order.discountHalalas || 0,
         prevInvoiceHash,
-        xml: finalSignedXml,
-        qrTlv: qrTlvBase64,
-        status: 'pending',
-        attemptNo,
-        reportedAt: null,
-        ...createAuditFields(userId, now),
-      } as any)
-      .run();
-    const invoiceId = Number(insertResult.lastInsertRowid);
+        invoiceProfile: 'standard',
+        buyer: this.getBuyerFromOrder(order),
+        paymentMeans: buildInvoicePaymentMeans(
+          paymentRows.map((p) => ({
+            methodId: p.methodId,
+            methodTitle: p.methodTitle,
+            amountHalalas: p.amountHalalas,
+            zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
+          })),
+        ),
+      };
+      const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+
+      // Sign
+      const invoiceHashB64 = computeInvoiceHash(unsignedXml);
+      const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
+      const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
+      const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
+      const signedXml = embedSignatureIntoXML(
+        unsignedXml,
+        invoiceHashB64,
+        signatureB64,
+        certForXml,
+      );
+
+      // QR TLV
+      const timestampIso = `${issueDate}T${issueTime}`;
+      const certSigB64 = extractCertSignature(certForXml);
+      const tlvInput: TLVInput = {
+        sellerName: seller.name,
+        vatNumber: seller.vatNumber,
+        timestamp: timestampIso,
+        totalHalalas: order.totalHalalas,
+        vatHalalas: order.vatHalalas,
+        invoiceHashBase64: invoiceHashB64,
+        signatureBase64: signatureB64,
+        publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
+        certificateSignatureBase64: certSigB64,
+      };
+      const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+
+      const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+      const finalInvoiceHash = invoiceHashB64;
+
+      // INSERT row with status=pending FIRST (ICV burned, XML stored) —
+      // same transaction as the ICV allocation
+      const insertResult = tx
+        .insert(zatcaInvoices)
+        .values({
+          orderId,
+          icv,
+          uuid: invUuid,
+          documentId: order.documentId,
+          invoiceHash: finalInvoiceHash,
+          prevInvoiceHash,
+          xml: finalSignedXml,
+          qrTlv: qrTlvBase64,
+          status: 'pending',
+          attemptNo,
+          reportedAt: null,
+          ...createAuditFields(userId, now),
+        } as any)
+        .run();
+      const invoiceId = Number(insertResult.lastInsertRowid);
+
+      return { invoiceId, icv, finalInvoiceHash, finalSignedXml, qrTlvBase64 };
+    });
 
     // Call clearance API
     const clearance = await this.clearanceService.clearDocument({
@@ -1040,87 +1055,100 @@ export class ZatcaStandardInvoiceService {
       hour12: false,
     });
 
-    const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.invoiceService.allocateNextIcv(tx, env, orgUnit);
-    });
-
-    const invUuid = require('crypto').randomUUID();
-
+    // documentId must exist BEFORE the write transaction — a missing ID is
+    // a fail-fast that must never consume an ICV.
     if (!refund.documentId) {
       throw new Error(`Refund ${refundId} is missing document_id`);
     }
 
-    const xmlInput: InvoiceXMLInput = {
-      type: 'credit_note',
-      documentId: refund.documentId,
-      icv,
-      uuid: invUuid,
-      issueDate,
-      issueTime,
-      seller,
-      items: invItems,
-      prevInvoiceHash,
-      invoiceProfile: 'standard',
-      buyer: this.getBuyerFromOrder(order),
-      billingReferenceId: originalInvoice.uuid,
-      // Single block from the refund tender: KSA-10 reason + method snapshot
-      paymentMeans: buildCreditNotePaymentMeans({
-        methodId: refund.methodId,
-        methodTitle: refund.methodTitle,
-        zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
-        reason: refund.reason || 'Refund',
-        amountHalalas: refund.totalHalalas,
-      }),
-    };
+    const invUuid = require('crypto').randomUUID();
 
-    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
-    const invoiceHashB64 = computeInvoiceHash(unsignedXml);
-    const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
-    const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
-    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
-    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+    // ── Single atomic transaction: allocate ICV + build + sign + insert ──
+    // The `last_icv` settings bump and the zatca_credit_notes row commit
+    // together. The clearance API call stays AFTER this transaction commits
+    // (a pending row is intentionally burned before calling ZATCA).
+    const { cnId, icv, finalInvoiceHash, finalSignedXml } = this.db.transaction((tx: any) => {
+      const { icv, prevInvoiceHash } = this.invoiceService.allocateNextIcv(tx, env, orgUnit);
 
-    const timestampIso = `${issueDate}T${issueTime}`;
-    const certSigB64 = extractCertSignature(certForXml);
-    const tlvInput: TLVInput = {
-      sellerName: seller.name,
-      vatNumber: seller.vatNumber,
-      timestamp: timestampIso,
-      totalHalalas,
-      vatHalalas,
-      invoiceHashBase64: invoiceHashB64,
-      signatureBase64: signatureB64,
-      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
-      certificateSignatureBase64: certSigB64,
-    };
-    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
-    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
-    const finalInvoiceHash = invoiceHashB64;
-
-    // INSERT pending row
-    const insertResult = this.db
-      .insert(zatcaCreditNotes)
-      .values({
-        orderId,
-        refundId,
-        relatedInvoiceUuid: originalInvoice.uuid,
+      const xmlInput: InvoiceXMLInput = {
+        type: 'credit_note',
+        documentId: refund.documentId,
         icv,
         uuid: invUuid,
-        documentId: refund.documentId,
-        invoiceHash: finalInvoiceHash,
+        issueDate,
+        issueTime,
+        seller,
+        items: invItems,
         prevInvoiceHash,
-        xml: finalSignedXml,
-        qrTlv: qrTlvBase64,
-        status: 'pending',
-        attemptNo,
-        reportedAt: null,
+        invoiceProfile: 'standard',
+        buyer: this.getBuyerFromOrder(order),
+        billingReferenceId: originalInvoice.uuid,
+        // Single block from the refund tender: KSA-10 reason + method snapshot
+        paymentMeans: buildCreditNotePaymentMeans({
+          methodId: refund.methodId,
+          methodTitle: refund.methodTitle,
+          zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
+          reason: refund.reason || 'Refund',
+          amountHalalas: refund.totalHalalas,
+        }),
+      };
+
+      const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+      const invoiceHashB64 = computeInvoiceHash(unsignedXml);
+      const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
+      const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
+      const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
+      const signedXml = embedSignatureIntoXML(
+        unsignedXml,
+        invoiceHashB64,
+        signatureB64,
+        certForXml,
+      );
+
+      const timestampIso = `${issueDate}T${issueTime}`;
+      const certSigB64 = extractCertSignature(certForXml);
+      const tlvInput: TLVInput = {
+        sellerName: seller.name,
+        vatNumber: seller.vatNumber,
+        timestamp: timestampIso,
         totalHalalas,
         vatHalalas,
-        reason: refund.reason || 'Refund',
-        ...createAuditFields(userId, now),
-      } as any)
-      .run();
-    const cnId = Number(insertResult.lastInsertRowid);
+        invoiceHashBase64: invoiceHashB64,
+        signatureBase64: signatureB64,
+        publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
+        certificateSignatureBase64: certSigB64,
+      };
+      const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+      const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+      const finalInvoiceHash = invoiceHashB64;
+
+      // INSERT pending row — same transaction as the ICV allocation
+      const insertResult = tx
+        .insert(zatcaCreditNotes)
+        .values({
+          orderId,
+          refundId,
+          relatedInvoiceUuid: originalInvoice.uuid,
+          icv,
+          uuid: invUuid,
+          documentId: refund.documentId,
+          invoiceHash: finalInvoiceHash,
+          prevInvoiceHash,
+          xml: finalSignedXml,
+          qrTlv: qrTlvBase64,
+          status: 'pending',
+          attemptNo,
+          reportedAt: null,
+          totalHalalas,
+          vatHalalas,
+          reason: refund.reason || 'Refund',
+          ...createAuditFields(userId, now),
+        } as any)
+        .run();
+      const cnId = Number(insertResult.lastInsertRowid);
+
+      return { cnId, icv, finalInvoiceHash, finalSignedXml, qrTlvBase64 };
+    });
 
     // Clearance
     const clearance = await this.clearanceService.clearDocument({

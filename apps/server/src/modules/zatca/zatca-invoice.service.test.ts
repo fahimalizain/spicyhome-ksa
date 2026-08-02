@@ -863,4 +863,260 @@ describe('ZatcaInvoiceService — credit notes', () => {
       expect(result.signedXml).not.toContain('<cbc:InstructionNote>');
     });
   });
+
+  // ── ICV allocation atomicity (GitHub #133) ─────────────────────────────────
+
+  describe('ICV allocation atomicity', () => {
+    function readLastIcv(): number {
+      const row = sqlite
+        .prepare(`SELECT value FROM settings WHERE key = '${LAST_ICV_KEY}'`)
+        .get() as any;
+      return row ? parseInt(row.value, 10) : 0;
+    }
+
+    // Assert that a promise rejects with a message containing `substring`.
+    // NOTE: errors raised by the SQLite engine (e.g. temp-trigger ABORT) are
+    // created by the better-sqlite3 native addon in a different VM realm
+    // under jest, so `instanceof Error` is false and jest's
+    // `.rejects.toThrow()` misreports them as "did not throw". Asserting on
+    // the rejection message directly is realm-agnostic.
+    async function expectRejectsWithMessage(
+      promise: Promise<unknown>,
+      substring: string,
+    ): Promise<void> {
+      let error: any;
+      try {
+        await promise;
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeDefined();
+      expect(String(error?.message ?? '')).toContain(substring);
+    }
+
+    // Create a simplified paid order WITH document_id and one item.
+    let atomicSeq = 0;
+    function createAtomicOrder(docId: string): number {
+      atomicSeq++;
+      const seq = sqlite
+        .prepare('SELECT COALESCE(MAX(order_no), 0) + 1 AS next FROM orders')
+        .get() as any;
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-10-${String(seq.next).padStart(2, '0')}', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at, updated_at)
+        VALUES (${seq.next}, 'uuid-atomic-${atomicSeq}-${Date.now()}', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, '${docId}', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES (${orderId}, 'Atomic Item', 11500, 1500, 1, 11500, ${now}, ${now})
+      `);
+
+      return orderId;
+    }
+
+    // Create a simplified paid order WITHOUT document_id and one item.
+    function createAtomicOrderWithoutDocId(): number {
+      atomicSeq++;
+      const seq = sqlite
+        .prepare('SELECT COALESCE(MAX(order_no), 0) + 1 AS next FROM orders')
+        .get() as any;
+      sqlite.exec(`
+        INSERT INTO day_openings (business_date, status, opened_at, opened_by, created_at, updated_at)
+        VALUES ('2024-10-${String(seq.next).padStart(2, '0')}', 'open', ${now}, 1, ${now}, ${now})
+      `);
+      const doId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (${seq.next}, 'uuid-atomic-nodoc-${atomicSeq}-${Date.now()}', 'dine_in', ${doId}, 'paid', 10000, 1500, 11500, ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES (${orderId}, 'Atomic Item', 11500, 1500, 1, 11500, ${now}, ${now})
+      `);
+
+      return orderId;
+    }
+
+    // Create a refund WITH a unique document_id for the atomicity tests.
+    let atomicRefundSeq = 0;
+    function createAtomicRefund(orderId: number): number {
+      atomicRefundSeq++;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, document_id, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Atomic refund', 'REF-ATOMIC-${atomicRefundSeq}', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_refund_items (refund_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at)
+        VALUES (${refundId}, 'Atomic Item', 11500, 1500, 1, 11500, ${now})
+      `);
+
+      return refundId;
+    }
+
+    // Create a refund WITHOUT document_id.
+    function createAtomicRefundWithoutDocId(orderId: number): number {
+      atomicRefundSeq++;
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, 1, 'cash', 'Cash', '10', 10000, 1500, 11500, 'Atomic refund', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO order_refund_items (refund_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at)
+        VALUES (${refundId}, 'Atomic Item', 11500, 1500, 1, 11500, ${now})
+      `);
+
+      return refundId;
+    }
+
+    it('createInvoice: insert failure after allocate rolls back last_icv and leaves no row', async () => {
+      const orderId = createAtomicOrder('INV-ATOMIC-001');
+      const before = readLastIcv();
+
+      sqlite.exec(`
+        CREATE TEMP TRIGGER fail_zatca_invoice_insert
+        BEFORE INSERT ON zatca_invoices
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated insert failure');
+        END;
+      `);
+
+      try {
+        await expectRejectsWithMessage(service.createInvoice(orderId), 'simulated insert failure');
+      } finally {
+        sqlite.exec('DROP TRIGGER IF EXISTS fail_zatca_invoice_insert');
+      }
+
+      // last_icv unchanged AND no orphan row for the would-be ICV
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .all(orderId) as any[];
+      expect(rows.length).toBe(0);
+    });
+
+    it('createCreditNote: insert failure after allocate rolls back last_icv and leaves no row', async () => {
+      const orderId = createAtomicOrder('INV-ATOMIC-CN-001');
+      const inv = await service.createInvoice(orderId); // original invoice
+      const refundId = createAtomicRefund(orderId);
+      const before = readLastIcv();
+      expect(before).toBe(inv.icv);
+
+      sqlite.exec(`
+        CREATE TEMP TRIGGER fail_zatca_credit_note_insert
+        BEFORE INSERT ON zatca_credit_notes
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated insert failure');
+        END;
+      `);
+
+      try {
+        await expectRejectsWithMessage(
+          service.createCreditNote(orderId, refundId),
+          'simulated insert failure',
+        );
+      } finally {
+        sqlite.exec('DROP TRIGGER IF EXISTS fail_zatca_credit_note_insert');
+      }
+
+      // last_icv unchanged AND no orphan credit note row for the would-be ICV
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
+        .all(refundId) as any[];
+      expect(rows.length).toBe(0);
+    });
+
+    it('missing order document_id fails fast without consuming an ICV', async () => {
+      const orderId = createAtomicOrderWithoutDocId();
+      const before = readLastIcv();
+
+      await expect(service.createInvoice(orderId)).rejects.toThrow('missing document_id');
+
+      // Fail-fast must not touch last_icv
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .all(orderId) as any[];
+      expect(rows.length).toBe(0);
+    });
+
+    it('missing refund document_id fails fast without consuming an ICV', async () => {
+      const orderId = createAtomicOrder('INV-ATOMIC-CN-NODOC');
+      await service.createInvoice(orderId);
+      const refundId = createAtomicRefundWithoutDocId(orderId);
+      const before = readLastIcv();
+
+      await expect(service.createCreditNote(orderId, refundId)).rejects.toThrow(
+        'missing document_id',
+      );
+
+      // Fail-fast must not touch last_icv
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
+        .all(refundId) as any[];
+      expect(rows.length).toBe(0);
+    });
+
+    it('happy path monotonic ICV across invoice → credit note → invoice with intact PIH chain', async () => {
+      const orderA = createAtomicOrder('INV-ATOMIC-A');
+      const invA = await service.createInvoice(orderA);
+
+      const refundId = createAtomicRefund(orderA);
+      const cn = await service.createCreditNote(orderA, refundId);
+      expect(cn.icv).toBe(invA.icv + 1);
+
+      const orderB = createAtomicOrder('INV-ATOMIC-B');
+      const invB = await service.createInvoice(orderB);
+      expect(invB.icv).toBe(invA.icv + 2);
+
+      // PIH chain: credit note → invoice A hash; invoice B → credit note hash
+      const cnRow = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
+        .get(refundId) as any;
+      expect(cnRow.prev_invoice_hash).toBe(invA.invoiceHash);
+      const invBRow = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE id = ?')
+        .get(invB.id) as any;
+      expect(invBRow.prev_invoice_hash).toBe(cnRow.invoice_hash);
+
+      // last_icv matches the final document's ICV
+      expect(readLastIcv()).toBe(invB.icv);
+    });
+
+    it('second createInvoice for same order returns existing row without bumping ICV', async () => {
+      const orderId = createAtomicOrder('INV-ATOMIC-IDEM');
+      const first = await service.createInvoice(orderId);
+      const before = readLastIcv();
+      expect(before).toBe(first.icv);
+
+      const second = await service.createInvoice(orderId);
+      expect(second.id).toBe(first.id);
+      expect(second.icv).toBe(first.icv);
+      expect(second.uuid).toBe(first.uuid);
+      expect(second.status).toBe('signed');
+      expect(second.invoiceHash).toBe(first.invoiceHash);
+
+      // Idempotent return must not bump the counter
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .all(orderId) as any[];
+      expect(rows.length).toBe(1);
+    });
+  });
 });

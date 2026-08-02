@@ -5,16 +5,16 @@
  * and the ZATCA e-invoicing module. It is called when an order is paid.
  *
  * Flow:
- *   1. Load seller config from settings.
- *   2. Atomically allocate next ICV from `last_icv` setting.
- *   3. Determine PIH from the previous invoice's hash.
- *   4. Build unsigned UBL XML.
- *   5. Compute invoice hash (canonicalize → SHA-256 → base64).
- *   6. Sign the hash with the seller's private key.
- *   7. Embed the signature into the UBL XML.
- *   8. Compute the QR TLV payload.
- *   9. Insert into `zatca_invoices` table with status `signed`.
- *  10. Return the invoice data (including QR payload for receipt printing).
+ *   1. Load order/refund, items, seller config, keys, cert (read-only).
+ *   2. In ONE transaction: atomically allocate the next ICV from the
+ *      `last_icv` setting, determine PIH from the previous document's hash
+ *      (invoice OR credit note), build the unsigned UBL XML, compute the
+ *      invoice hash (canonicalize → SHA-256 → base64), sign the hash with
+ *      the seller's private key, embed the signature, compute the QR TLV
+ *      payload, and insert into `zatca_invoices` with status `signed`.
+ *      The settings bump and the row insert commit together, so a failure
+ *      can never leave a permanent ICV gap with no matching row.
+ *   3. Return the invoice data (including QR payload for receipt printing).
  */
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
@@ -236,18 +236,12 @@ export class ZatcaInvoiceService {
       hour12: false,
     });
 
-    // Allocate ICV and get PIH atomically
-    const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateNextIcv(tx, env, orgUnit);
-    });
-
-    // Generate UUID
-    const invUuid = require('crypto').randomUUID();
-
-    // Build unsigned XML
+    // documentId must exist BEFORE the write transaction — a missing ID is
+    // a fail-fast that must never consume an ICV.
     if (!order.documentId) {
       throw new Error(`Order ${orderId} is missing document_id`);
     }
+
     // One cac:PaymentMeans block per NETTED payment method (BT-81 1..n) —
     // multi-line/correction payments are summed per methodId inside
     // buildInvoicePaymentMeans; zero/negative nets are dropped. Sorted by
@@ -257,115 +251,142 @@ export class ZatcaInvoiceService {
       .from(orderPayments)
       .where(eq(orderPayments.orderId, orderId))
       .all();
-    const xmlInput: InvoiceXMLInput = {
-      documentId: order.documentId,
-      icv,
-      uuid: invUuid,
-      issueDate,
-      issueTime,
-      seller,
-      items: invItems,
-      discountHalalas: order.discountHalalas || 0,
-      prevInvoiceHash,
-      paymentMeans: buildInvoicePaymentMeans(
-        paymentRows.map((p) => ({
-          methodId: p.methodId,
-          methodTitle: p.methodTitle,
-          amountHalalas: p.amountHalalas,
-          zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
-        })),
-      ),
-    };
 
-    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+    // Generate UUID (an orphaned UUID on rollback is harmless)
+    const invUuid = require('crypto').randomUUID();
 
-    // ── Compute invoice hash and sign ──
-    // The invoice hash = SHA-256 of the canonicalized unsigned XML (after
-    // stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference).
-    // This is base64(raw_bytes) — 44 chars.
-    // This same value goes into <ds:DigestValue> AND is sent as `invoiceHash`
-    // in the ZATCA API JSON body.
-    const invoiceHashB64 = computeInvoiceHash(unsignedXml);
-    const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
+    // ── Single atomic transaction: allocate ICV + build + sign + insert ──
+    // The `last_icv` settings bump and the zatca_invoices row commit
+    // together — a failure anywhere in this block can never leave an ICV
+    // gap with no matching row.
+    const { invoiceId, icv, invoiceHash, signedXml, qrTlvBase64 } = this.db.transaction(
+      (tx: any) => {
+        // Allocate ICV and get PIH atomically
+        const { icv, prevInvoiceHash } = this.allocateNextIcv(tx, env, orgUnit);
 
-    // ECDSA signature: sign the SHA-256 hash hex with secp256k1 private key
-    const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
+        const xmlInput: InvoiceXMLInput = {
+          documentId: order.documentId,
+          icv,
+          uuid: invUuid,
+          issueDate,
+          issueTime,
+          seller,
+          items: invItems,
+          discountHalalas: order.discountHalalas || 0,
+          prevInvoiceHash,
+          paymentMeans: buildInvoicePaymentMeans(
+            paymentRows.map((p) => ({
+              methodId: p.methodId,
+              methodTitle: p.methodTitle,
+              amountHalalas: p.amountHalalas,
+              zatcaPaymentMeansCode: p.zatcaPaymentMeansCode,
+            })),
+          ),
+        };
 
-    // ── Certificate: double-base64 decode ──
-    // ZATCA's binarySecurityToken is base64-encoded base64. We decode one
-    // layer here: Buffer.from(certBase64, 'base64').toString('utf-8')
-    // gives us the cert body base64 (e.g. "MIICQjCC...") that goes directly
-    // into <ds:X509Certificate> and is used for cert hashing.
-    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
+        const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
-    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+        // ── Compute invoice hash and sign ──
+        // The invoice hash = SHA-256 of the canonicalized unsigned XML (after
+        // stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference).
+        // This is base64(raw_bytes) — 44 chars.
+        // This same value goes into <ds:DigestValue> AND is sent as `invoiceHash`
+        // in the ZATCA API JSON body.
+        const invoiceHashB64 = computeInvoiceHash(unsignedXml);
+        const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
 
-    // ── QR TLV payload (9 tags) ──
-    // Tag 3 (timestamp): MUST be `${issueDate}T${issueTime}` — the exact
-    // same values that went into <cbc:IssueDate> and <cbc:IssueTime>.
-    // Any mismatch causes "invoiceTimeStamp_QRCODE_INVALID" warning.
-    // Note: no timezone offset suffix — ZATCA expects naive +03:00 time.
-    const timestampIso = `${issueDate}T${issueTime}`;
-    // Tag 9: raw ECDSA signature bytes from the ZATCA-issued X.509 cert
-    const certSigB64 = extractCertSignature(certForXml);
-    const tlvInput: TLVInput = {
-      sellerName,
-      vatNumber,
-      timestamp: timestampIso,
-      totalHalalas: order.totalHalalas,
-      vatHalalas: order.vatHalalas,
-      invoiceHashBase64: invoiceHashB64,
-      signatureBase64: signatureB64,
-      // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
-      // extracted directly from the X.509 certificate (NOT the reconstructed
-      // SPKI from the stored public_key hex — ZATCA validates byte-for-byte
-      // against certPublicKey.getEncoded()).
-      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
-      certificateSignatureBase64: certSigB64,
-    };
-    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
+        // ECDSA signature: sign the SHA-256 hash hex with secp256k1 private key
+        const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
 
-    // Inject QR into signed XML (after signing — QR is excluded from hash)
-    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+        // ── Certificate: double-base64 decode ──
+        // ZATCA's binarySecurityToken is base64-encoded base64. We decode one
+        // layer here: Buffer.from(certBase64, 'base64').toString('utf-8')
+        // gives us the cert body base64 (e.g. "MIICQjCC...") that goes directly
+        // into <ds:X509Certificate> and is used for cert hashing.
+        const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
 
-    // The invoiceHash sent to ZATCA API = DigestValue = hash of unsigned XML
-    // after stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference.
-    // This is the same value as invoiceHashB64 which we embedded in
-    // <ds:DigestValue> for the invoiceSignedData Reference.
-    const finalInvoiceHash = invoiceHashB64;
+        const signedXml = embedSignatureIntoXML(
+          unsignedXml,
+          invoiceHashB64,
+          signatureB64,
+          certForXml,
+        );
 
-    // Insert invoice
-    const result = this.db
-      .insert(zatcaInvoices)
-      .values({
-        orderId,
-        icv,
-        uuid: invUuid,
-        documentId: order.documentId,
-        invoiceHash: finalInvoiceHash,
-        prevInvoiceHash,
-        xml: finalSignedXml,
-        qrTlv: qrTlvBase64,
-        status: 'signed',
-        reportedAt: null,
-        ...createAuditFields(1, now),
-      } as any)
-      .run();
+        // ── QR TLV payload (9 tags) ──
+        // Tag 3 (timestamp): MUST be `${issueDate}T${issueTime}` — the exact
+        // same values that went into <cbc:IssueDate> and <cbc:IssueTime>.
+        // Any mismatch causes "invoiceTimeStamp_QRCODE_INVALID" warning.
+        // Note: no timezone offset suffix — ZATCA expects naive +03:00 time.
+        const timestampIso = `${issueDate}T${issueTime}`;
+        // Tag 9: raw ECDSA signature bytes from the ZATCA-issued X.509 cert
+        const certSigB64 = extractCertSignature(certForXml);
+        const tlvInput: TLVInput = {
+          sellerName,
+          vatNumber,
+          timestamp: timestampIso,
+          totalHalalas: order.totalHalalas,
+          vatHalalas: order.vatHalalas,
+          invoiceHashBase64: invoiceHashB64,
+          signatureBase64: signatureB64,
+          // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
+          // extracted directly from the X.509 certificate (NOT the reconstructed
+          // SPKI from the stored public_key hex — ZATCA validates byte-for-byte
+          // against certPublicKey.getEncoded()).
+          publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
+          certificateSignatureBase64: certSigB64,
+        };
+        const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-    const invoiceId = Number(result.lastInsertRowid);
+        // Inject QR into signed XML (after signing — QR is excluded from hash)
+        const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+
+        // The invoiceHash sent to ZATCA API = DigestValue = hash of unsigned XML
+        // after stripping UBLExtensions, cac:Signature, QR AdditionalDocumentReference.
+        // This is the same value as invoiceHashB64 which we embedded in
+        // <ds:DigestValue> for the invoiceSignedData Reference.
+        const finalInvoiceHash = invoiceHashB64;
+
+        // Insert invoice — same transaction as the ICV allocation
+        const result = tx
+          .insert(zatcaInvoices)
+          .values({
+            orderId,
+            icv,
+            uuid: invUuid,
+            documentId: order.documentId,
+            invoiceHash: finalInvoiceHash,
+            prevInvoiceHash,
+            xml: finalSignedXml,
+            qrTlv: qrTlvBase64,
+            status: 'signed',
+            reportedAt: null,
+            ...createAuditFields(1, now),
+          } as any)
+          .run();
+        const invoiceId = Number(result.lastInsertRowid);
+
+        return {
+          invoiceId,
+          icv,
+          invoiceHash: finalInvoiceHash,
+          signedXml: finalSignedXml,
+          qrTlvBase64,
+        };
+      },
+    );
 
     this.logger.log(
-      `Invoice created: ICV=${icv}, order=${orderId}, hash=${finalInvoiceHash.slice(0, 20)}...`,
+      `Invoice created: ICV=${icv}, order=${orderId}, hash=${invoiceHash.slice(0, 20)}...`,
     );
 
     return {
       id: invoiceId,
       icv,
       uuid: invUuid,
-      invoiceHash: finalInvoiceHash,
+      invoiceHash,
       status: 'signed',
       qrTlvBase64,
-      signedXml: finalSignedXml,
+      signedXml,
     };
   }
 
@@ -457,96 +478,109 @@ export class ZatcaInvoiceService {
       hour12: false,
     });
 
-    // 9. Allocate ICV and get PIH atomically (checks both zatca_invoices and zatca_credit_notes)
-    const { icv, prevInvoiceHash } = this.db.transaction((tx: any) => {
-      return this.allocateNextIcv(tx, env, orgUnit);
-    });
-
-    // 10. Generate UUID
-    const invUuid = require('crypto').randomUUID();
-
-    // 11. Build unsigned XML
+    // 9. documentId must exist BEFORE the write transaction — a missing ID is
+    // a fail-fast that must never consume an ICV.
     if (!refund.documentId) {
       throw new Error(`Refund ${refundId} is missing document_id`);
     }
-    const xmlInput: InvoiceXMLInput = {
-      type: 'credit_note',
-      documentId: refund.documentId,
-      icv,
-      uuid: invUuid,
-      issueDate,
-      issueTime,
-      seller,
-      items: invItems,
-      prevInvoiceHash,
-      billingReferenceId: originalInvoice.uuid,
-      // Single block from the refund tender: KSA-10 reason + method snapshot
-      paymentMeans: buildCreditNotePaymentMeans({
-        methodId: refund.methodId,
-        methodTitle: refund.methodTitle,
-        zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
-        reason: refund.reason || 'Refund',
-        amountHalalas: refund.totalHalalas,
-      }),
-    };
 
-    const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+    // 10. Generate UUID (an orphaned UUID on rollback is harmless)
+    const invUuid = require('crypto').randomUUID();
 
-    // 12. Compute invoice hash and sign
-    const invoiceHashB64 = computeInvoiceHash(unsignedXml);
-    const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
-    const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
-    const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
-    const signedXml = embedSignatureIntoXML(unsignedXml, invoiceHashB64, signatureB64, certForXml);
+    // 11. Single atomic transaction: allocate ICV + build + sign + insert.
+    // The `last_icv` settings bump and the zatca_credit_notes row commit
+    // together — a failure anywhere in this block can never leave an ICV
+    // gap with no matching row.
+    const { creditNoteId, icv, invoiceHash } = this.db.transaction((tx: any) => {
+      // Allocate ICV and get PIH atomically (checks both zatca_invoices and zatca_credit_notes)
+      const { icv, prevInvoiceHash } = this.allocateNextIcv(tx, env, orgUnit);
 
-    // 13. QR TLV
-    const timestampIso = `${issueDate}T${issueTime}`;
-    const certSigB64 = extractCertSignature(certForXml);
-    const tlvInput: TLVInput = {
-      sellerName,
-      vatNumber,
-      timestamp: timestampIso,
-      totalHalalas,
-      vatHalalas,
-      invoiceHashBase64: invoiceHashB64,
-      signatureBase64: signatureB64,
-      publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
-      certificateSignatureBase64: certSigB64,
-    };
-    const qrTlvBase64 = encodeZatcaTLV(tlvInput);
-
-    // 14. Inject QR into signed XML
-    const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
-
-    const finalInvoiceHash = invoiceHashB64;
-
-    // 15. Insert credit note
-    const result = this.db
-      .insert(zatcaCreditNotes)
-      .values({
-        orderId,
-        refundId,
-        relatedInvoiceUuid: originalInvoice.uuid,
+      const xmlInput: InvoiceXMLInput = {
+        type: 'credit_note',
+        documentId: refund.documentId,
         icv,
         uuid: invUuid,
-        documentId: refund.documentId,
-        invoiceHash: finalInvoiceHash,
+        issueDate,
+        issueTime,
+        seller,
+        items: invItems,
         prevInvoiceHash,
-        xml: finalSignedXml,
-        qrTlv: qrTlvBase64,
-        status: 'signed',
-        reportedAt: null,
+        billingReferenceId: originalInvoice.uuid,
+        // Single block from the refund tender: KSA-10 reason + method snapshot
+        paymentMeans: buildCreditNotePaymentMeans({
+          methodId: refund.methodId,
+          methodTitle: refund.methodTitle,
+          zatcaPaymentMeansCode: refund.zatcaPaymentMeansCode,
+          reason: refund.reason || 'Refund',
+          amountHalalas: refund.totalHalalas,
+        }),
+      };
+
+      const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
+
+      // 12. Compute invoice hash and sign
+      const invoiceHashB64 = computeInvoiceHash(unsignedXml);
+      const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
+      const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
+      const certForXml = Buffer.from(certBase64, 'base64').toString('utf-8');
+      const signedXml = embedSignatureIntoXML(
+        unsignedXml,
+        invoiceHashB64,
+        signatureB64,
+        certForXml,
+      );
+
+      // 13. QR TLV
+      const timestampIso = `${issueDate}T${issueTime}`;
+      const certSigB64 = extractCertSignature(certForXml);
+      const tlvInput: TLVInput = {
+        sellerName,
+        vatNumber,
+        timestamp: timestampIso,
         totalHalalas,
         vatHalalas,
-        reason: refund.reason || 'Refund',
-        ...createAuditFields(1, now),
-      } as any)
-      .run();
+        invoiceHashBase64: invoiceHashB64,
+        signatureBase64: signatureB64,
+        publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
+        certificateSignatureBase64: certSigB64,
+      };
+      const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-    const creditNoteId = Number(result.lastInsertRowid);
+      // 14. Inject QR into signed XML
+      const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
+
+      const finalInvoiceHash = invoiceHashB64;
+
+      // 15. Insert credit note — same transaction as the ICV allocation
+      const result = tx
+        .insert(zatcaCreditNotes)
+        .values({
+          orderId,
+          refundId,
+          relatedInvoiceUuid: originalInvoice.uuid,
+          icv,
+          uuid: invUuid,
+          documentId: refund.documentId,
+          invoiceHash: finalInvoiceHash,
+          prevInvoiceHash,
+          xml: finalSignedXml,
+          qrTlv: qrTlvBase64,
+          status: 'signed',
+          reportedAt: null,
+          totalHalalas,
+          vatHalalas,
+          reason: refund.reason || 'Refund',
+          ...createAuditFields(1, now),
+        } as any)
+        .run();
+
+      const creditNoteId = Number(result.lastInsertRowid);
+
+      return { creditNoteId, icv, invoiceHash: finalInvoiceHash };
+    });
 
     this.logger.log(
-      `Credit note created: ICV=${icv}, order=${orderId}, refund=${refundId}, hash=${finalInvoiceHash.slice(0, 20)}...`,
+      `Credit note created: ICV=${icv}, order=${orderId}, refund=${refundId}, hash=${invoiceHash.slice(0, 20)}...`,
     );
 
     return { id: creditNoteId, icv, uuid: invUuid };

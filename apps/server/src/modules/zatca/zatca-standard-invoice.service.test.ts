@@ -2022,4 +2022,114 @@ describe('ZatcaStandardInvoiceService', () => {
       expect(getRejectedEventsCount(orderId)).toBe(1);
     });
   });
+
+  // ── ICV allocation atomicity (GitHub #133) ────────────────────────────────
+
+  describe('ICV allocation atomicity (clearance attempt)', () => {
+    const LAST_ICV_KEY = zatcaKey('simulation', TEST_ORG_UNIT, 'last_icv');
+
+    function readLastIcv(): number {
+      const row = sqlite
+        .prepare(`SELECT value FROM settings WHERE key = '${LAST_ICV_KEY}'`)
+        .get() as any;
+      return row ? parseInt(row.value, 10) : 0;
+    }
+
+    // Assert that a promise rejects with a message containing `substring`.
+    // NOTE: errors raised by the SQLite engine (e.g. temp-trigger ABORT) are
+    // created by the better-sqlite3 native addon in a different VM realm
+    // under jest, so `instanceof Error` is false and jest's
+    // `.rejects.toThrow()` misreports them as "did not throw". Asserting on
+    // the rejection message directly is realm-agnostic.
+    async function expectRejectsWithMessage(
+      promise: Promise<unknown>,
+      substring: string,
+    ): Promise<void> {
+      let error: any;
+      try {
+        await promise;
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeDefined();
+      expect(String(error?.message ?? '')).toContain(substring);
+    }
+
+    it('attemptClearance: insert failure after allocate rolls back last_icv, leaves no row, never calls clearance', async () => {
+      const orderId = createStandardOrder();
+      const before = readLastIcv();
+
+      sqlite.exec(`
+        CREATE TEMP TRIGGER fail_zatca_invoice_insert
+        BEFORE INSERT ON zatca_invoices
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated insert failure');
+        END;
+      `);
+
+      try {
+        await expectRejectsWithMessage(
+          standardService.createStandardInvoice(orderId, 1),
+          'simulated insert failure',
+        );
+      } finally {
+        sqlite.exec('DROP TRIGGER IF EXISTS fail_zatca_invoice_insert');
+      }
+
+      // last_icv unchanged AND no orphan row for the would-be ICV
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_invoices WHERE order_id = ?')
+        .all(orderId) as any[];
+      expect(rows.length).toBe(0);
+
+      // Clearance API must never be reached when the insert aborts
+      expect(fakeHttp.requests.length).toBe(0);
+    });
+
+    it('attemptCreditNoteClearance: insert failure after allocate rolls back last_icv, leaves no row, never calls clearance', async () => {
+      const orderId = createStandardOrder();
+
+      fakeHttp.responses.set('clearance', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clearanceStatus: 'CLEARED',
+          clearedInvoice: Buffer.from('<Invoice/>').toString('base64'),
+        }),
+      });
+      await standardService.createStandardInvoice(orderId, 1);
+      fakeHttp.requests = [];
+
+      const refundId = createRefundForStandardOrder(orderId);
+      const before = readLastIcv();
+
+      sqlite.exec(`
+        CREATE TEMP TRIGGER fail_zatca_credit_note_insert
+        BEFORE INSERT ON zatca_credit_notes
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated insert failure');
+        END;
+      `);
+
+      try {
+        await expectRejectsWithMessage(
+          standardService.createStandardCreditNote(orderId, refundId, 1),
+          'simulated insert failure',
+        );
+      } finally {
+        sqlite.exec('DROP TRIGGER IF EXISTS fail_zatca_credit_note_insert');
+      }
+
+      // last_icv unchanged AND no orphan credit note row for the would-be ICV
+      expect(readLastIcv()).toBe(before);
+      const rows = sqlite
+        .prepare('SELECT * FROM zatca_credit_notes WHERE refund_id = ?')
+        .all(refundId) as any[];
+      expect(rows.length).toBe(0);
+
+      // Clearance API must never be reached when the insert aborts
+      expect(fakeHttp.requests.length).toBe(0);
+    });
+  });
 });
