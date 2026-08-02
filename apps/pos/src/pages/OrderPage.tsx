@@ -11,12 +11,12 @@ import { OskDock } from '../components/on-screen-keyboard/OskDock';
 import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
 import { StandardInvoiceBuyerModal } from '../components/orders/StandardInvoiceBuyerModal';
+import { OrderVoidModal } from '../components/orders/OrderVoidModal';
 import {
   emptyStandardInvoiceBuyer,
   validateStandardBuyer,
   type ZatcaBuyerDetails,
 } from '../components/orders/StandardInvoiceBuyerForm';
-import { ConfirmActionButton } from '../components/ConfirmActionButton';
 import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
@@ -164,6 +164,9 @@ export function OrderPage() {
   // Open order receipt (non-ZATCA guest slip, Summary tab)
   const [printingOpenReceipt, setPrintingOpenReceipt] = useState(false);
   const [openReceiptMessage, setOpenReceiptMessage] = useState('');
+
+  // Order void modal (#153) — collects the required free-text reason
+  const [showVoidModal, setShowVoidModal] = useState(false);
 
   // Standard invoice state (Summary tab)
   const [isStandardInvoice, setIsStandardInvoice] = useState(false);
@@ -471,6 +474,7 @@ export function OrderPage() {
     setShowStandardInvoiceModal(false);
     setStandardInvoiceSaving(false);
     setShowClearance(false);
+    setShowVoidModal(false);
     setPrintingOpenReceipt(false);
     setOpenReceiptMessage('');
     setSearchParams({}, { replace: true });
@@ -806,20 +810,12 @@ export function OrderPage() {
   }
 
   // ── Void ──
+  // The OrderVoidModal owns the API call + loading/error; this only flips the
+  // local status and closes the modal once the void succeeded server-side.
 
-  async function handleVoid() {
-    if (!currentOrder) return;
-    setLoading(true);
-    setError('');
-    try {
-      await client.orders.void(currentOrder.id);
-      setCurrentOrder((prev) => (prev ? { ...prev, status: 'voided' } : null));
-    } catch (e: any) {
-      // Server rejects when payments net ≠ 0 — surface the guidance
-      setError(e.message || 'Failed to void order');
-    } finally {
-      setLoading(false);
-    }
+  function handleVoided() {
+    setCurrentOrder((prev) => (prev ? { ...prev, status: 'voided' } : null));
+    setShowVoidModal(false);
   }
 
   // ── Cart mutations (ALL local — no API calls for open orders) ──
@@ -1834,16 +1830,14 @@ export function OrderPage() {
                     </button>
                   )}
                   {showVoid && (
-                    <ConfirmActionButton
-                      textContent="Void Order"
-                      confirmTextContent="Confirm Void Order"
-                      onConfirm={handleVoid}
+                    <button
+                      type="button"
+                      onClick={() => setShowVoidModal(true)}
                       disabled={loading}
-                      busy={loading}
-                      busyTextContent="Voiding..."
-                      className="flex-1 min-w-0 touch-target bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 py-3"
-                      confirmClassName="flex-1 min-w-0 touch-target bg-red-900 hover:bg-red-800 rounded-lg text-sm font-bold text-red-100 py-3"
-                    />
+                      className="flex-1 min-w-0 touch-target bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-gray-300 py-3"
+                    >
+                      Void Order
+                    </button>
                   )}
                 </div>
               )}
@@ -2127,6 +2121,17 @@ export function OrderPage() {
           partnerTitle={cart.deliveryPartnerTitle}
           onSaved={handlePartnerPricesSaved}
           onClose={() => setShowPartnerPriceModal(false)}
+        />
+      )}
+
+      {/* Order void modal (#153) — required free-text reason, modal owns the
+          API call */}
+      {showVoidModal && currentOrder && (
+        <OrderVoidModal
+          orderId={currentOrder.id}
+          orderLabel={currentOrder.documentId ? `Order ${currentOrder.documentId}` : undefined}
+          onVoided={handleVoided}
+          onClose={() => setShowVoidModal(false)}
         />
       )}
 

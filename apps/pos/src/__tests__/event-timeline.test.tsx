@@ -130,6 +130,33 @@ describe('OrderEventTimeline', () => {
     expect(labelTexts[2]).toBe('Order Created');
   });
 
+  it('renders a voided event with a reason alongside one without', async () => {
+    mockGetEvents.mockResolvedValue([
+      makeEvent({
+        id: 1,
+        eventIdx: 1,
+        type: 'voided',
+        payload: JSON.stringify({ fromStatus: 'open' }),
+      }),
+      makeEvent({
+        id: 2,
+        eventIdx: 2,
+        type: 'voided',
+        payload: JSON.stringify({ fromStatus: 'open', reason: '  Customer left  ' }),
+      }),
+    ]);
+    render(<OrderEventTimeline orderId={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Timeline')).toBeInTheDocument();
+    });
+
+    // Historical voids without a reason still render cleanly
+    expect(screen.getByText('Order Voided. From: open')).toBeInTheDocument();
+    // New voids carry the trimmed reason (#153)
+    expect(screen.getByText('Order Voided. From: open. Reason: Customer left')).toBeInTheDocument();
+  });
+
   it('shows verify chain button and result', async () => {
     mockGetEvents.mockResolvedValue([
       makeEvent({
