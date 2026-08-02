@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
+import { OskDock } from '../components/on-screen-keyboard/OskDock';
 
 export function DayPage() {
   const [day, setDay] = useState<any>(null);
@@ -235,19 +236,23 @@ export function DayPage() {
                 </div>
               )}
 
-              <div className="bg-gray-800 rounded-xl p-6">
+              <div data-osk-scope className="bg-gray-800 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Close Day</h3>
                 <div className="mb-4">
                   <label className="block text-sm text-gray-300 mb-2">Closing Cash (SAR)</label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
                     value={closingCash}
                     onChange={(e) => setClosingCash(e.target.value)}
                     placeholder="0.00"
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl max-w-xs"
                   />
                 </div>
+                {/* Inline keyboard dock: the numpad portals in here while the
+                    closing cash field is focused. Zero footprint otherwise. */}
+                <OskDock size="md" className="mt-4 mb-4" />
                 <button
                   onClick={handleClose}
                   disabled={loading || !closingCash}

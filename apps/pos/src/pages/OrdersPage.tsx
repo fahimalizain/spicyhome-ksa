@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { halalasToSar } from '@spicyhome/shared';
+import { halalasToSar, getServiceDayString, ALL_ORDER_STATUSES } from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
 import { usePermissions } from '../hooks/usePermissions';
@@ -13,6 +13,7 @@ import type {
   OrderResponse,
   OrderSummaryResponse,
   OrderRefundResponse,
+  UserOptionResponse,
 } from '@spicyhome/client-ts';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -22,10 +23,22 @@ const STATUS_LABELS: Record<string, string> = {
   refunded: 'Refunded',
 };
 
+// Active filter-pill colors, tinted per status (mirrors the status-* badge colors).
+const STATUS_PILL_ACTIVE: Record<string, string> = {
+  open: 'bg-yellow-700/90 border-yellow-500 text-yellow-100',
+  paid: 'bg-green-700/90 border-green-500 text-green-100',
+  voided: 'bg-red-700/90 border-red-500 text-red-100',
+  refunded: 'bg-purple-700/90 border-purple-500 text-purple-100',
+};
+
 export function OrdersPage() {
   const permissions = usePermissions();
   const [orders, setOrders] = useState<OrderSummaryResponse[]>([]);
+  // Full-page spinner only for the very first load; filter-driven reloads
+  // keep the page chrome mounted and only spin the list area.
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
   const [showRefund, setShowRefund] = useState(false);
@@ -34,6 +47,28 @@ export function OrdersPage() {
   const [previousDocumentIds, setPreviousDocumentIds] = useState<string[]>([]);
   const navigate = useNavigate();
 
+  // ── Filters (server-side) ────────────────────────────────────────────────
+  // Date: default current service day (Asia/Riyadh 05:00 boundary, per
+  // ADR 0008 — the same window the server uses for the orders list filter).
+  // Status: multiselect, default open only; empty selection → no status
+  // filter. User: all users (no userId sent) unless a specific user is
+  // picked.
+  const [selectedDate, setSelectedDate] = useState(() => getServiceDayString(Date.now()));
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
+    () => new Set([ALL_ORDER_STATUSES[0]]),
+  );
+  const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
+  const [users, setUsers] = useState<UserOptionResponse[]>([]);
+
+  // Current filter state, mirrored into a ref so the realtime handlers
+  // (registered once) always refresh the list with the active filters.
+  const filtersRef = useRef<{ status?: string; date?: string; userId?: number }>({});
+  filtersRef.current = {
+    status: selectedStatuses.size > 0 ? [...selectedStatuses].join(',') : undefined,
+    date: selectedDate,
+    userId: selectedUserId,
+  };
+
   // Current selected order id, kept in a ref so realtime handlers (registered
   // once) always refresh the order the user is currently viewing.
   const selectedOrderIdRef = useRef<number | null>(null);
@@ -41,6 +76,23 @@ export function OrdersPage() {
 
   useEffect(() => {
     loadOrders();
+  }, [selectedDate, selectedStatuses, selectedUserId]);
+
+  // Active users for the user filter dropdown (best-effort: failures leave
+  // only "All users").
+  useEffect(() => {
+    let cancelled = false;
+    client.auth
+      .listActiveUsers()
+      .then((u) => {
+        if (!cancelled) setUsers(u);
+      })
+      .catch(() => {
+        if (!cancelled) setUsers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -50,8 +102,9 @@ export function OrdersPage() {
    */
   const refreshAll = useCallback(async () => {
     try {
-      const res = await client.orders.list();
+      const res = await client.orders.list({ ...filtersRef.current });
       setOrders(res);
+      setError('');
     } catch {
       setError('Failed to load orders');
     }
@@ -93,17 +146,41 @@ export function OrdersPage() {
     };
   }, [refreshAll]);
 
-  /** Initial load only — shows the full-page spinner. */
+  /**
+   * Load the order list with the active filters. The first load uses the
+   * full-page spinner; every later (filter-driven) reload keeps the header,
+   * filter bar and selected-order detail mounted and only shows a spinner
+   * over the list area, so the user keeps seeing what they clicked.
+   */
   async function loadOrders() {
-    setLoading(true);
+    if (hasLoadedOnceRef.current) {
+      setListLoading(true);
+    } else {
+      setLoading(true);
+    }
     try {
-      const res = await client.orders.list();
+      const res = await client.orders.list({ ...filtersRef.current });
       setOrders(res);
+      setError('');
     } catch {
       setError('Failed to load orders');
     } finally {
       setLoading(false);
+      setListLoading(false);
+      hasLoadedOnceRef.current = true;
     }
+  }
+
+  function toggleStatus(status: string) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
   }
 
   async function viewOrder(id: number) {
@@ -123,7 +200,9 @@ export function OrdersPage() {
     }
   }
 
-  if (loading) {
+  // Full-page spinner only until the first list load completes (success or
+  // failure). Filter-driven reloads render the page chrome normally.
+  if (loading && !hasLoadedOnceRef.current) {
     return (
       <div className="h-full flex items-center justify-center text-gray-400">Loading orders...</div>
     );
@@ -148,39 +227,118 @@ export function OrdersPage() {
 
           {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
 
-          <div className="space-y-2">
-            {orders.map((order) => (
-              <button
-                key={order.id}
-                onClick={() => viewOrder(order.id)}
-                className={`w-full text-left bg-gray-800 hover:bg-gray-750 rounded-lg p-3 ${
-                  selectedOrder?.id === order.id ? 'ring-2 ring-brand-500' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-bold text-white">{order.documentId}</span>
-                    <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${order.status}`}>
-                      {STATUS_LABELS[order.status] || order.status}
+          {/* Filter bar — server-side filters, every change reloads the list */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="orders-filter-date" className="text-xs text-gray-400">
+              Date
+            </label>
+            <input
+              id="orders-filter-date"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+            />
+            <label htmlFor="orders-filter-user" className="text-xs text-gray-400 ml-2">
+              User
+            </label>
+            <select
+              id="orders-filter-user"
+              value={selectedUserId ?? ''}
+              onChange={(e) =>
+                setSelectedUserId(e.target.value === '' ? undefined : Number(e.target.value))
+              }
+              className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white"
+            >
+              <option value="">All users</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name || u.username}
+                </option>
+              ))}
+            </select>
+            {ALL_ORDER_STATUSES.map((status) => {
+              const active = selectedStatuses.has(status);
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleStatus(status)}
+                  className={`inline-flex items-center justify-center h-9 px-3.5 rounded-full text-xs font-semibold select-none border transition-colors ${
+                    active
+                      ? STATUS_PILL_ACTIVE[status]
+                      : 'bg-gray-800/80 border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  {STATUS_LABELS[status]}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative">
+            <div className="space-y-2">
+              {orders.map((order) => (
+                <button
+                  key={order.id}
+                  onClick={() => viewOrder(order.id)}
+                  className={`w-full text-left bg-gray-800 hover:bg-gray-750 rounded-lg p-3 ${
+                    selectedOrder?.id === order.id ? 'ring-2 ring-brand-500' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-bold text-white">{order.documentId}</span>
+                      <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${order.status}`}>
+                        {STATUS_LABELS[order.status] || order.status}
+                      </span>
+                    </div>
+                    <span className="text-sm text-brand-400">
+                      {halalasToSar(order.totalHalalas)} SAR
                     </span>
                   </div>
-                  <span className="text-sm text-brand-400">
-                    {halalasToSar(order.totalHalalas)} SAR
-                  </span>
+                  <div className="flex items-center justify-between gap-3 mt-1 text-xs text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 min-w-0">
+                      <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
+                      {order.tableId != null && (
+                        <span>Table #{order.tableId as unknown as number}</span>
+                      )}
+                      {order.status === 'open' && (
+                        <span
+                          className={
+                            order.kitchenPrintedQty !== order.itemQtyTotal
+                              ? 'text-amber-400 font-semibold'
+                              : undefined
+                          }
+                        >
+                          Kitchen Qty Printed: {order.kitchenPrintedQty} / {order.itemQtyTotal}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 ml-auto">
+                      {new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </button>
+              ))}
+              {orders.length === 0 && (
+                <div className="text-gray-500 text-center mt-8">No orders match filters</div>
+              )}
+            </div>
+
+            {/* List-area spinner during filter-driven reloads — the header,
+                filter bar and selected order detail stay mounted above/right. */}
+            {listLoading && (
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center bg-gray-900/60"
+                aria-busy="true"
+              >
+                <div className="flex items-center gap-2 text-gray-400">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-brand-500" />
+                  <span>Loading...</span>
                 </div>
-                <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                  <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
-                  {order.tableId != null && (
-                    <span>Table #{order.tableId as unknown as number}</span>
-                  )}
-                  <span>
-                    {new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}
-                  </span>
-                </div>
-              </button>
-            ))}
-            {orders.length === 0 && (
-              <div className="text-gray-500 text-center mt-8">No orders yet</div>
+              </div>
             )}
           </div>
         </div>

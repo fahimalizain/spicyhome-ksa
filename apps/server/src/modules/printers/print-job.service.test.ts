@@ -799,8 +799,9 @@ describe('PrintJobService', () => {
       expect(transport.sent.length).toBe(2);
       const str = transport.sent[0].data.toString('ascii');
       expect(str).toContain('NOTES: call on arrival');
-      expect(str).toContain('* no ice');
-      expect(str).toContain('2 Test Item');
+      expect(str).toContain('    Notes: no ice');
+      expect(str).toContain('1. Test Item');
+      expect(str).toContain('    Qty: 2x');
     });
   });
 });

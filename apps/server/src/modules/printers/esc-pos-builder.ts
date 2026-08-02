@@ -52,6 +52,12 @@ export class EscPosBuilder {
     return this;
   }
 
+  /** Double height only (normal width). One step below full doubleSize. */
+  doubleHeight(on: boolean): this {
+    this.cmd([GS, 0x21, on ? 0x10 : 0x00]); // GS ! n (h×2)
+    return this;
+  }
+
   underline(on: boolean): this {
     this.cmd([ESC, 0x2d, on ? 1 : 0]); // ESC - n
     return this;

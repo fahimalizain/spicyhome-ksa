@@ -160,6 +160,36 @@
         ]
       }
     },
+    "/auth/active-users": {
+      "get": {
+        "operationId": "AuthController_listActiveUsers",
+        "summary": "List active users (id, username, name) for filter dropdowns — no manage_users required",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of active users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserOptionResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/auth/users/{id}": {
       "get": {
         "operationId": "AuthController_getUser",
@@ -1059,19 +1089,31 @@
         "parameters": [
           {
             "name": "status",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "date",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter.",
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Filter by orders.created_by (user id). Omit → no user filter."
           }
         ],
         "responses": {
@@ -1237,6 +1279,53 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateOrderPartnerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/standard-invoice": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderStandardInvoice",
+        "summary": "Set or clear ZATCA standard invoice buyer details on an open order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderStandardInvoiceDto"
               }
             }
           }
@@ -3359,6 +3448,29 @@
           "updatedBy"
         ]
       },
+      "UserOptionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "username": {
+            "type": "string",
+            "example": "cashier1"
+          },
+          "name": {
+            "type": "string",
+            "example": "Ahmed"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name"
+        ]
+      },
       "CreateUserDto": {
         "type": "object",
         "properties": {
@@ -4352,6 +4464,18 @@
             "format": "int64",
             "example": 1,
             "nullable": true
+          },
+          "kitchenPrintedQty": {
+            "type": "integer",
+            "format": "int64",
+            "example": 3,
+            "description": "Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006)."
+          },
+          "itemQtyTotal": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5,
+            "description": "Sum of current order line quantities for this order."
           }
         },
         "required": [
@@ -4374,7 +4498,9 @@
           "createdAt",
           "updatedAt",
           "createdBy",
-          "updatedBy"
+          "updatedBy",
+          "kitchenPrintedQty",
+          "itemQtyTotal"
         ]
       },
       "ZatcaBuyerDetailsDto": {
@@ -4857,6 +4983,34 @@
           "baseUpdatedAt"
         ]
       },
+      "UpdateOrderStandardInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "isStandardInvoice": {
+            "type": "boolean",
+            "description": "Enable (true) or clear (false) the ZATCA standard invoice buyer details.",
+            "example": false
+          },
+          "zatcaBuyerDetails": {
+            "description": "ZATCA standard invoice buyer details — required when isStandardInvoice is true; ignored when false.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaBuyerDetailsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "isStandardInvoice"
+        ]
+      },
       "UpdateOrderItemUnitPriceDto": {
         "type": "object",
         "properties": {
@@ -5009,6 +5163,11 @@
                 "$ref": "#/components/schemas/ZatcaBuyerDetailsDto"
               }
             ]
+          },
+          "printReceipt": {
+            "type": "boolean",
+            "description": "Controls the automatic receipt print on submit for SIMPLIFIED invoices only. Defaults to true when omitted (current behavior). When false on a simplified invoice, the receipt print is skipped (no receipt_print_enqueued event and no physical print), but if a positive cash payment exists the cash drawer is still kicked. IGNORED for standard invoices: their receipt is always deferred until ZATCA clearance, and the cash drawer is kicked on submit for cash orders regardless of this flag.",
+            "example": true
           }
         }
       },

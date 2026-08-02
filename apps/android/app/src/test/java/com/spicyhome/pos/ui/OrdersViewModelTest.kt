@@ -3,17 +3,22 @@ package com.spicyhome.pos.ui.orders
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import com.google.common.truth.Truth.assertThat
+import com.spicyhome.client.apis.AuthApi
 import com.spicyhome.client.apis.OrdersApi
 import com.spicyhome.client.apis.TablesApi
+import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderItemResponse
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.client.models.TableResponse
+import com.spicyhome.client.models.UserOptionResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
+import com.spicyhome.pos.util.ServiceDay
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -39,6 +44,7 @@ class OrdersViewModelTest {
     private lateinit var realtimeClient: RealtimeClient
     private lateinit var ordersApi: OrdersApi
     private lateinit var tablesApi: TablesApi
+    private lateinit var authApi: AuthApi
 
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
@@ -52,25 +58,63 @@ class OrdersViewModelTest {
         realtimeClient = mockk(relaxed = true)
         ordersApi = mockk(relaxed = true)
         tablesApi = mockk(relaxed = true)
+        authApi = mockk(relaxed = true)
 
         every { preferencesManager.serverUrl } returns serverUrlFlow
         every { preferencesManager.authToken } returns authTokenFlow
         every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
         every { apiClientProvider.createTablesApi(any(), any()) } returns tablesApi
+        every { apiClientProvider.createAuthApi(any(), any()) } returns authApi
 
         // Stub empty realtime flows so viewModel init coroutines suspend gracefully
         every { realtimeClient.events } returns MutableSharedFlow(replay = 0, extraBufferCapacity = 0)
         every { realtimeClient.reconnected } returns MutableSharedFlow(replay = 0, extraBufferCapacity = 0)
 
+        // Stub auth so the default filters (me.id) are known before the first list call.
+        val meCall = mockk<Call<MeResponse>>(relaxed = true)
+        every { authApi.authControllerGetMe() } returns meCall
+        every { meCall.execute() } returns Response.success(meResponse())
+
+        val usersCall = mockk<Call<List<UserOptionResponse>>>(relaxed = true)
+        every { authApi.authControllerListActiveUsers() } returns usersCall
+        every { usersCall.execute() } returns Response.success(
+            listOf(
+                UserOptionResponse(id = 1L, username = "admin", name = "Administrator"),
+                UserOptionResponse(id = 2L, username = "cashier", name = "Cashier"),
+            )
+        )
+
         // Stub listOrders so the init's loadOrders() call succeeds
         val listCall = mockk<Call<List<OrderSummaryResponse>>>(relaxed = true)
-        every { ordersApi.ordersControllerListOrders(any(), any()) } returns listCall
+        every { ordersApi.ordersControllerListOrders(any(), any(), any()) } returns listCall
         every { listCall.execute() } returns Response.success(emptyList())
 
         // Stub listTables (best-effort) so the init's loadTables() call succeeds
         val tablesCall = mockk<Call<List<TableResponse>>>(relaxed = true)
         every { tablesApi.tablesControllerList() } returns tablesCall
         every { tablesCall.execute() } returns Response.success(emptyList())
+    }
+
+    private fun meResponse(id: Long = 1L): MeResponse {
+        return MeResponse(
+            id = id,
+            username = "admin",
+            name = "Administrator",
+            roleId = 1L,
+            isActive = true,
+            roleName = "admin",
+            createOrder = true,
+            updateOrder = true,
+            deleteOrderItem = true,
+            voidOrder = true,
+            refundOrder = true,
+            payOrder = true,
+            manageMenu = true,
+            manageTables = true,
+            managePrinters = true,
+            manageUsers = true,
+            manageSettings = true,
+        )
     }
 
     @After
@@ -114,6 +158,8 @@ class OrdersViewModelTest {
             updatedAt = 1700000000L,
             createdBy = 1L,
             updatedBy = 1L,
+            kitchenPrintedQty = 0L,
+            itemQtyTotal = 0L,
         )
     }
 
@@ -281,7 +327,7 @@ class OrdersViewModelTest {
         every { failingCall.execute() } returns Response.error(500, okhttp3.ResponseBody.create(null, "boom"))
 
         val ordersCall = mockk<Call<List<OrderSummaryResponse>>>(relaxed = true)
-        every { ordersApi.ordersControllerListOrders(any(), any()) } returns ordersCall
+        every { ordersApi.ordersControllerListOrders(any(), any(), any()) } returns ordersCall
         every { ordersCall.execute() } returns Response.success(listOf(createSummary(7L, 3003L)))
 
         vm.loadOrders()
@@ -289,5 +335,88 @@ class OrdersViewModelTest {
         assertThat(vm.uiState.value.tablesById).containsEntry(1L, "T12")
         assertThat(vm.uiState.value.orders).hasSize(1)
         assertThat(vm.uiState.value.error).isNull()
+    }
+
+    @Test
+    fun `default filters - status open, today date, current user id`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        // init flow: me + active users loaded, then the first list call.
+        assertThat(vm.uiState.value.currentUserId).isEqualTo(1L)
+        assertThat(vm.uiState.value.userId).isEqualTo(1L)
+        assertThat(vm.uiState.value.date).isEqualTo(ServiceDay.getServiceDayString(System.currentTimeMillis()))
+        assertThat(vm.uiState.value.statuses).containsExactly("open")
+
+        verify {
+            ordersApi.ordersControllerListOrders(
+                "open",
+                ServiceDay.getServiceDayString(System.currentTimeMillis()),
+                1L,
+            )
+        }
+    }
+
+    @Test
+    fun `me failure falls back to all users filter`() = runTest(testDispatcher) {
+        val meCall = mockk<Call<MeResponse>>(relaxed = true)
+        every { authApi.authControllerGetMe() } returns meCall
+        every { meCall.execute() } returns Response.error(500, okhttp3.ResponseBody.create(null, "boom"))
+
+        val vm = createViewModel()
+
+        assertThat(vm.uiState.value.currentUserId).isNull()
+        assertThat(vm.uiState.value.userId).isNull()
+        verify {
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), null)
+        }
+    }
+
+    @Test
+    fun `toggleStatus adds and removes statuses - empty set means no status filter`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        vm.toggleStatus("paid")
+        assertThat(vm.uiState.value.statuses).containsExactly("open", "paid")
+        verify {
+            ordersApi.ordersControllerListOrders("open,paid", ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
+        }
+
+        vm.toggleStatus("open")
+        assertThat(vm.uiState.value.statuses).containsExactly("paid")
+        verify {
+            ordersApi.ordersControllerListOrders("paid", ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
+        }
+
+        vm.toggleStatus("paid")
+        assertThat(vm.uiState.value.statuses).isEmpty()
+        // Empty statuses → no status filter (null → param omitted).
+        verify {
+            ordersApi.ordersControllerListOrders(null, ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
+        }
+    }
+
+    @Test
+    fun `setUserId null means all users`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        vm.setUserId(null)
+        assertThat(vm.uiState.value.userId).isNull()
+        verify {
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), null)
+        }
+
+        vm.setUserId(2L)
+        assertThat(vm.uiState.value.userId).isEqualTo(2L)
+        verify {
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), 2L)
+        }
+    }
+
+    @Test
+    fun `active users are exposed in state for the dropdown`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        val usernames = vm.uiState.value.users.map { it.username }
+        assertThat(usernames).containsExactly("admin", "cashier")
     }
 }

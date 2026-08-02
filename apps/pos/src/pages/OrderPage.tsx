@@ -7,15 +7,17 @@ import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { AddPaymentModal } from '../components/orders/AddPaymentModal';
+import { OskDock } from '../components/on-screen-keyboard/OskDock';
 import { PartnerPriceModal } from '../components/orders/PartnerPriceModal';
 import { ZatcaClearanceModal } from '../components/orders/ZatcaClearanceModal';
+import { StandardInvoiceBuyerModal } from '../components/orders/StandardInvoiceBuyerModal';
 import {
-  StandardInvoiceBuyerForm,
   emptyStandardInvoiceBuyer,
   validateStandardBuyer,
   type ZatcaBuyerDetails,
 } from '../components/orders/StandardInvoiceBuyerForm';
 import { ConfirmActionButton } from '../components/ConfirmActionButton';
+import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
 import { calcOutstandingHalalas } from '../lib/order-payments';
@@ -29,6 +31,7 @@ import type {
   OrderPaymentResponse,
   OrderEventResponse,
   DeliveryPartnerResponse,
+  SubmitOrderDto,
 } from '@spicyhome/client-ts';
 
 type OrderTab = 'items' | 'payments' | 'summary';
@@ -168,6 +171,8 @@ export function OrderPage() {
   const [buyerErrors, setBuyerErrors] = useState<Partial<Record<keyof ZatcaBuyerDetails, string>>>(
     {},
   );
+  const [showStandardInvoiceModal, setShowStandardInvoiceModal] = useState(false);
+  const [standardInvoiceSaving, setStandardInvoiceSaving] = useState(false);
   const [showClearance, setShowClearance] = useState(false);
 
   const [itemSearch, setItemSearch] = useState('');
@@ -219,6 +224,18 @@ export function OrderPage() {
       totalHalalas: order.totalHalalas,
     });
     setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+
+    // Standard invoice state comes from the SERVER (persisted on Done/X).
+    // The modal seeds its draft only on mount, so hydrating while the modal
+    // is open never clobbers an in-progress draft; the modal is deliberately
+    // left open/closed as the caller had it.
+    setIsStandardInvoice(!!order.isStandardInvoice);
+    if (order.isStandardInvoice && order.zatcaBuyerDetails) {
+      setBuyer({ ...emptyStandardInvoiceBuyer(), ...order.zatcaBuyerDetails });
+    } else {
+      setBuyer(emptyStandardInvoiceBuyer());
+    }
+    setBuyerErrors({});
   }
 
   /** Refetch + hydrate the current order (used after submit/refund/conflict). */
@@ -451,10 +468,101 @@ export function OrderPage() {
     setIsStandardInvoice(false);
     setBuyer(emptyStandardInvoiceBuyer());
     setBuyerErrors({});
+    setShowStandardInvoiceModal(false);
+    setStandardInvoiceSaving(false);
     setShowClearance(false);
     setPrintingOpenReceipt(false);
     setOpenReceiptMessage('');
     setSearchParams({}, { replace: true });
+  }
+
+  /**
+   * Refetch-and-hydrate on a 409/conflict from a standard-invoice PATCH —
+   * same conflict UX as the partner/type-table PATCHes. When the cart is
+   * dirty the order is left alone (local edits win); otherwise hydrate.
+   */
+  async function refetchAfterStandardInvoiceConflict() {
+    if (!currentOrder) return;
+    try {
+      const order = await client.orders.get(currentOrder.id);
+      if (order.status !== 'open') {
+        setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+      } else if (!cart.isDirty) {
+        hydrateOrder(order);
+      }
+    } catch {
+      // Ignore refetch errors — the error message below is the source of truth
+    }
+  }
+
+  /**
+   * Done on the buyer modal — PATCH the standard-invoice fields onto the
+   * open order immediately (persist, don't wait for Submit). The modal stays
+   * open with the error on failure; on success the hydrated order drives the
+   * callout.
+   */
+  async function handleSaveStandardInvoice(next: ZatcaBuyerDetails) {
+    if (!currentOrder || currentOrder.status !== 'open' || cart.serverUpdatedAt == null) {
+      // Local-only fallback (e.g. no server round-trip available) — keep the
+      // committed buyer for this session.
+      setBuyer(next);
+      setBuyerErrors({});
+      setIsStandardInvoice(true);
+      setShowStandardInvoiceModal(false);
+      return;
+    }
+    setStandardInvoiceSaving(true);
+    setError('');
+    try {
+      const res = await client.orders.updateStandardInvoice(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        isStandardInvoice: true,
+        zatcaBuyerDetails: next,
+      });
+      hydrateOrder(res); // picks up flag + buyer + new updatedAt
+      setShowStandardInvoiceModal(false);
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        await refetchAfterStandardInvoiceConflict();
+      }
+      setError(e.message || 'Failed to save standard invoice buyer');
+      // keep the modal open so the cashier can retry
+    } finally {
+      setStandardInvoiceSaving(false);
+    }
+  }
+
+  /**
+   * X on the callout — PATCH the standard-invoice flag off (isStandardInvoice
+   * false, buyer null). Falls back to local-only clearing when there is no
+   * open order / server round-trip (pre-create state never shows the callout,
+   * so this is just belt-and-braces).
+   */
+  async function handleClearStandardInvoice() {
+    if (!currentOrder || currentOrder.status !== 'open' || cart.serverUpdatedAt == null) {
+      setIsStandardInvoice(false);
+      setBuyer(emptyStandardInvoiceBuyer());
+      setBuyerErrors({});
+      setShowStandardInvoiceModal(false);
+      return;
+    }
+    setStandardInvoiceSaving(true);
+    setError('');
+    try {
+      const res = await client.orders.updateStandardInvoice(currentOrder.id, {
+        baseUpdatedAt: cart.serverUpdatedAt,
+        isStandardInvoice: false,
+      });
+      hydrateOrder(res);
+      setShowStandardInvoiceModal(false);
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('modified by another terminal')) {
+        await refetchAfterStandardInvoiceConflict();
+      }
+      setError(e.message || 'Failed to clear standard invoice');
+    } finally {
+      setStandardInvoiceSaving(false);
+    }
   }
 
   // ── Create Order (D10: create + sync) ──
@@ -611,6 +719,10 @@ export function OrderPage() {
   /** Kitchen delta view over the current (clean) cart vs the event ledger. */
   const hasUnsentKitchen = hasUnsentKitchenDeltas(cart.items, orderEvents);
 
+  /** Committed buyer is ready only after a successful Done (validation passes). */
+  const standardBuyerReady =
+    isStandardInvoice && Object.keys(validateStandardBuyer(buyer)).length === 0;
+
   function handlePaymentAdded(order: OrderResponse) {
     hydrateOrder(order);
     loadOpenOrders();
@@ -628,6 +740,8 @@ export function OrderPage() {
       const fieldErrors = validateStandardBuyer(buyer);
       if (Object.keys(fieldErrors).length > 0) {
         setBuyerErrors(fieldErrors);
+        // Re-open the modal so the cashier can fix the buyer details.
+        setShowStandardInvoiceModal(true);
         return;
       }
     }
@@ -636,14 +750,13 @@ export function OrderPage() {
     setError('');
     setBuyerErrors({});
     try {
-      const payload: {
-        baseUpdatedAt: number;
-        isStandardInvoice?: boolean;
-        zatcaBuyerDetails?: ZatcaBuyerDetails;
-      } = { baseUpdatedAt: cart.serverUpdatedAt };
+      const payload: SubmitOrderDto = { baseUpdatedAt: cart.serverUpdatedAt };
       if (isStandardInvoice) {
         payload.isStandardInvoice = true;
         payload.zatcaBuyerDetails = buyer;
+      } else {
+        // Simplified: skip auto tax-receipt print on submit; standard still prints on ZATCA clearance.
+        payload.printReceipt = false;
       }
       await client.orders.submit(currentOrder.id, payload);
 
@@ -1155,7 +1268,7 @@ export function OrderPage() {
   if (!dayOpen) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="bg-gray-800 rounded-xl p-8 w-96 text-center">
+        <div data-osk-scope className="bg-gray-800 rounded-xl p-8 w-[28rem] text-center">
           <h2 className="text-xl font-bold text-white mb-4">Open Business Day</h2>
           <p className="text-sm text-gray-400 mb-6">
             No business day is currently open. Enter the opening cash to start the day.
@@ -1164,14 +1277,19 @@ export function OrderPage() {
           <div className="mb-4">
             <label className="block text-sm text-gray-300 mb-2">Opening Cash (SAR)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
               value={openingCash}
               onChange={(e) => setOpeningCash(e.target.value)}
               placeholder="0.00"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-center text-xl"
             />
           </div>
+
+          {/* Inline keyboard dock: the numpad portals in here while the
+              opening cash field is focused. Zero footprint otherwise. */}
+          <OskDock size="lg" className="mt-4" />
 
           {error && <div className="text-red-400 text-sm mb-4">{error}</div>}
 
@@ -1438,71 +1556,15 @@ export function OrderPage() {
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
           {/* ── Items tab ── */}
           {(!currentOrder || activeTab === 'items') && (
-            <>
-              {cart.items.length === 0 ? (
-                <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
-              ) : (
-                <div className="space-y-2">
-                  {cart.items.map((item, idx) => (
-                    <div
-                      key={
-                        item.orderItemId != null
-                          ? `oi-${item.orderItemId}`
-                          : `mi-${item.itemId}-${idx}`
-                      }
-                      className="bg-gray-800 rounded-lg p-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-white flex-1">{item.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">
-                          {halalasToSar(item.unitPriceHalalas * item.qty)}
-                        </span>
-                      </div>
-                      {item.notes && (
-                        <span className="text-xs text-gray-400 block">{item.notes}</span>
-                      )}
-                      {!orderReadonly && !permissionsReadonly && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <button
-                            onClick={() => handleUpdateQty(item, item.qty - 1)}
-                            disabled={cartDisabled}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                          >
-                            -
-                          </button>
-                          <span className="text-sm text-gray-300 w-7 text-center">{item.qty}</span>
-                          <button
-                            onClick={() => handleUpdateQty(item, item.qty + 1)}
-                            disabled={cartDisabled}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                          >
-                            +
-                          </button>
-                          {/* Item notes editor — touch-friendly pencil */}
-                          <button
-                            onClick={() => handleOpenNotesEditor(item)}
-                            disabled={cartDisabled}
-                            title={item.notes ? 'Edit notes' : 'Add notes'}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs text-gray-300"
-                          >
-                            ✎
-                          </button>
-                          {(currentOrder ? permissions.deleteOrderItem : true) && (
-                            <button
-                              onClick={() => handleRemove(item)}
-                              disabled={cartDisabled}
-                              className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded text-xs text-white ml-auto"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
+            <OrderPageItems
+              items={cart.items}
+              readonly={orderReadonly || permissionsReadonly}
+              disabled={cartDisabled}
+              canRemove={currentOrder ? permissions.deleteOrderItem : true}
+              onUpdateQty={handleUpdateQty}
+              onRemove={handleRemove}
+              onEditNotes={handleOpenNotesEditor}
+            />
           )}
 
           {/* ── Payments tab ── */}
@@ -1601,39 +1663,64 @@ export function OrderPage() {
                 </div>
               </div>
 
-              {/* Standard invoice toggle + buyer form (open orders only) */}
+              {/* Standard invoice: checkbox until a valid buyer is saved,
+                  then a compact callout with an X to clear (open orders only) */}
               {openOrder && (
                 <div className="mb-3">
-                  <label className="flex items-center gap-2 touch-target cursor-pointer py-1">
-                    <input
-                      type="checkbox"
-                      checked={isStandardInvoice}
-                      onChange={(e) => {
-                        setIsStandardInvoice(e.target.checked);
-                        if (!e.target.checked) {
-                          setBuyerErrors({});
-                        }
-                      }}
-                      className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-brand-500 focus:ring-brand-500"
-                    />
-                    <span className="text-sm text-gray-300">Issue ZATCA Standard Invoice</span>
-                  </label>
-
-                  {isStandardInvoice && (
-                    <div className="mt-2 border-t border-gray-700 pt-3">
-                      <StandardInvoiceBuyerForm
-                        value={buyer}
-                        onChange={(next) => {
-                          setBuyer(next);
-                          // Clear individual field error on change
-                          if (buyerErrors) {
+                  {standardBuyerReady ? (
+                    <div className="rounded-lg border border-amber-600/50 bg-amber-900/30 p-3">
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowStandardInvoiceModal(true)}
+                          disabled={submittingOrder || standardInvoiceSaving}
+                          className="min-w-0 flex-1 text-left disabled:opacity-50"
+                          aria-label="Edit standard invoice buyer details"
+                        >
+                          <div className="text-xs font-semibold uppercase tracking-wide text-amber-400">
+                            Standard Invoice
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-white truncate">
+                            {buyer.name}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-400 truncate">
+                            VAT {buyer.vatNumber}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500 truncate">
+                            {[buyer.city, buyer.citySubdivision].filter(Boolean).join(' · ')}
+                          </div>
+                          <div className="mt-1 text-[11px] text-amber-400/80">Tap to edit</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleClearStandardInvoice()}
+                          disabled={submittingOrder || standardInvoiceSaving}
+                          aria-label="Clear standard invoice buyer"
+                          className="shrink-0 touch-target flex items-center justify-center w-9 h-9 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white disabled:opacity-50 text-xl leading-none"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-2 touch-target cursor-pointer py-1">
+                      <input
+                        type="checkbox"
+                        checked={isStandardInvoice}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setIsStandardInvoice(true);
+                            setShowStandardInvoiceModal(true);
+                          } else {
+                            setIsStandardInvoice(false);
                             setBuyerErrors({});
+                            setShowStandardInvoiceModal(false);
                           }
                         }}
-                        disabled={submittingOrder}
-                        errors={buyerErrors}
+                        className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-brand-500 focus:ring-brand-500"
                       />
-                    </div>
+                      <span className="text-sm text-gray-300">Issue ZATCA Standard Invoice</span>
+                    </label>
                   )}
                 </div>
               )}
@@ -1996,6 +2083,29 @@ export function OrderPage() {
           deliveryPartnerId={cart.deliveryPartnerId}
           onAdded={handlePaymentAdded}
           onClose={() => setShowAddPaymentModal(false)}
+        />
+      )}
+
+      {/* Standard invoice buyer details modal (Summary tab) */}
+      {showStandardInvoiceModal && (
+        <StandardInvoiceBuyerModal
+          initialBuyer={buyer}
+          initialErrors={buyerErrors}
+          disabled={submittingOrder || standardInvoiceSaving}
+          saving={standardInvoiceSaving}
+          onSave={(next) => {
+            void handleSaveStandardInvoice(next);
+          }}
+          onCancel={() => {
+            setShowStandardInvoiceModal(false);
+            // Uncheck only when the committed buyer is still invalid — staff
+            // must not leave a checked-but-incomplete standard invoice.
+            const errs = validateStandardBuyer(buyer);
+            if (Object.keys(errs).length > 0) {
+              setIsStandardInvoice(false);
+              setBuyerErrors({});
+            }
+          }}
         />
       )}
 

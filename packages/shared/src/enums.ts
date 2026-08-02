@@ -53,6 +53,8 @@ export const AuditAction = {
   DELIVERY_PARTNER_CHANGED: 'delivery_partner_changed',
   ITEM_PRICE_OVERRIDDEN: 'item_price_overridden', // Phase 7 (unit-price override)
   ITEM_PRICE_RESET: 'item_price_reset',
+  // ZATCA standard invoice buyer details (set/clear on an open order)
+  STANDARD_INVOICE_CHANGED: 'standard_invoice_changed',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

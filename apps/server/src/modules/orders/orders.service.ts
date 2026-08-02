@@ -7,11 +7,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte, lt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
   orders,
   orderItems,
+  orderEvents,
   orderRefunds,
   orderRefundItems,
   orderPayments,
@@ -27,7 +28,11 @@ import {
   parseZatcaBuyerDetails,
   formatZatcaBuyerDetailsErrors,
   AuditAction,
+  ALL_ORDER_STATUSES,
+  getServiceDayString,
+  getServiceDayBoundsUnix,
 } from '@spicyhome/shared';
+import type { OrderStatus } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { mapBools } from '../../common/bool-mapper.helper';
@@ -55,11 +60,6 @@ function recomputeOrderTotals(rows: Array<{ totalHalalas: number; vatRateBp: num
     total += row.totalHalalas;
   }
   return { subtotalHalalas: subtotal, vatHalalas: vat, totalHalalas: total };
-}
-
-function todayInRiyadh(): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
-  return fmt.format(new Date());
 }
 
 function normalizeNotes(n: string | null | undefined): string | null {
@@ -90,7 +90,8 @@ export class OrdersService {
     dto: { type: string; tableId?: number; notes?: string | null },
     userId: number,
   ) {
-    const now = Math.floor(Date.now() / 1000);
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
     if (dto.type === 'dine_in') {
       if (!dto.tableId) throw new BadRequestException('Table is required for dine-in orders');
       const table = this.db.select().from(tables).where(eq(tables.id, dto.tableId)).get();
@@ -107,10 +108,15 @@ export class OrdersService {
         'No open business day. Open a business day before creating orders.',
       );
 
-    const today = todayInRiyadh();
-    if (dayOpening.businessDate !== today) {
+    // ADR 0008: the open day must be labeled with the CURRENT SERVICE DAY
+    // (getServiceDayString), not the calendar day. Between 00:00–05:00
+    // Asia/Riyadh the service day is the previous calendar date — the open
+    // day carries that label, so comparing against the calendar day would
+    // reject orders until 05:00.
+    const serviceDay = getServiceDayString(nowMs);
+    if (dayOpening.businessDate !== serviceDay) {
       throw new ConflictException(
-        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${today}).`,
+        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${serviceDay}).`,
       );
     }
 
@@ -618,6 +624,136 @@ export class OrdersService {
   }
 
   /**
+   * PATCH /orders/:id/standard-invoice — set or clear the ZATCA standard
+   * invoice buyer details on an open order.
+   *
+   * Rules (same style as partner/meta):
+   *
+   * - open orders only → else 400
+   * - stale `baseUpdatedAt` → 409 `{ message, updatedAt }`
+   * - `isStandardInvoice: true` → buyer is validated (400 on invalid/missing)
+   *   and persisted as `is_standard_invoice = 1` + JSON buyer
+   * - `isStandardInvoice: false` → `is_standard_invoice = 0`, buyer null
+   * - no-op (same flag + same buyer JSON) → returns the current order without
+   *   bumping `updated_at` or writing an event
+   *
+   * Audit: writes `standard_invoice_changed` with
+   * `{ fromIsStandardInvoice, toIsStandardInvoice, fromBuyerVatNumber,
+   * toBuyerVatNumber, fromBuyerName, toBuyerName }` and emits `order.updated`
+   * on mutation.
+   */
+  async updateOrderStandardInvoice(
+    orderId: number,
+    dto: {
+      baseUpdatedAt: number;
+      isStandardInvoice: boolean;
+      zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+    },
+    userId: number,
+  ) {
+    const now = Math.floor(Date.now() / 1000);
+    let anyMutation = false;
+
+    this.db.transaction((tx: any) => {
+      const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Status gate — open orders only
+      if (order.status !== 'open') {
+        throw new BadRequestException('Only open orders can change the standard invoice buyer');
+      }
+
+      // Concurrency — same 409 shape as syncItems / updateOrderMeta
+      if (order.updatedAt !== dto.baseUpdatedAt) {
+        throw new ConflictException({
+          message: 'Order was modified by another terminal. Please refresh your cart.',
+          updatedAt: order.updatedAt,
+        });
+      }
+
+      const fromIsStandardInvoice = order.isStandardInvoice === 1;
+      const fromBuyer = this.parseOrderBuyerDetails(order);
+
+      let toIsStandardInvoice: boolean;
+      let toBuyer: Record<string, unknown> | null;
+
+      if (dto.isStandardInvoice) {
+        const validated = this.validateStandardInvoiceBuyer({
+          isStandardInvoice: true,
+          zatcaBuyerDetails: dto.zatcaBuyerDetails,
+        });
+        toIsStandardInvoice = true;
+        toBuyer = validated as unknown as Record<string, unknown>;
+      } else {
+        toIsStandardInvoice = false;
+        toBuyer = null;
+      }
+
+      // No-op: same flag + same normalized buyer JSON → return the current
+      // order without bumping updated_at or writing an event.
+      if (
+        toIsStandardInvoice === fromIsStandardInvoice &&
+        JSON.stringify(toBuyer) === JSON.stringify(fromBuyer)
+      ) {
+        const snapshot = () => {
+          const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+          const refreshedItems = tx
+            .select()
+            .from(orderItems)
+            .where(eq(orderItems.orderId, orderId))
+            .all();
+          const logs = this.orderEvents.getEvents(tx, orderId);
+          return { ...refreshedOrder, items: refreshedItems, events: logs };
+        };
+        return snapshot();
+      }
+
+      anyMutation = true;
+
+      tx.update(orders)
+        .set({
+          isStandardInvoice: toIsStandardInvoice ? 1 : 0,
+          zatcaBuyerDetails: toBuyer ? JSON.stringify(toBuyer) : null,
+          ...updateAuditFields(userId, now),
+        })
+        .where(eq(orders.id, orderId))
+        .run();
+
+      this.orderEvents.createEvent(
+        tx,
+        orderId,
+        userId,
+        AuditAction.STANDARD_INVOICE_CHANGED,
+        {
+          fromIsStandardInvoice,
+          toIsStandardInvoice,
+          fromBuyerVatNumber: fromBuyer?.vatNumber ?? null,
+          toBuyerVatNumber: toBuyer?.vatNumber ?? null,
+          fromBuyerName: fromBuyer?.name ?? null,
+          toBuyerName: toBuyer?.name ?? null,
+        },
+        now,
+      );
+
+      const refreshedOrder = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+      const refreshedItems = tx
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId))
+        .all();
+      const logs = this.orderEvents.getEvents(tx, orderId);
+      return { ...refreshedOrder, items: refreshedItems, events: logs };
+    });
+
+    // Only emit for an actual mutation — no-op returns without writing or emitting
+    if (anyMutation) {
+      this.emitDomainEvent('order.updated', orderId, userId);
+    }
+    // Reuse getOrder's mapping so the response always matches OrderResponse
+    return this.getOrder(orderId);
+  }
+
+  /**
    * PATCH /orders/:id/items/:orderItemId/unit-price — per-line partner price
    * override (ADR 0007). `orderItemId` is the `order_items.id` (line id),
    * NOT the catalog item id.
@@ -890,13 +1026,18 @@ export class OrdersService {
   }
 
   private getNextOrderNo(tx: any, now: number): number {
-    const today = new Date(now * 1000).toISOString().slice(0, 10);
+    // ADR 0008: the daily sequence resets on the SERVICE-DAY label (window
+    // [D 05:00, (D+1) 05:00) Asia/Riyadh), not the UTC calendar date.
+    // Between 00:00–05:00 Asia/Riyadh the service day is the PREVIOUS
+    // calendar date — a UTC date here would flip the sequence at midnight
+    // instead of at 05:00 (and briefly mislabel it pre-05:00).
+    const serviceDay = getServiceDayString(now * 1000);
 
     const row = tx.select().from(settings).where(eq(settings.key, 'daily_order_seq')).get();
 
     if (!row) {
       tx.insert(settings)
-        .values({ key: 'daily_order_seq', value: `${today}:1` })
+        .values({ key: 'daily_order_seq', value: `${serviceDay}:1` })
         .run();
       return 1;
     }
@@ -904,16 +1045,16 @@ export class OrdersService {
     const [storedDate, storedSeqStr] = row.value.split(':');
     const storedSeq = parseInt(storedSeqStr, 10);
 
-    if (storedDate === today) {
+    if (storedDate === serviceDay) {
       const newSeq = storedSeq + 1;
       tx.update(settings)
-        .set({ value: `${today}:${newSeq}` })
+        .set({ value: `${serviceDay}:${newSeq}` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return newSeq;
     } else {
       tx.update(settings)
-        .set({ value: `${today}:1` })
+        .set({ value: `${serviceDay}:1` })
         .where(eq(settings.key, 'daily_order_seq'))
         .run();
       return 1;
@@ -1332,6 +1473,17 @@ export class OrdersService {
    *   dropped
    *
    * Receipt logic:
+   * - optional `printReceipt` (default `true` when omitted) controls the auto
+   *   receipt print on submit for **simplified** invoices ONLY:
+   *   - omitted / `true` → current behavior: receipt printed right after the
+   *     `order.paid` listeners finish; `kickDrawer = hasCashPayment`
+   *   - `false` + simplified → receipt print skipped entirely (no
+   *     `receipt_print_enqueued`, no physical print); when a positive cash
+   *     payment exists the cash drawer is STILL kicked (ops: cash must open),
+   *     via the same drawer-only path as standard invoices
+   *     (`cash_drawer_kick_enqueued` in-tx + `kickCashDrawer` post-tx)
+   *   - `false` + standard → **ignored**; standard always defers the receipt
+   *     to ZATCA clearance and kicks the cash drawer on submit for cash
    * - `hasCashPayment` = any payment line with `methodId === 'cash'` and a
    *   positive amount (drawer kick if any positive cash line exists)
    * - simplified: awaits the `order.paid` listeners (ZATCA signing finishes,
@@ -1350,14 +1502,26 @@ export class OrdersService {
       baseUpdatedAt?: number;
       isStandardInvoice?: boolean;
       zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+      printReceipt?: boolean;
     },
   ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
 
-    // Validate standard invoice buyer fields outside transaction
-    const validatedBuyer = this.validateStandardInvoiceBuyer(dto);
-    const isStandardInvoice = dto.isStandardInvoice === true;
+    // Auto receipt print on submit defaults to true (backward compatible).
+    // Only honored for simplified invoices — the standard path never reads it
+    // (receipt deferred to ZATCA clearance; drawer kicked on cash).
+    const shouldPrintReceipt = dto.printReceipt !== false;
+
+    // Standard-invoice intent is resolved INSIDE the transaction because the
+    // omitted-body case needs the order row:
+    //   1. body isStandardInvoice:true  → use body buyer (validate)
+    //   2. body isStandardInvoice:false → simplified (ignore order flag)
+    //   3. omitted → follow the persisted order flag; when set, its buyer must
+    //      parse/validate (400 if missing/invalid)
+    //   4. otherwise simplified
+    let isStandardInvoice = false;
+    let validatedBuyer: Record<string, unknown> | null = null;
 
     // Set inside the transaction from the payment lines actually on the order
     let hasCashPayment = false;
@@ -1380,6 +1544,33 @@ export class OrdersService {
             updatedAt: order.updatedAt,
           });
         }
+      }
+
+      // Resolve the standard-invoice intent (see doc comment above).
+      if (dto.isStandardInvoice === true) {
+        validatedBuyer = this.validateStandardInvoiceBuyer({
+          isStandardInvoice: true,
+          zatcaBuyerDetails: dto.zatcaBuyerDetails,
+        });
+        isStandardInvoice = true;
+      } else if (dto.isStandardInvoice === false) {
+        isStandardInvoice = false;
+        validatedBuyer = null;
+      } else if (order.isStandardInvoice === 1) {
+        // Body omitted the flag — use the already-persisted order fields.
+        // Strict here (unlike getOrder's tolerant parse): a standard submit
+        // must never proceed with missing/corrupt buyer data.
+        if (!order.zatcaBuyerDetails) {
+          throw new BadRequestException(
+            'Order is marked for a standard invoice but has no buyer details. Clear the standard invoice flag or save buyer details first.',
+          );
+        }
+        const parsed = parseZatcaBuyerDetails(order.zatcaBuyerDetails);
+        if (!parsed.success) {
+          throw new BadRequestException('Order has invalid persisted buyer details');
+        }
+        validatedBuyer = parsed.data as unknown as Record<string, unknown>;
+        isStandardInvoice = true;
       }
 
       // ADR 0006 precondition: ≥ 1 order item
@@ -1465,10 +1656,12 @@ export class OrdersService {
 
       this.orderEvents.createEvent(tx, orderId, userId, 'paid', paidPayload, now);
 
-      // Receipt print enqueued with conditional kickDrawer
-      // For standard invoices: do NOT enqueue receipt print here — deferred
-      // until ZATCA clearance succeeds (see onZatcaInvoiceCleared).
-      if (receiptPrinter && !isStandardInvoice) {
+      // Receipt print enqueued with conditional kickDrawer.
+      // Simplified invoices only, and only when auto-print was not disabled
+      // via `printReceipt: false`. For standard invoices: do NOT enqueue
+      // receipt print here — deferred until ZATCA clearance succeeds (see
+      // onZatcaInvoiceCleared).
+      if (receiptPrinter && !isStandardInvoice && shouldPrintReceipt) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -1484,10 +1677,18 @@ export class OrdersService {
         );
       }
 
-      // For standard invoices with cash payment: kick cash drawer immediately
-      // on submit (ops requirement). The tax receipt with QR prints later on
-      // clearance, with kickDrawer:false since we already kicked here.
-      if (isStandardInvoice && hasCashPayment && receiptPrinter) {
+      // Cash drawer kick on submit (ops requirement — cash must open):
+      // - standard invoices with cash: kick immediately on submit, the tax
+      //   receipt with QR prints later on clearance, with kickDrawer:false
+      //   since we already kicked here (unchanged behavior)
+      // - simplified invoices with cash where the receipt print was skipped
+      //   via `printReceipt: false`: still kick the drawer — only the receipt
+      //   is suppressed, the drawer is not
+      if (
+        receiptPrinter &&
+        hasCashPayment &&
+        (isStandardInvoice || (!isStandardInvoice && !shouldPrintReceipt))
+      ) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -1511,8 +1712,12 @@ export class OrdersService {
     if (!isStandardInvoice) {
       await this.emitDomainEventAsync('order.paid', orderId, userId);
 
-      if (receiptPrinter) {
+      if (receiptPrinter && shouldPrintReceipt) {
         this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
+      } else if (receiptPrinter && !shouldPrintReceipt && hasCashPayment) {
+        // Receipt print skipped via `printReceipt: false` but cash was
+        // tendered — still kick the cash drawer (ops: cash must open).
+        this.kickCashDrawer(receiptPrinter, orderId, userId);
       }
     } else {
       if (isStandardInvoice && hasCashPayment && receiptPrinter) {
@@ -2501,13 +2706,133 @@ export class OrdersService {
       .run();
   }
 
-  listOrders(filters?: { status?: string; date?: string }): any[] {
-    let query = this.db.select().from(orders);
+  /**
+   * List orders, newest first (`ORDER BY orders.id DESC`), with optional
+   * filters — all dimensions are independent and ANDed together:
+   *
+   * - `status`: single status or comma-separated list → `status IN (...)`;
+   *   empty/omit → no status filter; invalid token → 400.
+   * - `date`: `YYYY-MM-DD` Asia/Riyadh **service day** (ADR 0008) on
+   *   `orders.created_at` — window `[D 05:00, (D+1) 05:00)` Unix seconds,
+   *   label D = window start date; invalid format → 400.
+   * - `userId`: `orders.created_by = userId`.
+   *
+   * NOTE: drizzle `.where()` **replaces** a previous where clause, so all
+   * conditions are ANDed into a single `.where(and(...))` call.
+   */
+  listOrders(filters?: { status?: string; date?: string; userId?: number }): any[] {
+    const conditions: any[] = [];
+
     if (filters?.status) {
-      query = query.where(eq(orders.status, filters.status)) as any;
+      const statuses = filters.status
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (statuses.length === 0) {
+        throw new BadRequestException('Invalid status filter');
+      }
+      for (const s of statuses) {
+        if (!ALL_ORDER_STATUSES.includes(s as OrderStatus)) {
+          throw new BadRequestException(`Invalid status: ${s}`);
+        }
+      }
+      conditions.push(
+        statuses.length === 1 ? eq(orders.status, statuses[0]) : inArray(orders.status, statuses),
+      );
     }
+
+    if (filters?.date) {
+      const bounds = getServiceDayBoundsUnix(filters.date);
+      if (!bounds) {
+        throw new BadRequestException(`Invalid date: ${filters.date} (expected YYYY-MM-DD)`);
+      }
+      conditions.push(
+        gte(orders.createdAt, bounds.startUnix),
+        lt(orders.createdAt, bounds.endUnix),
+      );
+    }
+
+    if (filters?.userId !== undefined) {
+      conditions.push(eq(orders.createdBy, filters.userId));
+    }
+
+    let query = this.db.select().from(orders);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
     const rows: any[] = query.orderBy(desc(orders.id)).all();
-    return this.attachDeliveryPartnerTitles(rows);
+    return this.attachKitchenQtyTotals(this.attachDeliveryPartnerTitles(rows));
+  }
+
+  /**
+   * Attach `kitchenPrintedQty` and `itemQtyTotal` to order rows (ADR 0006) —
+   * batched so a large list costs O(orders + items + events) queries, not
+   * one `getPrintedQty` scan per item.
+   *
+   * - `itemQtyTotal`: `SUM(order_items.qty)` over current items (0 if none).
+   * - `kitchenPrintedQty`: per current item, the same precedence as
+   *   `getPrintedQty` (enqueued events authoritative per item, else legacy
+   *   item-event `kitchenPrintedQty`), summed across items. Printed qty for
+   *   removed items is ignored because those rows are no longer current.
+   */
+  private attachKitchenQtyTotals(rows: any[]): any[] {
+    if (rows.length === 0) return rows;
+
+    const orderIds = rows.map((r) => r.id);
+
+    const itemsByOrder = new Map<number, Array<{ id: number; qty: number }>>();
+    const itemRows: Array<{ id: number; orderId: number; qty: number }> = this.db
+      .select({ id: orderItems.id, orderId: orderItems.orderId, qty: orderItems.qty })
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds))
+      .all();
+    for (const item of itemRows) {
+      const list = itemsByOrder.get(item.orderId) ?? [];
+      list.push({ id: item.id, qty: item.qty });
+      itemsByOrder.set(item.orderId, list);
+    }
+
+    const eventsByOrder = new Map<number, Array<{ type: string; payload: string }>>();
+    const eventRows: Array<{ orderId: number; type: string; payload: string }> = this.db
+      .select({
+        orderId: orderEvents.orderId,
+        type: orderEvents.type,
+        payload: orderEvents.payload,
+      })
+      .from(orderEvents)
+      .where(
+        and(
+          inArray(orderEvents.orderId, orderIds),
+          sql`${orderEvents.type} IN ('item_added', 'item_updated', 'kitchen_print_enqueued')`,
+        ),
+      )
+      .all();
+    for (const event of eventRows) {
+      const list = eventsByOrder.get(event.orderId) ?? [];
+      list.push({ type: event.type, payload: event.payload });
+      eventsByOrder.set(event.orderId, list);
+    }
+
+    const qtyByOrder = new Map<number, { kitchenPrintedQty: number; itemQtyTotal: number }>();
+    for (const orderId of orderIds) {
+      const orderItemsList = itemsByOrder.get(orderId) ?? [];
+      const itemQtyTotal = orderItemsList.reduce((sum, item) => sum + item.qty, 0);
+      const printed = this.orderEvents.sumPrintedQtyByOrderItemId(
+        eventsByOrder.get(orderId) ?? [],
+        orderItemsList.map((item) => item.id),
+      );
+      let kitchenPrintedQty = 0;
+      for (const item of orderItemsList) {
+        kitchenPrintedQty += printed.get(item.id) ?? 0;
+      }
+      qtyByOrder.set(orderId, { kitchenPrintedQty, itemQtyTotal });
+    }
+
+    return rows.map((r) => ({
+      ...r,
+      ...(qtyByOrder.get(r.id) ?? { kitchenPrintedQty: 0, itemQtyTotal: 0 }),
+    }));
   }
 
   /**

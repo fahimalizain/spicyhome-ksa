@@ -32,8 +32,21 @@ class OrderRepository(private val ordersApi: OrdersApi) {
         return ordersApi.ordersControllerGetOrder(id)
     }
 
-    fun listOrders(status: String? = null, date: String? = null): Call<List<OrderSummaryResponse>> {
-        return ordersApi.ordersControllerListOrders(status ?: "", date ?: "")
+    /**
+     * List orders with optional server-side filters. Null parameters are
+     * omitted from the query string → no filter on that dimension.
+     *
+     * - [status]: single status or comma-separated list (e.g. "open,paid");
+     *   null → no status filter.
+     * - [date]: YYYY-MM-DD Asia/Riyadh calendar day; null → no date filter.
+     * - [userId]: orders.created_by; null → no user filter.
+     */
+    fun listOrders(
+        status: String? = null,
+        date: String? = null,
+        userId: Long? = null,
+    ): Call<List<OrderSummaryResponse>> {
+        return ordersApi.ordersControllerListOrders(status, date, userId)
     }
 
     fun syncItems(

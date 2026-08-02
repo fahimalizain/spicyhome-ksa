@@ -17,12 +17,14 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-order.dto';
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
 import { UpdateOrderPartnerDto } from './dto/update-order-partner.dto';
+import { UpdateOrderStandardInvoiceDto } from './dto/update-order-standard-invoice.dto';
 import { UpdateOrderItemUnitPriceDto } from './dto/update-order-item-unit-price.dto';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
@@ -49,8 +51,30 @@ export class OrdersController {
   @Get()
   @ApiOperation({ summary: 'List orders with optional filters' })
   @ApiOkResponse({ description: 'List of orders', type: [OrderSummaryResponse] })
-  listOrders(@Query('status') status?: string, @Query('date') date?: string) {
-    return this.ordersService.listOrders({ status, date });
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description:
+      'Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter.',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    description:
+      'YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter.',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    schema: { type: 'integer', format: 'int64' },
+    description: 'Filter by orders.created_by (user id). Omit → no user filter.',
+  })
+  listOrders(
+    @Query('status') status?: string,
+    @Query('date') date?: string,
+    @Query('userId', new ParseIntPipe({ optional: true })) userId?: number,
+  ) {
+    return this.ordersService.listOrders({ status, date, userId });
   }
 
   @Get(':id')
@@ -88,6 +112,21 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.updateOrderPartner(id, dto, user.sub);
+  }
+
+  @Patch(':id/standard-invoice')
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary: 'Set or clear ZATCA standard invoice buyer details on an open order',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderStandardInvoice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderStandardInvoiceDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderStandardInvoice(id, dto, user.sub);
   }
 
   @Patch(':id/items/:orderItemId/unit-price')

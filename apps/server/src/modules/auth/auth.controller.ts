@@ -15,6 +15,7 @@ import { UsernamesResponse } from './dto/usernames-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponse } from './dto/user-response.dto';
+import { UserOptionResponse } from './dto/user-option-response.dto';
 import { MeResponse } from './dto/me-response.dto';
 import { CreateRoleDto, UpdateRoleDto } from './dto/create-role.dto';
 import { RoleResponse } from './dto/role-response.dto';
@@ -64,6 +65,17 @@ export class AuthController {
   @ApiOkResponse({ description: 'List of users', type: [UserResponse] })
   listUsers() {
     return this.authService.listUsers();
+  }
+
+  @Get('active-users')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'List active users (id, username, name) for filter dropdowns — no manage_users required',
+  })
+  @ApiOkResponse({ description: 'List of active users', type: [UserOptionResponse] })
+  listActiveUsers() {
+    return this.authService.listActiveUsers();
   }
 
   @Get('users/:id')

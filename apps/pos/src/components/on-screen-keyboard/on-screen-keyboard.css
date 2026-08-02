@@ -1,0 +1,114 @@
+/*
+ * Dark-theme overrides for react-simple-keyboard, matching the POS UI
+ * (gray-800/900 chrome, gray-700 keys, brand accent for action keys,
+ * 43px touch-friendly key height).
+ *
+ * This file is imported from OnScreenKeyboard.tsx AFTER the library CSS, so
+ * these rules win the cascade for the `.pos-osk-theme` keyboard instance.
+ *
+ * Key dimensions are size-driven: the rules below (43px / 1.05rem, numpad
+ * 55px / 1.5rem) are the `md` baseline — floating keyboards and default
+ * docks use them. The `.pos-osk-size-sm` / `.pos-osk-size-lg` blocks at the
+ * bottom of this file override dimensions for docked keyboards that opt
+ * into a different size. The size class lives on the keyboard root
+ * (`.pos-osk-size-*`), one level above `.pos-osk-theme`.
+ */
+
+.pos-osk-theme.hg-theme-default {
+  background-color: rgb(17 24 39); /* gray-900 */
+  border-radius: 0;
+  padding: 6px;
+}
+
+.pos-osk-theme .hg-button {
+  background-color: rgb(55 65 81); /* gray-700 */
+  border: none;
+  border-bottom: none;
+  border-radius: 6px;
+  box-shadow: none;
+  color: rgb(249 250 251); /* gray-50 */
+  font-size: 1.05rem;
+  height: 43px;
+}
+
+.pos-osk-theme .hg-button.hg-activeButton,
+.pos-osk-theme .hg-button:active {
+  background-color: rgb(75 85 99); /* gray-600 */
+}
+
+/* Function keys (shift/caps/space/close-layout): darker, muted accent */
+.pos-osk-theme .hg-button.hg-functionBtn {
+  background-color: rgb(31 41 55); /* gray-800 */
+  color: rgb(191 219 254); /* brand-200 */
+}
+
+/* Action keys (backspace, enter): brand accent */
+.pos-osk-theme .hg-button.hg-button-bksp,
+.pos-osk-theme .hg-button.hg-button-enter {
+  background-color: rgb(37 99 235); /* brand-600 */
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.pos-osk-theme .hg-button.hg-button-bksp.hg-activeButton,
+.pos-osk-theme .hg-button.hg-button-bksp:active,
+.pos-osk-theme .hg-button.hg-button-enter.hg-activeButton,
+.pos-osk-theme .hg-button.hg-button-enter:active {
+  background-color: rgb(29 78 216); /* brand-700 */
+}
+
+/*
+ * Numpad layout (type="number" fields): larger touch keys with bigger
+ * digits. The layout is applied to the keyboard root as hg-layout-numpad.
+ */
+.pos-osk-theme.hg-layout-numpad .hg-button {
+  height: 55px;
+  font-size: 1.5rem;
+}
+
+.pos-osk-theme.hg-layout-numpad .hg-button.hg-functionBtn {
+  font-size: 1.1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Size variants (sm | lg). `md` IS the base styles above — floating and
+ * default docks render exactly as before. These selectors sit above
+ * `.pos-osk-theme` (on the keyboard root), so every override here has higher
+ * specificity than the base rules and wins the cascade.
+ * ------------------------------------------------------------------------- */
+
+.pos-osk-size-sm .pos-osk-theme {
+  padding: 4px;
+}
+
+.pos-osk-size-sm .pos-osk-theme .hg-button {
+  height: 35px;
+  font-size: 0.9rem;
+}
+
+.pos-osk-size-sm .pos-osk-theme.hg-layout-numpad .hg-button {
+  height: 43px;
+  font-size: 1.15rem;
+}
+
+.pos-osk-size-sm .pos-osk-theme.hg-layout-numpad .hg-button.hg-functionBtn {
+  font-size: 0.9rem;
+}
+
+.pos-osk-size-lg .pos-osk-theme {
+  padding: 8px;
+}
+
+.pos-osk-size-lg .pos-osk-theme .hg-button {
+  height: 51px;
+  font-size: 1.15rem;
+}
+
+.pos-osk-size-lg .pos-osk-theme.hg-layout-numpad .hg-button {
+  height: 67px;
+  font-size: 1.75rem;
+}
+
+.pos-osk-size-lg .pos-osk-theme.hg-layout-numpad .hg-button.hg-functionBtn {
+  font-size: 1.2rem;
+}

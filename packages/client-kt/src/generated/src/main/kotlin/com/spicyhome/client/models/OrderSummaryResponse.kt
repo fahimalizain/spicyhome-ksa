@@ -42,6 +42,8 @@ import com.squareup.moshi.JsonClass
  * @param updatedAt 
  * @param createdBy 
  * @param updatedBy 
+ * @param kitchenPrintedQty Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).
+ * @param itemQtyTotal Sum of current order line quantities for this order.
  */
 
 
@@ -110,7 +112,15 @@ data class OrderSummaryResponse (
     val createdBy: kotlin.Long?,
 
     @Json(name = "updatedBy")
-    val updatedBy: kotlin.Long?
+    val updatedBy: kotlin.Long?,
+
+    /* Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006). */
+    @Json(name = "kitchenPrintedQty")
+    val kitchenPrintedQty: kotlin.Long,
+
+    /* Sum of current order line quantities for this order. */
+    @Json(name = "itemQtyTotal")
+    val itemQtyTotal: kotlin.Long
 
 ) {
 

@@ -73,6 +73,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/active-users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List active users (id, username, name) for filter dropdowns — no manage_users required */
+    get: operations['AuthController_listActiveUsers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/users/{id}': {
     parameters: {
       query?: never;
@@ -372,6 +389,23 @@ export interface paths {
     head?: never;
     /** Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) */
     patch: operations['OrdersController_updateOrderPartner'];
+    trace?: never;
+  };
+  '/orders/{id}/standard-invoice': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Set or clear ZATCA standard invoice buyer details on an open order */
+    patch: operations['OrdersController_updateOrderStandardInvoice'];
     trace?: never;
   };
   '/orders/{id}/items/{orderItemId}/unit-price': {
@@ -1287,6 +1321,17 @@ export interface components {
        */
       updatedBy: number | null;
     };
+    UserOptionResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example cashier1 */
+      username: string;
+      /** @example Ahmed */
+      name: string;
+    };
     CreateUserDto: {
       /** @example cashier1 */
       username: string;
@@ -1872,6 +1917,18 @@ export interface components {
        * @example 1
        */
       updatedBy: number | null;
+      /**
+       * Format: int64
+       * @description Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).
+       * @example 3
+       */
+      kitchenPrintedQty: number;
+      /**
+       * Format: int64
+       * @description Sum of current order line quantities for this order.
+       * @example 5
+       */
+      itemQtyTotal: number;
     };
     ZatcaBuyerDetailsDto: {
       /** @example Abdullah Al-Otaibi Est. */
@@ -2179,6 +2236,21 @@ export interface components {
        */
       deliveryExternalRef?: string | null;
     };
+    UpdateOrderStandardInvoiceDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @description Enable (true) or clear (false) the ZATCA standard invoice buyer details.
+       * @example false
+       */
+      isStandardInvoice: boolean;
+      /** @description ZATCA standard invoice buyer details — required when isStandardInvoice is true; ignored when false. */
+      zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'];
+    };
     UpdateOrderItemUnitPriceDto: {
       /**
        * Format: int64
@@ -2275,6 +2347,11 @@ export interface components {
       isStandardInvoice?: boolean;
       /** @description ZATCA standard invoice buyer details (required when isStandardInvoice is true) */
       zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'];
+      /**
+       * @description Controls the automatic receipt print on submit for SIMPLIFIED invoices only. Defaults to true when omitted (current behavior). When false on a simplified invoice, the receipt print is skipped (no receipt_print_enqueued event and no physical print), but if a positive cash payment exists the cash drawer is still kicked. IGNORED for standard invoices: their receipt is always deferred until ZATCA clearance, and the cash drawer is kicked on submit for cash orders regardless of this flag.
+       * @example true
+       */
+      printReceipt?: boolean;
     };
     StatusResponse: {
       /** @example true */
@@ -2971,6 +3048,26 @@ export interface operations {
       };
     };
   };
+  AuthController_listActiveUsers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of active users */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserOptionResponse'][];
+        };
+      };
+    };
+  };
   AuthController_getUser: {
     parameters: {
       query?: never;
@@ -3525,9 +3622,13 @@ export interface operations {
   };
   OrdersController_listOrders: {
     parameters: {
-      query: {
-        status: string;
-        date: string;
+      query?: {
+        /** @description Single status or comma-separated list (e.g. open or open,paid). Invalid tokens → 400. Empty/omit → no status filter. */
+        status?: string;
+        /** @description YYYY-MM-DD Asia/Riyadh calendar day filter on orders.created_at. Invalid format → 400. Omit → no date filter. */
+        date?: string;
+        /** @description Filter by orders.created_by (user id). Omit → no user filter. */
+        userId?: number;
       };
       header?: never;
       path?: never;
@@ -3630,6 +3731,32 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['UpdateOrderPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderStandardInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderStandardInvoiceDto'];
       };
     };
     responses: {
