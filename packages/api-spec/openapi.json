@@ -1305,6 +1305,53 @@
         ]
       }
     },
+    "/orders/{id}/standard-invoice": {
+      "patch": {
+        "operationId": "OrdersController_updateOrderStandardInvoice",
+        "summary": "Set or clear ZATCA standard invoice buyer details on an open order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderStandardInvoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated order with items and events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/orders/{id}/items/{orderItemId}/unit-price": {
       "patch": {
         "operationId": "OrdersController_updateOrderItemUnitPrice",
@@ -4934,6 +4981,34 @@
         },
         "required": [
           "baseUpdatedAt"
+        ]
+      },
+      "UpdateOrderStandardInvoiceDto": {
+        "type": "object",
+        "properties": {
+          "baseUpdatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1720000000,
+            "description": "Last known orders.updated_at the client hydrated from. Server returns 409 if stale."
+          },
+          "isStandardInvoice": {
+            "type": "boolean",
+            "description": "Enable (true) or clear (false) the ZATCA standard invoice buyer details.",
+            "example": false
+          },
+          "zatcaBuyerDetails": {
+            "description": "ZATCA standard invoice buyer details — required when isStandardInvoice is true; ignored when false.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZatcaBuyerDetailsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "baseUpdatedAt",
+          "isStandardInvoice"
         ]
       },
       "UpdateOrderItemUnitPriceDto": {
