@@ -10,9 +10,16 @@ export type OrderPageItemsProps = {
   disabled: boolean;
   /** Passed through to every row: whether the remove (✕) button is allowed. */
   canRemove: boolean;
-  onUpdateQty: (item: CartItem, newQty: number) => void;
-  onRemove: (item: CartItem) => void;
-  onEditNotes: (item: CartItem) => void;
+  /** Called with the new qty when a row's +/− is tapped. Optional: readonly
+   *  consumers (e.g. the Orders detail panel) omit it and rows stay
+   *  read-only. */
+  onUpdateQty?: (item: CartItem, newQty: number) => void;
+  /** Called when a row's remove (✕) button is tapped. Optional for readonly reuse. */
+  onRemove?: (item: CartItem) => void;
+  /** Called when a row's notes pencil (✎) is tapped. Optional for readonly reuse. */
+  onEditNotes?: (item: CartItem) => void;
+  /** Empty list copy. Default: "Cart is empty". */
+  emptyMessage?: string;
 };
 
 /**
@@ -42,6 +49,7 @@ export function OrderPageItems({
   onUpdateQty,
   onRemove,
   onEditNotes,
+  emptyMessage = 'Cart is empty',
 }: OrderPageItemsProps) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -53,7 +61,7 @@ export function OrderPageItems({
   }, [items, expandedKey]);
 
   if (items.length === 0) {
-    return <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>;
+    return <div className="text-sm text-gray-500 text-center mt-8">{emptyMessage}</div>;
   }
 
   return (
@@ -69,9 +77,9 @@ export function OrderPageItems({
             readonly={readonly}
             disabled={disabled}
             canRemove={canRemove}
-            onUpdateQty={onUpdateQty}
-            onRemove={onRemove}
-            onEditNotes={onEditNotes}
+            onUpdateQty={onUpdateQty ?? (() => {})}
+            onRemove={onRemove ?? (() => {})}
+            onEditNotes={onEditNotes ?? (() => {})}
           />
         );
       })}

@@ -9,8 +9,10 @@ import { RefundPanel } from '../components/RefundPanel';
 import { RefundDetailModal } from '../components/RefundDetailModal';
 import { OrderActionBar } from '../components/OrderActionBar';
 import { OrderHeader } from '../components/orders/OrderHeader';
+import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { getPreviousInvoiceDocumentIds } from '../lib/order-events';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
+import type { CartItem } from '../hooks/useCart';
 import type {
   OrderResponse,
   OrderSummaryResponse,
@@ -377,26 +379,23 @@ export function OrdersPage() {
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4">
             <div className="space-y-2 mb-4">
               <h3 className="text-sm font-semibold text-gray-300">Items</h3>
-              {(selectedOrder.items || []).map((oi) => (
-                <div key={oi.id} className="bg-gray-800 rounded-lg p-2 flex justify-between">
-                  <div>
-                    <span className="text-sm text-white">{oi.itemName}</span>
-                    {oi.notes && (
-                      <span className="text-xs text-gray-400 block">
-                        {oi.notes as unknown as string}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm text-gray-300">
-                      {oi.qty} × {halalasToSar(oi.unitPriceHalalas)}
-                    </span>
-                    <span className="text-sm text-brand-400 ml-2">
-                      {halalasToSar(oi.totalHalalas)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {/* Same cart row UI as the Order Page, readonly (same mapping
+                  shape as useCart.loadOrder). */}
+              <OrderPageItems
+                items={(selectedOrder.items || []).map((oi): CartItem => ({
+                  itemId: oi.itemId ?? 0,
+                  orderItemId: oi.id,
+                  name: oi.itemName,
+                  unitPriceHalalas: oi.unitPriceHalalas,
+                  vatRateBp: oi.vatRateBp,
+                  qty: oi.qty,
+                  notes: oi.notes ?? '',
+                }))}
+                readonly
+                disabled
+                canRemove={false}
+                emptyMessage="No items"
+              />
             </div>
 
             <div className="border-t border-gray-700 pt-3 space-y-1 text-sm">

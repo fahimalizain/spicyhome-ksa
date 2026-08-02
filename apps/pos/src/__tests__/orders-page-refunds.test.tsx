@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { halalasToSar } from '@spicyhome/shared';
 import { OrdersPage } from '../pages/OrdersPage';
 import type { OrderRefundResponse } from '@spicyhome/client-ts';
 
@@ -250,6 +251,42 @@ describe('OrdersPage — refunds list and modal', () => {
 
     // Refunds section should NOT be visible
     expect(screen.queryByText('Refunds')).not.toBeInTheDocument();
+  });
+
+  it('detail items use the readonly cart-item rows: notes preview, expand, no edit controls', async () => {
+    // Item with notes (e.g. another terminal captured them)
+    mockGet.mockResolvedValue({
+      ...paidOrder,
+      items: [{ ...paidOrder.items[0], notes: 'No onions' }],
+    });
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Collapsed row: name, qty badge, unit rate, line total, notes preview
+    expect(screen.getByText('Burger')).toBeInTheDocument();
+    expect(screen.getByText('×2')).toBeInTheDocument();
+    expect(screen.getByText('@23.00')).toBeInTheDocument();
+    expect(screen.getByText(halalasToSar(4600))).toBeInTheDocument();
+    expect(screen.getByText('No onions')).toBeInTheDocument();
+
+    // Expand works for notes wrap, but never any edit controls
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Burger' }));
+    expect(screen.getByRole('button', { name: 'Collapse Burger' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '-' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✎' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✕' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cart-item-controls-panel')).not.toBeInTheDocument();
   });
 
   it('shows Refunds section with correct data when order has refunds', async () => {
@@ -688,7 +725,14 @@ describe('OrdersPage — realtime detail refresh', () => {
       await realtimeHandler('order.item.updated')();
     });
 
-    expect(screen.getByText('3 × 23.00')).toBeInTheDocument();
+    // Detail rows use the cart-item layout (readonly): qty badge, unit rate,
+    // line total — no edit controls.
+    expect(screen.getByText('×3')).toBeInTheDocument();
+    expect(screen.getByText('@23.00')).toBeInTheDocument();
+    expect(screen.getByText(halalasToSar(6900))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✕' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✎' })).not.toBeInTheDocument();
     expect(screen.queryByText('Loading orders...')).not.toBeInTheDocument();
   });
 });
