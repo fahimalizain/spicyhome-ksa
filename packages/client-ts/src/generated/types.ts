@@ -2347,6 +2347,11 @@ export interface components {
       isStandardInvoice?: boolean;
       /** @description ZATCA standard invoice buyer details (required when isStandardInvoice is true) */
       zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'];
+      /**
+       * @description Controls the automatic receipt print on submit for SIMPLIFIED invoices only. Defaults to true when omitted (current behavior). When false on a simplified invoice, the receipt print is skipped (no receipt_print_enqueued event and no physical print), but if a positive cash payment exists the cash drawer is still kicked. IGNORED for standard invoices: their receipt is always deferred until ZATCA clearance, and the cash drawer is kicked on submit for cash orders regardless of this flag.
+       * @example true
+       */
+      printReceipt?: boolean;
     };
     StatusResponse: {
       /** @example true */

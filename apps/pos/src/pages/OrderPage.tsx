@@ -30,6 +30,7 @@ import type {
   OrderPaymentResponse,
   OrderEventResponse,
   DeliveryPartnerResponse,
+  SubmitOrderDto,
 } from '@spicyhome/client-ts';
 
 type OrderTab = 'items' | 'payments' | 'summary';
@@ -748,14 +749,13 @@ export function OrderPage() {
     setError('');
     setBuyerErrors({});
     try {
-      const payload: {
-        baseUpdatedAt: number;
-        isStandardInvoice?: boolean;
-        zatcaBuyerDetails?: ZatcaBuyerDetails;
-      } = { baseUpdatedAt: cart.serverUpdatedAt };
+      const payload: SubmitOrderDto = { baseUpdatedAt: cart.serverUpdatedAt };
       if (isStandardInvoice) {
         payload.isStandardInvoice = true;
         payload.zatcaBuyerDetails = buyer;
+      } else {
+        // Simplified: skip auto tax-receipt print on submit; standard still prints on ZATCA clearance.
+        payload.printReceipt = false;
       }
       await client.orders.submit(currentOrder.id, payload);
 

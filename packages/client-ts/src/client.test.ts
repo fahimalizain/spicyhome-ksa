@@ -154,8 +154,10 @@ describe('SpicyHomeClient', () => {
     const dto: SubmitOrderDto = {
       baseUpdatedAt: 123,
       isStandardInvoice: false,
+      printReceipt: false,
     };
     expect(dto.isStandardInvoice).toBe(false);
+    expect(dto.printReceipt).toBe(false);
   });
 
   it('AddOrderPaymentDto type is constructable', () => {

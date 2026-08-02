@@ -26,6 +26,7 @@ import com.squareup.moshi.JsonClass
  * @param baseUpdatedAt Order updated_at observed by the client; if present it must match the current value or the submit is rejected with 409.
  * @param isStandardInvoice Enable standard invoice with buyer details for ZATCA
  * @param zatcaBuyerDetails ZATCA standard invoice buyer details (required when isStandardInvoice is true)
+ * @param printReceipt Controls the automatic receipt print on submit for SIMPLIFIED invoices only. Defaults to true when omitted (current behavior). When false on a simplified invoice, the receipt print is skipped (no receipt_print_enqueued event and no physical print), but if a positive cash payment exists the cash drawer is still kicked. IGNORED for standard invoices: their receipt is always deferred until ZATCA clearance, and the cash drawer is kicked on submit for cash orders regardless of this flag.
  */
 
 
@@ -41,7 +42,11 @@ data class SubmitOrderDto (
 
     /* ZATCA standard invoice buyer details (required when isStandardInvoice is true) */
     @Json(name = "zatcaBuyerDetails")
-    val zatcaBuyerDetails: ZatcaBuyerDetailsDto? = null
+    val zatcaBuyerDetails: ZatcaBuyerDetailsDto? = null,
+
+    /* Controls the automatic receipt print on submit for SIMPLIFIED invoices only. Defaults to true when omitted (current behavior). When false on a simplified invoice, the receipt print is skipped (no receipt_print_enqueued event and no physical print), but if a positive cash payment exists the cash drawer is still kicked. IGNORED for standard invoices: their receipt is always deferred until ZATCA clearance, and the cash drawer is kicked on submit for cash orders regardless of this flag. */
+    @Json(name = "printReceipt")
+    val printReceipt: kotlin.Boolean? = null
 
 ) {
 
