@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/pos",
-  "version": "202608.01.3",
+  "version": "202608.02.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "@spicyhome/shared": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0"
+    "react-router-dom": "^6.20.0",
+    "react-simple-keyboard": "^3.8.254"
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^3.4.0",

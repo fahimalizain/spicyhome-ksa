@@ -27,6 +27,7 @@ export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
 export type UpdateOrderMetaDto = Schemas['UpdateOrderMetaDto'];
 export type UpdateOrderPartnerDto = Schemas['UpdateOrderPartnerDto'];
+export type UpdateOrderStandardInvoiceDto = Schemas['UpdateOrderStandardInvoiceDto'];
 export type UpdateOrderItemUnitPriceDto = Schemas['UpdateOrderItemUnitPriceDto'];
 
 export type CreateRefundDto = Schemas['CreateRefundDto'];
@@ -391,6 +392,15 @@ export class SpicyHomeClient {
      */
     updatePartner: (orderId: number, dto: UpdateOrderPartnerDto) =>
       request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}/partner`, dto),
+
+    /**
+     * Set or clear the ZATCA standard invoice buyer details on an open
+     * order. `isStandardInvoice: true` persists the buyer so a later submit
+     * (with only `baseUpdatedAt`) still produces a standard invoice;
+     * `isStandardInvoice: false` clears the flag and buyer.
+     */
+    updateStandardInvoice: (orderId: number, dto: UpdateOrderStandardInvoiceDto) =>
+      request<OrderResponse>(this.config, 'PATCH', `/orders/${orderId}/standard-invoice`, dto),
 
     /**
      * Override one order LINE unit price on a delivery-partner order

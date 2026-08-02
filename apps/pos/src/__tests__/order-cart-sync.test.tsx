@@ -295,11 +295,12 @@ describe('OrderPage — staged cart', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    // Initial qty is 2
-    const qtyElements = screen.getAllByText('2');
+    // Initial qty is 2 (qty badge on the collapsed row)
+    const qtyElements = screen.getAllByText('×2');
     expect(qtyElements.length).toBeGreaterThanOrEqual(1);
 
-    // Change qty to 3
+    // Change qty to 3 (expand the cart row first — controls are hidden when collapsed)
+    fireEvent.click(screen.getByLabelText('Expand Burger'));
     const plusButtons = screen.getAllByText('+');
     fireEvent.click(plusButtons[0]);
 
@@ -339,7 +340,8 @@ describe('OrderPage — staged cart', () => {
     expect(screen.queryByText('Send to Kitchen')).toBeInTheDocument();
     expect(screen.queryByText('Save Items')).not.toBeInTheDocument();
 
-    // Make a change
+    // Make a change (expand the cart row first — controls are hidden when collapsed)
+    fireEvent.click(screen.getByLabelText('Expand Burger'));
     const plusButtons = screen.getAllByText('+');
     fireEvent.click(plusButtons[0]);
 
@@ -580,7 +582,8 @@ describe('OrderPage — staged cart', () => {
     expect(screen.getByText('Send to Kitchen')).toBeInTheDocument();
     expect(screen.queryByText('Save Items')).not.toBeInTheDocument();
 
-    // Dirty: Save only
+    // Dirty: Save only (expand the cart row first — controls are hidden when collapsed)
+    fireEvent.click(screen.getByLabelText('Expand Burger'));
     fireEvent.click(screen.getAllByText('+')[0]);
     await waitFor(() => {
       expect(screen.getByText('Save Items')).toBeInTheDocument();

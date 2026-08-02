@@ -2,6 +2,7 @@ import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { clearToken, getMe, getToken } from '../api';
 import { realtime } from '../realtime';
+import { useOnScreenKeyboard } from './on-screen-keyboard/OnScreenKeyboardProvider';
 import type { MeResponse } from '@spicyhome/client-ts';
 
 export function Layout() {
@@ -66,6 +67,7 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
 function UserMenu({ me, onLogout }: { me: MeResponse | null; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { enabled: oskEnabled, setEnabled: setOskEnabled } = useOnScreenKeyboard();
 
   useEffect(() => {
     if (!open) return;
@@ -121,6 +123,17 @@ function UserMenu({ me, onLogout }: { me: MeResponse | null; onLogout: () => voi
               Admin
             </Link>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => setOskEnabled(!oskEnabled)}
+            className="touch-target !justify-start w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white gap-3"
+          >
+            <span className="flex-1 text-left">On-screen keyboard</span>
+            <span className={oskEnabled ? 'text-brand-500' : 'text-gray-500'}>
+              {oskEnabled ? 'On' : 'Off'}
+            </span>
+          </button>
           <button
             type="button"
             role="menuitem"

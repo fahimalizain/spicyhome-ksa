@@ -77,6 +77,7 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.orders.sendToKitchen).toBe('function');
     expect(typeof client.orders.update).toBe('function');
     expect(typeof client.orders.updatePartner).toBe('function');
+    expect(typeof client.orders.updateStandardInvoice).toBe('function');
     expect(typeof client.orders.updateItemUnitPrice).toBe('function');
     expect(typeof client.orders.addPayment).toBe('function');
     expect(typeof client.orders.submit).toBe('function');
@@ -153,8 +154,10 @@ describe('SpicyHomeClient', () => {
     const dto: SubmitOrderDto = {
       baseUpdatedAt: 123,
       isStandardInvoice: false,
+      printReceipt: false,
     };
     expect(dto.isStandardInvoice).toBe(false);
+    expect(dto.printReceipt).toBe(false);
   });
 
   it('AddOrderPaymentDto type is constructable', () => {

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   amountPrefillFromOutstanding,
-  applyNumpadKey,
   buildAddPaymentDraft,
   calcCashChange,
   canConfirmAddPayment,
@@ -264,37 +263,5 @@ describe('filterMethodsForOrder (ADR 0007)', () => {
     expect(filterMethodsForOrder([{ id: 'cash', title: 'Cash' }], null)).toEqual([
       { id: 'cash', title: 'Cash' },
     ]);
-  });
-});
-
-describe('applyNumpadKey', () => {
-  it('C clears the input', () => {
-    expect(applyNumpadKey('12.50', 'C')).toBe('');
-    expect(applyNumpadKey('', 'C')).toBe('');
-  });
-
-  it('⌫ removes the last character', () => {
-    expect(applyNumpadKey('12.50', '⌫')).toBe('12.5');
-    expect(applyNumpadKey('1', '⌫')).toBe('');
-    expect(applyNumpadKey('', '⌫')).toBe('');
-  });
-
-  it('appends digits', () => {
-    expect(applyNumpadKey('', '1')).toBe('1');
-    expect(applyNumpadKey('1', '2')).toBe('12');
-  });
-
-  it('allows a single decimal point', () => {
-    expect(applyNumpadKey('12', '.')).toBe('12.');
-    expect(applyNumpadKey('12.', '5')).toBe('12.5');
-  });
-
-  it('rejects a second decimal point', () => {
-    expect(applyNumpadKey('12.50', '.')).toBeNull();
-  });
-
-  it('caps decimal places at 2', () => {
-    expect(applyNumpadKey('12.50', '1')).toBeNull();
-    expect(applyNumpadKey('12.5', '0')).toBe('12.50');
   });
 });

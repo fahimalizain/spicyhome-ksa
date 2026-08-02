@@ -224,9 +224,13 @@ describe('Print Integration', () => {
 
       for (const print of kitchenPrints) {
         const str = print.data.toString('ascii');
-        expect(str).toContain('Zinger Burger');
-        expect(str).toContain('2 Zinger Burger');
-        expect(str).toContain('Pepsi');
+        // Numbered item blocks: name line + indented Qty line
+        expect(str).toContain('1. Zinger Burger');
+        expect(str).toContain('    Qty: 2x');
+        expect(str).toContain('2. Pepsi');
+        expect(str).toContain('    Qty: 1x');
+        // No old "qty name" single-line item format
+        expect(str).not.toContain('2 Zinger Burger');
         // Big header id is the ZATCA documentId, NOT the order number
         expect(str).toContain(orderRes.body.documentId);
         expect(str).not.toContain(`ORDER #${orderRes.body.orderNo}`);
@@ -418,7 +422,10 @@ describe('Print Integration', () => {
         (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
       );
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-      expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+      const deltaStr = kitchenPrints[0].data.toString('ascii');
+      // Single delta item → numbered first block with the delta qty
+      expect(deltaStr).toContain('1. Zinger Burger');
+      expect(deltaStr).toContain('    Qty: 3x');
     });
   });
 
@@ -626,6 +633,73 @@ describe('Print Integration', () => {
       expect(str).toContain('TOTAL');
       expect(str).toContain('Thank you! Visit again.');
     });
+
+    it('printReceipt:false skips the receipt transport call but still kicks the drawer for cash', async () => {
+      // Create order
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'dine_in', tableId: 1 })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      // Get order to get updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Sync items
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      // Give any async prints a moment to settle before clearing the log
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Finalize order (open → paid) with printReceipt:false — cash payment
+      const fetchedOrder = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: fetchedOrder.body.totalHalalas })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ printReceipt: false })
+        .expect(201);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // No full receipt was printed — the ONLY transport call is the drawer
+      // kick, a minimal ESC/POS buffer with no receipt content
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints).toHaveLength(1);
+      const str = receiptPrints[0].data.toString('ascii');
+      expect(str).not.toContain('SpicyHome');
+      expect(str).not.toContain('TOTAL');
+      // But the drawer kick command (ESC p) IS present
+      expect(receiptPrints[0].data.toString('hex')).toContain('1b70');
+
+      // Ledger: no receipt_print_enqueued, but the drawer kick was enqueued
+      const orderRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const types = orderRes2.body.events.map((e: any) => e.type);
+      expect(types).toContain('paid');
+      expect(types).not.toContain('receipt_print_enqueued');
+      expect(types).toContain('cash_drawer_kick_enqueued');
+    });
   });
 
   describe('delivery partner on prints (ADR 0007)', () => {
@@ -773,8 +847,9 @@ describe('Print Integration', () => {
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const kitchenStr = kitchenPrints[0].data.toString('ascii');
       expect(kitchenStr).toContain('NOTES: call on arrival');
-      // Item notes still flow on the same ticket
-      expect(kitchenStr).toContain('2 Zinger Burger');
+      // Item notes still flow on the same ticket — item as numbered block
+      expect(kitchenStr).toContain('1. Zinger Burger');
+      expect(kitchenStr).toContain('    Qty: 2x');
     });
 
     it('notes-only meta PATCH does not enqueue kitchen prints; notes appear on next send-to-kitchen', async () => {

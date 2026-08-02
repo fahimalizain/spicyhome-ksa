@@ -15,6 +15,7 @@ import com.spicyhome.client.models.UserOptionResponse
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
+import com.spicyhome.pos.util.ServiceDay
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -157,6 +158,8 @@ class OrdersViewModelTest {
             updatedAt = 1700000000L,
             createdBy = 1L,
             updatedBy = 1L,
+            kitchenPrintedQty = 0L,
+            itemQtyTotal = 0L,
         )
     }
 
@@ -341,13 +344,13 @@ class OrdersViewModelTest {
         // init flow: me + active users loaded, then the first list call.
         assertThat(vm.uiState.value.currentUserId).isEqualTo(1L)
         assertThat(vm.uiState.value.userId).isEqualTo(1L)
-        assertThat(vm.uiState.value.date).isEqualTo(todayInRiyadhDate())
+        assertThat(vm.uiState.value.date).isEqualTo(ServiceDay.getServiceDayString(System.currentTimeMillis()))
         assertThat(vm.uiState.value.statuses).containsExactly("open")
 
         verify {
             ordersApi.ordersControllerListOrders(
                 "open",
-                todayInRiyadhDate(),
+                ServiceDay.getServiceDayString(System.currentTimeMillis()),
                 1L,
             )
         }
@@ -364,7 +367,7 @@ class OrdersViewModelTest {
         assertThat(vm.uiState.value.currentUserId).isNull()
         assertThat(vm.uiState.value.userId).isNull()
         verify {
-            ordersApi.ordersControllerListOrders("open", todayInRiyadhDate(), null)
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), null)
         }
     }
 
@@ -375,20 +378,20 @@ class OrdersViewModelTest {
         vm.toggleStatus("paid")
         assertThat(vm.uiState.value.statuses).containsExactly("open", "paid")
         verify {
-            ordersApi.ordersControllerListOrders("open,paid", todayInRiyadhDate(), 1L)
+            ordersApi.ordersControllerListOrders("open,paid", ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
         }
 
         vm.toggleStatus("open")
         assertThat(vm.uiState.value.statuses).containsExactly("paid")
         verify {
-            ordersApi.ordersControllerListOrders("paid", todayInRiyadhDate(), 1L)
+            ordersApi.ordersControllerListOrders("paid", ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
         }
 
         vm.toggleStatus("paid")
         assertThat(vm.uiState.value.statuses).isEmpty()
         // Empty statuses → no status filter (null → param omitted).
         verify {
-            ordersApi.ordersControllerListOrders(null, todayInRiyadhDate(), 1L)
+            ordersApi.ordersControllerListOrders(null, ServiceDay.getServiceDayString(System.currentTimeMillis()), 1L)
         }
     }
 
@@ -399,13 +402,13 @@ class OrdersViewModelTest {
         vm.setUserId(null)
         assertThat(vm.uiState.value.userId).isNull()
         verify {
-            ordersApi.ordersControllerListOrders("open", todayInRiyadhDate(), null)
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), null)
         }
 
         vm.setUserId(2L)
         assertThat(vm.uiState.value.userId).isEqualTo(2L)
         verify {
-            ordersApi.ordersControllerListOrders("open", todayInRiyadhDate(), 2L)
+            ordersApi.ordersControllerListOrders("open", ServiceDay.getServiceDayString(System.currentTimeMillis()), 2L)
         }
     }
 

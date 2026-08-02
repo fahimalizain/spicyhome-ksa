@@ -88,4 +88,21 @@ export class OrderSummaryResponse {
 
   @ApiProperty({ ...ApiInt64, example: 1, nullable: true })
   updatedBy!: number | null;
+
+  // ── Kitchen printed quantity (ledger-derived, ADR 0006) ───────────────────
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 3,
+    description:
+      'Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).',
+  })
+  kitchenPrintedQty!: number;
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 5,
+    description: 'Sum of current order line quantities for this order.',
+  })
+  itemQtyTotal!: number;
 }

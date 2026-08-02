@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { halalasToSar, todayInRiyadh, ALL_ORDER_STATUSES } from '@spicyhome/shared';
+import { halalasToSar, getServiceDayString, ALL_ORDER_STATUSES } from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
 import { usePermissions } from '../hooks/usePermissions';
@@ -48,10 +48,12 @@ export function OrdersPage() {
   const navigate = useNavigate();
 
   // ── Filters (server-side) ────────────────────────────────────────────────
-  // Date: default today (Asia/Riyadh calendar day). Status: multiselect,
-  // default open only; empty selection → no status filter. User: all users
-  // (no userId sent) unless a specific user is picked.
-  const [selectedDate, setSelectedDate] = useState(() => todayInRiyadh());
+  // Date: default current service day (Asia/Riyadh 05:00 boundary, per
+  // ADR 0008 — the same window the server uses for the orders list filter).
+  // Status: multiselect, default open only; empty selection → no status
+  // filter. User: all users (no userId sent) unless a specific user is
+  // picked.
+  const [selectedDate, setSelectedDate] = useState(() => getServiceDayString(Date.now()));
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
     () => new Set([ALL_ORDER_STATUSES[0]]),
   );
@@ -296,12 +298,25 @@ export function OrdersPage() {
                       {halalasToSar(order.totalHalalas)} SAR
                     </span>
                   </div>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
-                    <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
-                    {order.tableId != null && (
-                      <span>Table #{order.tableId as unknown as number}</span>
-                    )}
-                    <span>
+                  <div className="flex items-center justify-between gap-3 mt-1 text-xs text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 min-w-0">
+                      <span>{order.type === 'dine_in' ? 'Dine-in' : 'Takeaway'}</span>
+                      {order.tableId != null && (
+                        <span>Table #{order.tableId as unknown as number}</span>
+                      )}
+                      {order.status === 'open' && (
+                        <span
+                          className={
+                            order.kitchenPrintedQty !== order.itemQtyTotal
+                              ? 'text-amber-400 font-semibold'
+                              : undefined
+                          }
+                        >
+                          Kitchen Qty Printed: {order.kitchenPrintedQty} / {order.itemQtyTotal}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 ml-auto">
                       {new Date((order.createdAt as unknown as number) * 1000).toLocaleTimeString()}
                     </span>
                   </div>

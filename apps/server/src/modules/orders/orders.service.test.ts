@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
-import { todayInRiyadh, riyadhCalendarDayBoundsUnix } from '@spicyhome/shared';
+import { getServiceDayString, getServiceDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -120,6 +120,129 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   sqlite.close();
+});
+
+describe('createOrder — business-day gate uses the service day (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // 02:00 Asia/Riyadh of that same label — pre-05:00, so the service day is
+  // the PREVIOUS calendar date (the exact window this bugfix targets).
+  const pre0500Ms = (currentBounds.startUnix - 3 * 3600) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function closeOpenDay(): void {
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+  }
+
+  it('409 when no open business day exists', async () => {
+    closeOpenDay();
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toBe(
+      'No open business day. Open a business day before creating orders.',
+    );
+  });
+
+  it('201 when the open day matches the current service day', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
+
+  it('409 when the open day is from a previous service day (stale after 05:00)', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const currentServiceDay = getServiceDayString(post0500Ms);
+    const previousServiceDay = getServiceDayString(pre0500Ms);
+    setOpenDayBusinessDate(previousServiceDay);
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toContain(`from ${previousServiceDay}`);
+    expect(res.body.message).toContain(`today (${currentServiceDay})`);
+  });
+
+  it('201 pre-05:00 when the open day is labeled with the previous calendar date (service day)', async () => {
+    // 02:00 Asia/Riyadh — the service day is still the PREVIOUS calendar
+    // date, which is exactly the label the open day carries (stamped at open
+    // time via getServiceDayString). Creation must SUCCEED; the old
+    // calendar-day comparison rejected it as "stale" until 05:00.
+    jest.spyOn(Date, 'now').mockReturnValue(pre0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(pre0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
 });
 
 describe('Order Refunds', () => {
@@ -1563,6 +1686,120 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       const typesAfter = eventsAfter.body.map((e: any) => e.type);
       expect(typesAfter).toContain('receipt_print_enqueued');
       expect(typesAfter).toContain('receipt_print_succeeded');
+    });
+  });
+
+  describe('printReceipt flag (simplified-only auto receipt print)', () => {
+    const STANDARD_BUYER = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+
+    async function fetchEventTypes(orderId: number): Promise<string[]> {
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      return eventsRes.body.map((e: any) => e.type);
+    }
+
+    it('simplified + printReceipt:false + cash → paid, no receipt enqueued, drawer still kicked', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('simplified');
+
+      // Drawer kick is async post-tx — give it a moment to write succeeded
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('paid');
+      // Receipt print fully skipped: no enqueued (and thus no print)
+      expect(types).not.toContain('receipt_print_enqueued');
+      // Cash was tendered → drawer still kicked (ops: cash must open)
+      expect(types).toContain('cash_drawer_kick_enqueued');
+      // kickCashDrawer writes receipt_print_succeeded after a successful kick
+      expect(types).toContain('receipt_print_succeeded');
+    });
+
+    it('simplified + printReceipt:false + card → paid, no receipt events, no drawer', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'card', amountHalalas: totalHalalas }],
+        { printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('simplified');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('paid');
+      // No receipt print and no drawer kick for card-only
+      expect(types).not.toContain('receipt_print_enqueued');
+      expect(types).not.toContain('cash_drawer_kick_enqueued');
+      expect(types).not.toContain('receipt_print_succeeded');
+      // Nothing was sent to the printer transport either
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it('simplified + printReceipt:true → receipt still enqueued (same as omitted)', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { printReceipt: true },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('receipt_print_enqueued');
+      expect(types).toContain('receipt_print_succeeded');
+    });
+
+    it('standard + printReceipt:false → ignored, identical to a normal standard submit', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { isStandardInvoice: true, zatcaBuyerDetails: STANDARD_BUYER, printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('standard');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      // Standard always defers the receipt to ZATCA clearance — the flag is
+      // ignored and NO receipt_print_enqueued is written on submit
+      expect(types).not.toContain('receipt_print_enqueued');
+      // Cash order → immediate drawer kick on submit (unchanged)
+      expect(types).toContain('cash_drawer_kick_enqueued');
     });
   });
 });
@@ -3116,6 +3353,331 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   });
 });
 
+describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
+  let stdOrderIds: number[];
+
+  beforeEach(() => {
+    stdOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of stdOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    stdOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
+      .expect(200);
+    return res.body;
+  }
+
+  // Returns the supertest chain — supports both `.expect(...)` chaining
+  // and `await` (resolves to the response).
+  function patchStandardInvoice(id: number, body: Record<string, unknown>) {
+    return request(app.getHttpServer())
+      .patch(`/orders/${id}/standard-invoice`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body);
+  }
+
+  const FULL_BUYER = {
+    name: 'Abdullah Al-Otaibi Est.',
+    vatNumber: '300123456789012',
+    street: 'King Fahd Road',
+    buildingNumber: '7845',
+    citySubdivision: 'Al-Olaya',
+    city: 'Riyadh',
+    postalCode: '12271',
+    country: 'SA',
+  };
+
+  it('set standard invoice with full buyer → persisted on the order row', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    expect(res.body.isStandardInvoice).toBe(true);
+    expect(res.body.zatcaBuyerDetails).toEqual(FULL_BUYER);
+
+    // Persisted in the DB
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.isStandardInvoice).toBe(1);
+    expect(JSON.parse(dbOrder.zatcaBuyerDetails)).toEqual(FULL_BUYER);
+
+    // Audit event written with from→to summary
+    const evts = res.body.events.filter((e: any) => e.type === 'standard_invoice_changed');
+    expect(evts).toHaveLength(1);
+    expect(JSON.parse(evts[0].payload)).toEqual({
+      fromIsStandardInvoice: false,
+      toIsStandardInvoice: true,
+      fromBuyerVatNumber: null,
+      toBuyerVatNumber: '300123456789012',
+      fromBuyerName: null,
+      toBuyerName: 'Abdullah Al-Otaibi Est.',
+    });
+  });
+
+  it('PATCH again with identical buyer → 200 no-op (no updated_at bump, no event)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    const setUpdatedAt = set.body.updatedAt;
+
+    // Same buyer again (country normalized to SA) → no-op
+    const again = await patchStandardInvoice(id, {
+      baseUpdatedAt: setUpdatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    expect(again.body.updatedAt).toBe(setUpdatedAt);
+    expect(
+      again.body.events.filter((e: any) => e.type === 'standard_invoice_changed'),
+    ).toHaveLength(1); // only the first set wrote an event
+  });
+
+  it('PATCH clear → flag 0, buyer null, event written', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    const cleared = await patchStandardInvoice(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      isStandardInvoice: false,
+    }).expect(200);
+
+    expect(cleared.body.isStandardInvoice).toBe(false);
+    expect(cleared.body.zatcaBuyerDetails).toBeNull();
+
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.isStandardInvoice).toBe(0);
+    expect(dbOrder.zatcaBuyerDetails).toBeNull();
+
+    const evts = cleared.body.events.filter((e: any) => e.type === 'standard_invoice_changed');
+    expect(evts).toHaveLength(2); // set + clear
+    expect(JSON.parse(evts[1].payload)).toEqual({
+      fromIsStandardInvoice: true,
+      toIsStandardInvoice: false,
+      fromBuyerVatNumber: '300123456789012',
+      toBuyerVatNumber: null,
+      fromBuyerName: 'Abdullah Al-Otaibi Est.',
+      toBuyerName: null,
+    });
+  });
+
+  it('PATCH set with invalid buyer → 400, nothing persisted', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: { ...FULL_BUYER, vatNumber: '12345' },
+    }).expect(400);
+
+    expect(res.body.message).toContain('Invalid buyer details');
+
+    const orderRes = await getOrder(id);
+    expect(orderRes.isStandardInvoice).toBe(false);
+    expect(orderRes.zatcaBuyerDetails).toBeNull();
+  });
+
+  it('PATCH set without buyer when isStandardInvoice true → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: before.updatedAt,
+      isStandardInvoice: true,
+    }).expect(400);
+
+    expect(res.body.message).toBe('zatcaBuyerDetails is required when isStandardInvoice is true');
+  });
+
+  it('PATCH non-open order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    await addItem(id, before.updatedAt, 1, 1);
+
+    // Pay + submit so the order is no longer open
+    const paid = await getOrder(id);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: paid.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: paid.updatedAt })
+      .expect(201);
+
+    const afterPaid = await getOrder(id);
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: afterPaid.updatedAt,
+      isStandardInvoice: false,
+    }).expect(400);
+    expect(res.body.message).toBe('Only open orders can change the standard invoice buyer');
+  });
+
+  it('PATCH stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the sync
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: before.updatedAt, // stale — sync bumped updated_at
+      isStandardInvoice: false,
+    }).expect(409);
+
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(synced.updatedAt);
+  }, 10000);
+
+  it('missing order → 404', async () => {
+    await patchStandardInvoice(999999, {
+      baseUpdatedAt: 0,
+      isStandardInvoice: false,
+    }).expect(404);
+  });
+
+  it('submit with only baseUpdatedAt after PATCH set → paid as standard (order flag honored)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    expect(set.body.isStandardInvoice).toBe(true);
+
+    // Balance + submit with ONLY baseUpdatedAt — the body omits the flag
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: set.body.totalHalalas })
+      .expect(201);
+    const beforeSubmit = await getOrder(id);
+    const submitRes = await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: beforeSubmit.updatedAt })
+      .expect(201);
+
+    expect(submitRes.body.invoiceType).toBe('standard');
+
+    // Order row keeps the standard flag + buyer after the paid transition
+    const afterPaid = await getOrder(id);
+    expect(afterPaid.isStandardInvoice).toBe(true);
+    expect(afterPaid.zatcaBuyerDetails).toEqual(FULL_BUYER);
+
+    // Paid event carries the buyer summary from the PERSISTED buyer
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${id}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+    expect(paidEvent).toBeDefined();
+    const paidPayload =
+      typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+    expect(paidPayload.isStandardInvoice).toBe(true);
+    expect(paidPayload.buyerVatNumber).toBe('300123456789012');
+    expect(paidPayload.buyerName).toBe('Abdullah Al-Otaibi Est.');
+  });
+
+  it('submit after PATCH clear → simplified', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    const cleared = await patchStandardInvoice(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      isStandardInvoice: false,
+    }).expect(200);
+    expect(cleared.body.isStandardInvoice).toBe(false);
+
+    // Balance + submit with only baseUpdatedAt → simplified (order flag is 0)
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: cleared.body.totalHalalas })
+      .expect(201);
+    const beforeSubmit = await getOrder(id);
+    const submitRes = await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: beforeSubmit.updatedAt })
+      .expect(201);
+
+    expect(submitRes.body.invoiceType).toBe('simplified');
+
+    const afterPaid = await getOrder(id);
+    expect(afterPaid.isStandardInvoice).toBe(false);
+    expect(afterPaid.zatcaBuyerDetails).toBeNull();
+  });
+});
+
 describe('listOrders — GET /orders returns newest first (DESC by orders.id)', () => {
   const createdIds: number[] = [];
 
@@ -3210,24 +3772,31 @@ describe('listOrders — date / user / multi-status filters', () => {
     return res.body;
   }
 
-  it('date filter returns only orders created that Riyadh calendar day (neighbors excluded)', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+  it('date filter uses the service-day window [D 05:00, (D+1) 05:00) Asia/Riyadh', async () => {
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
-    const yesterdayOrder = await createOrder({ type: 'takeaway' });
-    const todayOrder = await createOrder({ type: 'takeaway' });
-    const tomorrowOrder = await createOrder({ type: 'takeaway' });
+    const inWindow = await createOrder({ type: 'takeaway' });
+    const prevDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayPreBoundary = await createOrder({ type: 'takeaway' });
+    const nextDayNoon = await createOrder({ type: 'takeaway' });
 
-    // Yesterday 12:00 / today 12:00 / tomorrow 12:00 Asia/Riyadh.
+    // 12:00 Asia/Riyadh on D → inside the service day window.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix - 86400 + 12 * 3600, yesterdayOrder.id);
+      .run(bounds.startUnix + 12 * 3600, inWindow.id);
+    // 01:00 Asia/Riyadh on D → pre-05:00, belongs to service day D-1 → excluded.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.startUnix + 12 * 3600, todayOrder.id);
+      .run(bounds.startUnix - 4 * 3600, prevDayPreBoundary.id);
+    // 01:00 Asia/Riyadh on D+1 → pre-05:00 but still inside service day D → included.
     sqlite
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
-      .run(bounds.endUnix + 12 * 3600, tomorrowOrder.id);
+      .run(bounds.endUnix - 4 * 3600, nextDayPreBoundary.id);
+    // 12:00 Asia/Riyadh on D+1 → outside the window → excluded.
+    sqlite
+      .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
+      .run(bounds.endUnix + 12 * 3600, nextDayNoon.id);
 
     const res = await request(app.getHttpServer())
       .get(`/orders?date=${today}`)
@@ -3235,14 +3804,15 @@ describe('listOrders — date / user / multi-status filters', () => {
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
 
-    expect(ids).toContain(todayOrder.id);
-    expect(ids).not.toContain(yesterdayOrder.id);
-    expect(ids).not.toContain(tomorrowOrder.id);
+    expect(ids).toContain(inWindow.id);
+    expect(ids).toContain(nextDayPreBoundary.id);
+    expect(ids).not.toContain(prevDayPreBoundary.id);
+    expect(ids).not.toContain(nextDayNoon.id);
   });
 
   it('date filter keeps newest-first (DESC by id) within the day', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
 
     const first = await createOrder({ type: 'takeaway' });
     const second = await createOrder({ type: 'takeaway' });
@@ -3348,8 +3918,8 @@ describe('listOrders — date / user / multi-status filters', () => {
   });
 
   it('combined filters (date + status + userId) and still DESC by id', async () => {
-    const today = todayInRiyadh();
-    const bounds = riyadhCalendarDayBoundsUnix(today)!;
+    const today = getServiceDayString(Date.now());
+    const bounds = getServiceDayBoundsUnix(today)!;
     const admin = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as {
       id: number;
     };
@@ -3366,7 +3936,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     const b = await createOrder({ type: 'takeaway' });
     // today + open + other user (fails user filter)
     const c = await createOrder({ type: 'takeaway' });
-    // yesterday + open + admin (fails date filter)
+    // 04:00 Asia/Riyadh on D (previous service day) + open + admin (fails date filter)
     const d = await createOrder({ type: 'takeaway' });
 
     sqlite
@@ -3418,6 +3988,160 @@ describe('listOrders — date / user / multi-status filters', () => {
     for (let i = 1; i < ids.length; i++) {
       expect(ids[i - 1]).toBeGreaterThan(ids[i]);
     }
+  });
+});
+
+describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+    createdIds.push(orderId);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  async function syncItems(orderId: number, updatedAt: number, items: any[]) {
+    return request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+  }
+
+  async function sendToKitchen(orderId: number) {
+    return request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+  }
+
+  /** Fetch the single summary row for `orderId` from GET /orders. */
+  async function summaryFor(orderId: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const row = res.body.find((o: any) => o.id === orderId);
+    expect(row).toBeDefined();
+    return row;
+  }
+
+  it('empty open order → kitchenPrintedQty 0 / itemQtyTotal 0', async () => {
+    const { orderId } = await createOpenOrder();
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(0);
+  });
+
+  it('order with items never sent to kitchen → kitchenPrintedQty 0, itemQtyTotal sums qtys', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 }, // Zinger Burger
+      { itemId: 2, qty: 3 }, // Pepsi
+    ]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(5);
+  });
+
+  it('order after send-to-kitchen → printed matches total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 },
+      { itemId: 2, qty: 3 },
+    ]);
+    await sendToKitchen(orderId);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('unsent delta (qty increased after send) → printed < total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 2 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 2
+    await sendToKitchen(orderId);
+
+    // Qty up to 5 via sync — sync itself never prints (ADR 0006)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 5 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(2);
+  });
+
+  it('qty decreased after print → printed exceeds total, both still reported', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5
+    await sendToKitchen(orderId);
+
+    // Qty down to 2 via sync (no print for decreases)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 2 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(2);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('multiple sends accumulate printed qty; fields present on paid rows too', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5, then bump to 8 and send the 3 delta → 8 printed total
+    await sendToKitchen(orderId);
+    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 8 }]);
+    await sendToKitchen(orderId);
+    expect(sync2.body.items[0].qty).toBe(8);
+
+    // Pay + submit so the row is no longer open — fields must still exist.
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 2300 * 8 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.status).toBe('paid');
+    expect(summary.itemQtyTotal).toBe(8);
+    expect(summary.kitchenPrintedQty).toBe(8);
   });
 });
 
@@ -5045,7 +5769,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('5 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 5x');
 
     // Second send with no changes → 200 no-op, no new enqueued events
     const res2 = await sendToKitchen(orderId);
@@ -5084,7 +5809,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 3x');
   });
 
   it('qty decrease: send does not print negative; printed total stays high', async () => {
@@ -5200,5 +5926,158 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     // No kitchen prints at all
     await new Promise((r) => setTimeout(r, 200));
     expect(transport.sent.filter((s: any) => s.ip !== '192.168.1.50').length).toBe(0);
+  });
+});
+
+describe('createOrder — daily_order_seq resets on the service-day label (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // Straddle the 05:00 boundary itself: 04:59:30 vs 05:00:30.
+  const justBefore0500Ms = (currentBounds.startUnix - 30) * 1000;
+  const justAfter0500Ms = (currentBounds.startUnix + 30) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function setDailyOrderSeq(value: string): void {
+    sqlite
+      .prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .run('daily_order_seq', value);
+  }
+
+  function readDailyOrderSeq(): string | undefined {
+    const row = sqlite.prepare("SELECT value FROM settings WHERE key = 'daily_order_seq'").get() as
+      { value: string } | undefined;
+    return row?.value;
+  }
+
+  it('two creates in the same service day get sequential orderNos', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
+    // The counter is keyed by the SERVICE-DAY label, not the UTC date.
+    expect(readDailyOrderSeq()).toBe(`${getServiceDayString(post0500Ms)}:${second.body.orderNo}`);
+  });
+
+  it('orderNo resets to 1 when crossing the 05:00 service-day boundary', async () => {
+    // Prime the pre-05:00 service day (the previous calendar date) with a
+    // known counter so "first had N" is deterministic: N = 5 + 1 = 6.
+    const pre0500ServiceDay = getServiceDayString(justBefore0500Ms);
+    setDailyOrderSeq(`${pre0500ServiceDay}:5`);
+
+    // 04:59:30 — still the previous service day → continues at 6.
+    jest.spyOn(Date, 'now').mockReturnValue(justBefore0500Ms);
+    setOpenDayBusinessDate(pre0500ServiceDay);
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+    expect(first.body.orderNo).toBe(6);
+
+    // 05:00:30 — the service day flips to the NEW label → seq resets to 1.
+    const post0500ServiceDay = getServiceDayString(justAfter0500Ms);
+    expect(post0500ServiceDay).not.toBe(pre0500ServiceDay);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(post0500ServiceDay);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(1);
+    expect(readDailyOrderSeq()).toBe(`${post0500ServiceDay}:1`);
+  });
+
+  it('two creates both after 05:00 in the same service day get consecutive orderNos', async () => {
+    const serviceDay = getServiceDayString(justAfter0500Ms);
+    jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
+    setOpenDayBusinessDate(serviceDay);
+
+    const first = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(first.body.id);
+
+    // Slightly later (12:00), still the same service day.
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const second = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(second.body.id);
+
+    expect(second.body.orderNo).toBe(first.body.orderNo + 1);
   });
 });

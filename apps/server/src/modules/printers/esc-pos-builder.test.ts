@@ -72,6 +72,26 @@ describe('EscPosBuilder', () => {
     });
   });
 
+  describe('doubleHeight', () => {
+    it('emits GS ! 0x10 for double height on', () => {
+      const eb = new EscPosBuilder();
+      eb.doubleHeight(true);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0x1d);
+      expect(buf[1]).toBe(0x21);
+      expect(buf[2]).toBe(0x10);
+    });
+
+    it('emits GS ! 0x00 for double height off', () => {
+      const eb = new EscPosBuilder();
+      eb.doubleHeight(false);
+      const buf = eb.getBuffer();
+      expect(buf[0]).toBe(0x1d);
+      expect(buf[1]).toBe(0x21);
+      expect(buf[2]).toBe(0x00);
+    });
+  });
+
   describe('text', () => {
     it('appends text with LF', () => {
       const eb = new EscPosBuilder();

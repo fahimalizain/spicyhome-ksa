@@ -24,6 +24,8 @@
 | **updatedAt** | **kotlin.Long** |  |  |
 | **createdBy** | **kotlin.Long** |  |  |
 | **updatedBy** | **kotlin.Long** |  |  |
+| **kitchenPrintedQty** | **kotlin.Long** | Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006). |  |
+| **itemQtyTotal** | **kotlin.Long** | Sum of current order line quantities for this order. |  |
 
 
 

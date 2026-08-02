@@ -1,6 +1,6 @@
 {
   "name": "@spicyhome/db",
-  "version": "202608.01.3",
+  "version": "202608.02.1",
   "private": true,
   "type": "commonjs",
   "main": "src/index.js",
