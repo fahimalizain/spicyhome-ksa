@@ -1,15 +1,11 @@
 import { Injectable, Inject, ConflictException, NotFoundException } from '@nestjs/common';
 import { eq, and, desc } from 'drizzle-orm';
 import { dayOpenings, orders } from '@spicyhome/db';
+import { getServiceDayString } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
-
-function todayInRiyadh(): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
-  return fmt.format(new Date());
-}
 
 @Injectable()
 export class BusinessDayService {
@@ -27,8 +23,9 @@ export class BusinessDayService {
       );
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const businessDate = todayInRiyadh();
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
+    const businessDate = getServiceDayString(nowMs);
 
     const values = {
       businessDate,
@@ -157,10 +154,5 @@ export class BusinessDayService {
     const day = this.db.select().from(dayOpenings).where(eq(dayOpenings.id, id)).get();
     if (!day) throw new NotFoundException('Business day not found');
     return day;
-  }
-
-  /** Today's business date in Asia/Riyadh (YYYY-MM-DD). */
-  static todayInRiyadh(): string {
-    return todayInRiyadh();
   }
 }
