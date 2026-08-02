@@ -123,7 +123,7 @@ interface ParsedServiceDayDate {
  * Parse and validate a service-day label (`YYYY-MM-DD`). Returns the date
  * parts, or `null` when the string is not a valid date (bad format,
  * unpadded parts, or out-of-range month/day, e.g. `2026-13-01` or
- * `2026-02-30`). Same validation approach as `riyadh.ts`'s parser.
+ * `2026-02-30`). Reject impossible calendar dates via Date.UTC round-trip.
  */
 function parseServiceDayDate(dateStr: string): ParsedServiceDayDate | null {
   const m = DATE_RE.exec(dateStr);
