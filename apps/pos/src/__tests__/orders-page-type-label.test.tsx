@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { OrdersPage } from '../pages/OrdersPage';
 
@@ -208,5 +208,72 @@ describe('OrdersPage — order type labels (delivery partner hints)', () => {
       expect(screen.getAllByText('Jahez / JH-42').length).toBeGreaterThanOrEqual(2);
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
+  });
+
+  it('detail header shows the JS title-cased creator name resolved via listActiveUsers', async () => {
+    mockList.mockResolvedValue([summary({ createdBy: 1 })]);
+    mockGet.mockResolvedValue(orderDetail({ createdBy: 1 }));
+    mockListActiveUsers.mockResolvedValue([{ id: 1, username: 'sara', name: 'sara ahmed' }]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Creator name comes from the users list and is title-cased in JS.
+    // (The raw lowercase name still appears in the user filter dropdown's
+    // options — scope the assertion to the detail header.)
+    const header = screen.getByText('Order INV26-0042').closest('.border-b') as HTMLElement;
+    expect(within(header).getByText('Sara Ahmed')).toBeInTheDocument();
+    expect(within(header).queryByText('sara ahmed')).not.toBeInTheDocument();
+  });
+
+  it('detail header falls back to the username when the user name is blank', async () => {
+    mockList.mockResolvedValue([summary({ createdBy: 1 })]);
+    mockGet.mockResolvedValue(orderDetail({ createdBy: 1 }));
+    mockListActiveUsers.mockResolvedValue([{ id: 1, username: 'sara', name: '   ' }]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    const header = screen.getByText('Order INV26-0042').closest('.border-b') as HTMLElement;
+    expect(within(header).getByText('Sara')).toBeInTheDocument();
+  });
+
+  it('detail header hides the creator name for unknown createdBy ids', async () => {
+    mockList.mockResolvedValue([summary({ createdBy: 99 })]);
+    mockGet.mockResolvedValue(orderDetail({ createdBy: 99 }));
+    mockListActiveUsers.mockResolvedValue([{ id: 1, username: 'sara', name: 'Sara' }]);
+
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('INV26-0042'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    const header = screen.getByText('Order INV26-0042').closest('.border-b') as HTMLElement;
+    expect(within(header).queryByText('Sara')).not.toBeInTheDocument();
   });
 });

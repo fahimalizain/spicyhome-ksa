@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { OrderHeader } from '../components/orders/OrderHeader';
+import { OrderHeader, titleCaseName } from '../components/orders/OrderHeader';
 
 describe('OrderHeader', () => {
   it('new order: shows "New Order" and the type label, no status/created/creator', () => {
@@ -81,20 +81,65 @@ describe('OrderHeader', () => {
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
   });
 
-  it('capitalizes the creator name via CSS', () => {
+  it('title-cases the creator name via JS (not CSS capitalize)', () => {
     render(
       <OrderHeader
         documentId="INV26-0042"
         status="open"
         typeLabel="Dine-in"
-        createdByName="john doe"
+        createdByName="john DOE"
       />,
     );
 
-    const name = screen.getByText('john doe');
-    expect(name).toBeInTheDocument();
-    expect(name.className).toContain('capitalize');
+    // The displayed text is the JS title-cased name — CSS `capitalize` would
+    // leave the DOM text as the raw input and fails on ALL-CAPS input.
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(screen.queryByText('john DOE')).not.toBeInTheDocument();
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
+  });
+
+  it('variant="detail": renders documentId/status/type with notes and previous document ids', () => {
+    render(
+      <OrderHeader
+        variant="detail"
+        documentId="INV26-0042"
+        status="paid"
+        typeLabel="HungerStation / HS-1"
+        createdAt={1750000000}
+        createdByName="SARA ahmed"
+        notes="  Call on arrival  "
+        previousDocumentIds={['INV26-0041']}
+      />,
+    );
+
+    expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    expect(screen.getByText('Paid')).toBeInTheDocument();
+    expect(screen.getByText('HungerStation / HS-1')).toBeInTheDocument();
+    expect(screen.getByText('Sara Ahmed')).toBeInTheDocument();
+    expect(screen.getByText(new Date(1750000000 * 1000).toLocaleString())).toBeInTheDocument();
+    // Notes trimmed, with the muted "Notes:" prefix
+    expect(screen.getByText('Notes:')).toBeInTheDocument();
+    expect(screen.getByText('Call on arrival')).toBeInTheDocument();
+    expect(screen.getByText('Previous: INV26-0041')).toBeInTheDocument();
+  });
+
+  it('variant="detail": notes and previous ids hidden when empty', () => {
+    render(
+      <OrderHeader
+        variant="detail"
+        documentId="INV26-0042"
+        status="open"
+        typeLabel="Dine-in"
+        notes=""
+        previousDocumentIds={[]}
+      />,
+    );
+
+    expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText('Dine-in')).toBeInTheDocument();
+    expect(screen.queryByText('Notes:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Previous:/)).not.toBeInTheDocument();
   });
 
   it('hides the created-at line when createdAt is null, undefined or 0', () => {
@@ -116,5 +161,35 @@ describe('OrderHeader', () => {
     render(<OrderHeader documentId="INV26-0042" status="archived" typeLabel="Dine-in" />);
 
     expect(screen.getByText('archived')).toBeInTheDocument();
+  });
+});
+
+describe('titleCaseName', () => {
+  it('empty and whitespace-only strings return empty', () => {
+    expect(titleCaseName('')).toBe('');
+    expect(titleCaseName('   ')).toBe('');
+    expect(titleCaseName('\t \n ')).toBe('');
+  });
+
+  it('single word is capitalized', () => {
+    expect(titleCaseName('sara')).toBe('Sara');
+    expect(titleCaseName('SARA')).toBe('Sara');
+    expect(titleCaseName('Sara')).toBe('Sara');
+  });
+
+  it('multi-word names are title-cased per word', () => {
+    expect(titleCaseName('john doe')).toBe('John Doe');
+    expect(titleCaseName('sara ahmed')).toBe('Sara Ahmed');
+  });
+
+  it('mixed case and ALL CAPS normalize to title case', () => {
+    expect(titleCaseName('jOhN dOe')).toBe('John Doe');
+    expect(titleCaseName('JOHN DOE')).toBe('John Doe');
+    expect(titleCaseName('AL MOHAMMED')).toBe('Al Mohammed');
+  });
+
+  it('collapses internal runs of whitespace', () => {
+    expect(titleCaseName('  john    doe  ')).toBe('John Doe');
+    expect(titleCaseName('sara\tahmed\nali')).toBe('Sara Ahmed Ali');
   });
 });
