@@ -1,5 +1,8 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
 
+/** Blank lines between the leading dashed markers before KOT content. */
+const LEADING_SPACER_LINES = 10;
+
 export interface KitchenTicketOptions {
   /**
    * Human-facing order identifier (e.g. "INV26-0042") — printed big in the
@@ -42,6 +45,14 @@ export class KitchenTicketBuilder {
     const eb = new EscPosBuilder(this.width);
 
     eb.init();
+
+    // Leading tear-off / grab space so kitchen content starts well below the
+    // cutter. Two dashed markers frame the blank region for easy tearing.
+    eb.separator('-');
+    for (let i = 0; i < LEADING_SPACER_LINES; i++) {
+      eb.blankLine();
+    }
+    eb.separator('-');
 
     // Big document id — double-size bold, centered, so the kitchen can match
     // the ticket to the order at a glance (e.g. "INV26-0042").

@@ -301,6 +301,30 @@ describe('KitchenTicketBuilder', () => {
     expect(hex.startsWith('1b40')).toBe(true);
   });
 
+  it('prints a leading dashed spacer with blank lines before content', () => {
+    const buf = builder.build(baseOpts);
+    const hex = buf.toString('hex');
+    // init first
+    expect(hex.startsWith('1b40')).toBe(true);
+
+    const str = buf.toString('ascii');
+    const dashLine = '-'.repeat(42);
+    const firstDash = str.indexOf(dashLine);
+    const secondDash = str.indexOf(dashLine, firstDash + dashLine.length);
+    const contentStart = str.indexOf('INV26-0042');
+
+    expect(firstDash).toBeGreaterThan(-1);
+    expect(secondDash).toBeGreaterThan(firstDash);
+    expect(contentStart).toBeGreaterThan(secondDash);
+
+    // Between the two dashed lines: exactly LEADING_SPACER_LINES newlines
+    // (separator itself ends with LF, so the gap between end of first dash
+    // line content and start of second is: LF from first sep + N blank LFs)
+    const between = str.slice(firstDash + dashLine.length, secondDash);
+    const lfCount = (between.match(/\n/g) || []).length;
+    expect(lfCount).toBe(1 + 10); // trailing LF of first separator + 10 blank lines
+  });
+
   it('truncates long item names to fit paper width', () => {
     const longName = 'A'.repeat(100);
     const opts = { ...baseOpts, items: [{ qty: 1, name: longName, notes: null }] };
@@ -328,5 +352,7 @@ describe('KitchenTicketBuilder', () => {
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
     expect(str).toContain('INV26-0042');
+    // Leading tear-off spacer is still present without any items
+    expect(str.indexOf('-'.repeat(42))).toBeGreaterThan(-1);
   });
 });
