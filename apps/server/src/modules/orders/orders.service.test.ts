@@ -6,7 +6,12 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
-import { todayInRiyadh, riyadhCalendarDayBoundsUnix } from '@spicyhome/shared';
+import {
+  todayInRiyadh,
+  riyadhCalendarDayBoundsUnix,
+  getServiceDayString,
+  getServiceDayBoundsUnix,
+} from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { FakePrinterTransport } from '../printers/printer-transport';
@@ -113,6 +118,129 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   sqlite.close();
+});
+
+describe('createOrder — business-day gate uses the service day (ADR 0008)', () => {
+  const createdIds: number[] = [];
+
+  // Mocked instants must stay BEFORE the token's exp (the end of the
+  // current service day) so the shared jwtToken stays valid.
+  const currentBounds = getServiceDayBoundsUnix(getServiceDayString(Date.now()))!;
+  // 12:00 Asia/Riyadh on the current service-day label — post-05:00, so the
+  // service day IS that label.
+  const post0500Ms = (currentBounds.startUnix + 12 * 3600) * 1000;
+  // 02:00 Asia/Riyadh of that same label — pre-05:00, so the service day is
+  // the PREVIOUS calendar date (the exact window this bugfix targets).
+  const pre0500Ms = (currentBounds.startUnix - 3 * 3600) * 1000;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    createdIds.length = 0;
+    // Baseline: exactly one OPEN day row, labeled with the REAL current
+    // service day (the state beforeAll leaves behind).
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    // Void orders created here so later describes see a clean slate.
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+    // Restore the open day the rest of the suite expects.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+  });
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  function closeOpenDay(): void {
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+  }
+
+  it('409 when no open business day exists', async () => {
+    closeOpenDay();
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toBe(
+      'No open business day. Open a business day before creating orders.',
+    );
+  });
+
+  it('201 when the open day matches the current service day', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(post0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
+
+  it('409 when the open day is from a previous service day (stale after 05:00)', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
+    const currentServiceDay = getServiceDayString(post0500Ms);
+    const previousServiceDay = getServiceDayString(pre0500Ms);
+    setOpenDayBusinessDate(previousServiceDay);
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(409);
+
+    expect(res.body.message).toContain(`from ${previousServiceDay}`);
+    expect(res.body.message).toContain(`today (${currentServiceDay})`);
+  });
+
+  it('201 pre-05:00 when the open day is labeled with the previous calendar date (service day)', async () => {
+    // 02:00 Asia/Riyadh — the service day is still the PREVIOUS calendar
+    // date, which is exactly the label the open day carries (stamped at open
+    // time via getServiceDayString). Creation must SUCCEED; the old
+    // calendar-day comparison rejected it as "stale" until 05:00.
+    jest.spyOn(Date, 'now').mockReturnValue(pre0500Ms);
+    setOpenDayBusinessDate(getServiceDayString(pre0500Ms));
+
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    createdIds.push(res.body.id);
+  });
 });
 
 describe('Order Refunds', () => {

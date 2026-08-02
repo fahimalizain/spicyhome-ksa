@@ -29,6 +29,7 @@ import {
   formatZatcaBuyerDetailsErrors,
   AuditAction,
   ALL_ORDER_STATUSES,
+  getServiceDayString,
   riyadhCalendarDayBoundsUnix,
 } from '@spicyhome/shared';
 import type { OrderStatus } from '@spicyhome/shared';
@@ -61,11 +62,6 @@ function recomputeOrderTotals(rows: Array<{ totalHalalas: number; vatRateBp: num
   return { subtotalHalalas: subtotal, vatHalalas: vat, totalHalalas: total };
 }
 
-function todayInRiyadh(): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
-  return fmt.format(new Date());
-}
-
 function normalizeNotes(n: string | null | undefined): string | null {
   if (n == null || n === '') return null;
   return n;
@@ -94,7 +90,8 @@ export class OrdersService {
     dto: { type: string; tableId?: number; notes?: string | null },
     userId: number,
   ) {
-    const now = Math.floor(Date.now() / 1000);
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
     if (dto.type === 'dine_in') {
       if (!dto.tableId) throw new BadRequestException('Table is required for dine-in orders');
       const table = this.db.select().from(tables).where(eq(tables.id, dto.tableId)).get();
@@ -111,10 +108,15 @@ export class OrdersService {
         'No open business day. Open a business day before creating orders.',
       );
 
-    const today = todayInRiyadh();
-    if (dayOpening.businessDate !== today) {
+    // ADR 0008: the open day must be labeled with the CURRENT SERVICE DAY
+    // (getServiceDayString), not the calendar day. Between 00:00–05:00
+    // Asia/Riyadh the service day is the previous calendar date — the open
+    // day carries that label, so comparing against the calendar day would
+    // reject orders until 05:00.
+    const serviceDay = getServiceDayString(nowMs);
+    if (dayOpening.businessDate !== serviceDay) {
       throw new ConflictException(
-        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${today}).`,
+        `The open business day is from ${dayOpening.businessDate}. Close it before creating orders for today (${serviceDay}).`,
       );
     }
 
