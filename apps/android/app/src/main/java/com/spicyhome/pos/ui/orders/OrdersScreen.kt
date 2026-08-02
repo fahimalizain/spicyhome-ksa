@@ -23,10 +23,6 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,7 +88,7 @@ fun OrdersScreen(
                 Text("← Back", color = Accent, fontSize = 16.sp)
             }
             Text(
-                text = if (state.date == todayInRiyadhDate()) "Today's Orders" else "Orders",
+                text = "Today's Orders",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = OnDark,
@@ -104,7 +100,6 @@ fun OrdersScreen(
 
         OrdersFilterBar(
             state = state,
-            onDateChange = { viewModel.setDate(it) },
             onToggleStatus = { viewModel.toggleStatus(it) },
             onUserChange = { viewModel.setUserId(it) },
         )
@@ -163,20 +158,17 @@ private fun statusPillColor(status: String): Color = when (status) {
 }
 
 /**
- * Server-side filter bar: date (single day), user (dropdown, default =
- * current user), status (multiselect chips). Every change reloads the list
- * through the ViewModel.
+ * Server-side filter bar: user (dropdown, default = current user), status
+ * (multiselect chips). The date is always today (Asia/Riyadh) and is not
+ * user-selectable. Every change reloads the list through the ViewModel.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OrdersFilterBar(
     state: OrdersUiState,
-    onDateChange: (String) -> Unit,
     onToggleStatus: (String) -> Unit,
     onUserChange: (Long?) -> Unit,
 ) {
-    var showDatePicker by remember { mutableStateOf(false) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -185,10 +177,6 @@ private fun OrdersFilterBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedButton(onClick = { showDatePicker = true }) {
-            Text(state.date, color = Accent, fontSize = 14.sp)
-        }
-
         ORDER_FILTER_STATUSES.forEach { status ->
             val selected = status in state.statuses
             val statusColor = statusPillColor(status)
@@ -222,32 +210,6 @@ private fun OrdersFilterBar(
 
         Spacer(modifier = Modifier.weight(1f))
         UserFilterDropdown(state = state, onUserChange = onUserChange)
-    }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = parseRiyadhDateMillis(state.date),
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        onDateChange(riyadhDateString(millis))
-                    }
-                    showDatePicker = false
-                }) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
-                }
-            },
-        ) {
-            DatePicker(state = datePickerState)
-        }
     }
 }
 
@@ -295,20 +257,6 @@ private fun UserFilterDropdown(
             }
         }
     }
-}
-
-/** Parse a YYYY-MM-DD string to UTC-midnight millis (DatePicker's epoch). */
-private fun parseRiyadhDateMillis(date: String): Long? {
-    return try {
-        LocalDate.parse(date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    } catch (_: Exception) {
-        null
-    }
-}
-
-/** Format a DatePicker UTC-midnight instant as YYYY-MM-DD in Asia/Riyadh. */
-private fun riyadhDateString(epochMillis: Long): String {
-    return LocalDate.ofInstant(Instant.ofEpochMilli(epochMillis), ZoneId.of("Asia/Riyadh")).toString()
 }
 
 @Composable

@@ -157,6 +157,8 @@ class OrdersViewModelTest {
             updatedAt = 1700000000L,
             createdBy = 1L,
             updatedBy = 1L,
+            kitchenPrintedQty = 0L,
+            itemQtyTotal = 0L,
         )
     }
 
@@ -365,18 +367,6 @@ class OrdersViewModelTest {
         assertThat(vm.uiState.value.userId).isNull()
         verify {
             ordersApi.ordersControllerListOrders("open", todayInRiyadhDate(), null)
-        }
-    }
-
-    @Test
-    fun `setDate issues a new list call with the new date`() = runTest(testDispatcher) {
-        val vm = createViewModel()
-
-        vm.setDate("2026-07-20")
-
-        assertThat(vm.uiState.value.date).isEqualTo("2026-07-20")
-        verify {
-            ordersApi.ordersControllerListOrders("open", "2026-07-20", 1L)
         }
     }
 

@@ -2,8 +2,9 @@
  * StandardInvoiceBuyerForm — buyer details form for ZATCA standard (tax) invoices.
  *
  * Renders 8 fields as native <input> elements with dark-theme styling
- * matching the POS admin forms. No on-screen keyboard — standard device
- * keyboard only.
+ * matching the POS admin forms. The global on-screen keyboard (when enabled
+ * from the Layout user menu) attaches to these fields automatically; the
+ * native device keyboard always remains available too.
  *
  * Uses the shared `ZatcaBuyerDetails` Zod schema from `@spicyhome/shared`
  * for validation (shared between BE and FE).

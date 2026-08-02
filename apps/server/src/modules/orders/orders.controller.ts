@@ -24,6 +24,7 @@ import { CreateOrderDto, ReprintOrderDto, CreateRefundDto } from './dto/create-o
 import { SyncOrderItemsDto } from './dto/sync-order-items.dto';
 import { UpdateOrderMetaDto } from './dto/update-order-meta.dto';
 import { UpdateOrderPartnerDto } from './dto/update-order-partner.dto';
+import { UpdateOrderStandardInvoiceDto } from './dto/update-order-standard-invoice.dto';
 import { UpdateOrderItemUnitPriceDto } from './dto/update-order-item-unit-price.dto';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
@@ -111,6 +112,21 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.updateOrderPartner(id, dto, user.sub);
+  }
+
+  @Patch(':id/standard-invoice')
+  @RequiresPermission('update_order')
+  @ApiOperation({
+    summary: 'Set or clear ZATCA standard invoice buyer details on an open order',
+  })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated order with items and events', type: OrderResponse })
+  updateOrderStandardInvoice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderStandardInvoiceDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateOrderStandardInvoice(id, dto, user.sub);
   }
 
   @Patch(':id/items/:orderItemId/unit-price')

@@ -103,24 +103,38 @@ export class KitchenTicketBuilder {
 
     eb.separator();
 
-    // Items — qty BIG, name, notes highlighted
-    for (const item of opts.items) {
+    // Items — numbered name (double-height bold), Qty line, optional Notes.
+    // Each item is its own block, separated by a blank line for readability.
+    eb.align(Align.Left);
+    for (let i = 0; i < opts.items.length; i++) {
+      const item = opts.items[i];
+      const n = i + 1;
+
+      // Name — bold + double-height, truncated to paper width.
       eb.bold(true);
-      eb.doubleSize(true);
-      const qtyStr = `${item.qty}`;
-      const nameWidth = this.width - qtyStr.length - 1;
-      const namePart = item.name.slice(0, nameWidth);
-      eb.text(`${qtyStr} ${namePart}`);
-      eb.doubleSize(false);
+      eb.doubleHeight(true);
+      const nameLine = `${n}. ${item.name}`;
+      eb.text(nameLine.slice(0, this.width));
+      eb.doubleHeight(false);
       eb.bold(false);
 
+      // Qty — always printed, bold, normal size, indented under the name.
+      eb.bold(true);
+      eb.text(`    Qty: ${item.qty}x`);
+      eb.bold(false);
+
+      // Notes — only when set, underlined (kept prominent for the kitchen),
+      // indented to align with the Qty line.
       if (item.notes) {
         eb.underline(true);
-        const notesText = `  * ${item.notes}`;
-        const truncated = notesText.slice(0, this.width);
-        eb.text(truncated);
+        const notesLine = `    Notes: ${item.notes}`;
+        eb.text(notesLine.slice(0, this.width));
         eb.underline(false);
       }
+
+      // Blank line after each item block so kitchen staff can read items
+      // more easily (gap is between item blocks, not between name and notes).
+      eb.blankLine();
     }
 
     eb.separator('=');

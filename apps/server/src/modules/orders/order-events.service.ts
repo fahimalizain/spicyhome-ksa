@@ -142,35 +142,74 @@ export class OrderEventsService {
       .where(sql`${orderEvents.type} IN ('item_added', 'item_updated', 'kitchen_print_enqueued')`)
       .all() as Array<{ type: string; payload: string }>;
 
-    let fromItems = 0;
-    let fromEnqueued = 0;
-    let hasEnqueuedForItem = false;
+    return this.sumPrintedQtyByOrderItemId(rows, [orderItemId]).get(orderItemId) ?? 0;
+  }
 
-    for (const row of rows) {
+  /**
+   * Batch variant of `getPrintedQty` for order-list enrichment: computes the
+   * kitchen-printed quantity for MANY order items from a single batch of
+   * already-fetched event rows (types restricted to `item_added` /
+   * `item_updated` / `kitchen_print_enqueued`). Uses exactly the same
+   * per-item precedence as `getPrintedQty`:
+   *
+   * - if ANY `kitchen_print_enqueued` event mentions the `orderItemId`, the
+   *   sum of `items[].printedQty` across those events is authoritative;
+   * - otherwise the sum of `kitchenPrintedQty` from item events (legacy).
+   *
+   * Returns a map keyed by `orderItemId` — every requested id is present,
+   * defaulting to 0 when the item never went to the kitchen.
+   */
+  sumPrintedQtyByOrderItemId(
+    events: ReadonlyArray<{ type: string; payload: string }>,
+    orderItemIds: ReadonlyArray<number>,
+  ): Map<number, number> {
+    const idSet = new Set(orderItemIds);
+    const fromItems = new Map<number, number>();
+    const fromEnqueued = new Map<number, number>();
+    const hasEnqueuedForItem = new Set<number>();
+
+    const addTo = (map: Map<number, number>, id: number, qty: number): void => {
+      map.set(id, (map.get(id) ?? 0) + qty);
+    };
+
+    for (const row of events) {
+      let payload: any;
       try {
-        const payload = JSON.parse(row.payload);
-        if (row.type === 'kitchen_print_enqueued') {
-          if (Array.isArray(payload.items)) {
-            const match = payload.items.find((i: any) => i.orderItemId === orderItemId);
-            if (match) {
-              hasEnqueuedForItem = true;
-              if (typeof match.printedQty === 'number') {
-                fromEnqueued += match.printedQty;
+        payload = JSON.parse(row.payload);
+      } catch {
+        continue; // Ignore malformed JSON — treat as 0
+      }
+      if (row.type === 'kitchen_print_enqueued') {
+        if (Array.isArray(payload.items)) {
+          for (const item of payload.items) {
+            if (
+              item != null &&
+              typeof item.orderItemId === 'number' &&
+              idSet.has(item.orderItemId)
+            ) {
+              hasEnqueuedForItem.add(item.orderItemId);
+              if (typeof item.printedQty === 'number') {
+                addTo(fromEnqueued, item.orderItemId, item.printedQty);
               }
             }
           }
-        } else if (payload.orderItemId === orderItemId) {
-          fromItems +=
-            typeof payload.kitchenPrintedQty === 'number' ? payload.kitchenPrintedQty : 0;
         }
-      } catch {
-        // Ignore malformed JSON — treat as 0
+      } else if (typeof payload.orderItemId === 'number' && idSet.has(payload.orderItemId)) {
+        addTo(
+          fromItems,
+          payload.orderItemId,
+          typeof payload.kitchenPrintedQty === 'number' ? payload.kitchenPrintedQty : 0,
+        );
       }
     }
 
-    // Enqueued events are authoritative for anything that went through the
-    // kitchen-print queue (old or new path); item events alone only count
-    // when the item never went through enqueue.
-    return hasEnqueuedForItem ? fromEnqueued : fromItems;
+    const result = new Map<number, number>();
+    for (const id of idSet) {
+      result.set(
+        id,
+        hasEnqueuedForItem.has(id) ? (fromEnqueued.get(id) ?? 0) : (fromItems.get(id) ?? 0),
+      );
+    }
+    return result;
   }
 }

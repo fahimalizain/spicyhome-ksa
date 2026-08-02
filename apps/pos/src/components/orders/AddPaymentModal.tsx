@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import {
   amountPrefillFromOutstanding,
-  applyNumpadKey,
   buildAddPaymentDraft,
   calcCashChange,
   canConfirmAddPayment,
@@ -14,32 +13,7 @@ import {
   type PaymentMethod,
 } from './add-payment-modal-logic';
 import type { OrderResponse } from '@spicyhome/client-ts';
-
-type NumpadTarget = 'amount' | 'tendered';
-
-const NUMPAD_KEYS = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['C', '0', '.'], ['⌫']];
-
-/** Reusable numpad grid — renders 5 rows of keys. */
-function Numpad({ onKey }: { onKey: (key: string) => void }) {
-  return (
-    <div className="space-y-1">
-      {NUMPAD_KEYS.map((row, ri) => (
-        <div key={ri} className="flex gap-1 justify-center">
-          {row.map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onKey(key)}
-              className="touch-target w-14 h-10 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white font-medium"
-            >
-              {key}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
+import { OskDock } from '../on-screen-keyboard/OskDock';
 
 interface AddPaymentModalProps {
   orderId: number;
@@ -78,7 +52,9 @@ export function AddPaymentModal({
   const [amountInput, setAmountInput] = useState('');
   const [sign, setSign] = useState<1 | -1>(1);
   const [tenderedInput, setTenderedInput] = useState('');
-  const [numpadTarget, setNumpadTarget] = useState<NumpadTarget>('amount');
+  // Amount input is a real focusable input; the global on-screen keyboard
+  // drives it (numpad layout when enabled).
+  const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadMethods();
@@ -106,13 +82,13 @@ export function AddPaymentModal({
   // Tendered only on positive cash lines
   const showTendered = isCashSelected && amountHalalas > 0;
 
-  // Force numpadTarget back to 'amount' when the tendered section is not
-  // relevant (non-cash method, zero amount, or negative sign).
+  // After a method is picked, focus the amount input so the global OSK
+  // (numpad layout for inputMode=decimal) appears when enabled.
   useEffect(() => {
-    if (!showTendered) {
-      setNumpadTarget('amount');
+    if (selectedMethodId) {
+      amountRef.current?.focus();
     }
-  }, [showTendered]);
+  }, [selectedMethodId]);
 
   const tenderedHalalas = tenderedToHalalas(tenderedInput);
   const changeDue = showTendered ? calcCashChange(amountHalalas, tenderedHalalas) : 0;
@@ -123,18 +99,6 @@ export function AddPaymentModal({
     tenderedInput,
   });
   const canConfirm = canConfirmAddPayment(draft, submitting);
-
-  function handleNumpadKey(key: string) {
-    const next = applyNumpadKey(amountInput, key);
-    if (next === null) return;
-    setAmountInput(next);
-  }
-
-  function handleTenderedNumpadKey(key: string) {
-    const next = applyNumpadKey(tenderedInput, key);
-    if (next === null) return;
-    setTenderedInput(next);
-  }
 
   function handleSign(next: 1 | -1) {
     setSign(next);
@@ -152,7 +116,6 @@ export function AddPaymentModal({
     setAmountInput(prefill.amountInput);
     setSign(prefill.sign);
     setTenderedInput('');
-    setNumpadTarget('amount');
   }
 
   async function handleConfirm() {
@@ -183,7 +146,10 @@ export function AddPaymentModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto">
+      <div
+        data-osk-scope
+        className="bg-gray-900 rounded-xl p-4 w-[420px] max-h-[90vh] overflow-y-auto"
+      >
         <h2 className="text-lg font-bold text-white mb-3">Add Payment</h2>
 
         {/* Order total + outstanding */}
@@ -257,37 +223,33 @@ export function AddPaymentModal({
               </button>
             </div>
 
-            {/* Amount display — tapping focuses the amount numpad */}
-            <button
-              type="button"
-              onClick={() => setNumpadTarget('amount')}
-              className={`w-full touch-target bg-gray-700 border rounded px-3 py-3 text-left transition-colors ${
-                numpadTarget === 'amount'
-                  ? 'border-brand-500'
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
-            >
-              <span
-                className={`block text-2xl font-mono text-center ${
-                  amountHalalas < 0 ? 'text-red-400' : 'text-white'
-                }`}
-              >
-                {amountHalalas !== 0
-                  ? `${amountHalalas < 0 ? '−' : ''}${halalasToSar(Math.abs(amountHalalas))} SAR`
-                  : '0.00 SAR'}
-              </span>
-            </button>
+            {/* Amount — money text input (inputMode=decimal); the sign toggle
+                above owns the sign, so the field itself is always a
+                non-negative magnitude. Text+decimal instead of type="number":
+                the OSK must be able to type "46." while building "46.50", and
+                browsers silently drop trailing dots on number inputs. */}
+            <input
+              ref={amountRef}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              data-testid="payment-amount-input"
+              placeholder="0.00"
+              className="w-full bg-gray-700 border rounded px-3 py-3 text-2xl font-mono text-center text-white border-gray-700 focus:outline-none focus:border-brand-500"
+            />
 
-            {/* Collapsible amount numpad */}
+            {/* Signed summary — informational only; editing happens in the
+                input above. */}
             <div
-              className={`overflow-hidden transition-all duration-200 ease-in-out mt-3 ${
-                numpadTarget === 'amount'
-                  ? 'max-h-64 opacity-100'
-                  : 'max-h-0 opacity-0 pointer-events-none'
+              className={`text-center text-sm mt-1 ${
+                amountHalalas < 0 ? 'text-red-400' : 'text-gray-400'
               }`}
-              data-testid="amount-numpad"
             >
-              <Numpad onKey={handleNumpadKey} />
+              {amountHalalas !== 0
+                ? `${amountHalalas < 0 ? '−' : ''}${halalasToSar(Math.abs(amountHalalas))} SAR`
+                : '0.00 SAR'}
             </div>
           </div>
         )}
@@ -297,18 +259,18 @@ export function AddPaymentModal({
           <div className="bg-gray-800 rounded-lg p-3 mb-3 space-y-2">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Tendered (SAR)</label>
-              {/* Tendered display — tapping focuses the tendered numpad */}
-              <button
-                type="button"
-                onClick={() => setNumpadTarget('tendered')}
-                className={`w-full bg-gray-700 border rounded px-3 py-2 text-sm text-left ${
-                  numpadTarget === 'tendered'
-                    ? 'border-brand-500 text-white'
-                    : 'border-gray-600 text-gray-400'
-                }`}
-              >
-                {tenderedInput || <span className="text-gray-500">0.00</span>}
-              </button>
+              {/* Tendered — money text input (positive amount only); the
+                  global OSK numpad drives it when enabled. */}
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={tenderedInput}
+                onChange={(e) => setTenderedInput(e.target.value)}
+                data-testid="payment-tendered-input"
+                placeholder="0.00"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+              />
             </div>
 
             {tenderedHalalas !== undefined && tenderedHalalas > amountHalalas && (
@@ -321,20 +283,13 @@ export function AddPaymentModal({
               tenderedHalalas < amountHalalas && (
                 <div className="text-sm text-red-400">Insufficient tendered amount</div>
               )}
-
-            {/* Collapsible tendered numpad */}
-            <div
-              className={`overflow-hidden transition-all duration-200 ease-in-out ${
-                numpadTarget === 'tendered'
-                  ? 'max-h-64 opacity-100'
-                  : 'max-h-0 opacity-0 pointer-events-none'
-              }`}
-              data-testid="tendered-numpad"
-            >
-              <Numpad onKey={handleTenderedNumpadKey} />
-            </div>
           </div>
         )}
+
+        {/* Inline keyboard dock: the OSK portals in here when the amount /
+            tendered fields are focused, so it grows the modal instead of
+            covering the Confirm/Cancel row. Zero footprint otherwise. */}
+        <OskDock size="sm" className="mt-3" />
 
         {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
 

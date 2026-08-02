@@ -17,6 +17,7 @@ import { DeliveryPartnersPage } from './pages/admin/DeliveryPartnersPage';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { SentryErrorFallback } from './components/SentryErrorFallback';
+import { OnScreenKeyboardProvider } from './components/on-screen-keyboard/OnScreenKeyboardProvider';
 
 // Create a Sentry-wrapped BrowserRouter with React Router v6 browser tracing
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
@@ -24,29 +25,31 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
 export function App() {
   return (
     <Sentry.ErrorBoundary fallback={SentryErrorFallback}>
-      <BrowserRouter>
-        <SentryRoutes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
-              <Route path="/" element={<OrderPage />} />
-              <Route path="/day" element={<DayPage />} />
-              <Route path="/orders" element={<OrdersPage />} />
-              <Route path="/tables" element={<TablesViewPage />} />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="/admin/items" element={<ItemsPage />} />
-              <Route path="/admin/categories" element={<CategoriesPage />} />
-              <Route path="/admin/printers" element={<PrintersPage />} />
-              <Route path="/admin/tables" element={<TablesPage />} />
-              <Route path="/admin/users" element={<UsersPage />} />
-              <Route path="/admin/zatca" element={<ZatcaPage />} />
-              <Route path="/admin/payment-methods" element={<PaymentMethodsPage />} />
-              <Route path="/admin/delivery-partners" element={<DeliveryPartnersPage />} />
+      <OnScreenKeyboardProvider>
+        <BrowserRouter>
+          <SentryRoutes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<OrderPage />} />
+                <Route path="/day" element={<DayPage />} />
+                <Route path="/orders" element={<OrdersPage />} />
+                <Route path="/tables" element={<TablesViewPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/items" element={<ItemsPage />} />
+                <Route path="/admin/categories" element={<CategoriesPage />} />
+                <Route path="/admin/printers" element={<PrintersPage />} />
+                <Route path="/admin/tables" element={<TablesPage />} />
+                <Route path="/admin/users" element={<UsersPage />} />
+                <Route path="/admin/zatca" element={<ZatcaPage />} />
+                <Route path="/admin/payment-methods" element={<PaymentMethodsPage />} />
+                <Route path="/admin/delivery-partners" element={<DeliveryPartnersPage />} />
+              </Route>
             </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </SentryRoutes>
-      </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </SentryRoutes>
+        </BrowserRouter>
+      </OnScreenKeyboardProvider>
     </Sentry.ErrorBoundary>
   );
 }

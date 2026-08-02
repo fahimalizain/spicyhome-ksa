@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '../components/Layout';
+import { OnScreenKeyboardProvider } from '../components/on-screen-keyboard/OnScreenKeyboardProvider';
 import type { MeResponse } from '@spicyhome/client-ts';
 
 const { mockClearToken, mockRealtimeDisconnect } = vi.hoisted(() => ({
@@ -65,18 +66,22 @@ const mockReload = vi.fn();
 
 function renderLayout() {
   return render(
-    <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<div>Home Content</div>} />
-          <Route path="/day" element={<div>Day Page</div>} />
-          <Route path="/orders" element={<div>Orders Page</div>} />
-          <Route path="/tables" element={<div>Tables Page</div>} />
-          <Route path="/admin" element={<div>Admin Page</div>} />
-        </Route>
-        <Route path="/login" element={<div>Login Page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    // Layout's user menu uses useOnScreenKeyboard(); the real app wraps the
+    // tree in OnScreenKeyboardProvider (see app.tsx).
+    <OnScreenKeyboardProvider>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<div>Home Content</div>} />
+            <Route path="/day" element={<div>Day Page</div>} />
+            <Route path="/orders" element={<div>Orders Page</div>} />
+            <Route path="/tables" element={<div>Tables Page</div>} />
+            <Route path="/admin" element={<div>Admin Page</div>} />
+          </Route>
+          <Route path="/login" element={<div>Login Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </OnScreenKeyboardProvider>,
   );
 }
 
@@ -84,6 +89,7 @@ describe('Layout TopBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     me = adminMe;
+    localStorage.clear();
     // jsdom's location.reload cannot be spied; replace location with a stub
     // (same pattern as sentry-error-fallback.test.tsx).
     Object.defineProperty(window, 'location', {
@@ -208,5 +214,21 @@ describe('Layout TopBar', () => {
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+  });
+
+  it('toggles the on-screen keyboard preference from the user menu', () => {
+    renderLayout();
+
+    fireEvent.click(screen.getByRole('button', { name: /Admin User/ }));
+    const item = screen.getByRole('menuitem', { name: /On-screen keyboard/ });
+    expect(item).toHaveTextContent('Off');
+
+    fireEvent.click(item);
+    expect(item).toHaveTextContent('On');
+    expect(localStorage.getItem('spicyhome_osk_enabled')).toBe('1');
+
+    fireEvent.click(item);
+    expect(item).toHaveTextContent('Off');
+    expect(localStorage.getItem('spicyhome_osk_enabled')).toBe('0');
   });
 });

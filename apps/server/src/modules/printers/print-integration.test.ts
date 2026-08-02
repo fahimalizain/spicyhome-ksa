@@ -213,9 +213,13 @@ describe('Print Integration', () => {
 
       for (const print of kitchenPrints) {
         const str = print.data.toString('ascii');
-        expect(str).toContain('Zinger Burger');
-        expect(str).toContain('2 Zinger Burger');
-        expect(str).toContain('Pepsi');
+        // Numbered item blocks: name line + indented Qty line
+        expect(str).toContain('1. Zinger Burger');
+        expect(str).toContain('    Qty: 2x');
+        expect(str).toContain('2. Pepsi');
+        expect(str).toContain('    Qty: 1x');
+        // No old "qty name" single-line item format
+        expect(str).not.toContain('2 Zinger Burger');
         // Big header id is the ZATCA documentId, NOT the order number
         expect(str).toContain(orderRes.body.documentId);
         expect(str).not.toContain(`ORDER #${orderRes.body.orderNo}`);
@@ -407,7 +411,10 @@ describe('Print Integration', () => {
         (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
       );
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-      expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+      const deltaStr = kitchenPrints[0].data.toString('ascii');
+      // Single delta item → numbered first block with the delta qty
+      expect(deltaStr).toContain('1. Zinger Burger');
+      expect(deltaStr).toContain('    Qty: 3x');
     });
   });
 
@@ -762,8 +769,9 @@ describe('Print Integration', () => {
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const kitchenStr = kitchenPrints[0].data.toString('ascii');
       expect(kitchenStr).toContain('NOTES: call on arrival');
-      // Item notes still flow on the same ticket
-      expect(kitchenStr).toContain('2 Zinger Burger');
+      // Item notes still flow on the same ticket — item as numbered block
+      expect(kitchenStr).toContain('1. Zinger Burger');
+      expect(kitchenStr).toContain('    Qty: 2x');
     });
 
     it('notes-only meta PATCH does not enqueue kitchen prints; notes appear on next send-to-kitchen', async () => {

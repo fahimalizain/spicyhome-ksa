@@ -314,7 +314,9 @@ class AdapterSerializationTest {
                 "createdAt": 1700000000,
                 "updatedAt": 1700000000,
                 "createdBy": 1,
-                "updatedBy": 1
+                "updatedBy": 1,
+                "kitchenPrintedQty": 0,
+                "itemQtyTotal": 0
             }
         """.trimIndent()
         val response = moshi.adapter(OrderSummaryResponse::class.java).fromJson(json)
@@ -346,7 +348,9 @@ class AdapterSerializationTest {
                     "createdAt": 1700000000,
                     "updatedAt": 1700000000,
                     "createdBy": 1,
-                    "updatedBy": 1
+                    "updatedBy": 1,
+                    "kitchenPrintedQty": 0,
+                    "itemQtyTotal": 0
                 },
                 {
                     "id": 2,
@@ -364,7 +368,9 @@ class AdapterSerializationTest {
                     "createdAt": 1700000000,
                     "updatedAt": 1700000000,
                     "createdBy": 2,
-                    "updatedBy": 2
+                    "updatedBy": 2,
+                    "kitchenPrintedQty": 0,
+                    "itemQtyTotal": 0
                 }
             ]
         """.trimIndent()

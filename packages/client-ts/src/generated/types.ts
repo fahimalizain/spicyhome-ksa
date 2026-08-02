@@ -391,6 +391,23 @@ export interface paths {
     patch: operations['OrdersController_updateOrderPartner'];
     trace?: never;
   };
+  '/orders/{id}/standard-invoice': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Set or clear ZATCA standard invoice buyer details on an open order */
+    patch: operations['OrdersController_updateOrderStandardInvoice'];
+    trace?: never;
+  };
   '/orders/{id}/items/{orderItemId}/unit-price': {
     parameters: {
       query?: never;
@@ -1900,6 +1917,18 @@ export interface components {
        * @example 1
        */
       updatedBy: number | null;
+      /**
+       * Format: int64
+       * @description Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).
+       * @example 3
+       */
+      kitchenPrintedQty: number;
+      /**
+       * Format: int64
+       * @description Sum of current order line quantities for this order.
+       * @example 5
+       */
+      itemQtyTotal: number;
     };
     ZatcaBuyerDetailsDto: {
       /** @example Abdullah Al-Otaibi Est. */
@@ -2206,6 +2235,21 @@ export interface components {
        * @example HS-883129
        */
       deliveryExternalRef?: string | null;
+    };
+    UpdateOrderStandardInvoiceDto: {
+      /**
+       * Format: int64
+       * @description Last known orders.updated_at the client hydrated from. Server returns 409 if stale.
+       * @example 1720000000
+       */
+      baseUpdatedAt: number;
+      /**
+       * @description Enable (true) or clear (false) the ZATCA standard invoice buyer details.
+       * @example false
+       */
+      isStandardInvoice: boolean;
+      /** @description ZATCA standard invoice buyer details — required when isStandardInvoice is true; ignored when false. */
+      zatcaBuyerDetails?: components['schemas']['ZatcaBuyerDetailsDto'];
     };
     UpdateOrderItemUnitPriceDto: {
       /**
@@ -3682,6 +3726,32 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['UpdateOrderPartnerDto'];
+      };
+    };
+    responses: {
+      /** @description Updated order with items and events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrderResponse'];
+        };
+      };
+    };
+  };
+  OrdersController_updateOrderStandardInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateOrderStandardInvoiceDto'];
       };
     };
     responses: {

@@ -3109,6 +3109,331 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   });
 });
 
+describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
+  let stdOrderIds: number[];
+
+  beforeEach(() => {
+    stdOrderIds = [];
+  });
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of stdOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+  });
+
+  async function createOrder(body: Record<string, unknown>): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body)
+      .expect(201);
+    stdOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/orders/${id}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
+      .expect(200);
+    return res.body;
+  }
+
+  // Returns the supertest chain — supports both `.expect(...)` chaining
+  // and `await` (resolves to the response).
+  function patchStandardInvoice(id: number, body: Record<string, unknown>) {
+    return request(app.getHttpServer())
+      .patch(`/orders/${id}/standard-invoice`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(body);
+  }
+
+  const FULL_BUYER = {
+    name: 'Abdullah Al-Otaibi Est.',
+    vatNumber: '300123456789012',
+    street: 'King Fahd Road',
+    buildingNumber: '7845',
+    citySubdivision: 'Al-Olaya',
+    city: 'Riyadh',
+    postalCode: '12271',
+    country: 'SA',
+  };
+
+  it('set standard invoice with full buyer → persisted on the order row', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    expect(res.body.isStandardInvoice).toBe(true);
+    expect(res.body.zatcaBuyerDetails).toEqual(FULL_BUYER);
+
+    // Persisted in the DB
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.isStandardInvoice).toBe(1);
+    expect(JSON.parse(dbOrder.zatcaBuyerDetails)).toEqual(FULL_BUYER);
+
+    // Audit event written with from→to summary
+    const evts = res.body.events.filter((e: any) => e.type === 'standard_invoice_changed');
+    expect(evts).toHaveLength(1);
+    expect(JSON.parse(evts[0].payload)).toEqual({
+      fromIsStandardInvoice: false,
+      toIsStandardInvoice: true,
+      fromBuyerVatNumber: null,
+      toBuyerVatNumber: '300123456789012',
+      fromBuyerName: null,
+      toBuyerName: 'Abdullah Al-Otaibi Est.',
+    });
+  });
+
+  it('PATCH again with identical buyer → 200 no-op (no updated_at bump, no event)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    const setUpdatedAt = set.body.updatedAt;
+
+    // Same buyer again (country normalized to SA) → no-op
+    const again = await patchStandardInvoice(id, {
+      baseUpdatedAt: setUpdatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    expect(again.body.updatedAt).toBe(setUpdatedAt);
+    expect(
+      again.body.events.filter((e: any) => e.type === 'standard_invoice_changed'),
+    ).toHaveLength(1); // only the first set wrote an event
+  });
+
+  it('PATCH clear → flag 0, buyer null, event written', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+
+    const cleared = await patchStandardInvoice(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      isStandardInvoice: false,
+    }).expect(200);
+
+    expect(cleared.body.isStandardInvoice).toBe(false);
+    expect(cleared.body.zatcaBuyerDetails).toBeNull();
+
+    const dbOrder: any = db.select().from(schema.orders).where(eq(schema.orders.id, id)).get();
+    expect(dbOrder.isStandardInvoice).toBe(0);
+    expect(dbOrder.zatcaBuyerDetails).toBeNull();
+
+    const evts = cleared.body.events.filter((e: any) => e.type === 'standard_invoice_changed');
+    expect(evts).toHaveLength(2); // set + clear
+    expect(JSON.parse(evts[1].payload)).toEqual({
+      fromIsStandardInvoice: true,
+      toIsStandardInvoice: false,
+      fromBuyerVatNumber: '300123456789012',
+      toBuyerVatNumber: null,
+      fromBuyerName: 'Abdullah Al-Otaibi Est.',
+      toBuyerName: null,
+    });
+  });
+
+  it('PATCH set with invalid buyer → 400, nothing persisted', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: { ...FULL_BUYER, vatNumber: '12345' },
+    }).expect(400);
+
+    expect(res.body.message).toContain('Invalid buyer details');
+
+    const orderRes = await getOrder(id);
+    expect(orderRes.isStandardInvoice).toBe(false);
+    expect(orderRes.zatcaBuyerDetails).toBeNull();
+  });
+
+  it('PATCH set without buyer when isStandardInvoice true → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: before.updatedAt,
+      isStandardInvoice: true,
+    }).expect(400);
+
+    expect(res.body.message).toBe('zatcaBuyerDetails is required when isStandardInvoice is true');
+  });
+
+  it('PATCH non-open order → 400', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    await addItem(id, before.updatedAt, 1, 1);
+
+    // Pay + submit so the order is no longer open
+    const paid = await getOrder(id);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: paid.totalHalalas })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: paid.updatedAt })
+      .expect(201);
+
+    const afterPaid = await getOrder(id);
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: afterPaid.updatedAt,
+      isStandardInvoice: false,
+    }).expect(400);
+    expect(res.body.message).toBe('Only open orders can change the standard invoice buyer');
+  });
+
+  it('PATCH stale baseUpdatedAt → 409 with updatedAt', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+
+    // Ensure updated_at ticks past creation time before the sync
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const synced = await addItem(id, before.updatedAt, 1, 1);
+
+    const res = await patchStandardInvoice(id, {
+      baseUpdatedAt: before.updatedAt, // stale — sync bumped updated_at
+      isStandardInvoice: false,
+    }).expect(409);
+
+    expect(res.body.message).toBe(
+      'Order was modified by another terminal. Please refresh your cart.',
+    );
+    expect(res.body.updatedAt).toBe(synced.updatedAt);
+  }, 10000);
+
+  it('missing order → 404', async () => {
+    await patchStandardInvoice(999999, {
+      baseUpdatedAt: 0,
+      isStandardInvoice: false,
+    }).expect(404);
+  });
+
+  it('submit with only baseUpdatedAt after PATCH set → paid as standard (order flag honored)', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    expect(set.body.isStandardInvoice).toBe(true);
+
+    // Balance + submit with ONLY baseUpdatedAt — the body omits the flag
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: set.body.totalHalalas })
+      .expect(201);
+    const beforeSubmit = await getOrder(id);
+    const submitRes = await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: beforeSubmit.updatedAt })
+      .expect(201);
+
+    expect(submitRes.body.invoiceType).toBe('standard');
+
+    // Order row keeps the standard flag + buyer after the paid transition
+    const afterPaid = await getOrder(id);
+    expect(afterPaid.isStandardInvoice).toBe(true);
+    expect(afterPaid.zatcaBuyerDetails).toEqual(FULL_BUYER);
+
+    // Paid event carries the buyer summary from the PERSISTED buyer
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${id}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
+    expect(paidEvent).toBeDefined();
+    const paidPayload =
+      typeof paidEvent.payload === 'string' ? JSON.parse(paidEvent.payload) : paidEvent.payload;
+    expect(paidPayload.isStandardInvoice).toBe(true);
+    expect(paidPayload.buyerVatNumber).toBe('300123456789012');
+    expect(paidPayload.buyerName).toBe('Abdullah Al-Otaibi Est.');
+  });
+
+  it('submit after PATCH clear → simplified', async () => {
+    const { id } = await createOrder({ type: 'takeaway' });
+    const before = await getOrder(id);
+    const synced = await addItem(id, before.updatedAt, 1, 2);
+
+    const set = await patchStandardInvoice(id, {
+      baseUpdatedAt: synced.updatedAt,
+      isStandardInvoice: true,
+      zatcaBuyerDetails: FULL_BUYER,
+    }).expect(200);
+    const cleared = await patchStandardInvoice(id, {
+      baseUpdatedAt: set.body.updatedAt,
+      isStandardInvoice: false,
+    }).expect(200);
+    expect(cleared.body.isStandardInvoice).toBe(false);
+
+    // Balance + submit with only baseUpdatedAt → simplified (order flag is 0)
+    await request(app.getHttpServer())
+      .post(`/orders/${id}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: cleared.body.totalHalalas })
+      .expect(201);
+    const beforeSubmit = await getOrder(id);
+    const submitRes = await request(app.getHttpServer())
+      .post(`/orders/${id}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: beforeSubmit.updatedAt })
+      .expect(201);
+
+    expect(submitRes.body.invoiceType).toBe('simplified');
+
+    const afterPaid = await getOrder(id);
+    expect(afterPaid.isStandardInvoice).toBe(false);
+    expect(afterPaid.zatcaBuyerDetails).toBeNull();
+  });
+});
+
 describe('listOrders — GET /orders returns newest first (DESC by orders.id)', () => {
   const createdIds: number[] = [];
 
@@ -3411,6 +3736,160 @@ describe('listOrders — date / user / multi-status filters', () => {
     for (let i = 1; i < ids.length; i++) {
       expect(ids[i - 1]).toBeGreaterThan(ids[i]);
     }
+  });
+});
+
+describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
+  const createdIds: number[] = [];
+
+  afterEach(async () => {
+    for (const id of createdIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`);
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    createdIds.length = 0;
+  });
+
+  async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
+    const orderRes = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    const orderId = orderRes.body.id;
+    createdIds.push(orderId);
+
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    return { orderId, updatedAt: getRes.body.updatedAt };
+  }
+
+  async function syncItems(orderId: number, updatedAt: number, items: any[]) {
+    return request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+  }
+
+  async function sendToKitchen(orderId: number) {
+    return request(app.getHttpServer())
+      .post(`/orders/${orderId}/send-to-kitchen`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+  }
+
+  /** Fetch the single summary row for `orderId` from GET /orders. */
+  async function summaryFor(orderId: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const row = res.body.find((o: any) => o.id === orderId);
+    expect(row).toBeDefined();
+    return row;
+  }
+
+  it('empty open order → kitchenPrintedQty 0 / itemQtyTotal 0', async () => {
+    const { orderId } = await createOpenOrder();
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(0);
+  });
+
+  it('order with items never sent to kitchen → kitchenPrintedQty 0, itemQtyTotal sums qtys', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 }, // Zinger Burger
+      { itemId: 2, qty: 3 }, // Pepsi
+    ]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.kitchenPrintedQty).toBe(0);
+    expect(summary.itemQtyTotal).toBe(5);
+  });
+
+  it('order after send-to-kitchen → printed matches total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    await syncItems(orderId, updatedAt, [
+      { itemId: 1, qty: 2 },
+      { itemId: 2, qty: 3 },
+    ]);
+    await sendToKitchen(orderId);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('unsent delta (qty increased after send) → printed < total', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 2 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 2
+    await sendToKitchen(orderId);
+
+    // Qty up to 5 via sync — sync itself never prints (ADR 0006)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 5 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(5);
+    expect(summary.kitchenPrintedQty).toBe(2);
+  });
+
+  it('qty decreased after print → printed exceeds total, both still reported', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5
+    await sendToKitchen(orderId);
+
+    // Qty down to 2 via sync (no print for decreases)
+    await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 2 }]);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.itemQtyTotal).toBe(2);
+    expect(summary.kitchenPrintedQty).toBe(5);
+  });
+
+  it('multiple sends accumulate printed qty; fields present on paid rows too', async () => {
+    const { orderId, updatedAt } = await createOpenOrder();
+    const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
+    const orderItemId = sync1.body.items[0].id;
+
+    // Send 5, then bump to 8 and send the 3 delta → 8 printed total
+    await sendToKitchen(orderId);
+    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 8 }]);
+    await sendToKitchen(orderId);
+    expect(sync2.body.items[0].qty).toBe(8);
+
+    // Pay + submit so the row is no longer open — fields must still exist.
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 2300 * 8 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/submit`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(201);
+
+    const summary = await summaryFor(orderId);
+    expect(summary.status).toBe('paid');
+    expect(summary.itemQtyTotal).toBe(8);
+    expect(summary.kitchenPrintedQty).toBe(8);
   });
 });
 
@@ -5038,7 +5517,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('5 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 5x');
 
     // Second send with no changes → 200 no-op, no new enqueued events
     const res2 = await sendToKitchen(orderId);
@@ -5077,7 +5557,8 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('3 Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 3x');
   });
 
   it('qty decrease: send does not print negative; printed total stays high', async () => {
