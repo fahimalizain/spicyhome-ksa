@@ -168,6 +168,13 @@ Submit validates all of the following inside its transaction; any failure is a
   cash line with tendered keeps the prior behavior.
 - Standard-invoice buyer form lives on the Summary tab; the submit DTO carries
   `isStandardInvoice` + `zatcaBuyerDetails` exactly like the old pay request.
+- **Optional `printReceipt`** (default `true`) on submit disables the auto
+  receipt print for **simplified invoices only** (e.g. order-at-table flows
+  where the customer keeps the phone receipt). `false` skips the receipt
+  print entirely, but a **cash drawer kick is still emitted** when any
+  positive cash payment exists — the flag suppresses the receipt, never the
+  drawer. **Ignored for standard invoices**: their receipt is always deferred
+  until ZATCA clearance regardless of the flag.
 
 ### Reports
 

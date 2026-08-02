@@ -622,6 +622,73 @@ describe('Print Integration', () => {
       expect(str).toContain('TOTAL');
       expect(str).toContain('Thank you! Visit again.');
     });
+
+    it('printReceipt:false skips the receipt transport call but still kicks the drawer for cash', async () => {
+      // Create order
+      const orderRes = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ type: 'dine_in', tableId: 1 })
+        .expect(201);
+      const orderId = orderRes.body.id;
+
+      // Get order to get updatedAt
+      const getRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+
+      // Sync items
+      await request(app.getHttpServer())
+        .put(`/orders/${orderId}/items/sync`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          baseUpdatedAt: getRes.body.updatedAt,
+          items: [{ itemId: zingerItemId, qty: 2 }],
+        })
+        .expect(200);
+
+      // Give any async prints a moment to settle before clearing the log
+      await new Promise((r) => setTimeout(r, 200));
+      transport.sent = [];
+
+      // Finalize order (open → paid) with printReceipt:false — cash payment
+      const fetchedOrder = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/payments`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ methodId: 'cash', amountHalalas: fetchedOrder.body.totalHalalas })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/submit`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ printReceipt: false })
+        .expect(201);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // No full receipt was printed — the ONLY transport call is the drawer
+      // kick, a minimal ESC/POS buffer with no receipt content
+      const receiptPrints = transport.sent.filter((s) => s.ip === '192.168.1.50');
+      expect(receiptPrints).toHaveLength(1);
+      const str = receiptPrints[0].data.toString('ascii');
+      expect(str).not.toContain('SpicyHome');
+      expect(str).not.toContain('TOTAL');
+      // But the drawer kick command (ESC p) IS present
+      expect(receiptPrints[0].data.toString('hex')).toContain('1b70');
+
+      // Ledger: no receipt_print_enqueued, but the drawer kick was enqueued
+      const orderRes2 = await request(app.getHttpServer())
+        .get(`/orders/${orderId}`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      const types = orderRes2.body.events.map((e: any) => e.type);
+      expect(types).toContain('paid');
+      expect(types).not.toContain('receipt_print_enqueued');
+      expect(types).toContain('cash_drawer_kick_enqueued');
+    });
   });
 
   describe('delivery partner on prints (ADR 0007)', () => {

@@ -645,7 +645,10 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
-      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, { baseUpdatedAt: 5000 });
+      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 5000,
+        printReceipt: false,
+      });
     });
     await waitFor(() => {
       expect(screen.getByText('paid')).toBeInTheDocument();
@@ -998,7 +1001,10 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     // isStandardInvoice is off after the clear: Submit sends a plain payload
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => {
-      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, { baseUpdatedAt: 7000 });
+      expect(mockOrdersSubmit).toHaveBeenCalledWith(1, {
+        baseUpdatedAt: 7000,
+        printReceipt: false,
+      });
     });
   });
 

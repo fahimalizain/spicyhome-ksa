@@ -28,12 +28,12 @@ VALID_TRANSITIONS:
 
 ### Transition Details
 
-| Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                                                                                                                                                                                                             |
-| `open` → `paid`     | `POST /orders/:id/submit` | **POS SPA only**        | Finalizes an open order (ADR 0006): validates exact payment balance (`SUM(order_payments) === total`), ≥ 1 item, and non-negative net per method. Writes the `paid` transition. Receipt printed (cash drawer kick only if a positive cash line exists). ZATCA invoice created (simplified inline / standard deferred to clearance). `order_events` entries for `paid` + `receipt_print_enqueued` + `receipt_print_succeeded`. `order.paid` event. |
-| `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded)                                                                                                                                                                                |
+| Transition          | Trigger                   | Allowed On              | Side Effects                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (new) → `open`      | `POST /orders`            | POS SPA, Android tablet | `order_events` entry, `order.created` WebSocket event                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `open` → `paid`     | `POST /orders/:id/submit` | **POS SPA only**        | Finalizes an open order (ADR 0006): validates exact payment balance (`SUM(order_payments) === total`), ≥ 1 item, and non-negative net per method. Writes the `paid` transition. Receipt printed (cash drawer kick only if a positive cash line exists) unless optional `printReceipt: false` is sent — **simplified invoices only**, and even then the cash drawer still kicks for cash orders. ZATCA invoice created (simplified inline / standard deferred to clearance). `order_events` entries for `paid` + `receipt_print_enqueued` + `receipt_print_succeeded` (or `cash_drawer_kick_enqueued` when the print is skipped on a cash order). `order.paid` event. |
+| `open` → `voided`   | `POST /orders/:id/void`   | **POS SPA only**        | `order_events` entry, `order.voided` event                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `paid` → `refunded` | `POST /orders/:id/refund` | **POS SPA only**        | Refund records created, ZATCA credit note, receipt printed, `order_events` entries for `refund_issued` + `receipt_print_enqueued` + `receipt_print_succeeded` + `refunded` (if fully refunded), `order.refund.issued` event (+ `order.refunded` if fully refunded)                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Device Responsibilities
 
@@ -338,6 +338,10 @@ Payment and refund write multiple rows:
 
 ```
 submit (happy)    → paid + receipt_print_enqueued + receipt_print_succeeded          (3 rows)
+submit (simplified, printReceipt: false, cash)
+                   → paid + cash_drawer_kick_enqueued + receipt_print_succeeded      (3 rows)
+submit (simplified, printReceipt: false, card-only)
+                   → paid                                                             (1 row)
 refund (full)     → refund_issued + receipt_print_enqueued + receipt_print_succeeded + refunded  (4 rows)
 refund (partial)  → refund_issued + receipt_print_enqueued + receipt_print_succeeded   (3 rows)
 ```
@@ -449,16 +453,32 @@ Validation (single transaction):
 3. `SUM(order_payments.amountHalalas) === order.totalHalalas` (outstanding exactly 0; temporary overpay must be balanced before submit).
 4. Optional `baseUpdatedAt` concurrency check (stale → 409).
 5. Every payment method nets ≥ 0.
+6. Optional `printReceipt` (boolean, default `true` when omitted) — controls
+   the **automatic receipt print on submit for simplified invoices only**:
+
+   | `printReceipt`   | Simplified invoice                                                                                                                                            | Standard invoice                                                                                |
+   | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+   | omitted / `true` | Receipt printed inline (current behavior; `kickDrawer` = has positive cash)                                                                                   | **Ignored** — receipt deferred to ZATCA clearance                                               |
+   | `false`          | Receipt print skipped (no `receipt_print_enqueued`, no physical print); **cash drawer still kicks** when a positive cash payment exists (ops: cash must open) | **Ignored** — receipt deferred to ZATCA clearance; cash drawer kicked on submit for cash orders |
 
 Transaction writes: order → `paid`, `order_events` `paid` (with raw payment
 ledger + netted per-method breakdown), `receipt_print_enqueued` with
 `kickDrawer: true` only if a positive cash line exists. Simplified invoices
 print the receipt inline; standard invoices defer the receipt until ZATCA
-clearance (cash drawer kicked immediately on submit for cash orders).
+clearance (cash drawer kicked immediately on submit for cash orders). When a
+simplified submit skips the print via `printReceipt: false`, `paid` is followed
+by `cash_drawer_kick_enqueued` instead of `receipt_print_enqueued` (cash
+orders only).
 
 ### Cash Drawer Kick
 
 `kickDrawer: true` only when a cash payment line has `amountHalalas > 0`. Card-only orders do not open the cash drawer.
+
+The drawer is kicked on submit for **any** cash order, even when the simplified
+receipt print is suppressed via `printReceipt: false` — the flag disables only
+the receipt, never the drawer (ops: cash must open). In that case the ledger
+shows `cash_drawer_kick_enqueued` (instead of `receipt_print_enqueued`) plus
+the drawer-only kick's `receipt_print_succeeded`.
 
 ### `order_payments` (Immutable Ledger)
 

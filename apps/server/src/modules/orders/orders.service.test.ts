@@ -1681,6 +1681,120 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(typesAfter).toContain('receipt_print_succeeded');
     });
   });
+
+  describe('printReceipt flag (simplified-only auto receipt print)', () => {
+    const STANDARD_BUYER = {
+      name: 'Abdullah Al-Otaibi Est.',
+      vatNumber: '300123456789012',
+      street: 'King Fahd Road',
+      buildingNumber: '7845',
+      citySubdivision: 'Al-Olaya',
+      city: 'Riyadh',
+      postalCode: '12271',
+      country: 'SA',
+    };
+
+    async function fetchEventTypes(orderId: number): Promise<string[]> {
+      const eventsRes = await request(app.getHttpServer())
+        .get(`/orders/${orderId}/events`)
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .expect(200);
+      return eventsRes.body.map((e: any) => e.type);
+    }
+
+    it('simplified + printReceipt:false + cash → paid, no receipt enqueued, drawer still kicked', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('simplified');
+
+      // Drawer kick is async post-tx — give it a moment to write succeeded
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('paid');
+      // Receipt print fully skipped: no enqueued (and thus no print)
+      expect(types).not.toContain('receipt_print_enqueued');
+      // Cash was tendered → drawer still kicked (ops: cash must open)
+      expect(types).toContain('cash_drawer_kick_enqueued');
+      // kickCashDrawer writes receipt_print_succeeded after a successful kick
+      expect(types).toContain('receipt_print_succeeded');
+    });
+
+    it('simplified + printReceipt:false + card → paid, no receipt events, no drawer', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'card', amountHalalas: totalHalalas }],
+        { printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('simplified');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('paid');
+      // No receipt print and no drawer kick for card-only
+      expect(types).not.toContain('receipt_print_enqueued');
+      expect(types).not.toContain('cash_drawer_kick_enqueued');
+      expect(types).not.toContain('receipt_print_succeeded');
+      // Nothing was sent to the printer transport either
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it('simplified + printReceipt:true → receipt still enqueued (same as omitted)', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { printReceipt: true },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      expect(types).toContain('receipt_print_enqueued');
+      expect(types).toContain('receipt_print_succeeded');
+    });
+
+    it('standard + printReceipt:false → ignored, identical to a normal standard submit', async () => {
+      const { orderId, totalHalalas } = await createOpenOrderWithItems();
+
+      transport.sent = [];
+      const payRes = await payViaPaymentsAndSubmit(
+        orderId,
+        [{ methodId: 'cash', amountHalalas: totalHalalas }],
+        { isStandardInvoice: true, zatcaBuyerDetails: STANDARD_BUYER, printReceipt: false },
+      );
+
+      expect(payRes.body.status).toBe('paid');
+      expect(payRes.body.invoiceType).toBe('standard');
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const types = await fetchEventTypes(orderId);
+      // Standard always defers the receipt to ZATCA clearance — the flag is
+      // ignored and NO receipt_print_enqueued is written on submit
+      expect(types).not.toContain('receipt_print_enqueued');
+      // Cash order → immediate drawer kick on submit (unchanged)
+      expect(types).toContain('cash_drawer_kick_enqueued');
+    });
+  });
 });
 
 describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => {

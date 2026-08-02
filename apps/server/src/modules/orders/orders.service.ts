@@ -1473,6 +1473,17 @@ export class OrdersService {
    *   dropped
    *
    * Receipt logic:
+   * - optional `printReceipt` (default `true` when omitted) controls the auto
+   *   receipt print on submit for **simplified** invoices ONLY:
+   *   - omitted / `true` → current behavior: receipt printed right after the
+   *     `order.paid` listeners finish; `kickDrawer = hasCashPayment`
+   *   - `false` + simplified → receipt print skipped entirely (no
+   *     `receipt_print_enqueued`, no physical print); when a positive cash
+   *     payment exists the cash drawer is STILL kicked (ops: cash must open),
+   *     via the same drawer-only path as standard invoices
+   *     (`cash_drawer_kick_enqueued` in-tx + `kickCashDrawer` post-tx)
+   *   - `false` + standard → **ignored**; standard always defers the receipt
+   *     to ZATCA clearance and kicks the cash drawer on submit for cash
    * - `hasCashPayment` = any payment line with `methodId === 'cash'` and a
    *   positive amount (drawer kick if any positive cash line exists)
    * - simplified: awaits the `order.paid` listeners (ZATCA signing finishes,
@@ -1491,10 +1502,16 @@ export class OrdersService {
       baseUpdatedAt?: number;
       isStandardInvoice?: boolean;
       zatcaBuyerDetails?: ZatcaBuyerDetailsDto;
+      printReceipt?: boolean;
     },
   ) {
     const now = Math.floor(Date.now() / 1000);
     const receiptPrinter = this.printJobService.getReceiptPrinter();
+
+    // Auto receipt print on submit defaults to true (backward compatible).
+    // Only honored for simplified invoices — the standard path never reads it
+    // (receipt deferred to ZATCA clearance; drawer kicked on cash).
+    const shouldPrintReceipt = dto.printReceipt !== false;
 
     // Standard-invoice intent is resolved INSIDE the transaction because the
     // omitted-body case needs the order row:
@@ -1639,10 +1656,12 @@ export class OrdersService {
 
       this.orderEvents.createEvent(tx, orderId, userId, 'paid', paidPayload, now);
 
-      // Receipt print enqueued with conditional kickDrawer
-      // For standard invoices: do NOT enqueue receipt print here — deferred
-      // until ZATCA clearance succeeds (see onZatcaInvoiceCleared).
-      if (receiptPrinter && !isStandardInvoice) {
+      // Receipt print enqueued with conditional kickDrawer.
+      // Simplified invoices only, and only when auto-print was not disabled
+      // via `printReceipt: false`. For standard invoices: do NOT enqueue
+      // receipt print here — deferred until ZATCA clearance succeeds (see
+      // onZatcaInvoiceCleared).
+      if (receiptPrinter && !isStandardInvoice && shouldPrintReceipt) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -1658,10 +1677,18 @@ export class OrdersService {
         );
       }
 
-      // For standard invoices with cash payment: kick cash drawer immediately
-      // on submit (ops requirement). The tax receipt with QR prints later on
-      // clearance, with kickDrawer:false since we already kicked here.
-      if (isStandardInvoice && hasCashPayment && receiptPrinter) {
+      // Cash drawer kick on submit (ops requirement — cash must open):
+      // - standard invoices with cash: kick immediately on submit, the tax
+      //   receipt with QR prints later on clearance, with kickDrawer:false
+      //   since we already kicked here (unchanged behavior)
+      // - simplified invoices with cash where the receipt print was skipped
+      //   via `printReceipt: false`: still kick the drawer — only the receipt
+      //   is suppressed, the drawer is not
+      if (
+        receiptPrinter &&
+        hasCashPayment &&
+        (isStandardInvoice || (!isStandardInvoice && !shouldPrintReceipt))
+      ) {
         this.orderEvents.createEvent(
           tx,
           orderId,
@@ -1685,8 +1712,12 @@ export class OrdersService {
     if (!isStandardInvoice) {
       await this.emitDomainEventAsync('order.paid', orderId, userId);
 
-      if (receiptPrinter) {
+      if (receiptPrinter && shouldPrintReceipt) {
         this.runReceiptPrint(orderId, receiptPrinter, userId, hasCashPayment);
+      } else if (receiptPrinter && !shouldPrintReceipt && hasCashPayment) {
+        // Receipt print skipped via `printReceipt: false` but cash was
+        // tendered — still kick the cash drawer (ops: cash must open).
+        this.kickCashDrawer(receiptPrinter, orderId, userId);
       }
     } else {
       if (isStandardInvoice && hasCashPayment && receiptPrinter) {
