@@ -9,6 +9,7 @@ import {
   items,
   itemCategories,
   tables,
+  users,
   zatcaInvoices,
   zatcaCreditNotes,
   deliveryPartners,
@@ -406,6 +407,10 @@ export class PrintJobService {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
+    // Display name of the user who created the order (resolved once per
+    // method, not per printer) — printed as "Created By: <name>" on each ticket.
+    const createdByName = this.resolveCreatedByName(order);
+
     // Get table name
     let tableName: string | undefined;
     if (order.tableId) {
@@ -452,6 +457,7 @@ export class PrintJobService {
           deliveryPartnerTitle,
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
+          createdByName,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
@@ -481,6 +487,10 @@ export class PrintJobService {
   ): Promise<{ printed: PrinterRecord[]; errors: string[] }> {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
+
+    // Display name of the user who created the order (resolved once per
+    // method, not per printer) — printed as "Created By: <name>" on each ticket.
+    const createdByName = this.resolveCreatedByName(order);
 
     let oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     if (orderItemIds && orderItemIds.length > 0) {
@@ -526,6 +536,7 @@ export class PrintJobService {
           deliveryPartnerTitle,
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
+          createdByName,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
@@ -593,6 +604,19 @@ export class PrintJobService {
     if (rateBps.length === 0) return undefined;
     const first = rateBps[0];
     return rateBps.every((r) => r === first) ? first : undefined;
+  }
+
+  /**
+   * Resolve the display name of the user who created an order (users.name) so
+   * kitchen tickets can print "Created By: <name>". Display name only — never
+   * username, id, or role. Returns undefined when the order has no creator or
+   * the user row is missing/blank.
+   */
+  private resolveCreatedByName(order: { createdBy: number | null }): string | undefined {
+    if (order.createdBy == null) return undefined;
+    const user = this.db.select().from(users).where(eq(users.id, order.createdBy)).get();
+    const name = user?.name?.trim();
+    return name ? name : undefined;
   }
 
   /**
