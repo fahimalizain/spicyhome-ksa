@@ -17,6 +17,7 @@ import {
   type ZatcaBuyerDetails,
 } from '../components/orders/StandardInvoiceBuyerForm';
 import { ConfirmActionButton } from '../components/ConfirmActionButton';
+import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
 import { calcOutstandingHalalas } from '../lib/order-payments';
@@ -1555,71 +1556,15 @@ export function OrderPage() {
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
           {/* ── Items tab ── */}
           {(!currentOrder || activeTab === 'items') && (
-            <>
-              {cart.items.length === 0 ? (
-                <div className="text-sm text-gray-500 text-center mt-8">Cart is empty</div>
-              ) : (
-                <div className="space-y-2">
-                  {cart.items.map((item, idx) => (
-                    <div
-                      key={
-                        item.orderItemId != null
-                          ? `oi-${item.orderItemId}`
-                          : `mi-${item.itemId}-${idx}`
-                      }
-                      className="bg-gray-800 rounded-lg p-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-white flex-1">{item.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">
-                          {halalasToSar(item.unitPriceHalalas * item.qty)}
-                        </span>
-                      </div>
-                      {item.notes && (
-                        <span className="text-xs text-gray-400 block">{item.notes}</span>
-                      )}
-                      {!orderReadonly && !permissionsReadonly && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <button
-                            onClick={() => handleUpdateQty(item, item.qty - 1)}
-                            disabled={cartDisabled}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                          >
-                            -
-                          </button>
-                          <span className="text-sm text-gray-300 w-7 text-center">{item.qty}</span>
-                          <button
-                            onClick={() => handleUpdateQty(item, item.qty + 1)}
-                            disabled={cartDisabled}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm text-white"
-                          >
-                            +
-                          </button>
-                          {/* Item notes editor — touch-friendly pencil */}
-                          <button
-                            onClick={() => handleOpenNotesEditor(item)}
-                            disabled={cartDisabled}
-                            title={item.notes ? 'Edit notes' : 'Add notes'}
-                            className="touch-target w-7 h-7 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs text-gray-300"
-                          >
-                            ✎
-                          </button>
-                          {(currentOrder ? permissions.deleteOrderItem : true) && (
-                            <button
-                              onClick={() => handleRemove(item)}
-                              disabled={cartDisabled}
-                              className="touch-target w-7 h-7 bg-red-800 hover:bg-red-700 disabled:opacity-50 rounded text-xs text-white ml-auto"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
+            <OrderPageItems
+              items={cart.items}
+              readonly={orderReadonly || permissionsReadonly}
+              disabled={cartDisabled}
+              canRemove={currentOrder ? permissions.deleteOrderItem : true}
+              onUpdateQty={handleUpdateQty}
+              onRemove={handleRemove}
+              onEditNotes={handleOpenNotesEditor}
+            />
           )}
 
           {/* ── Payments tab ── */}
