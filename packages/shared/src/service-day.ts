@@ -15,9 +15,9 @@
  * These helpers use an explicit UTC+3 offset — they do **not** depend on
  * `process.env.TZ` or the host timezone.
  *
- * **Android Kotlin counterpart**: keep the formulas in sync with
- * `apps/android/app/src/main/java/com/spicyhome/pos/util/ServiceDay.kt`
- * (intended path; the file may not exist yet).
+ * **Android Kotlin counterpart**: the file exists at
+ * `apps/android/app/src/main/java/com/spicyhome/pos/util/ServiceDay.kt` —
+ * keep the formulas in sync (same path).
  */
 
 const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3, no DST
