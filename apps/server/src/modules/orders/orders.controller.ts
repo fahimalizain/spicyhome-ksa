@@ -27,6 +27,7 @@ import { UpdateOrderPartnerDto } from './dto/update-order-partner.dto';
 import { UpdateOrderStandardInvoiceDto } from './dto/update-order-standard-invoice.dto';
 import { UpdateOrderItemUnitPriceDto } from './dto/update-order-item-unit-price.dto';
 import { SubmitOrderDto } from './dto/submit-order.dto';
+import { VoidOrderDto } from './dto/void-order.dto';
 import { AddOrderPaymentDto } from './dto/add-order-payment.dto';
 import { CreateOrderResponse } from './dto/create-order-response.dto';
 import { OrderResponse } from './dto/order-response.dto';
@@ -221,8 +222,12 @@ export class OrdersController {
   @ApiOperation({ summary: 'Void an order (open → voided)' })
   @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
   @ApiCreatedResponse({ description: 'Order voided', type: StatusResponse })
-  voidOrder(@Param('id', ParseIntPipe) orderId: number, @CurrentUser() user: any) {
-    return this.ordersService.voidOrder(orderId, user.sub);
+  voidOrder(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: VoidOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.voidOrder(orderId, user.sub, dto);
   }
 
   @Post(':id/print')

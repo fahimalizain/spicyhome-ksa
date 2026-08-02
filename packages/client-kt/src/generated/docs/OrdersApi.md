@@ -25,6 +25,7 @@ All URIs are relative to *http://localhost*
 | [**ordersControllerUpdateOrderItemUnitPrice**](OrdersApi.md#ordersControllerUpdateOrderItemUnitPrice) | **PATCH** orders/{id}/items/{orderItemId}/unit-price | Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 |
 | [**ordersControllerUpdateOrderMeta**](OrdersApi.md#ordersControllerUpdateOrderMeta) | **PATCH** orders/{id} | Update open order type and/or table |
 | [**ordersControllerUpdateOrderPartner**](OrdersApi.md#ordersControllerUpdateOrderPartner) | **PATCH** orders/{id}/partner | Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) |
+| [**ordersControllerUpdateOrderStandardInvoice**](OrdersApi.md#ordersControllerUpdateOrderStandardInvoice) | **PATCH** orders/{id}/standard-invoice | Set or clear ZATCA standard invoice buyer details on an open order |
 | [**ordersControllerVerifyOrderChain**](OrdersApi.md#ordersControllerVerifyOrderChain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | [**ordersControllerVoidOrder**](OrdersApi.md#ordersControllerVoidOrder) | **POST** orders/{id}/void | Void an order (open → voided) |
 
@@ -860,6 +861,46 @@ Configure bearer:
  - **Accept**: application/json
 
 
+Set or clear ZATCA standard invoice buyer details on an open order
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(OrdersApi::class.java)
+val id : kotlin.Long = 789 // kotlin.Long | 
+val updateOrderStandardInvoiceDto : UpdateOrderStandardInvoiceDto =  // UpdateOrderStandardInvoiceDto | 
+
+val result : OrderResponse = webService.ordersControllerUpdateOrderStandardInvoice(id, updateOrderStandardInvoiceDto)
+```
+
+### Parameters
+| **id** | **kotlin.Long**|  | |
+| Name | Type | Description  | Notes |
+| ------------- | ------------- | ------------- | ------------- |
+| **updateOrderStandardInvoiceDto** | [**UpdateOrderStandardInvoiceDto**](UpdateOrderStandardInvoiceDto.md)|  | |
+
+### Return type
+
+[**OrderResponse**](OrderResponse.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
 Verify the hash chain integrity for an order
 
 ### Example
@@ -911,14 +952,16 @@ val apiClient = ApiClient()
 apiClient.setBearerToken("TOKEN")
 val webService = apiClient.createWebservice(OrdersApi::class.java)
 val id : kotlin.Long = 789 // kotlin.Long | 
+val voidOrderDto : VoidOrderDto =  // VoidOrderDto | 
 
-val result : StatusResponse = webService.ordersControllerVoidOrder(id)
+val result : StatusResponse = webService.ordersControllerVoidOrder(id, voidOrderDto)
 ```
 
 ### Parameters
+| **id** | **kotlin.Long**|  | |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **id** | **kotlin.Long**|  | |
+| **voidOrderDto** | [**VoidOrderDto**](VoidOrderDto.md)|  | |
 
 ### Return type
 
@@ -932,6 +975,6 @@ Configure bearer:
 
 ### HTTP request headers
 
- - **Content-Type**: Not defined
+ - **Content-Type**: application/json
  - **Accept**: application/json
 

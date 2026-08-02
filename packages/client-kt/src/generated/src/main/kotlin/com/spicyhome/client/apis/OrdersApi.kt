@@ -24,6 +24,8 @@ import com.spicyhome.client.models.SyncOrderItemsDto
 import com.spicyhome.client.models.UpdateOrderItemUnitPriceDto
 import com.spicyhome.client.models.UpdateOrderMetaDto
 import com.spicyhome.client.models.UpdateOrderPartnerDto
+import com.spicyhome.client.models.UpdateOrderStandardInvoiceDto
+import com.spicyhome.client.models.VoidOrderDto
 import com.spicyhome.client.models.ZatcaInvoiceReissueDto
 import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
 import com.spicyhome.client.models.ZatcaReissueResultDto
@@ -319,6 +321,20 @@ interface OrdersApi {
     fun ordersControllerUpdateOrderPartner(@Path("id") id: kotlin.Long, @Body updateOrderPartnerDto: UpdateOrderPartnerDto): Call<OrderResponse>
 
     /**
+     * PATCH orders/{id}/standard-invoice
+     * Set or clear ZATCA standard invoice buyer details on an open order
+     * 
+     * Responses:
+     *  - 200: Updated order with items and events
+     *
+     * @param id 
+     * @param updateOrderStandardInvoiceDto 
+     * @return [Call]<[OrderResponse]>
+     */
+    @PATCH("orders/{id}/standard-invoice")
+    fun ordersControllerUpdateOrderStandardInvoice(@Path("id") id: kotlin.Long, @Body updateOrderStandardInvoiceDto: UpdateOrderStandardInvoiceDto): Call<OrderResponse>
+
+    /**
      * GET orders/{id}/events/verify
      * Verify the hash chain integrity for an order
      * 
@@ -339,9 +355,10 @@ interface OrdersApi {
      *  - 201: Order voided
      *
      * @param id 
+     * @param voidOrderDto 
      * @return [Call]<[StatusResponse]>
      */
     @POST("orders/{id}/void")
-    fun ordersControllerVoidOrder(@Path("id") id: kotlin.Long): Call<StatusResponse>
+    fun ordersControllerVoidOrder(@Path("id") id: kotlin.Long, @Body voidOrderDto: VoidOrderDto): Call<StatusResponse>
 
 }

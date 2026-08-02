@@ -145,5 +145,17 @@ class OrderSummaryResponseTest : ShouldSpec() {
             //modelInstance.updatedBy shouldBe ("TODO")
         }
 
+        // to test the property `kitchenPrintedQty` - Sum of kitchen-printed quantities across current order lines (ledger-derived, ADR 0006).
+        should("test kitchenPrintedQty") {
+            // uncomment below to test the property
+            //modelInstance.kitchenPrintedQty shouldBe ("TODO")
+        }
+
+        // to test the property `itemQtyTotal` - Sum of current order line quantities for this order.
+        should("test itemQtyTotal") {
+            // uncomment below to test the property
+            //modelInstance.itemQtyTotal shouldBe ("TODO")
+        }
+
     }
 }

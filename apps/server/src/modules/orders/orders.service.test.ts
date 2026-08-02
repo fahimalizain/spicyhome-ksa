@@ -152,7 +152,8 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -490,6 +491,7 @@ describe('Order Refunds', () => {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' })
         .expect(201);
 
       // Try to refund a voided order
@@ -876,7 +878,8 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     try {
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
-        .set('Authorization', `Bearer ${jwtToken}`);
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' });
     } catch {
       // Ignore
     }
@@ -2101,6 +2104,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const res = await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' })
         .expect(201);
 
       expect(res.body.status).toBe('voided');
@@ -2123,6 +2127,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const res = await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' })
         .expect(201);
 
       expect(res.body.status).toBe('voided');
@@ -2140,6 +2145,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const res = await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' })
         .expect(400);
 
       expect(res.body.message).toContain('net 100 halalas');
@@ -2154,8 +2160,187 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       await request(app.getHttpServer())
         .post(`/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
+        .send({ reason: 'test cleanup' })
         .expect(201);
     });
+  });
+});
+
+describe('void order — POST /orders/:id/void (required reason)', () => {
+  const voidReasonOrderIds: number[] = [];
+
+  afterEach(async () => {
+    // Void any open orders created during this test to keep the DB clean
+    for (const id of voidReasonOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/orders/${id}/void`)
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
+      } catch {
+        // Order may already be paid/voided — ignore
+      }
+    }
+    voidReasonOrderIds.length = 0;
+  });
+
+  async function createOpenOrder(): Promise<number> {
+    const res = await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ type: 'takeaway' })
+      .expect(201);
+    voidReasonOrderIds.push(res.body.id);
+    return res.body.id;
+  }
+
+  async function createOpenOrderWithItem(): Promise<number> {
+    const orderId = await createOpenOrder();
+    const getRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .put(`/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        baseUpdatedAt: getRes.body.updatedAt,
+        items: [{ itemId: 1, qty: 1 }],
+      })
+      .expect(200);
+    return orderId;
+  }
+
+  function expectReasonValidationFailed(res: any) {
+    // APP_PIPE in app.module.ts maps class-validator failures to
+    // message "Validation failed" with per-field detail in `errors`.
+    expect(res.body.message).toBe('Validation failed');
+    const fields = (res.body.errors ?? []).map((e: any) => e.field);
+    expect(fields).toContain('reason');
+  }
+
+  it('voids with a reason and stores the trimmed reason on the voided event payload', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: '  Customer left  ' })
+      .expect(201);
+
+    expect(res.body).toEqual({ success: true, status: 'voided' });
+
+    const eventsRes = await request(app.getHttpServer())
+      .get(`/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    const voidedEvent = eventsRes.body.find((e: any) => e.type === 'voided');
+    expect(voidedEvent).toBeDefined();
+    expect(JSON.parse(voidedEvent.payload)).toEqual({
+      fromStatus: 'open',
+      toStatus: 'voided',
+      reason: 'Customer left',
+    });
+  });
+
+  it('rejects void without a body (400)', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(400);
+
+    expectReasonValidationFailed(res);
+  });
+
+  it('rejects void with a missing reason (400)', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({})
+      .expect(400);
+
+    expectReasonValidationFailed(res);
+  });
+
+  it('rejects void with an empty string reason (400)', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: '' })
+      .expect(400);
+
+    expectReasonValidationFailed(res);
+  });
+
+  it('rejects void with a whitespace-only reason (400)', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: '   ' })
+      .expect(400);
+
+    expect(res.body.message).toBe('Void reason is required');
+  });
+
+  it('rejects void with a reason longer than 500 chars (400)', async () => {
+    const orderId = await createOpenOrder();
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'x'.repeat(501) })
+      .expect(400);
+
+    expectReasonValidationFailed(res);
+  });
+
+  it('void with a reason still passes the net-zero guards (ADR 0006)', async () => {
+    const orderId = await createOpenOrderWithItem();
+
+    // Net zero with payments: +100 then −100, then void with reason
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: -100 })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .post(`/orders/${orderId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'Balanced and voided' })
+      .expect(201);
+
+    expect(res.body.status).toBe('voided');
+
+    // Non-zero net with reason → still 400 from the ADR 0006 guard
+    const secondId = await createOpenOrderWithItem();
+    await request(app.getHttpServer())
+      .post(`/orders/${secondId}/payments`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ methodId: 'cash', amountHalalas: 100 })
+      .expect(201);
+
+    const rejected = await request(app.getHttpServer())
+      .post(`/orders/${secondId}/void`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'Should be blocked by net-zero guard' })
+      .expect(400);
+    expect(rejected.body.message).toContain('net 100 halalas');
+    expect(rejected.body.message).toContain('balancing payment lines');
   });
 });
 
@@ -2182,7 +2367,8 @@ describe('One open order per table', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -2229,6 +2415,7 @@ describe('One open order per table', () => {
     await request(app.getHttpServer())
       .post(`/orders/${first.id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'test cleanup' })
       .expect(201);
 
     // Now creating a new dine-in on same table should succeed
@@ -2247,6 +2434,7 @@ describe('One open order per table', () => {
     await request(app.getHttpServer())
       .post(`/orders/${first.id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'test cleanup' })
       .expect(201);
 
     // Now creating a new dine-in on same table should succeed
@@ -2312,7 +2500,8 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -2457,6 +2646,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     await request(app.getHttpServer())
       .post(`/orders/${id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'test cleanup' })
       .expect(201);
     const before = await getOrder(id);
 
@@ -2769,6 +2959,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     await request(app.getHttpServer())
       .post(`/orders/${id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ reason: 'test cleanup' })
       .expect(201);
     const before = await getOrder(id);
 
@@ -2813,7 +3004,8 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -3359,7 +3551,8 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -3680,7 +3873,8 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -3747,7 +3941,8 @@ describe('listOrders — date / user / multi-status filters', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -3992,7 +4187,8 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -4168,7 +4364,8 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -4358,7 +4555,8 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -4531,7 +4729,8 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }
@@ -5959,7 +6158,8 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
       try {
         await request(app.getHttpServer())
           .post(`/orders/${id}/void`)
-          .set('Authorization', `Bearer ${jwtToken}`);
+          .set('Authorization', `Bearer ${jwtToken}`)
+          .send({ reason: 'test cleanup' });
       } catch {
         // Order may already be paid/voided — ignore
       }

@@ -37,6 +37,8 @@ import com.spicyhome.client.models.SyncOrderItemsDto
 import com.spicyhome.client.models.UpdateOrderItemUnitPriceDto
 import com.spicyhome.client.models.UpdateOrderMetaDto
 import com.spicyhome.client.models.UpdateOrderPartnerDto
+import com.spicyhome.client.models.UpdateOrderStandardInvoiceDto
+import com.spicyhome.client.models.VoidOrderDto
 import com.spicyhome.client.models.ZatcaInvoiceReissueDto
 import com.spicyhome.client.models.ZatcaInvoiceStatusResponse
 import com.spicyhome.client.models.ZatcaReissueResultDto
@@ -230,6 +232,15 @@ class OrdersApiTest : ShouldSpec() {
             //result shouldBe ("TODO")
         }
 
+        // to test ordersControllerUpdateOrderStandardInvoice
+        should("test ordersControllerUpdateOrderStandardInvoice") {
+            // uncomment below to test ordersControllerUpdateOrderStandardInvoice
+            //val id : kotlin.Long = 789 // kotlin.Long | 
+            //val updateOrderStandardInvoiceDto : UpdateOrderStandardInvoiceDto =  // UpdateOrderStandardInvoiceDto | 
+            //val result : OrderResponse = apiInstance.ordersControllerUpdateOrderStandardInvoice(id, updateOrderStandardInvoiceDto)
+            //result shouldBe ("TODO")
+        }
+
         // to test ordersControllerVerifyOrderChain
         should("test ordersControllerVerifyOrderChain") {
             // uncomment below to test ordersControllerVerifyOrderChain
@@ -242,7 +253,8 @@ class OrdersApiTest : ShouldSpec() {
         should("test ordersControllerVoidOrder") {
             // uncomment below to test ordersControllerVoidOrder
             //val id : kotlin.Long = 789 // kotlin.Long | 
-            //val result : StatusResponse = apiInstance.ordersControllerVoidOrder(id)
+            //val voidOrderDto : VoidOrderDto =  // VoidOrderDto | 
+            //val result : StatusResponse = apiInstance.ordersControllerVoidOrder(id, voidOrderDto)
             //result shouldBe ("TODO")
         }
 

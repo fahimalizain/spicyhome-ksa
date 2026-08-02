@@ -2031,8 +2031,19 @@ export class OrdersService {
     }
   }
 
-  async voidOrder(orderId: number, userId: number) {
+  async voidOrder(orderId: number, userId: number, dto: { reason: string }) {
     const now = Math.floor(Date.now() / 1000);
+
+    // Trim and validate the reason here (belt-and-suspenders on top of the
+    // DTO validation): whitespace-only values pass @MinLength(1) but are
+    // meaningless, and the stored payload must carry the trimmed reason.
+    const reason = dto.reason.trim();
+    if (reason.length === 0) {
+      throw new BadRequestException('Void reason is required');
+    }
+    if (reason.length > 500) {
+      throw new BadRequestException('Void reason must be 500 characters or fewer');
+    }
 
     this.db.transaction((tx: any) => {
       const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
@@ -2071,6 +2082,7 @@ export class OrdersService {
         {
           fromStatus: 'open',
           toStatus: 'voided',
+          reason,
         },
         now,
       );

@@ -28,6 +28,7 @@ export type UpdateOrderPartnerDto = Schemas['UpdateOrderPartnerDto'];
 export type UpdateOrderStandardInvoiceDto = Schemas['UpdateOrderStandardInvoiceDto'];
 export type UpdateOrderItemUnitPriceDto = Schemas['UpdateOrderItemUnitPriceDto'];
 
+export type VoidOrderDto = Schemas['VoidOrderDto'];
 export type CreateRefundDto = Schemas['CreateRefundDto'];
 export type RefundResponse = Schemas['RefundResponse'];
 export type OrderRefundResponse = Schemas['OrderRefundResponse'];
@@ -406,8 +407,8 @@ export class SpicyHomeClient {
     submit: (orderId: number, dto?: SubmitOrderDto) =>
       request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/submit`, dto),
 
-    void: (orderId: number) =>
-      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`),
+    void: (orderId: number, dto: VoidOrderDto) =>
+      request<StatusResponse>(this.config, 'POST', `/orders/${orderId}/void`, dto),
 
     refund: (orderId: number, dto: CreateRefundDto) =>
       request<RefundResponse>(this.config, 'POST', `/orders/${orderId}/refund`, dto),
