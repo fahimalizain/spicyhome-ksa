@@ -1,5 +1,8 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
 
+/** Blank lines between the leading dashed markers before KOT content. */
+const LEADING_SPACER_LINES = 5;
+
 export interface KitchenTicketOptions {
   /**
    * Human-facing order identifier (e.g. "INV26-0042") — printed big in the
@@ -22,6 +25,8 @@ export interface KitchenTicketOptions {
   deliveryExternalRef?: string;
   /** Order-level notes ("Order notes") — printed prominently when set (bold, before the items). */
   orderNotes?: string | null;
+  /** Display name of the user who created the order (users.name). Omitted when unknown. */
+  createdByName?: string | null;
   items: KitchenTicketItem[];
 }
 
@@ -42,6 +47,14 @@ export class KitchenTicketBuilder {
     const eb = new EscPosBuilder(this.width);
 
     eb.init();
+
+    // Leading tear-off / grab space so kitchen content starts well below the
+    // cutter. Two dashed markers frame the blank region for easy tearing.
+    eb.separator('-');
+    for (let i = 0; i < LEADING_SPACER_LINES; i++) {
+      eb.blankLine();
+    }
+    eb.separator('-');
 
     // Big document id — double-size bold, centered, so the kitchen can match
     // the ticket to the order at a glance (e.g. "INV26-0042").
@@ -92,6 +105,12 @@ export class KitchenTicketBuilder {
 
     eb.text(`Time: ${this.formatTime(opts.createdAt)}`);
 
+    // Who took the order — display name only (users.name), normal size like
+    // the Type/Time lines. Omitted when unknown.
+    if (opts.createdByName?.trim()) {
+      eb.text(`Created By: ${opts.createdByName}`.slice(0, this.width));
+    }
+
     // Order-level notes — prominent (bold), truncated to paper width, right
     // after type/time so the kitchen sees them before the items.
     if (opts.orderNotes) {
@@ -103,25 +122,18 @@ export class KitchenTicketBuilder {
 
     eb.separator();
 
-    // Items — numbered name (double-height bold), Qty line, optional Notes.
+    // Items — name (bold), Qty line, optional Notes.
     // Each item is its own block, separated by a blank line for readability.
     eb.align(Align.Left);
-    for (let i = 0; i < opts.items.length; i++) {
-      const item = opts.items[i];
-      const n = i + 1;
-
-      // Name — bold + double-height, truncated to paper width.
+    for (const item of opts.items) {
+      // Name — bold only (normal size), truncated to paper width.
       eb.bold(true);
-      eb.doubleHeight(true);
-      const nameLine = `${n}. ${item.name}`;
+      const nameLine = `- ${item.name}`;
       eb.text(nameLine.slice(0, this.width));
-      eb.doubleHeight(false);
       eb.bold(false);
 
-      // Qty — always printed, bold, normal size, indented under the name.
-      eb.bold(true);
+      // Qty — always printed, normal weight, indented under the name.
       eb.text(`    Qty: ${item.qty}x`);
-      eb.bold(false);
 
       // Notes — only when set, underlined (kept prominent for the kitchen),
       // indented to align with the Qty line.
@@ -151,12 +163,19 @@ export class KitchenTicketBuilder {
         timeZone: 'Asia/Riyadh',
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false,
+        hour12: true,
       });
-      return fmt.format(d);
+      // Some Node/ICU builds insert NNBSP (U+202F) before AM/PM; EscPosBuilder
+      // strips non-ASCII, which would glue "01:13AM". Normalize to plain space.
+      return fmt.format(d).replace(/\u202f|\u00a0/g, ' ');
     } catch {
+      // Manual 12h fallback (local machine TZ — last resort only)
+      const h24 = d.getHours();
+      const m = d.getMinutes();
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
       const pad = (n: number) => String(n).padStart(2, '0');
-      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return `${pad(h12)}:${pad(m)} ${ampm}`;
     }
   }
 

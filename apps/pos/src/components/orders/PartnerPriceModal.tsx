@@ -3,6 +3,7 @@ import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import { sarDisplayToHalalas } from './add-payment-modal-logic';
 import type { OrderResponse } from '@spicyhome/client-ts';
+import { OskDock } from '../on-screen-keyboard/OskDock';
 
 /**
  * One order line shown in the partner price modal (ADR 0007, Phase 7).
@@ -84,6 +85,11 @@ function validateLine(
  * via the house sarDisplayToHalalas helper); every line is floored at the
  * live catalog price client-side, and the server enforces the same floor.
  *
+ * Mirrors the AddPaymentModal pattern for the OSK: the card root carries
+ * `data-osk-scope` and an <OskDock size="sm" /> sits above the footer, so
+ * the numpad docks inside the modal instead of covering the Cancel/Save row
+ * when a price field is focused.
+ *
  * Save runs one PATCH per changed line, sequentially, threading the
  * returned `updatedAt` as the next `baseUpdatedAt` (ADR is per-line — no
  * batch endpoint). Unchanged lines are skipped (server would no-op anyway).
@@ -162,6 +168,7 @@ export function PartnerPriceModal({
       onClick={onClose}
     >
       <div
+        data-osk-scope
         className="bg-gray-900 rounded-xl p-4 w-[560px] max-w-[92vw] max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -228,6 +235,11 @@ export function PartnerPriceModal({
             {error}
           </div>
         )}
+
+        {/* Inline keyboard dock: the numpad OSK portals in here when a price
+            field is focused, so it grows the modal instead of covering the
+            Cancel/Save row. Zero footprint otherwise. */}
+        <OskDock size="sm" className="mt-3" />
 
         {/* Footer */}
         <div className="shrink-0 flex gap-2 mt-4">

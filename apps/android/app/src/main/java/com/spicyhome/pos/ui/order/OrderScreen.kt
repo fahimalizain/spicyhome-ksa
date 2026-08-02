@@ -686,41 +686,6 @@ private fun UnifiedCartPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Order-level notes ("Order notes"). Pre-create: staged locally, sent
-        // with create. Open order: committed PATCH (notes-only → no kitchen
-        // auto-print). Gated by updateOrder when open+synced.
-        OutlinedTextField(
-            value = orderNotesDraft,
-            onValueChange = { orderNotesDraft = it },
-            enabled = canEditOrderNotes && !state.isSyncing && !state.isLoading,
-            singleLine = true,
-            placeholder = { Text("Order notes", color = OnDarkSecondary) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                onUpdateOrderNotes(orderNotesDraft)
-                focusManager.clearFocus()
-            }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused && orderNotesHadFocus) {
-                        onUpdateOrderNotes(orderNotesDraft)
-                    }
-                    orderNotesHadFocus = focusState.isFocused
-                },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Accent,
-                unfocusedBorderColor = DarkSurfaceVariant,
-                focusedTextColor = OnDark,
-                unfocusedTextColor = OnDark,
-                cursorColor = Accent,
-                focusedContainerColor = DarkSurface,
-                unfocusedContainerColor = DarkSurface,
-            ),
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         if (state.isCartEmpty) {
             Box(
                 modifier = Modifier
@@ -763,6 +728,41 @@ private fun UnifiedCartPanel(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Order-level notes ("Order notes"). Pre-create: staged locally, sent
+        // with create. Open order: committed PATCH (notes-only → no kitchen
+        // auto-print). Gated by updateOrder when open+synced.
+        OutlinedTextField(
+            value = orderNotesDraft,
+            onValueChange = { orderNotesDraft = it },
+            enabled = canEditOrderNotes && !state.isSyncing && !state.isLoading,
+            singleLine = true,
+            placeholder = { Text("Order notes", color = OnDarkSecondary) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                onUpdateOrderNotes(orderNotesDraft)
+                focusManager.clearFocus()
+            }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused && orderNotesHadFocus) {
+                        onUpdateOrderNotes(orderNotesDraft)
+                    }
+                    orderNotesHadFocus = focusState.isFocused
+                },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Accent,
+                unfocusedBorderColor = DarkSurfaceVariant,
+                focusedTextColor = OnDark,
+                unfocusedTextColor = OnDark,
+                cursorColor = Accent,
+                focusedContainerColor = DarkSurface,
+                unfocusedContainerColor = DarkSurface,
+            ),
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 

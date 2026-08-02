@@ -132,12 +132,22 @@ describe('KitchenTicketBuilder', () => {
     expect(str).not.toContain('App order #:');
   });
 
-  it('renders time in Asia/Riyadh timezone', () => {
+  it('renders time in Asia/Riyadh timezone as 12-hour with AM/PM', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');
-    expect(str).toContain('Time:');
-    // Should contain 24-hour time format
-    expect(str).toMatch(/Time: \d{2}:\d{2}/);
+    // baseOpts.createdAt = 1700000000 → 2023-11-14 22:13 UTC → Asia/Riyadh 01:13 AM
+    expect(str).toContain('Time: 01:13 AM');
+    // 12-hour format with explicit AM/PM marker
+    expect(str).toMatch(/Time: \d{1,2}:\d{2} (AM|PM)/);
+  });
+
+  it('renders afternoon times as PM (not 24-hour)', () => {
+    // 1700048700 → 2023-11-15 11:45 UTC → Asia/Riyadh 02:45 PM
+    const opts = { ...baseOpts, createdAt: 1700048700 };
+    const str = builder.build(opts).toString('ascii');
+    expect(str).toContain('Time: 02:45 PM');
+    // Not pure 24h — "14:45" without AM/PM must not appear
+    expect(str).not.toContain('Time: 14:45');
   });
 
   // ── Order notes ──────────────────────────────────────────────────────────────
@@ -186,39 +196,79 @@ describe('KitchenTicketBuilder', () => {
     expect(text).toContain('NOTES: ' + 'N'.repeat(35)); // 42 - len("NOTES: ")
   });
 
-  it('renders items as numbered blocks with name, Qty and optional Notes', () => {
+  // ── Order creator ─────────────────────────────────────────────────────────────
+
+  it('renders "Created By:" with the creator display name when createdByName is set', () => {
+    const opts = { ...baseOpts, createdByName: 'Admin' };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    expect(str).toContain('Created By: Admin');
+    // Between the Time line and the NOTES section
+    expect(str.indexOf('Created By: Admin')).toBeGreaterThan(str.indexOf('Time:'));
+  });
+
+  it('omits the "Created By:" line when createdByName is missing/null/empty/whitespace', () => {
+    expect(builder.build(baseOpts).toString('ascii')).not.toContain('Created By:');
+
+    const optsNull = { ...baseOpts, createdByName: null };
+    expect(builder.build(optsNull).toString('ascii')).not.toContain('Created By:');
+
+    const optsEmpty = { ...baseOpts, createdByName: '' };
+    expect(builder.build(optsEmpty).toString('ascii')).not.toContain('Created By:');
+
+    const optsBlank = { ...baseOpts, createdByName: '   ' };
+    expect(builder.build(optsBlank).toString('ascii')).not.toContain('Created By:');
+
+    const optsUndefined = { ...baseOpts };
+    expect(builder.build(optsUndefined).toString('ascii')).not.toContain('Created By:');
+  });
+
+  it('truncates a long creator name to paper width', () => {
+    const longName = 'A'.repeat(100);
+    const opts = { ...baseOpts, createdByName: longName };
+    const buf = builder.build(opts);
+    const str = buf.toString('ascii');
+    // Full name must not appear; the truncated "Created By: " + name prefix does
+    expect(str).not.toContain(longName);
+    const text = str.replace(/[\x00-\x1f\x7f-\xff]/g, '');
+    expect(text).toContain('Created By: ' + 'A'.repeat(30)); // 42 - 12 (len of "Created By: ")
+  });
+
+  it('renders items as name/Qty/Notes blocks with name, Qty and optional Notes', () => {
     const buf = builder.build(baseOpts);
     const str = buf.toString('ascii');
 
-    // Numbered name line, indented Qty line, optional indented Notes line
-    expect(str).toContain('1. Zinger Burger');
+    // Dash-prefixed name line, indented Qty line, optional indented Notes line
+    expect(str).toContain('- Zinger Burger');
     expect(str).toContain('    Qty: 2x');
-    expect(str).toContain('2. Pepsi');
+    expect(str).toContain('- Pepsi');
     expect(str).toContain('    Qty: 1x');
     expect(str).toContain('    Notes: no ice');
-    expect(str).toContain('3. Fries');
+    expect(str).toContain('- Fries');
     expect(str).toContain('    Qty: 3x');
 
     // No old "qty name" single-line format, no old "  * notes" format
     expect(str).not.toContain('2 Zinger Burger');
     expect(str).not.toContain('* no ice');
 
-    // Item names are double-height only (GS ! 0x10), one step below the full
-    // double size (GS ! 0x11) used for the document id and TABLE lines.
+    // Item names are bold only, at normal size: ESC E 0x01 immediately before
+    // the name line (including its "- " prefix), with no double-height
+    // (GS ! 0x10) and no full double size (GS ! 0x11) emitted for the text.
     const hex = buf.toString('hex');
-    const itemHex = Buffer.from('1. Zinger Burger', 'ascii').toString('hex');
+    const itemHex = Buffer.from('- Zinger Burger', 'ascii').toString('hex');
     const idx = hex.indexOf(itemHex);
     expect(idx).not.toBe(-1);
-    // Byte order before item text: bold on (1b4501), then double height on (1d2110).
-    expect(hex.slice(idx - 6, idx)).toBe('1d2110'); // double height on
+    // Bold on immediately before the full "- Name" line; no character-size commands.
+    expect(hex.slice(idx - 6, idx)).toBe('1b4501'); // bold on
+    expect(hex.slice(idx - 6, idx)).not.toBe('1d2110'); // NOT double height
     expect(hex.slice(idx - 6, idx)).not.toBe('1d2111'); // NOT full double size
-    expect(hex.slice(idx - 12, idx - 6)).toBe('1b4501'); // bold on
 
     // Second item name line follows the same pattern (after off/reset + blank line).
-    const pepsiHex = Buffer.from('2. Pepsi', 'ascii').toString('hex');
+    const pepsiHex = Buffer.from('- Pepsi', 'ascii').toString('hex');
     const idxPepsi = hex.indexOf(pepsiHex);
     expect(idxPepsi).not.toBe(-1);
-    expect(hex.slice(idxPepsi - 6, idxPepsi)).toBe('1d2110');
+    expect(hex.slice(idxPepsi - 6, idxPepsi)).toBe('1b4501'); // bold on
+    expect(hex.slice(idxPepsi - 6, idxPepsi)).not.toBe('1d2110'); // NOT double height
   });
 
   it('adds a blank line between item blocks', () => {
@@ -229,8 +279,8 @@ describe('KitchenTicketBuilder', () => {
     // Item without notes: name LF + Qty LF + blank line LF (blank separates
     // item blocks).
     const noNotesBlock = str.slice(
-      str.indexOf('1. Zinger Burger') + '1. Zinger Burger'.length,
-      str.indexOf('2. Pepsi'),
+      str.indexOf('- Zinger Burger') + '- Zinger Burger'.length,
+      str.indexOf('- Pepsi'),
     );
     expect(countLf(noNotesBlock)).toBe(3);
 
@@ -239,17 +289,11 @@ describe('KitchenTicketBuilder', () => {
     const qtyToNotes = str.slice(str.indexOf('Qty: 1x'), str.indexOf('Notes: no ice'));
     expect(countLf(qtyToNotes)).toBe(1);
 
-    const notesBlock = str.slice(
-      str.indexOf('2. Pepsi') + '2. Pepsi'.length,
-      str.indexOf('3. Fries'),
-    );
+    const notesBlock = str.slice(str.indexOf('- Pepsi') + '- Pepsi'.length, str.indexOf('- Fries'));
     expect(countLf(notesBlock)).toBe(4);
 
     // Blank line after the last item block before the bottom separator as well.
-    const beforeSep = str.slice(
-      str.indexOf('3. Fries') + '3. Fries'.length,
-      str.lastIndexOf('===='),
-    );
+    const beforeSep = str.slice(str.indexOf('- Fries') + '- Fries'.length, str.lastIndexOf('===='));
     expect(countLf(beforeSep)).toBe(3);
   });
 
@@ -274,8 +318,8 @@ describe('KitchenTicketBuilder', () => {
     const str = buf.toString('ascii');
 
     expect(str).not.toContain('Notes:');
-    // Single plain item still renders its numbered name + Qty block
-    expect(str).toContain('1. Plain Item');
+    // Single plain item still renders its dash-prefixed name + Qty block
+    expect(str).toContain('- Plain Item');
     expect(str).toContain('    Qty: 1x');
   });
 
@@ -301,6 +345,30 @@ describe('KitchenTicketBuilder', () => {
     expect(hex.startsWith('1b40')).toBe(true);
   });
 
+  it('prints a leading dashed spacer with blank lines before content', () => {
+    const buf = builder.build(baseOpts);
+    const hex = buf.toString('hex');
+    // init first
+    expect(hex.startsWith('1b40')).toBe(true);
+
+    const str = buf.toString('ascii');
+    const dashLine = '-'.repeat(42);
+    const firstDash = str.indexOf(dashLine);
+    const secondDash = str.indexOf(dashLine, firstDash + dashLine.length);
+    const contentStart = str.indexOf('INV26-0042');
+
+    expect(firstDash).toBeGreaterThan(-1);
+    expect(secondDash).toBeGreaterThan(firstDash);
+    expect(contentStart).toBeGreaterThan(secondDash);
+
+    // Between the two dashed lines: exactly LEADING_SPACER_LINES newlines
+    // (separator itself ends with LF, so the gap between end of first dash
+    // line content and start of second is: LF from first sep + N blank LFs)
+    const between = str.slice(firstDash + dashLine.length, secondDash);
+    const lfCount = (between.match(/\n/g) || []).length;
+    expect(lfCount).toBe(1 + 5); // trailing LF of first separator + 5 blank lines
+  });
+
   it('truncates long item names to fit paper width', () => {
     const longName = 'A'.repeat(100);
     const opts = { ...baseOpts, items: [{ qty: 1, name: longName, notes: null }] };
@@ -309,10 +377,10 @@ describe('KitchenTicketBuilder', () => {
 
     // The full longName should NOT appear in the output (should be truncated)
     expect(str).not.toContain(longName);
-    // But the first part should appear: "1. " prefix + truncated name start,
-    // capped at the paper width (42 chars total).
+    // "- " (2 chars) + name truncated to 42 chars total, so the name part is
+    // 40 A's after the prefix: ("- " + "A"*100).slice(0, 42).
     const text = str.replace(/[\x00-\x1f\x7f-\xff]/g, '');
-    expect(text).toContain('1. ' + 'A'.repeat(39)); // 42 - len("1. ")
+    expect(text).toContain('- ' + 'A'.repeat(40)); // 42 - len("- ")
   });
 
   it('renders order notes and item notes together on the same ticket', () => {
@@ -328,5 +396,7 @@ describe('KitchenTicketBuilder', () => {
     const buf = builder.build(opts);
     const str = buf.toString('ascii');
     expect(str).toContain('INV26-0042');
+    // Leading tear-off spacer is still present without any items
+    expect(str.indexOf('-'.repeat(42))).toBeGreaterThan(-1);
   });
 });

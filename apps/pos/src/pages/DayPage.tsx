@@ -263,50 +263,6 @@ export function DayPage() {
               </div>
             </div>
           )}
-
-          {selectedZ && (
-            <div className="bg-gray-800 rounded-xl p-6 mt-6">
-              <h2 className="text-lg font-bold text-white mb-4">
-                Z-Report: {selectedZ.businessDate}{' '}
-                <span className="text-blue-400 text-sm ml-2">CLOSED</span>
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <StatCard
-                  label="Opening Cash"
-                  value={`${halalasToSar(selectedZ.openingCashHalalas)} SAR`}
-                />
-                <StatCard
-                  label="Closing Cash"
-                  value={`${halalasToSar(selectedZ.closingCashHalalas)} SAR`}
-                />
-                <StatCard
-                  label="Total Sales"
-                  value={`${halalasToSar(selectedZ.totalSalesHalalas)} SAR`}
-                />
-                <StatCard
-                  label="Total VAT"
-                  value={`${halalasToSar(selectedZ.totalVatHalalas)} SAR`}
-                />
-                <StatCard
-                  label="Paid Orders"
-                  value={String(selectedZ.paidOrderCount || selectedZ.orderCount)}
-                />
-                <StatCard label="Voided" value={String(selectedZ.voidedOrderCount || 0)} />
-              </div>
-              <button
-                onClick={() => printZ(selectedZ.dayId)}
-                className="touch-target px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white"
-              >
-                Print Z-Report
-              </button>
-              <button
-                onClick={() => setSelectedZ(null)}
-                className="touch-target px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 ml-3"
-              >
-                Close Report
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -353,6 +309,47 @@ export function DayPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {selectedZ && (
+        <div className="bg-gray-800 rounded-xl p-6 mt-6">
+          <h2 className="text-lg font-bold text-white mb-4">
+            Z-Report: {selectedZ.businessDate}{' '}
+            <span className="text-blue-400 text-sm ml-2">CLOSED</span>
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <StatCard
+              label="Opening Cash"
+              value={`${halalasToSar(selectedZ.openingCashHalalas)} SAR`}
+            />
+            <StatCard
+              label="Closing Cash"
+              value={`${halalasToSar(selectedZ.closingCashHalalas)} SAR`}
+            />
+            <StatCard
+              label="Total Sales"
+              value={`${halalasToSar(selectedZ.totalSalesHalalas)} SAR`}
+            />
+            <StatCard label="Total VAT" value={`${halalasToSar(selectedZ.totalVatHalalas)} SAR`} />
+            <StatCard
+              label="Paid Orders"
+              value={String(selectedZ.paidOrderCount || selectedZ.orderCount)}
+            />
+            <StatCard label="Voided" value={String(selectedZ.voidedOrderCount || 0)} />
+          </div>
+          <button
+            onClick={() => printZ(selectedZ.dayId)}
+            className="touch-target px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white"
+          >
+            Print Z-Report
+          </button>
+          <button
+            onClick={() => setSelectedZ(null)}
+            className="touch-target px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 ml-3"
+          >
+            Close Report
+          </button>
         </div>
       )}
     </div>

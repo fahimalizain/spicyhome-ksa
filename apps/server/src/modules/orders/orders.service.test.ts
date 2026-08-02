@@ -5769,7 +5769,7 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('- Zinger Burger');
     expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 5x');
 
     // Second send with no changes → 200 no-op, no new enqueued events
@@ -5809,7 +5809,7 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
       (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('1. Zinger Burger');
+    expect(kitchenPrints[0].data.toString('ascii')).toContain('- Zinger Burger');
     expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 3x');
   });
 
