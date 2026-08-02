@@ -219,6 +219,9 @@ describe('OrderPageCartItem', () => {
     expectControlsHidden();
     // Readonly: no controls panel at all
     expect(screen.queryByTestId('cart-item-controls-panel')).not.toBeInTheDocument();
+    // Readonly rows have no expanded qty stepper, so the header qty badge
+    // must stay visible even when expanded
+    expect(screen.getByText('×2')).toBeInTheDocument();
   });
 
   // ── Test 7: canRemove=false hides remove only ──

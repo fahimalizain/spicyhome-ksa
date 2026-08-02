@@ -67,7 +67,7 @@ export function OrderPageCartItem({
       >
         <span className="flex w-full items-center gap-1.5 min-h-[2em]">
           <span className="text-sm text-white flex-1 min-w-0 truncate">{item.name}</span>
-          {!expanded && (
+          {(readonly || !expanded) && (
             <span className="text-xs text-gray-300 bg-gray-700 rounded px-1.5 py-0.5 shrink-0">
               ×{item.qty}
             </span>

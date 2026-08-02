@@ -17,8 +17,10 @@ import {
   validateStandardBuyer,
   type ZatcaBuyerDetails,
 } from '../components/orders/StandardInvoiceBuyerForm';
+import { OrderHeader } from '../components/orders/OrderHeader';
 import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
+import { formatOrderTypeLabel } from '../lib/order-type-label';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
 import { calcOutstandingHalalas } from '../lib/order-payments';
 import type { CartItem } from '../hooks/useCart';
@@ -32,6 +34,7 @@ import type {
   OrderEventResponse,
   DeliveryPartnerResponse,
   SubmitOrderDto,
+  UserOptionResponse,
 } from '@spicyhome/client-ts';
 
 type OrderTab = 'items' | 'payments' | 'summary';
@@ -137,7 +140,12 @@ export function OrderPage() {
     id: number;
     status: string;
     documentId: string;
+    createdAt: number;
+    createdBy: number | null;
   } | null>(null);
+  // Active users (best-effort) for the header "Created by" line — failures
+  // leave the line hidden.
+  const [users, setUsers] = useState<UserOptionResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [metaUpdating, setMetaUpdating] = useState(false);
@@ -226,7 +234,13 @@ export function OrderPage() {
       vatHalalas: order.vatHalalas,
       totalHalalas: order.totalHalalas,
     });
-    setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+    setCurrentOrder({
+      id: order.id,
+      status: order.status,
+      documentId: order.documentId,
+      createdAt: order.createdAt,
+      createdBy: order.createdBy,
+    });
 
     // Standard invoice state comes from the SERVER (persisted on Done/X).
     // The modal seeds its draft only on mount, so hydrating while the modal
@@ -281,6 +295,23 @@ export function OrderPage() {
     loadTables();
     loadDeliveryPartners();
     loadOpenOrders();
+  }, []);
+
+  // Active users for the header "Created by" line — best-effort like the
+  // Orders page filter dropdown: failures leave the line hidden.
+  useEffect(() => {
+    let cancelled = false;
+    client.auth
+      .listActiveUsers()
+      .then((u) => {
+        if (!cancelled) setUsers(u);
+      })
+      .catch(() => {
+        if (!cancelled) setUsers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Keep the external-ref draft in sync with the cart (hydration / new order).
@@ -490,7 +521,17 @@ export function OrderPage() {
     try {
       const order = await client.orders.get(currentOrder.id);
       if (order.status !== 'open') {
-        setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+        setCurrentOrder((prev) =>
+          prev
+            ? { ...prev, status: order.status }
+            : {
+                id: order.id,
+                status: order.status,
+                documentId: order.documentId,
+                createdAt: order.createdAt,
+                createdBy: order.createdBy,
+              },
+        );
       } else if (!cart.isDirty) {
         hydrateOrder(order);
       }
@@ -591,7 +632,15 @@ export function OrderPage() {
         notes: cart.orderNotes.trim() ? cart.orderNotes : undefined,
       });
       createdId = res.id;
-      setCurrentOrder({ id: res.id, status: 'open', documentId: res.documentId });
+      // Interim header state — createdAt/createdBy are filled by the
+      // hydrateOrder below (CreateOrderResponse lacks them).
+      setCurrentOrder({
+        id: res.id,
+        status: 'open',
+        documentId: res.documentId,
+        createdAt: 0,
+        createdBy: null,
+      });
 
       // B6: Refetch to get real updatedAt before syncing (create response lacks updatedAt)
       const fetchedOrder = await client.orders.get(res.id);
@@ -883,7 +932,17 @@ export function OrderPage() {
         try {
           const order = await client.orders.get(currentOrder.id);
           if (order.status !== 'open') {
-            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+            setCurrentOrder((prev) =>
+              prev
+                ? { ...prev, status: order.status }
+                : {
+                    id: order.id,
+                    status: order.status,
+                    documentId: order.documentId,
+                    createdAt: order.createdAt,
+                    createdBy: order.createdBy,
+                  },
+            );
           } else if (!cart.isDirty) {
             hydrateOrder(order);
             loadOpenOrders();
@@ -971,7 +1030,17 @@ export function OrderPage() {
         try {
           const order = await client.orders.get(currentOrder.id);
           if (order.status !== 'open') {
-            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+            setCurrentOrder((prev) =>
+              prev
+                ? { ...prev, status: order.status }
+                : {
+                    id: order.id,
+                    status: order.status,
+                    documentId: order.documentId,
+                    createdAt: order.createdAt,
+                    createdBy: order.createdBy,
+                  },
+            );
           } else if (!cart.isDirty) {
             hydrateOrder(order);
             loadOpenOrders();
@@ -1033,7 +1102,17 @@ export function OrderPage() {
         try {
           const order = await client.orders.get(currentOrder.id);
           if (order.status !== 'open') {
-            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+            setCurrentOrder((prev) =>
+              prev
+                ? { ...prev, status: order.status }
+                : {
+                    id: order.id,
+                    status: order.status,
+                    documentId: order.documentId,
+                    createdAt: order.createdAt,
+                    createdBy: order.createdBy,
+                  },
+            );
           } else if (!cart.isDirty) {
             hydrateOrder(order);
             loadOpenOrders();
@@ -1079,7 +1158,17 @@ export function OrderPage() {
         try {
           const order = await client.orders.get(currentOrder.id);
           if (order.status !== 'open') {
-            setCurrentOrder({ id: order.id, status: order.status, documentId: order.documentId });
+            setCurrentOrder((prev) =>
+              prev
+                ? { ...prev, status: order.status }
+                : {
+                    id: order.id,
+                    status: order.status,
+                    documentId: order.documentId,
+                    createdAt: order.createdAt,
+                    createdBy: order.createdBy,
+                  },
+            );
           } else if (!cart.isDirty) {
             hydrateOrder(order);
             loadOpenOrders();
@@ -1157,6 +1246,17 @@ export function OrderPage() {
   }
 
   // ── Visibility logic ──
+
+  // Header "Created by" line: resolve the creator id against the active users
+  // list. Prefer a non-blank name; fall back to the username. Unknown ids
+  // (inactive/deleted users, failed list) hide the line entirely.
+  const createdByName = (() => {
+    if (!currentOrder?.createdBy) return null;
+    const u = users.find((x) => x.id === currentOrder.createdBy);
+    if (!u) return null;
+    const name = u.name?.trim();
+    return name || u.username || null;
+  })();
 
   const orderReadonly = currentOrder ? currentOrder.status !== 'open' : false;
   const permissionsReadonly = currentOrder ? !permissions.updateOrder : false;
@@ -1494,40 +1594,18 @@ export function OrderPage() {
       {/* Right: Cart (tabbed panel, ADR 0006) */}
       <div className="w-80 bg-gray-850 flex flex-col border-l border-gray-700 shrink-0 min-h-0">
         {/* Header — pinned */}
-        <div className="shrink-0 px-3 pt-3 pb-2 border-b border-gray-700/80">
-          <h2 className="text-sm font-semibold text-gray-300">
-            {currentOrder ? `Order ${currentOrder.documentId}` : 'New Order'}
-            {currentOrder && (
-              <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${currentOrder.status}`}>
-                {currentOrder.status}
-              </span>
-            )}
-            {cart.isDirty && <span className="ml-2 text-xs text-amber-400">Unsent changes</span>}
-          </h2>
-          {cart.deliveryPartnerTitle && (
-            <div className="text-xs text-gray-500 mt-1">
-              {cart.deliveryPartnerTitle}
-              {cart.deliveryExternalRef ? ` · Ref ${cart.deliveryExternalRef}` : ''}
-            </div>
-          )}
-          {/* Order notes (order-level remarks) — staged pre-create, PATCHed on
-              blur/Enter for open orders. Disabled while busy / readonly / dirty
-              (same gate as the external-ref field). */}
-          <input
-            type="text"
-            value={orderNotesDraft}
-            onChange={(e) => setOrderNotesDraft(e.target.value)}
-            onBlur={() => void handleSaveOrderNotes()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            disabled={!canEditTypeTable}
-            placeholder="Order notes"
-            className="w-full mt-2 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
-          />
-        </div>
+        <OrderHeader
+          documentId={currentOrder?.documentId}
+          status={currentOrder?.status}
+          typeLabel={formatOrderTypeLabel({
+            type: cart.orderType,
+            deliveryPartnerTitle: cart.deliveryPartnerTitle,
+            deliveryExternalRef: cart.deliveryExternalRef,
+          })}
+          createdAt={currentOrder?.createdAt}
+          createdByName={createdByName}
+          isDirty={cart.isDirty}
+        />
 
         {/* Tabs — pinned, only for existing orders (pre-create stays Items-only) */}
         {currentOrder && (
@@ -1731,6 +1809,25 @@ export function OrderPage() {
           {/* ── Items footer ── */}
           {(!currentOrder || activeTab === 'items') && (
             <>
+              {/* Order notes (order-level remarks) — staged pre-create, PATCHed
+                  on blur/Enter for open orders. Pinned above the Total row
+                  (not in the scrollable item list); visible even on an empty
+                  cart. Disabled while busy / readonly / dirty (same gate as
+                  the external-ref field). */}
+              <input
+                type="text"
+                value={orderNotesDraft}
+                onChange={(e) => setOrderNotesDraft(e.target.value)}
+                onBlur={() => void handleSaveOrderNotes()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                disabled={!canEditTypeTable}
+                placeholder="Order notes"
+                className="w-full mb-2 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+              />
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>Total</span>
                 <span className="text-white font-bold">
