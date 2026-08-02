@@ -33,24 +33,45 @@ Codebase conventions and constraints for all contributors and AI agents.
 
 ## Timezone
 
-- **Asia/Riyadh** (+03:00) for all business logic, reporting, and ZATCA.
+- **Asia/Riyadh** (+03:00) for all business logic, reporting, and ZATCA
+  wall-clock issue times.
 - Server runs with `TZ=Asia/Riyadh`.
 - Business dates computed in +03:00, stored as `YYYY-MM-DD` in `day_openings`.
 
-### Service day (JWT expiry)
+### Service day / Business day (ADR 0008)
+
+One day concept everywhere: JWT expiry, day open/close, order creation,
+`daily_order_seq`, and the orders list filter all use the same service-day
+window and label. (Calendar-day helpers such as `todayInRiyadh` are retired
+in favor of the service-day helpers.)
 
 - **Service day** window: `[D 05:00, (D+1) 05:00)` Asia/Riyadh (half-open).
   The label `D` (`YYYY-MM-DD`) is the **start** date of the window.
   Times before 05:00 belong to the **previous** service day.
+- **Business day** (`day_openings`): the cash open/close session for that
+  service-day label. On open, `business_date = getServiceDayString(now)`.
+  `createOrder` requires an open day whose `business_date` matches the
+  current service day — a stale open day after 05:00 rejects new orders
+  (409) until staff close and reopen. **No auto-close** at 05:00; existing
+  `open` orders stay editable and payable after 05:00.
+- **Orders list `?date=YYYY-MM-DD`**: a service-day window on
+  `orders.created_at` via `getServiceDayBoundsUnix` (bounds
+  `[D 05:00, (D+1) 05:00)` Asia/Riyadh); the client default "today" is
+  `getServiceDayString(now)`.
+- **`daily_order_seq`**: resets on the service-day label.
 - **JWT `exp`**: access tokens expire at the **next** 05:00 Asia/Riyadh
   service-day boundary. On login, `exp` is set to the Unix seconds of the
   upcoming 05:00. At exactly 05:00:00 the boundary is tomorrow 05:00.
-- **`businessDate`** (day open/close) is still **calendar-day** in
-  Asia/Riyadh (`todayInRiyadh`) — do **not** conflate service day with
-  business date yet.
+- **ZATCA `IssueDate`/`IssueTime`**: wall-clock Asia/Riyadh at sign time —
+  **not** the service-day label. After midnight the ops bag (service-day
+  labeled) and the tax document clock may disagree; intentional and accepted.
 - Helpers in `packages/shared/src/service-day.ts`:
-  `getServiceDayString(nowMs)`, `getNextServiceDayBoundaryUnix(nowMs)`.
-  These use an explicit UTC+3 offset and do **not** depend on `process.env.TZ`.
+  `getServiceDayString(nowMs)`, `getNextServiceDayBoundaryUnix(nowMs)`,
+  `getServiceDayBoundsUnix(dateStr)`. They use an explicit UTC+3 offset and
+  do **not** depend on `process.env.TZ`.
+- Android Kotlin twin:
+  `apps/android/app/src/main/java/com/spicyhome/pos/util/ServiceDay.kt`
+  (may be added in a later slice).
 
 ## Database
 

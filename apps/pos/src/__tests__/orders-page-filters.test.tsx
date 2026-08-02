@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { getServiceDayString } from '@spicyhome/shared';
 import { OrdersPage } from '../pages/OrdersPage';
 
 const mockNavigate = vi.fn();
@@ -96,7 +97,7 @@ describe('OrdersPage — filters', () => {
     mockRealtimeSubscribe.mockReturnValue(vi.fn());
   });
 
-  it('loads with default filters: today (Riyadh) + open only + no user', async () => {
+  it('loads with default filters: current service day + open only + no user', async () => {
     renderOrdersPage();
 
     await waitFor(() => {
@@ -104,7 +105,7 @@ describe('OrdersPage — filters', () => {
     });
 
     const filters = lastListFilters();
-    expect(filters.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(filters.date).toBe(getServiceDayString(Date.now()));
     expect(filters.status).toBe('open');
     expect(filters.userId).toBeUndefined();
 
