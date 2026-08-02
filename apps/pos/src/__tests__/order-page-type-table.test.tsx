@@ -13,13 +13,18 @@ const mockOrdersList = vi.fn().mockResolvedValue([]);
 const mockOrdersUpdate = vi.fn();
 const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 /** Mutable current user — flip updateOrder per test. */
 let mockMe: Record<string, unknown> = {};
 
 vi.mock('../api', () => ({
   client: {
-    auth: { login: vi.fn(), me: vi.fn() },
+    auth: {
+      login: vi.fn(),
+      me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
+    },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
       listItems: (...args: any[]) => mockListItems(...args),
@@ -175,6 +180,7 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
     // resetAllMocks so mockResolvedValue implementations from previous tests
     // (e.g. occupied open-order lists) do not leak into this test.
     vi.resetAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     mockOrdersList.mockResolvedValue([]);
     mockDayIsOpen();
     mockMe = {
@@ -243,12 +249,12 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
     });
 
     // Pre-create type/table toggles stay ungated by update_order (pre-#109)
-    expect(screen.getByText('Takeaway').closest('button')).not.toBeDisabled();
-    expect(screen.getByText('Dine-in').closest('button')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Takeaway' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Dine-in' })).not.toBeDisabled();
     expect(screen.getByText('Select table…').closest('button')).not.toBeDisabled();
 
     // Switching is local-only — no API calls
-    fireEvent.click(screen.getByText('Takeaway'));
+    fireEvent.click(screen.getByRole('button', { name: 'Takeaway' }));
     expect(mockOrdersUpdate).not.toHaveBeenCalled();
     expect(screen.queryByText('Select table…')).not.toBeInTheDocument();
 
@@ -284,10 +290,10 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
     });
 
     // Clean open order → controls enabled
-    expect(screen.getByText('Takeaway').closest('button')).not.toBeDisabled();
-    expect(screen.getByText('Dine-in').closest('button')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Takeaway' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Dine-in' })).not.toBeDisabled();
 
-    fireEvent.click(screen.getByText('Takeaway'));
+    fireEvent.click(screen.getByRole('button', { name: 'Takeaway' }));
 
     await waitFor(() => {
       expect(mockOrdersUpdate).toHaveBeenCalledWith(1, {
@@ -312,7 +318,7 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Takeaway'));
+    fireEvent.click(screen.getByRole('button', { name: 'Takeaway' }));
 
     // No update call — already takeaway
     expect(mockOrdersUpdate).not.toHaveBeenCalled();
@@ -370,7 +376,7 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Dine-in'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dine-in' }));
     await waitFor(() => {
       expect(screen.getByText('Select Table')).toBeInTheDocument();
     });
@@ -394,7 +400,7 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Dine-in'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dine-in' }));
     await waitFor(() => {
       expect(screen.getByText('Select Table')).toBeInTheDocument();
     });
@@ -431,9 +437,9 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Unsent changes')).toBeInTheDocument();
     });
 
-    const takeawayBtn = screen.getByText('Takeaway').closest('button')!;
+    const takeawayBtn = screen.getByRole('button', { name: 'Takeaway' });
     expect(takeawayBtn).toBeDisabled();
-    const dineInBtn = screen.getByText('Dine-in').closest('button')!;
+    const dineInBtn = screen.getByRole('button', { name: 'Dine-in' });
     expect(dineInBtn).toBeDisabled();
     expect(screen.getByText(/Table: T1/).closest('button')).toBeDisabled();
   });
@@ -448,8 +454,8 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Takeaway').closest('button')).toBeDisabled();
-    expect(screen.getByText('Dine-in').closest('button')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Takeaway' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Dine-in' })).toBeDisabled();
     expect(screen.getByText(/Table: T1/).closest('button')).toBeDisabled();
   });
 
@@ -462,8 +468,8 @@ describe('OrderPage — type/table switch on open orders (#109)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Takeaway').closest('button')).toBeDisabled();
-    expect(screen.getByText('Dine-in').closest('button')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Takeaway' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Dine-in' })).toBeDisabled();
   });
 
   // ── 409 occupied: error shown, picker stays open, state kept ──
