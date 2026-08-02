@@ -1634,35 +1634,15 @@ export function OrderPage() {
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
           {/* ── Items tab ── */}
           {(!currentOrder || activeTab === 'items') && (
-            <>
-              <OrderPageItems
-                items={cart.items}
-                readonly={orderReadonly || permissionsReadonly}
-                disabled={cartDisabled}
-                canRemove={currentOrder ? permissions.deleteOrderItem : true}
-                onUpdateQty={handleUpdateQty}
-                onRemove={handleRemove}
-                onEditNotes={handleOpenNotesEditor}
-              />
-              {/* Order notes (order-level remarks) — staged pre-create, PATCHed
-                  on blur/Enter for open orders. Below the item list (matching
-                  Android); visible even on an empty cart. Disabled while busy /
-                  readonly / dirty (same gate as the external-ref field). */}
-              <input
-                type="text"
-                value={orderNotesDraft}
-                onChange={(e) => setOrderNotesDraft(e.target.value)}
-                onBlur={() => void handleSaveOrderNotes()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                disabled={!canEditTypeTable}
-                placeholder="Order notes"
-                className="w-full mt-2 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
-              />
-            </>
+            <OrderPageItems
+              items={cart.items}
+              readonly={orderReadonly || permissionsReadonly}
+              disabled={cartDisabled}
+              canRemove={currentOrder ? permissions.deleteOrderItem : true}
+              onUpdateQty={handleUpdateQty}
+              onRemove={handleRemove}
+              onEditNotes={handleOpenNotesEditor}
+            />
           )}
 
           {/* ── Payments tab ── */}
@@ -1833,6 +1813,25 @@ export function OrderPage() {
           {/* ── Items footer ── */}
           {(!currentOrder || activeTab === 'items') && (
             <>
+              {/* Order notes (order-level remarks) — staged pre-create, PATCHed
+                  on blur/Enter for open orders. Pinned above the Total row
+                  (not in the scrollable item list); visible even on an empty
+                  cart. Disabled while busy / readonly / dirty (same gate as
+                  the external-ref field). */}
+              <input
+                type="text"
+                value={orderNotesDraft}
+                onChange={(e) => setOrderNotesDraft(e.target.value)}
+                onBlur={() => void handleSaveOrderNotes()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                disabled={!canEditTypeTable}
+                placeholder="Order notes"
+                className="w-full mb-2 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+              />
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>Total</span>
                 <span className="text-white font-bold">

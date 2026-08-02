@@ -38,9 +38,11 @@ describe('OrderHeader', () => {
     // Status shows the human label, not the raw status
     expect(screen.getByText('Open')).toBeInTheDocument();
     expect(screen.queryByText('open')).not.toBeInTheDocument();
+    // Type label and creator name coexist (same row, no "Created by" prefix)
     expect(screen.getByText('HungerStation / HS-1')).toBeInTheDocument();
+    expect(screen.getByText('Sara')).toBeInTheDocument();
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
     expect(screen.getByText(expectedCreated)).toBeInTheDocument();
-    expect(screen.getByText('Created by Sara')).toBeInTheDocument();
     expect(screen.queryByText('Unsent changes')).not.toBeInTheDocument();
   });
 
@@ -50,8 +52,18 @@ describe('OrderHeader', () => {
     expect(screen.getByText('Unsent changes')).toBeInTheDocument();
   });
 
-  it('omits the creator line when createdByName is null or empty', () => {
+  it('omits the creator name when createdByName is null or empty', () => {
     const { rerender } = render(
+      <OrderHeader
+        documentId="INV26-0042"
+        status="open"
+        typeLabel="Dine-in"
+        createdByName="Sara"
+      />,
+    );
+    expect(screen.getByText('Sara')).toBeInTheDocument();
+
+    rerender(
       <OrderHeader
         documentId="INV26-0042"
         status="open"
@@ -59,11 +71,29 @@ describe('OrderHeader', () => {
         createdByName={null}
       />,
     );
+    expect(screen.queryByText('Sara')).not.toBeInTheDocument();
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
 
     rerender(
       <OrderHeader documentId="INV26-0042" status="open" typeLabel="Dine-in" createdByName="" />,
     );
+    expect(screen.queryByText('Sara')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
+  });
+
+  it('capitalizes the creator name via CSS', () => {
+    render(
+      <OrderHeader
+        documentId="INV26-0042"
+        status="open"
+        typeLabel="Dine-in"
+        createdByName="john doe"
+      />,
+    );
+
+    const name = screen.getByText('john doe');
+    expect(name).toBeInTheDocument();
+    expect(name.className).toContain('capitalize');
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
   });
 

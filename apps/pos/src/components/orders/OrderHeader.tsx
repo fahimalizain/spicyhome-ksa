@@ -2,7 +2,7 @@
  * Cart/order header on the Order page — modeled on the Orders page detail
  * header (document id + status badge + type label + created time), compacted
  * for the `w-80` cart column. Order notes are NOT part of this header; they
- * live in the Items tab body (matching Android).
+ * live in the Items tab footer, pinned above the Total row.
  */
 export type OrderHeaderProps = {
   /** null/undefined → "New Order" */
@@ -13,7 +13,7 @@ export type OrderHeaderProps = {
   typeLabel: string;
   /** Unix seconds; null/undefined/0 → hide the created-at line */
   createdAt?: number | null;
-  /** Resolved creator display name; null/undefined/empty → hide the creator line */
+  /** Resolved creator display name; null/undefined/empty → hide the creator name */
   createdByName?: string | null;
   /** Show amber "Unsent changes" when the cart is dirty */
   isDirty?: boolean;
@@ -50,12 +50,21 @@ export function OrderHeader({
         </div>
       </div>
       <div className="text-sm text-gray-400">
-        <p>{typeLabel}</p>
+        {/* Type label and creator name share one row: type left (truncating
+            so long partner labels stay usable), name right, capitalized via
+            CSS. Without a creator, the type label spans the row alone. */}
+        {createdByName ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate">{typeLabel}</p>
+            <p className="shrink-0 text-right capitalize">{createdByName}</p>
+          </div>
+        ) : (
+          <p>{typeLabel}</p>
+        )}
         {/* createdAt 0 is the interim "not hydrated yet" marker on the create
             path — hide the line until the hydrated order provides a real
             epoch (real epochs are always > 0). */}
         {createdAt != null && createdAt > 0 && <p>{new Date(createdAt * 1000).toLocaleString()}</p>}
-        {createdByName && <p>Created by {createdByName}</p>}
       </div>
     </div>
   );

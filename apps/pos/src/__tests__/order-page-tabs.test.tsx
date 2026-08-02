@@ -1230,9 +1230,9 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
   });
 
-  // ---- OrderHeader: creator line + notes placement ----
+  // ---- OrderHeader: creator name + notes placement ----
 
-  it('header: hydrated order with createdBy shows "Created by {name}" from listActiveUsers', async () => {
+  it('header: hydrated order with createdBy shows the creator name (no prefix) from listActiveUsers', async () => {
     mockGetReturns(makeOrder({ createdBy: 1, createdAt: 1000 }));
     mockListActiveUsers.mockResolvedValue([
       { id: 1, username: 'sara', name: 'Sara' },
@@ -1245,11 +1245,16 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
     await waitFor(() => {
-      expect(screen.getByText('Created by Sara')).toBeInTheDocument();
+      expect(screen.getByText('Sara')).toBeInTheDocument();
     });
+    // Creator sits on the same row as the type label (type left, name right),
+    // no "Created by" prefix
+    const sara = screen.getByText('Sara');
+    expect(sara.previousElementSibling?.textContent).toBe('Dine-in');
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
   });
 
-  it('header: unknown createdBy hides the creator line', async () => {
+  it('header: unknown createdBy does not show a creator name', async () => {
     mockGetReturns(makeOrder({ createdBy: 99 }));
     mockListActiveUsers.mockResolvedValue([{ id: 1, username: 'sara', name: 'Sara' }]);
 
@@ -1258,10 +1263,11 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
+    expect(screen.queryByText('Sara')).not.toBeInTheDocument();
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
   });
 
-  it('items tab: order notes input sits below the item list, hidden on other tabs', async () => {
+  it('items tab: order notes input pinned above Total in the Items footer, hidden on other tabs', async () => {
     mockGetReturns(makeOrder());
 
     renderOrderPage();
@@ -1270,15 +1276,20 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
       expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     });
 
-    // Items tab is the default — the notes input is present
-    expect(screen.getByPlaceholderText('Order notes')).toBeInTheDocument();
+    // Items tab is the default — the notes input is present, above the Total row
+    const notesInput = screen.getByPlaceholderText('Order notes');
+    expect(notesInput).toBeInTheDocument();
+    const totalRow = screen.getByText('Total');
+    expect(
+      notesInput.compareDocumentPosition(totalRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     // Switching to Payments hides it (notes live only in the Items tab)
     fireEvent.click(screen.getByText('Payments'));
     expect(screen.queryByPlaceholderText('Order notes')).not.toBeInTheDocument();
   });
 
-  it('pre-create: notes input visible on the empty-cart items area', async () => {
+  it('pre-create: notes input visible in the empty-cart Items footer', async () => {
     renderOrderPage(['/']);
 
     await waitFor(() => {
