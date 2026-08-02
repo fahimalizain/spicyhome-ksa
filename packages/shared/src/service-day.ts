@@ -2,8 +2,11 @@
  * Service-day helpers for Asia/Riyadh timezone.
  *
  * A **service day** at SpicyHome runs from 05:00 to (next day) 05:00
- * in Asia/Riyadh (+03:00, no DST). Used for JWT access-token expiry;
- * intended for future business-day alignment.
+ * in Asia/Riyadh (+03:00, no DST). Used for JWT access-token expiry and,
+ * per ADR 0008 (docs/adr/0008-service-day-business-day.md), for the
+ * business day: `day_openings.business_date`, the orders-list `?date=`
+ * filter, and `daily_order_seq` reset all run on this window (upcoming
+ * call sites).
  *
  * - Window: [D 05:00, (D+1) 05:00)  (half-open).
  * - Label D: YYYY-MM-DD = start date of the window.
@@ -11,10 +14,17 @@
  *
  * These helpers use an explicit UTC+3 offset — they do **not** depend on
  * `process.env.TZ` or the host timezone.
+ *
+ * **Android Kotlin counterpart**: keep the formulas in sync with
+ * `apps/android/app/src/main/java/com/spicyhome/pos/util/ServiceDay.kt`
+ * (intended path; the file may not exist yet).
  */
 
 const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3, no DST
 const SERVICE_DAY_HOUR = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 interface RiyadhComponents {
   year: number;
@@ -99,4 +109,55 @@ export function getNextServiceDayBoundaryUnix(nowMs: number): number {
   const bd = new Date(boundaryMs);
   // Riyadh 05:00 = UTC 02:00 (UTC+3, no DST).
   return Date.UTC(bd.getUTCFullYear(), bd.getUTCMonth(), bd.getUTCDate(), 2, 0, 0) / 1000;
+}
+
+interface ParsedServiceDayDate {
+  year: number;
+  /** 0-indexed month (January = 0). */
+  monthIndex: number;
+  /** Day of month (1–31). */
+  day: number;
+}
+
+/**
+ * Parse and validate a service-day label (`YYYY-MM-DD`). Returns the date
+ * parts, or `null` when the string is not a valid date (bad format,
+ * unpadded parts, or out-of-range month/day, e.g. `2026-13-01` or
+ * `2026-02-30`). Same validation approach as `riyadh.ts`'s parser.
+ */
+function parseServiceDayDate(dateStr: string): ParsedServiceDayDate | null {
+  const m = DATE_RE.exec(dateStr);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const monthIndex = Number(m[2]) - 1;
+  const day = Number(m[3]);
+
+  // Reject out-of-range values by round-tripping through Date.UTC.
+  const d = new Date(Date.UTC(year, monthIndex, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== monthIndex || d.getUTCDate() !== day) {
+    return null;
+  }
+  return { year, monthIndex, day };
+}
+
+/**
+ * Return the half-open `[startUnix, endUnix)` bounds — Unix **seconds** — of
+ * the service day labeled `dateStr` (`YYYY-MM-DD` = D). Window =
+ * `[D 05:00, (D+1) 05:00)` Asia/Riyadh. All instants in the service day
+ * satisfy `startUnix <= t < endUnix`.
+ *
+ * Returns `null` when `dateStr` is not a valid `YYYY-MM-DD` (servers should
+ * map that to a 400).
+ *
+ * @param dateStr Service-day label `YYYY-MM-DD` (the window's start date).
+ */
+export function getServiceDayBoundsUnix(
+  dateStr: string,
+): { startUnix: number; endUnix: number } | null {
+  const parts = parseServiceDayDate(dateStr);
+  if (!parts) return null;
+
+  // Riyadh 05:00 = UTC 02:00 on the same calendar date components (UTC+3, no DST).
+  const startUnix = Date.UTC(parts.year, parts.monthIndex, parts.day, 2, 0, 0) / 1000;
+  return { startUnix, endUnix: startUnix + DAY_MS / 1000 };
 }

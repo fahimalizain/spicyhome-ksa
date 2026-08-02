@@ -1,4 +1,8 @@
-import { getServiceDayString, getNextServiceDayBoundaryUnix } from './service-day';
+import {
+  getServiceDayString,
+  getNextServiceDayBoundaryUnix,
+  getServiceDayBoundsUnix,
+} from './service-day';
 
 /**
  * Helper: build a Unix-ms value for a given Asia/Riyadh local date-time.
@@ -204,6 +208,108 @@ describe('getNextServiceDayBoundaryUnix', () => {
     const exp = getNextServiceDayBoundaryUnix(ms);
     // 06:00 >= 05:00, so next boundary = 2026-07-29 05:00 Riyadh = 02:00 UTC
     expect(exp).toBe(Date.UTC(2026, 6, 29, 2, 0, 0) / 1000);
+  });
+});
+
+describe('getServiceDayBoundsUnix', () => {
+  it('returns half-open bounds spanning exactly one service day (86400 s)', () => {
+    const bounds = getServiceDayBoundsUnix('2026-07-27');
+    expect(bounds).not.toBeNull();
+    expect(bounds!.endUnix - bounds!.startUnix).toBe(86400);
+  });
+
+  it('starts at D 05:00 Riyadh and ends at (D+1) 05:00 Riyadh', () => {
+    const bounds = getServiceDayBoundsUnix('2026-07-27')!;
+    // Riyadh 2026-07-27 05:00 = UTC 2026-07-27 02:00
+    expect(bounds.startUnix).toBe(Date.UTC(2026, 6, 27, 2, 0, 0) / 1000);
+    // Riyadh 2026-07-28 05:00 = UTC 2026-07-28 02:00
+    expect(bounds.endUnix).toBe(Date.UTC(2026, 6, 28, 2, 0, 0) / 1000);
+  });
+
+  it('bounds contain instants inside the service day and exclude neighbors (half-open)', () => {
+    const bounds = getServiceDayBoundsUnix('2026-07-27')!;
+    // 2026-07-27 04:59:59 Riyadh — just before start, outside
+    expect(riyadhMs(2026, 6, 27, 4, 59, 59) / 1000).toBeLessThan(bounds.startUnix);
+    // 2026-07-27 05:00:00 Riyadh — start is inclusive
+    expect(riyadhMs(2026, 6, 27, 5, 0, 0) / 1000).toBe(bounds.startUnix);
+    // 2026-07-27 12:00:00 Riyadh — inside
+    const noon = riyadhMs(2026, 6, 27, 12, 0, 0) / 1000;
+    expect(noon).toBeGreaterThanOrEqual(bounds.startUnix);
+    expect(noon).toBeLessThan(bounds.endUnix);
+    // 2026-07-28 04:59:59 Riyadh — last second inside (just before end)
+    expect(riyadhMs(2026, 6, 28, 4, 59, 59) / 1000).toBeLessThan(bounds.endUnix);
+    // 2026-07-28 05:00:00 Riyadh — end is exclusive (next service day)
+    expect(riyadhMs(2026, 6, 28, 5, 0, 0) / 1000).toBe(bounds.endUnix);
+  });
+
+  it('is consistent with getServiceDayString for a mid-window instant', () => {
+    // 2026-07-27 23:59:59 Riyadh — mid-window of service day 2026-07-27
+    const nowMs = riyadhMs(2026, 6, 27, 23, 59, 59);
+    const bounds = getServiceDayBoundsUnix('2026-07-27')!;
+    expect(getServiceDayString(nowMs)).toBe('2026-07-27');
+    expect(nowMs / 1000).toBeGreaterThanOrEqual(bounds.startUnix);
+    expect(nowMs / 1000).toBeLessThan(bounds.endUnix);
+  });
+
+  it('is consistent with getServiceDayString for a pre-05:00 instant', () => {
+    // 2026-07-28 03:00 Riyadh belongs to service day 2026-07-27
+    const nowMs = riyadhMs(2026, 6, 28, 3, 0, 0);
+    const bounds = getServiceDayBoundsUnix('2026-07-27')!;
+    expect(getServiceDayString(nowMs)).toBe('2026-07-27');
+    expect(nowMs / 1000).toBeGreaterThanOrEqual(bounds.startUnix);
+    expect(nowMs / 1000).toBeLessThan(bounds.endUnix);
+  });
+
+  it('at the next boundary instant, D excludes it and D+1 includes it', () => {
+    const boundarySec = getServiceDayBoundsUnix('2026-07-27')!.endUnix;
+    const boundaryMs = boundarySec * 1000; // 2026-07-28 05:00 Riyadh
+    expect(getServiceDayString(boundaryMs)).toBe('2026-07-28');
+    expect(boundarySec).toBe(getServiceDayBoundsUnix('2026-07-28')!.startUnix);
+  });
+
+  it('is consistent with getNextServiceDayBoundaryUnix: inside D, next boundary === endUnix', () => {
+    const nowMs = riyadhMs(2026, 6, 27, 12, 0, 0);
+    const bounds = getServiceDayBoundsUnix('2026-07-27')!;
+    expect(getServiceDayString(nowMs)).toBe('2026-07-27');
+    expect(getNextServiceDayBoundaryUnix(nowMs)).toBe(bounds.endUnix);
+  });
+
+  it('handles month/year rollover (2025-12-31 → end is 2026-01-01 05:00 Riyadh)', () => {
+    const bounds = getServiceDayBoundsUnix('2025-12-31')!;
+    // Riyadh 2025-12-31 05:00 = UTC 2025-12-31 02:00
+    expect(bounds.startUnix).toBe(Date.UTC(2025, 11, 31, 2, 0, 0) / 1000);
+    // Riyadh 2026-01-01 05:00 = UTC 2026-01-01 02:00
+    expect(bounds.endUnix).toBe(Date.UTC(2026, 0, 1, 2, 0, 0) / 1000);
+  });
+
+  it('adjacent service days chain seamlessly across the year boundary', () => {
+    const lastOfYear = getServiceDayBoundsUnix('2025-12-31')!;
+    const firstOfYear = getServiceDayBoundsUnix('2026-01-01')!;
+    expect(lastOfYear.endUnix).toBe(firstOfYear.startUnix);
+    expect(firstOfYear.endUnix).toBe(Date.UTC(2026, 0, 2, 2, 0, 0) / 1000);
+  });
+
+  it('accepts leap day 2024-02-29 and rejects 2023-02-29', () => {
+    expect(getServiceDayBoundsUnix('2024-02-29')).not.toBeNull();
+    expect(getServiceDayBoundsUnix('2023-02-29')).toBeNull();
+  });
+
+  it('leap day 2024-02-29 ends at 2024-03-01 05:00 Riyadh', () => {
+    const bounds = getServiceDayBoundsUnix('2024-02-29')!;
+    expect(bounds.startUnix).toBe(Date.UTC(2024, 1, 29, 2, 0, 0) / 1000);
+    expect(bounds.endUnix).toBe(Date.UTC(2024, 2, 1, 2, 0, 0) / 1000);
+  });
+
+  it('rejects malformed date strings', () => {
+    expect(getServiceDayBoundsUnix('2026-13-01')).toBeNull(); // month out of range
+    expect(getServiceDayBoundsUnix('2026-02-30')).toBeNull(); // day out of range
+    expect(getServiceDayBoundsUnix('2026-1-1')).toBeNull(); // no zero padding
+    expect(getServiceDayBoundsUnix('2026/01/01')).toBeNull(); // wrong separator
+    expect(getServiceDayBoundsUnix('026-01-01')).toBeNull(); // wrong year width
+    expect(getServiceDayBoundsUnix('2026-01-01 ')).toBeNull(); // trailing space
+    expect(getServiceDayBoundsUnix('abc')).toBeNull();
+    expect(getServiceDayBoundsUnix('')).toBeNull();
+    expect(getServiceDayBoundsUnix('2026-01-01T00:00:00')).toBeNull();
   });
 });
 
