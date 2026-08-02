@@ -238,14 +238,15 @@ export function OnScreenKeyboard({
       {/*
         Only the key area prevents default on press start, so key presses do
         not steal focus from the field. The header (Close button) lives
-        OUTSIDE this wrapper: preventDefault on touchstart there would
-        suppress the subsequent click on touch browsers and make Close
+        OUTSIDE this wrapper: preventDefault on touchstart/pointerdown there
+        would suppress the subsequent click on touch browsers and make Close
         unreliable.
       */}
       <div
         data-testid={OSK_KEYS_TEST_ID}
         onMouseDown={(e) => e.preventDefault()}
         onTouchStart={(e) => e.preventDefault()}
+        onPointerDown={(e) => e.preventDefault()}
       >
         <Keyboard
           layout={LAYOUTS}
@@ -260,11 +261,9 @@ export function OnScreenKeyboard({
           keyboardRef={handleKeyboardRef}
           maxLength={maxLength}
           preventMouseDownDefault
-          autoUseTouchEvents
           newLineOnEnter={false}
           tabCharOnTab={false}
           enableLayoutCandidates={false}
-          useButtonTag
         />
       </div>
     </div>
