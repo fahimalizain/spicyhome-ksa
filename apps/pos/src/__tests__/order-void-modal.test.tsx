@@ -42,8 +42,27 @@ describe('OrderVoidModal', () => {
     expect(screen.getByText('Voiding is permanent and cannot be undone.')).toBeInTheDocument();
     expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
     // Card root carries the OSK scope so the QWERTY keyboard docks inside the modal
-    expect(document.querySelector('[data-osk-scope]')).toHaveClass('w-[420px]');
+    expect(document.querySelector('[data-osk-scope]')).toHaveClass('w-[630px]');
     expect(screen.getByTestId('osk-dock')).toHaveAttribute('data-osk-size', 'md');
+  });
+
+  it('does not close when the backdrop is clicked — only Cancel closes', () => {
+    const { onClose } = renderModal();
+
+    const backdrop = document.querySelector('.fixed.inset-0');
+    expect(backdrop).not.toBeNull();
+    expect(backdrop).not.toHaveAttribute('onclick');
+
+    fireEvent.click(backdrop as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Clicking inside the card also never bubbles to a close handler.
+    fireEvent.click(screen.getByRole('heading', { name: 'Void Order' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Cancel remains the single explicit close path.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Confirm disabled when the reason is empty or whitespace-only', () => {

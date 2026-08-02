@@ -44,14 +44,10 @@ export function OrderVoidModal({ orderId, orderLabel, onVoided, onClose }: Order
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div
         data-osk-scope
-        className="bg-gray-900 rounded-xl p-4 w-[420px] max-w-[90vw] max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
+        className="bg-gray-900 rounded-xl p-4 w-[630px] max-w-[90vw] max-h-[90vh] overflow-y-auto"
       >
         <h2 className="text-lg font-bold text-white mb-1">Void Order</h2>
         {orderLabel && <p className="text-xs text-gray-400 mb-2">{orderLabel}</p>}
