@@ -31,14 +31,15 @@ function focusField(testId: string) {
 }
 
 /**
- * Click a virtual key by its displayed label (touch, like the existing
- * on-screen-keyboard tests — jsdom reports touch support).
+ * Click a virtual key by its displayed label (mouse, like the existing
+ * on-screen-keyboard tests — without autoUseTouchEvents simple-keyboard
+ * falls back to mouse/click handlers in jsdom).
  */
 function pressKey(label: string) {
   const span = screen.getByText(label);
   const button = span.closest('.hg-button');
   if (!button) throw new Error(`no .hg-button for label "${label}"`);
-  fireEvent.touchStart(button);
+  fireEvent.click(button);
 }
 
 beforeEach(() => {

@@ -101,15 +101,14 @@ function keyboard() {
 /**
  * Click a virtual key by its displayed label.
  *
- * The library auto-enables touch events when the environment looks like a
- * touch device, and jsdom does (`'ontouchstart' in window` is true), so keys
- * are triggered via touchStart rather than click.
+ * Without autoUseTouchEvents simple-keyboard falls back to mouse/click
+ * handlers (jsdom has no PointerEvent), so keys are triggered via click.
  */
 function pressKey(label: string) {
   const span = screen.getByText(label);
   const button = span.closest('.hg-button');
   if (!button) throw new Error(`no .hg-button for label "${label}"`);
-  fireEvent.touchStart(button);
+  fireEvent.click(button);
 }
 
 /**
@@ -120,7 +119,7 @@ function pressKey(label: string) {
 function pressKeyByClass(buttonClass: string) {
   const button = document.querySelector(`.${buttonClass}`);
   if (!button) throw new Error(`no .${buttonClass} button found`);
-  fireEvent.touchStart(button);
+  fireEvent.click(button);
 }
 
 beforeEach(() => {
