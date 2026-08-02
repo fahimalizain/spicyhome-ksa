@@ -213,10 +213,10 @@ describe('Print Integration', () => {
 
       for (const print of kitchenPrints) {
         const str = print.data.toString('ascii');
-        // Numbered item blocks: name line + indented Qty line
-        expect(str).toContain('1. Zinger Burger');
+        // Item blocks: dash-prefixed name line + indented Qty line
+        expect(str).toContain('- Zinger Burger');
         expect(str).toContain('    Qty: 2x');
-        expect(str).toContain('2. Pepsi');
+        expect(str).toContain('- Pepsi');
         expect(str).toContain('    Qty: 1x');
         // No old "qty name" single-line item format
         expect(str).not.toContain('2 Zinger Burger');
@@ -412,8 +412,8 @@ describe('Print Integration', () => {
       );
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const deltaStr = kitchenPrints[0].data.toString('ascii');
-      // Single delta item → numbered first block with the delta qty
-      expect(deltaStr).toContain('1. Zinger Burger');
+      // Single delta item → dash-prefixed name block with the delta qty
+      expect(deltaStr).toContain('- Zinger Burger');
       expect(deltaStr).toContain('    Qty: 3x');
     });
   });
@@ -836,8 +836,8 @@ describe('Print Integration', () => {
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const kitchenStr = kitchenPrints[0].data.toString('ascii');
       expect(kitchenStr).toContain('NOTES: call on arrival');
-      // Item notes still flow on the same ticket — item as numbered block
-      expect(kitchenStr).toContain('1. Zinger Burger');
+      // Item notes still flow on the same ticket — item as its own block
+      expect(kitchenStr).toContain('- Zinger Burger');
       expect(kitchenStr).toContain('    Qty: 2x');
     });
 

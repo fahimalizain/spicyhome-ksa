@@ -129,11 +129,11 @@ describe('PrintJobService', () => {
       INSERT INTO orders (
         order_no, uuid, type, day_opening_id, status,
         subtotal_halalas, vat_halalas, total_halalas,
-        document_id, created_at, updated_at
+        document_id, created_at, updated_at, created_by
       ) VALUES (
         ${orderNo}, '${uuid}', 'dine_in', ${doId}, 'paid',
         10000, 1500, 11500,
-        '${documentId}', ${now}, ${now}
+        '${documentId}', ${now}, ${now}, 1
       )
     `);
     const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
@@ -163,11 +163,11 @@ describe('PrintJobService', () => {
       INSERT INTO orders (
         order_no, uuid, type, day_opening_id, status,
         subtotal_halalas, vat_halalas, total_halalas,
-        document_id, created_at, updated_at
+        document_id, created_at, updated_at, created_by
       ) VALUES (
         ${orderNo}, '${uuid}', 'takeaway', ${doId}, 'open',
         10000, 1500, 11500,
-        NULL, ${now}, ${now}
+        NULL, ${now}, ${now}, 1
       )
     `);
     const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
@@ -800,8 +800,56 @@ describe('PrintJobService', () => {
       const str = transport.sent[0].data.toString('ascii');
       expect(str).toContain('NOTES: call on arrival');
       expect(str).toContain('    Notes: no ice');
-      expect(str).toContain('1. Test Item');
+      expect(str).toContain('- Test Item');
       expect(str).toContain('    Qty: 2x');
+    });
+
+    it('prints "Created By: Admin" on kitchen tickets when the order has a creator', async () => {
+      const orderId = createBasicOrder(); // created_by = 1 → users.name = 'Admin'
+      await printJobService.printKitchenTickets(orderId);
+
+      expect(transport.sent.length).toBe(2);
+      for (const sent of transport.sent) {
+        const str = sent.data.toString('ascii');
+        expect(str).toContain('Created By: Admin');
+        expect(str).not.toContain('Created By: admin'); // username, not display name
+        expect(str).not.toContain('Created By: 1'); // user id, not display name
+      }
+    });
+
+    it('omits the "Created By:" line when created_by is NULL', async () => {
+      const orderId = createOpenOrder();
+      sqlite.exec(`UPDATE orders SET created_by = NULL WHERE id = ${orderId}`);
+
+      await printJobService.printKitchenTickets(orderId);
+
+      expect(transport.sent.length).toBe(2);
+      for (const sent of transport.sent) {
+        expect(sent.data.toString('ascii')).not.toContain('Created By:');
+      }
+    });
+
+    it('resolves the creator name from users.name (not username) for deltas', async () => {
+      // A second user proves the lookup reads users.name rather than
+      // hardcoding the seeded 'Admin'.
+      sqlite.exec(`
+        INSERT INTO users (id, username, pin_hash, name, role_id, is_active, created_at, updated_at)
+        VALUES (2, 'fahim', '$2a$10$placeholder', 'Fahim', 1, 1, ${now}, ${now})
+      `);
+      const orderId = createBasicOrder();
+      sqlite.exec(`UPDATE orders SET created_by = 2 WHERE id = ${orderId}`);
+      const oi = sqlite
+        .prepare('SELECT id FROM order_items WHERE order_id = ?')
+        .get(orderId) as any;
+
+      await printJobService.printKitchenDeltas(orderId, [
+        { orderItemId: oi.id, printedQty: 1, itemName: 'Test Item' },
+      ]);
+
+      expect(transport.sent.length).toBe(2);
+      const str = transport.sent[0].data.toString('ascii');
+      expect(str).toContain('Created By: Fahim');
+      expect(str).not.toContain('fahim'); // username must not appear
     });
   });
 });
