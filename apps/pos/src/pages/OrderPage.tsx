@@ -1628,8 +1628,15 @@ export function OrderPage() {
           </div>
         )}
 
-        {/* Tab body — only this scrolls */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
+        {/* Tab body — other tabs scroll the whole body; Payments pins
+            Outstanding/By method and scrolls only the History list */}
+        <div
+          className={
+            currentOrder && activeTab === 'payments'
+              ? 'flex-1 min-h-0 overflow-hidden flex flex-col px-3 py-2'
+              : 'flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2'
+          }
+        >
           {/* ── Items tab ── */}
           {(!currentOrder || activeTab === 'items') && (
             <OrderPageItems
@@ -1645,9 +1652,9 @@ export function OrderPage() {
 
           {/* ── Payments tab ── */}
           {currentOrder && activeTab === 'payments' && (
-            <>
+            <div className="flex flex-col flex-1 min-h-0 h-full">
               {/* Outstanding — from SERVER totals and SERVER payment ledger */}
-              <div className="mb-3">
+              <div className="mb-3 shrink-0">
                 <div className="text-xs text-gray-500 mb-1">Outstanding</div>
                 <div
                   className={`text-2xl font-bold ${
@@ -1667,7 +1674,7 @@ export function OrderPage() {
 
               {/* Per-method net totals (summary of the ledger below) */}
               {payments.length > 0 && (
-                <div className="bg-gray-800/60 rounded-lg px-3 py-2 mb-3 space-y-1">
+                <div className="bg-gray-800/60 rounded-lg px-3 py-2 mb-3 space-y-1 shrink-0">
                   <div className="text-xs text-gray-500">By method</div>
                   {paymentsByMethod.map((m) => (
                     <div key={m.methodId} className="flex justify-between text-sm">
@@ -1691,9 +1698,12 @@ export function OrderPage() {
               {payments.length === 0 ? (
                 <div className="text-sm text-gray-500 text-center mt-8">No payments yet</div>
               ) : (
-                <>
-                  <div className="text-xs text-gray-500 mb-1">History</div>
-                  <div className="space-y-1">
+                <div className="flex flex-col flex-1 min-h-0">
+                  <div className="text-xs text-gray-500 mb-1 shrink-0">History</div>
+                  <div
+                    data-testid="payment-history-list"
+                    className="flex-1 min-h-0 overflow-y-auto scrollbar-thin space-y-1"
+                  >
                     {payments.map((p) => (
                       <div
                         key={p.id}
@@ -1721,9 +1731,9 @@ export function OrderPage() {
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               )}
-            </>
+            </div>
           )}
 
           {/* ── Summary tab ── */}
