@@ -121,6 +121,25 @@ js_binary(
 )
 
 js_binary(
+    name = "bake_open_kots",
+    data = [
+        ":lib",
+        # Baker imports the DB schema, shared role enum, and sqlite directly
+        # (see bake-open-kots.ts). better-sqlite3 is a native addon and must
+        # be in data for `bazel run` to load it; drizzle-orm is a direct
+        # import even though @spicyhome/db also carries it transitively.
+        ":node_modules/@spicyhome/db",
+        ":node_modules/@spicyhome/shared",
+        ":node_modules/better-sqlite3",
+        ":node_modules/drizzle-orm",
+    ],
+    entry_point = "src/modules/printers/bake-open-kots.js",
+    env = {
+        "TZ": "Asia/Riyadh",
+    },
+)
+
+js_binary(
     name = "openapi",
     data = [
         ":lib",
