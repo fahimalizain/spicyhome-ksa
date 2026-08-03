@@ -121,6 +121,15 @@ describe('OrdersPage — filters', () => {
     );
   });
 
+  it('shows the daily order number (#42) next to the document id', async () => {
+    renderOrdersPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('#42')).toBeInTheDocument();
+    });
+    expect(screen.getByText('INV26-0042')).toBeInTheDocument();
+  });
+
   it('date change reloads with the new date', async () => {
     renderOrdersPage();
 
