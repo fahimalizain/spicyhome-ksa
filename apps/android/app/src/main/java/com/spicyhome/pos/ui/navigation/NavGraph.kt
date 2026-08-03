@@ -59,8 +59,19 @@ fun NavGraph(
         navController = navController,
         startDestination = NavRoutes.SETUP,
     ) {
-        composable(NavRoutes.SETUP) {
-            val vm: SetupViewModel = viewModel(factory = SetupViewModel.Factory(preferencesManager, apiClientProvider))
+        composable(
+            route = "setup?skipAutoConnect={skipAutoConnect}",
+            arguments = listOf(
+                navArgument("skipAutoConnect") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
+        ) { backStackEntry ->
+            val skipAutoConnect = backStackEntry.arguments?.getBoolean("skipAutoConnect") ?: false
+            val vm: SetupViewModel = viewModel(
+                factory = SetupViewModel.Factory(preferencesManager, apiClientProvider, skipAutoConnect)
+            )
             SetupScreen(
                 viewModel = vm,
                 onConnected = {
@@ -82,7 +93,10 @@ fun NavGraph(
                     }
                 },
                 onLogout = {
-                    navController.navigate(NavRoutes.SETUP) {
+                    // Change Server: land on Setup and stay there so the user can
+                    // edit the URL. skipAutoConnect disables the auto-reconnect to
+                    // the previously saved server.
+                    navController.navigate("setup?skipAutoConnect=true") {
                         popUpTo(0) { inclusive = true }
                     }
                 },

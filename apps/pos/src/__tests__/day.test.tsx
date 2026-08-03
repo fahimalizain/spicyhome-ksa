@@ -18,6 +18,7 @@ vi.mock('../api', () => ({
     auth: {
       login: vi.fn(),
       me: vi.fn(),
+      listActiveUsers: vi.fn().mockResolvedValue([]),
     },
     menu: {
       listCategories: vi.fn().mockResolvedValue([]),
@@ -225,6 +226,92 @@ describe('DayPage', () => {
     await waitFor(() => {
       const buttons = screen.getAllByText('Close Day');
       expect(buttons.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('shows Z-report from Past Days without switching tabs', async () => {
+    mockDayCurrent.mockResolvedValue({ open: false });
+    mockDayList.mockResolvedValue({
+      data: [
+        {
+          id: 42,
+          businessDate: '2026-07-21',
+          status: 'closed',
+          totalSalesHalalas: 500000,
+          orderCount: 3,
+        },
+      ],
+    });
+    mockReportsZ.mockResolvedValue({
+      dayId: 42,
+      businessDate: '2026-07-21',
+      openingCashHalalas: 100000,
+      closingCashHalalas: 120000,
+      totalSalesHalalas: 500000,
+      totalVatHalalas: 75000,
+      paidOrderCount: 3,
+      voidedOrderCount: 0,
+    });
+
+    renderDayPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Business Day')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Past Days'));
+
+    await waitFor(() => {
+      expect(screen.getByText('View Z-Report')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('View Z-Report'));
+
+    // Z-report content is visible while still on the Past Days tab
+    await waitFor(() => {
+      expect(screen.getByText(/Z-Report: 2026-07-21/)).toBeInTheDocument();
+    });
+    expect(screen.getByText('Print Z-Report')).toBeInTheDocument();
+    expect(screen.getByText('Close Report')).toBeInTheDocument();
+    // Past Days tab content is still rendered
+    expect(screen.getByText('View Z-Report')).toBeInTheDocument();
+  });
+
+  it('shows Z-report after closing day and clears it with Close Report', async () => {
+    mockDayCurrent.mockResolvedValue({
+      status: 'open',
+      businessDate: '2026-07-22',
+      openingCashHalalas: 50000,
+    });
+    mockReportsX.mockResolvedValue(null);
+    mockDayClose.mockResolvedValue({
+      dayId: 1,
+      businessDate: '2026-07-22',
+      openingCashHalalas: 50000,
+      closingCashHalalas: 70000,
+      totalSalesHalalas: 500000,
+      totalVatHalalas: 75000,
+      paidOrderCount: 3,
+      voidedOrderCount: 0,
+    });
+
+    renderDayPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Close Day' })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '700' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close Day' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Z-Report: 2026-07-22/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Close Report'));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Z-Report: 2026-07-22/)).not.toBeInTheDocument();
     });
   });
 });

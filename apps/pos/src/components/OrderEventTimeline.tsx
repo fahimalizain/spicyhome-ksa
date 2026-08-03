@@ -73,8 +73,14 @@ function formatPayload(event: OrderEventResponse): string {
       return `${label}. Printer: ${p.printer || '?'}`;
     case 'paid':
       return `${label}. From: ${p.fromStatus || '?'}`;
-    case 'voided':
-      return `${label}. From: ${p.fromStatus || '?'}`;
+    case 'voided': {
+      // #153: reason is required on new voids; historical voids without one
+      // still render cleanly.
+      const reason = typeof p.reason === 'string' && p.reason.trim() ? p.reason.trim() : null;
+      return reason
+        ? `${label}. From: ${p.fromStatus || '?'}. Reason: ${reason}`
+        : `${label}. From: ${p.fromStatus || '?'}`;
+    }
     case 'refund_issued': {
       const items = Array.isArray(p.items) ? p.items : [];
       const itemNames = items

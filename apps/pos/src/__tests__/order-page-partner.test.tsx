@@ -15,13 +15,18 @@ const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
 const mockOrdersUpdate = vi.fn();
 const mockOrdersUpdatePartner = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 /** Mutable current user — flip updateOrder per test. */
 let mockMe: Record<string, unknown> = {};
 
 vi.mock('../api', () => ({
   client: {
-    auth: { login: vi.fn(), me: vi.fn() },
+    auth: {
+      login: vi.fn(),
+      me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
+    },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
       listItems: (...args: any[]) => mockListItems(...args),
@@ -184,6 +189,7 @@ function mockBaseData() {
 describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 6)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     mockOrdersList.mockResolvedValue([]);
     mockBaseData();
     mockMe = {
@@ -428,7 +434,7 @@ describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 
     await waitFor(() => {
       expect(screen.getByText('Order INV26-0005')).toBeInTheDocument();
     });
-    expect(screen.getByText(/HungerStation · Ref HS-883129/)).toBeInTheDocument();
+    expect(screen.getByText('HungerStation / HS-883129')).toBeInTheDocument();
     expect(screen.getByText('Partner: HungerStation')).toBeInTheDocument();
   });
 
@@ -560,7 +566,7 @@ describe('OrderPage — delivery partner picker + external ref (ADR 0007, Phase 
     await waitFor(() => {
       expect(screen.getByText('Partner: HungerStation')).toBeInTheDocument();
     });
-    expect(screen.getByText(/HungerStation · Ref HS-883129/)).toBeInTheDocument();
+    expect(screen.getByText('HungerStation / HS-883129')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Partner: HungerStation'));
     await waitFor(() => {

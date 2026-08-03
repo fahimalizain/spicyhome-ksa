@@ -9,6 +9,7 @@ import {
   items,
   itemCategories,
   tables,
+  users,
   zatcaInvoices,
   zatcaCreditNotes,
   deliveryPartners,
@@ -406,6 +407,10 @@ export class PrintJobService {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
+    // Display name of the user who created the order (resolved once per
+    // method, not per printer) — printed as "Created By: <name>" on each ticket.
+    const createdByName = this.resolveCreatedByName(order);
+
     // Get table name
     let tableName: string | undefined;
     if (order.tableId) {
@@ -418,19 +423,28 @@ export class PrintJobService {
     const targets = this.printersService.listActiveByRole(PrinterRole.KITCHEN);
     if (targets.length === 0) return { printed: [], errors: [] };
 
-    // Load notes for each delta's order item (same as the old per-group path)
-    const notesById = new Map<number, string | null>();
+    // Load notes + unit price for each delta's order item.
+    const oiById = new Map<number, { notes: string | null; unitPriceHalalas: number }>();
     for (const d of deltas) {
-      if (notesById.has(d.orderItemId)) continue;
+      if (oiById.has(d.orderItemId)) continue;
       const oi = this.db.select().from(orderItems).where(eq(orderItems.id, d.orderItemId)).get();
-      notesById.set(d.orderItemId, oi?.notes ?? null);
+      oiById.set(d.orderItemId, {
+        notes: oi?.notes ?? null,
+        unitPriceHalalas: oi?.unitPriceHalalas ?? 0,
+      });
     }
 
-    const ticketItems: KitchenTicketItem[] = deltas.map((d) => ({
-      qty: d.printedQty,
-      name: d.itemName,
-      notes: notesById.get(d.orderItemId) ?? null,
-    }));
+    const ticketItems: KitchenTicketItem[] = deltas.map((d) => {
+      const oi = oiById.get(d.orderItemId);
+      const unit = oi?.unitPriceHalalas ?? 0;
+      return {
+        qty: d.printedQty,
+        name: d.itemName,
+        notes: oi?.notes ?? null,
+        unitPriceHalalas: unit,
+        totalHalalas: unit * d.printedQty,
+      };
+    });
 
     // Prefer the ZATCA document id; fall back to the internal reference as
     // last resort (same pattern as receipts).
@@ -452,6 +466,8 @@ export class PrintJobService {
           deliveryPartnerTitle,
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
+          createdByName,
+          totalHalalas: order.totalHalalas,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
@@ -482,6 +498,10 @@ export class PrintJobService {
     const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new Error(`Order ${orderId} not found`);
 
+    // Display name of the user who created the order (resolved once per
+    // method, not per printer) — printed as "Created By: <name>" on each ticket.
+    const createdByName = this.resolveCreatedByName(order);
+
     let oiRows = this.db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     if (orderItemIds && orderItemIds.length > 0) {
       const idSet = new Set(orderItemIds);
@@ -504,6 +524,8 @@ export class PrintJobService {
       qty: oi.qty,
       name: oi.itemName,
       notes: oi.notes,
+      unitPriceHalalas: oi.unitPriceHalalas,
+      totalHalalas: oi.totalHalalas,
     }));
 
     // Prefer the ZATCA document id; fall back to the internal reference as
@@ -526,6 +548,8 @@ export class PrintJobService {
           deliveryPartnerTitle,
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
+          createdByName,
+          totalHalalas: order.totalHalalas,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
@@ -593,6 +617,19 @@ export class PrintJobService {
     if (rateBps.length === 0) return undefined;
     const first = rateBps[0];
     return rateBps.every((r) => r === first) ? first : undefined;
+  }
+
+  /**
+   * Resolve the display name of the user who created an order (users.name) so
+   * kitchen tickets can print "Created By: <name>". Display name only — never
+   * username, id, or role. Returns undefined when the order has no creator or
+   * the user row is missing/blank.
+   */
+  private resolveCreatedByName(order: { createdBy: number | null }): string | undefined {
+    if (order.createdBy == null) return undefined;
+    const user = this.db.select().from(users).where(eq(users.id, order.createdBy)).get();
+    const name = user?.name?.trim();
+    return name ? name : undefined;
   }
 
   /**

@@ -16,13 +16,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
+import com.spicyhome.pos.util.OrderTypeLabel
+import com.spicyhome.pos.util.RiyadhTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -259,6 +265,14 @@ private fun UserFilterDropdown(
     }
 }
 
+/**
+ * Two-row orders list card mirroring the POS OrdersPage row:
+ *
+ * Row 1 — bold `documentId` + status-colored label (left) | total (right).
+ * Row 2 — meta line: order type · table · kitchen print progress (open
+ * orders only), with the Asia/Riyadh created wall-clock time pinned right.
+ * The kitchen line is amber + bold while the printed qty is incomplete.
+ */
 @Composable
 private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: () -> Unit) {
     val statusColor = when (order.status) {
@@ -267,11 +281,29 @@ private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: 
         "refunded" -> StatusRefunded
         else -> StatusOpen
     }
-    // Middle-dot pattern matching the OrderScreen header: "INV26-42 · T12".
-    val title = if (tableName != null) {
-        listOfNotNull(order.documentId.takeIf { it.isNotBlank() }, tableName).joinToString(" · ")
-    } else {
-        order.documentId
+    val kitchenIncomplete = order.status == "open" && order.kitchenPrintedQty != order.itemQtyTotal
+    val metaText = buildAnnotatedString {
+        append(
+            OrderTypeLabel.format(
+                order.type,
+                order.deliveryPartnerTitle,
+                order.deliveryExternalRef,
+            ),
+        )
+        if (tableName != null) {
+            append(" · Table $tableName")
+        }
+        if (order.status == "open") {
+            append(" · ")
+            val kitchenText = "Kitchen Qty Printed: ${order.kitchenPrintedQty} / ${order.itemQtyTotal}"
+            if (kitchenIncomplete) {
+                withStyle(SpanStyle(color = Warning, fontWeight = FontWeight.Bold)) {
+                    append(kitchenText)
+                }
+            } else {
+                append(kitchenText)
+            }
+        }
     }
 
     Card(
@@ -281,40 +313,63 @@ private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: 
         colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
         shape = RoundedCornerShape(8.dp),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = OnDark,
-                )
-                Text(
-                    text = order.type.uppercase(),
-                    fontSize = 13.sp,
-                    color = OnDarkSecondary,
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
+            // Row 1: document id + status (left) | total (right).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = order.documentId,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnDark,
+                    )
+                    Text(
+                        text = order.status.uppercase(),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = statusColor,
+                    )
+                }
                 Text(
                     text = MoneyFormatter.halalasToSar(order.totalHalalas),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Accent,
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Row 2: meta line (wraps, ellipsizes) | created time (pinned right).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = order.status.uppercase(),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = statusColor,
+                    text = metaText,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 12.sp,
+                    color = OnDarkSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = RiyadhTimeFormatter.format(order.createdAt),
+                    fontSize = 12.sp,
+                    color = OnDarkSecondary,
+                    maxLines = 1,
                 )
             }
         }
@@ -380,7 +435,15 @@ private fun OrderDetailView(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text("Type:", color = OnDarkSecondary, fontSize = 14.sp)
-                        Text(order.type, color = OnDark, fontSize = 14.sp)
+                        Text(
+                            OrderTypeLabel.format(
+                                order.type,
+                                order.deliveryPartnerTitle,
+                                order.deliveryExternalRef,
+                            ),
+                            color = OnDark,
+                            fontSize = 14.sp,
+                        )
                     }
                     if (tableName != null) {
                         Row(
@@ -465,7 +528,10 @@ private fun OrderDetailView(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (order.items.isNotEmpty()) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     items(order.items, key = { it.id }) { item ->
                         Card(
                             colors = CardDefaults.cardColors(
@@ -503,6 +569,10 @@ private fun OrderDetailView(
                         }
                     }
                 }
+            } else {
+                // Empty items: weight filler keeps the Continue Editing button
+                // pinned to the bottom for open orders.
+                Spacer(modifier = Modifier.weight(1f))
             }
 
             // Continue Editing button for open orders
