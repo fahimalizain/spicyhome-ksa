@@ -22,7 +22,7 @@ import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
-import { calcOutstandingHalalas } from '../lib/order-payments';
+import { calcOutstandingHalalas, summarizePaymentsByMethod } from '../lib/order-payments';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
@@ -769,6 +769,8 @@ export function OrderPage() {
 
   /** Server view: total − SUM(payments). Negative = temporary overpay. */
   const outstandingHalalas = calcOutstandingHalalas(serverTotals.totalHalalas, payments);
+  /** Per-method net totals for the Payments tab summary strip. */
+  const paymentsByMethod = summarizePaymentsByMethod(payments);
   /** Kitchen delta view over the current (clean) cart vs the event ledger. */
   const hasUnsentKitchen = hasUnsentKitchenDeltas(cart.items, orderEvents);
 
@@ -1662,6 +1664,28 @@ export function OrderPage() {
                   )}
                 </div>
               </div>
+
+              {/* Per-method net totals (summary of the ledger below) */}
+              {payments.length > 0 && (
+                <div className="bg-gray-800/60 rounded-lg px-3 py-2 mb-3 space-y-1">
+                  <div className="text-xs text-gray-500">By method</div>
+                  {paymentsByMethod.map((m) => (
+                    <div key={m.methodId} className="flex justify-between text-sm">
+                      <div className="min-w-0 mr-2 text-sm text-white truncate">
+                        {m.methodTitle}
+                      </div>
+                      <div
+                        className={`text-sm font-mono shrink-0 ${
+                          m.totalHalalas < 0 ? 'text-red-400' : 'text-white'
+                        }`}
+                      >
+                        {m.totalHalalas < 0 ? '−' : ''}
+                        {halalasToSar(Math.abs(m.totalHalalas))} SAR
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Append-only log, oldest-first (server returns payments by id) */}
               {payments.length === 0 ? (
