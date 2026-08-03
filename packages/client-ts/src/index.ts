@@ -43,6 +43,7 @@ export type {
   SyncOrderItemsDto,
   SyncOrderItemDto,
   CreateRefundDto,
+  VoidOrderDto,
   RefundItemDto,
   RefundItemResponse,
   RefundResponse,

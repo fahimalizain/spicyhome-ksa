@@ -2501,6 +2501,13 @@ export interface components {
        */
       tenderedHalalas?: number | null;
     };
+    VoidOrderDto: {
+      /**
+       * @description Required reason for voiding the order
+       * @example Customer left
+       */
+      reason: string;
+    };
     ReprintOrderDto: {
       /**
        * @description Print target: 'receipt' = ZATCA tax receipt reprint (paid); 'open_receipt' = non-ZATCA open order slip
@@ -4126,7 +4133,11 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VoidOrderDto'];
+      };
+    };
     responses: {
       /** @description Order voided */
       201: {

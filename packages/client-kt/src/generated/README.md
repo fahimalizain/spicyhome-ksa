@@ -98,6 +98,7 @@ All URIs are relative to *http://localhost*
 | *OrdersApi* | [**ordersControllerUpdateOrderItemUnitPrice**](docs/OrdersApi.md#orderscontrollerupdateorderitemunitprice) | **PATCH** orders/{id}/items/{orderItemId}/unit-price | Override one order line unit price on a delivery-partner order (app-menu price, floored at the live catalog price) — ADR 0007 |
 | *OrdersApi* | [**ordersControllerUpdateOrderMeta**](docs/OrdersApi.md#orderscontrollerupdateordermeta) | **PATCH** orders/{id} | Update open order type and/or table |
 | *OrdersApi* | [**ordersControllerUpdateOrderPartner**](docs/OrdersApi.md#orderscontrollerupdateorderpartner) | **PATCH** orders/{id}/partner | Set, change or clear the delivery partner (+ external ref) on an open order (ADR 0007) |
+| *OrdersApi* | [**ordersControllerUpdateOrderStandardInvoice**](docs/OrdersApi.md#orderscontrollerupdateorderstandardinvoice) | **PATCH** orders/{id}/standard-invoice | Set or clear ZATCA standard invoice buyer details on an open order |
 | *OrdersApi* | [**ordersControllerVerifyOrderChain**](docs/OrdersApi.md#orderscontrollerverifyorderchain) | **GET** orders/{id}/events/verify | Verify the hash chain integrity for an order |
 | *OrdersApi* | [**ordersControllerVoidOrder**](docs/OrdersApi.md#orderscontrollervoidorder) | **POST** orders/{id}/void | Void an order (open → voided) |
 | *PaymentMethodsApi* | [**paymentMethodsControllerCreate**](docs/PaymentMethodsApi.md#paymentmethodscontrollercreate) | **POST** payment-methods | Create a payment method |
@@ -197,6 +198,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateOrderItemUnitPriceDto](docs/UpdateOrderItemUnitPriceDto.md)
  - [com.spicyhome.client.models.UpdateOrderMetaDto](docs/UpdateOrderMetaDto.md)
  - [com.spicyhome.client.models.UpdateOrderPartnerDto](docs/UpdateOrderPartnerDto.md)
+ - [com.spicyhome.client.models.UpdateOrderStandardInvoiceDto](docs/UpdateOrderStandardInvoiceDto.md)
  - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
@@ -206,6 +208,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UserOptionResponse](docs/UserOptionResponse.md)
  - [com.spicyhome.client.models.UserResponse](docs/UserResponse.md)
  - [com.spicyhome.client.models.UsernamesResponse](docs/UsernamesResponse.md)
+ - [com.spicyhome.client.models.VoidOrderDto](docs/VoidOrderDto.md)
  - [com.spicyhome.client.models.WindowsPrinterQueuesResponse](docs/WindowsPrinterQueuesResponse.md)
  - [com.spicyhome.client.models.ZatcaBuyerDetailsDto](docs/ZatcaBuyerDetailsDto.md)
  - [com.spicyhome.client.models.ZatcaClearanceDetailDto](docs/ZatcaClearanceDetailDto.md)

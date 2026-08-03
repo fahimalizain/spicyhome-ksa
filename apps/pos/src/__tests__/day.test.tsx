@@ -18,6 +18,7 @@ vi.mock('../api', () => ({
     auth: {
       login: vi.fn(),
       me: vi.fn(),
+      listActiveUsers: vi.fn().mockResolvedValue([]),
     },
     menu: {
       listCategories: vi.fn().mockResolvedValue([]),

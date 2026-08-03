@@ -8,8 +8,11 @@ import { OrderEventTimeline } from '../components/OrderEventTimeline';
 import { RefundPanel } from '../components/RefundPanel';
 import { RefundDetailModal } from '../components/RefundDetailModal';
 import { OrderActionBar } from '../components/OrderActionBar';
+import { OrderHeader } from '../components/orders/OrderHeader';
+import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { getPreviousInvoiceDocumentIds } from '../lib/order-events';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
+import type { CartItem } from '../hooks/useCart';
 import type {
   OrderResponse,
   OrderSummaryResponse,
@@ -209,6 +212,18 @@ export function OrdersPage() {
     );
   }
 
+  // Detail header creator name: resolve the order's createdBy id against the
+  // active users list (already loaded for the filter dropdown). Prefer a
+  // non-blank name; fall back to the username. Unknown ids (inactive/deleted
+  // users, failed list) hide the line entirely.
+  const createdByName = (() => {
+    if (selectedOrder?.createdBy == null) return null;
+    const u = users.find((x) => x.id === selectedOrder.createdBy);
+    if (!u) return null;
+    const name = u.name?.trim();
+    return name || u.username || null;
+  })();
+
   return (
     <div className="h-full flex">
       {/* Order list */}
@@ -348,57 +363,39 @@ export function OrdersPage() {
       {/* Order detail */}
       {selectedOrder && (
         <div className="w-1/2 flex flex-col min-h-0 h-full border-l border-gray-700">
-          {/* Sticky header */}
-          <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-700/80 bg-gray-900">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold text-white">Order {selectedOrder.documentId}</h2>
-              <span
-                className={`px-2 py-1 rounded text-xs font-bold status-${selectedOrder.status}`}
-              >
-                {STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
-              </span>
-            </div>
-            <div className="text-sm text-gray-400">
-              <p>{formatOrderTypeLabel(selectedOrder)}</p>
-              <p>{new Date(selectedOrder.createdAt * 1000).toLocaleString()}</p>
-            </div>
-            {selectedOrder.notes && (
-              <p className="text-xs text-gray-400 mt-1">
-                <span className="text-gray-500">Notes:</span>{' '}
-                {selectedOrder.notes as unknown as string}
-              </p>
-            )}
-            {previousDocumentIds.length > 0 && (
-              <p className="text-xs text-gray-500 mt-1">
-                Previous: {previousDocumentIds.join(', ')}
-              </p>
-            )}
-          </div>
+          {/* Sticky header — shared OrderHeader, detail variant */}
+          <OrderHeader
+            variant="detail"
+            documentId={selectedOrder.documentId}
+            status={selectedOrder.status}
+            typeLabel={formatOrderTypeLabel(selectedOrder)}
+            createdAt={selectedOrder.createdAt}
+            createdByName={createdByName}
+            notes={selectedOrder.notes}
+            previousDocumentIds={previousDocumentIds}
+          />
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4">
             <div className="space-y-2 mb-4">
               <h3 className="text-sm font-semibold text-gray-300">Items</h3>
-              {(selectedOrder.items || []).map((oi) => (
-                <div key={oi.id} className="bg-gray-800 rounded-lg p-2 flex justify-between">
-                  <div>
-                    <span className="text-sm text-white">{oi.itemName}</span>
-                    {oi.notes && (
-                      <span className="text-xs text-gray-400 block">
-                        {oi.notes as unknown as string}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm text-gray-300">
-                      {oi.qty} × {halalasToSar(oi.unitPriceHalalas)}
-                    </span>
-                    <span className="text-sm text-brand-400 ml-2">
-                      {halalasToSar(oi.totalHalalas)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {/* Same cart row UI as the Order Page, readonly (same mapping
+                  shape as useCart.loadOrder). */}
+              <OrderPageItems
+                items={(selectedOrder.items || []).map((oi): CartItem => ({
+                  itemId: oi.itemId ?? 0,
+                  orderItemId: oi.id,
+                  name: oi.itemName,
+                  unitPriceHalalas: oi.unitPriceHalalas,
+                  vatRateBp: oi.vatRateBp,
+                  qty: oi.qty,
+                  notes: oi.notes ?? '',
+                }))}
+                readonly
+                disabled
+                canRemove={false}
+                emptyMessage="No items"
+              />
             </div>
 
             <div className="border-t border-gray-700 pt-3 space-y-1 text-sm">

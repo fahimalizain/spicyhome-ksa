@@ -13,13 +13,18 @@ const mockDeliveryPartnersListEnabled = vi.fn();
 const mockOrdersList = vi.fn().mockResolvedValue([]);
 const mockOrdersGet = vi.fn();
 const mockOrdersUpdateItemUnitPrice = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 /** Mutable current user — flip updateOrder per test. */
 let mockMe: Record<string, unknown> = {};
 
 vi.mock('../api', () => ({
   client: {
-    auth: { login: vi.fn(), me: vi.fn() },
+    auth: {
+      login: vi.fn(),
+      me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
+    },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
       listSubcategories: (...args: any[]) => mockListSubcategories(...args),
@@ -212,6 +217,7 @@ async function renderPartnerOrder(overrides: Record<string, unknown> = {}) {
 describe('OrderPage — Edit partner prices (ADR 0007, Phase 7)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     mockOrdersList.mockResolvedValue([]);
     mockBaseData();
     mockMe = {

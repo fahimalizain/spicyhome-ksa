@@ -13,12 +13,14 @@ const mockDayCurrent = vi.fn();
 const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
 const mockOrdersGet = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
     auth: {
       login: vi.fn(),
       me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
     },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
@@ -157,6 +159,7 @@ function setupOpenDay() {
 describe('OrderPage — create order with sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     setupOpenDay();
   });
 
@@ -447,7 +450,7 @@ describe('OrderPage — create order with sync', () => {
     });
 
     // Click Dine-in button again
-    fireEvent.click(screen.getByText('Dine-in'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dine-in' }));
 
     await waitFor(() => {
       expect(screen.getByText('Select Table')).toBeInTheDocument();

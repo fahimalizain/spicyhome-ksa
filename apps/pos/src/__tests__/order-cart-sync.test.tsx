@@ -14,10 +14,15 @@ const mockOrdersCreate = vi.fn();
 const mockOrdersSyncItems = vi.fn();
 const mockOrdersSendToKitchen = vi.fn();
 const mockOrdersVoid = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
-    auth: { login: vi.fn(), me: vi.fn() },
+    auth: {
+      login: vi.fn(),
+      me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
+    },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
       listSubcategories: (...args: any[]) => mockListSubcategories(...args),
@@ -200,6 +205,7 @@ function mockGetReturns(order: Record<string, unknown>) {
 describe('OrderPage — staged cart', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     mockDayIsOpen();
   });
 

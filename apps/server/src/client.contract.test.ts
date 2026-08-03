@@ -340,7 +340,7 @@ describe('Client contract test', () => {
     const newOrder: any = await client.orders.create({
       type: 'takeaway',
     });
-    const voided: any = await client.orders.void(newOrder.id);
+    const voided = await client.orders.void(newOrder.id, { reason: 'test cleanup' });
     expect(voided.status).toBe('voided');
   });
 });

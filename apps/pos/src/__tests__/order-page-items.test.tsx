@@ -155,4 +155,48 @@ describe('OrderPageItems', () => {
     expect(screen.queryByRole('button', { name: '+' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('cart-item-controls-panel')).not.toBeInTheDocument();
   });
+
+  // ── Test 8: readonly reuse — no mutation handlers required ──
+  it('renders readonly rows without mutation handlers (Orders detail reuse)', () => {
+    render(<OrderPageItems items={[burger]} readonly disabled canRemove={false} />);
+
+    // Collapsed row shows name, qty badge, unit rate and line total
+    expect(screen.getByText('Burger')).toBeInTheDocument();
+    expect(screen.getByText('×2')).toBeInTheDocument();
+    expect(screen.getByText('@15.00')).toBeInTheDocument();
+    expect(screen.getByText(halalasToSar(3000))).toBeInTheDocument();
+
+    // Expand still works for notes wrap, but no controls appear
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Burger' }));
+    expect(screen.getByRole('button', { name: 'Collapse Burger' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '-' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✎' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✕' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cart-item-controls-panel')).not.toBeInTheDocument();
+  });
+
+  // ── Test 9: custom empty message ──
+  it('renders the custom emptyMessage instead of the cart default', () => {
+    render(
+      <OrderPageItems items={[]} readonly disabled canRemove={false} emptyMessage="No items" />,
+    );
+
+    expect(screen.getByText('No items')).toBeInTheDocument();
+    expect(screen.queryByText('Cart is empty')).not.toBeInTheDocument();
+  });
+
+  // ── Test 10: notes preview visible when collapsed, no edit controls ──
+  it('shows notes preview when collapsed and expand wraps them, readonly', () => {
+    const withNotes = makeItem({ notes: 'No onions, extra sauce' });
+    render(<OrderPageItems items={[withNotes]} readonly disabled canRemove={false} />);
+
+    expect(screen.getByText('No onions, extra sauce')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✎' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Burger' }));
+    expect(screen.getByRole('button', { name: 'Collapse Burger' })).toBeInTheDocument();
+    expect(screen.getByText('No onions, extra sauce')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '✎' })).not.toBeInTheDocument();
+  });
 });

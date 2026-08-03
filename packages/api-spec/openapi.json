@@ -1766,6 +1766,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidOrderDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Order voided",
@@ -5505,6 +5515,19 @@
         "required": [
           "methodId",
           "amountHalalas"
+        ]
+      },
+      "VoidOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Customer left",
+            "description": "Required reason for voiding the order"
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "ReprintOrderDto": {

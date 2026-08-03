@@ -19,6 +19,7 @@ const mockOrdersReprint = vi.fn();
 const mockOrdersGetZatcaInvoice = vi.fn();
 const mockPaymentMethodsListEnabled = vi.fn();
 const mockGetMe = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 function makeMe(overrides: Record<string, unknown> = {}) {
   return {
@@ -45,7 +46,11 @@ function makeMe(overrides: Record<string, unknown> = {}) {
 
 vi.mock('../api', () => ({
   client: {
-    auth: { login: vi.fn(), me: vi.fn() },
+    auth: {
+      login: vi.fn(),
+      me: vi.fn(),
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
+    },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
       listSubcategories: (...args: any[]) => mockListSubcategories(...args),
@@ -260,6 +265,7 @@ function fillBuyerForm(buyer: Record<string, string>) {
 describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
     mockGetMe.mockReturnValue(makeMe());
     mockDayIsOpen();
     mockPaymentMethodsListEnabled.mockResolvedValue([
@@ -546,9 +552,9 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     expect(screen.queryByTestId('payment-amount-input')).not.toBeInTheDocument();
 
     // Partner method chip is present (the order header also shows the
-    // partner title + ref as one combined text node); non-partner and
+    // partner title + ref as the type label); non-partner and
     // other-partner methods are NOT rendered.
-    expect(screen.getByText('HungerStation · Ref HS-1')).toBeInTheDocument(); // header
+    expect(screen.getByText('HungerStation / HS-1')).toBeInTheDocument(); // header type label
     expect(screen.queryByText('Cash')).not.toBeInTheDocument();
     expect(screen.queryByText('Keeta')).not.toBeInTheDocument();
 
@@ -668,7 +674,7 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByText('paid')).toBeInTheDocument();
+      expect(screen.getByText('Paid')).toBeInTheDocument();
     });
   });
 
@@ -1239,5 +1245,76 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.queryByText('Send to Kitchen')).not.toBeInTheDocument();
     });
+  });
+
+  // ---- OrderHeader: creator name + notes placement ----
+
+  it('header: hydrated order with createdBy shows the creator name (no prefix) from listActiveUsers', async () => {
+    mockGetReturns(makeOrder({ createdBy: 1, createdAt: 1000 }));
+    mockListActiveUsers.mockResolvedValue([
+      { id: 1, username: 'sara', name: 'Sara' },
+      { id: 2, username: 'ahmed', name: 'Ahmed' },
+    ]);
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Sara')).toBeInTheDocument();
+    });
+    // Creator sits on the same row as the type label (type left, name right),
+    // no "Created by" prefix
+    const sara = screen.getByText('Sara');
+    expect(sara.previousElementSibling?.textContent).toBe('Dine-in');
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
+  });
+
+  it('header: unknown createdBy does not show a creator name', async () => {
+    mockGetReturns(makeOrder({ createdBy: 99 }));
+    mockListActiveUsers.mockResolvedValue([{ id: 1, username: 'sara', name: 'Sara' }]);
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Sara')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument();
+  });
+
+  it('items tab: order notes input pinned above Total in the Items footer, hidden on other tabs', async () => {
+    mockGetReturns(makeOrder());
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    // Items tab is the default — the notes input is present, above the Total row
+    const notesInput = screen.getByPlaceholderText('Order notes');
+    expect(notesInput).toBeInTheDocument();
+    const totalRow = screen.getByText('Total');
+    expect(
+      notesInput.compareDocumentPosition(totalRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // Switching to Payments hides it (notes live only in the Items tab)
+    fireEvent.click(screen.getByText('Payments'));
+    expect(screen.queryByPlaceholderText('Order notes')).not.toBeInTheDocument();
+  });
+
+  it('pre-create: notes input visible in the empty-cart Items footer', async () => {
+    renderOrderPage(['/']);
+
+    await waitFor(() => {
+      expect(screen.getByText('Burger')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Order notes')).toBeInTheDocument();
+    expect(screen.getByText('New Order')).toBeInTheDocument();
   });
 });
