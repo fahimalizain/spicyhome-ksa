@@ -8,17 +8,21 @@
 # .env.worktree.  Android apps/android/local.properties is synced from
 # SENTRY_ANDROID_DSN (never server SENTRY_DSN).
 #
+# Lives in: .agents/skills/worktree/scripts/bootstrap.sh
+#
 # Usage:
-#   scripts/worktree/bootstrap.sh              # current repo / worktree
-#   scripts/worktree/bootstrap.sh /path/to/wt  # explicit checkout
-#   scripts/worktree/bootstrap.sh --force-env  # rewrite .env.worktree
-#   scripts/worktree/bootstrap.sh --skip-install
-#   scripts/worktree/bootstrap.sh --env-only   # alias: env only, no install
+#   bash .agents/skills/worktree/scripts/bootstrap.sh
+#   bash .agents/skills/worktree/scripts/bootstrap.sh /path/to/wt
+#   bash .agents/skills/worktree/scripts/bootstrap.sh --force-env
+#   bash .agents/skills/worktree/scripts/bootstrap.sh --skip-install
+#   bash .agents/skills/worktree/scripts/bootstrap.sh --env-only
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_VIA_SCRIPT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# scripts/ → worktree/ → skills/ → .agents/ → repo root
+REPO_VIA_SCRIPT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+ENV_SH="$SCRIPT_DIR/env.sh"
 
 FORCE_ENV=false
 SKIP_INSTALL=false
@@ -58,8 +62,8 @@ if [[ ! -e "$ROOT/.git" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$ROOT/scripts/worktree/env.sh" ]]; then
-  echo "Error: missing scripts/worktree/env.sh in $ROOT" >&2
+if [[ ! -f "$ENV_SH" ]]; then
+  echo "Error: missing env.sh next to bootstrap.sh ($ENV_SH)" >&2
   exit 1
 fi
 
@@ -69,7 +73,7 @@ env_args=(--sync-android)
 if $FORCE_ENV; then
   env_args+=(--force)
 fi
-bash "$ROOT/scripts/worktree/env.sh" "${env_args[@]}" "$ROOT"
+bash "$ENV_SH" "${env_args[@]}" "$ROOT"
 
 check_node() {
   if ! command -v node >/dev/null 2>&1; then

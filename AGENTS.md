@@ -111,9 +111,12 @@ in favor of the service-day helpers.)
 
 ## Parallel worktrees
 
-- Worktree **creation** is external (user's worktree manager). Agents only
-  **bootstrap** an existing checkout: skill **bootstrap-worktree** or
-  `bash scripts/worktree/bootstrap.sh`.
+- Worktree **creation** is external (user's worktree manager). Agents use
+  skill **worktree** (`.agents/skills/worktree/`): bootstrap via
+  `scripts/bootstrap.sh`, teardown via `scripts/delete.sh`, orphans via
+  `scripts/cleanup-dangling.sh`. See skill references for details.
+  `delete.sh` stops procs, expunges/sweeps Bazel output base (~1.5G), drops
+  worktree DB, then `git worktree remove`. Do not leave output bases behind.
 - Per-checkout `.env.worktree` (gitignored): `PORT`, `VITE_PORT`, `SPICYHOME_DB`.
 - Main worktree keeps `3742` / `6124` / `data/spicyhome.db`. Linked worktrees
   get a stable hash offset and `data/spicyhome-<slug>.db`.

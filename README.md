@@ -106,7 +106,7 @@ export VITE_SENTRY_ENVIRONMENT="production"
 ```
 
 For Android, the bootstrap script auto-syncs `apps/android/local.properties` from
-`SENTRY_ANDROID_DSN` in `.env.worktree` (`bash scripts/worktree/env.sh --force` to
+`SENTRY_ANDROID_DSN` in `.env.worktree` (`bash .agents/skills/worktree/scripts/env.sh --force` to
 regenerate). Never put the server DSN into Android's config — use the dedicated
 Android DSN key:
 
