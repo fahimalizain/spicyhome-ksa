@@ -478,7 +478,10 @@ private fun OrderDetailView(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (order.items.isNotEmpty()) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     items(order.items, key = { it.id }) { item ->
                         Card(
                             colors = CardDefaults.cardColors(
@@ -516,6 +519,10 @@ private fun OrderDetailView(
                         }
                     }
                 }
+            } else {
+                // Empty items: weight filler keeps the Continue Editing button
+                // pinned to the bottom for open orders.
+                Spacer(modifier = Modifier.weight(1f))
             }
 
             // Continue Editing button for open orders
