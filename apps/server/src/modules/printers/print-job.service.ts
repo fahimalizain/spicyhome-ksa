@@ -423,19 +423,28 @@ export class PrintJobService {
     const targets = this.printersService.listActiveByRole(PrinterRole.KITCHEN);
     if (targets.length === 0) return { printed: [], errors: [] };
 
-    // Load notes for each delta's order item (same as the old per-group path)
-    const notesById = new Map<number, string | null>();
+    // Load notes + unit price for each delta's order item.
+    const oiById = new Map<number, { notes: string | null; unitPriceHalalas: number }>();
     for (const d of deltas) {
-      if (notesById.has(d.orderItemId)) continue;
+      if (oiById.has(d.orderItemId)) continue;
       const oi = this.db.select().from(orderItems).where(eq(orderItems.id, d.orderItemId)).get();
-      notesById.set(d.orderItemId, oi?.notes ?? null);
+      oiById.set(d.orderItemId, {
+        notes: oi?.notes ?? null,
+        unitPriceHalalas: oi?.unitPriceHalalas ?? 0,
+      });
     }
 
-    const ticketItems: KitchenTicketItem[] = deltas.map((d) => ({
-      qty: d.printedQty,
-      name: d.itemName,
-      notes: notesById.get(d.orderItemId) ?? null,
-    }));
+    const ticketItems: KitchenTicketItem[] = deltas.map((d) => {
+      const oi = oiById.get(d.orderItemId);
+      const unit = oi?.unitPriceHalalas ?? 0;
+      return {
+        qty: d.printedQty,
+        name: d.itemName,
+        notes: oi?.notes ?? null,
+        unitPriceHalalas: unit,
+        totalHalalas: unit * d.printedQty,
+      };
+    });
 
     // Prefer the ZATCA document id; fall back to the internal reference as
     // last resort (same pattern as receipts).
@@ -458,6 +467,7 @@ export class PrintJobService {
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
           createdByName,
+          totalHalalas: order.totalHalalas,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
@@ -514,6 +524,8 @@ export class PrintJobService {
       qty: oi.qty,
       name: oi.itemName,
       notes: oi.notes,
+      unitPriceHalalas: oi.unitPriceHalalas,
+      totalHalalas: oi.totalHalalas,
     }));
 
     // Prefer the ZATCA document id; fall back to the internal reference as
@@ -537,6 +549,7 @@ export class PrintJobService {
           deliveryExternalRef: order.deliveryExternalRef ?? undefined,
           orderNotes: order.notes,
           createdByName,
+          totalHalalas: order.totalHalalas,
           items: ticketItems,
         });
         await this.printersService.sendBuffer(printer, ticket);
