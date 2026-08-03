@@ -305,7 +305,8 @@ export function OrdersPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-sm font-bold text-white">{order.documentId}</span>
+                      <span className="text-sm font-bold text-white">#{order.orderNo}</span>
+                      <span className="ml-2 text-sm font-bold text-white">{order.documentId}</span>
                       <span className={`ml-2 px-2 py-0.5 rounded text-xs status-${order.status}`}>
                         {STATUS_LABELS[order.status] || order.status}
                       </span>
