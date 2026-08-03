@@ -12,10 +12,9 @@ modules so probes can never drift from production code), different artifact
 (an executable emit script instead of `.bin` preview files).
 
 > Status: implemented. The baker CLI (`bazel run //apps/server:bake_open_kots`,
-> module `apps/server/src/modules/printers/bake-open-kots.ts`), the thin
-> wrapper (`scripts/printing/kitchen/bake-open-kots.mjs`), and the emit-script
-> generator are all in place and documented; this document describes the
-> running probe.
+> module `apps/server/src/modules/printers/bake-open-kots.ts`) and the
+> emit-script generator are in place and documented; this document describes
+> the running probe.
 
 ## 1. Purpose
 
@@ -32,12 +31,11 @@ modules so probes can never drift from production code), different artifact
 
 ## 2. Architecture (arabic_probes pattern)
 
-| Piece                    | Location                                                                                | Status      |
-| ------------------------ | --------------------------------------------------------------------------------------- | ----------- |
-| Baker CLI (Bazel target) | `apps/server` module — `bazel run //apps/server:bake_open_kots`                         | implemented |
-| Thin wrapper             | `scripts/printing/kitchen/bake-open-kots.mjs` (runs `bazel run`)                        | implemented |
-| Emitted artifact         | `scripts/printing/kitchen/out/send-open-kots.js` (`out/` is gitignored)                 | generated   |
-| Probe tooling            | Baker + wrapper live in the repo permanently; the **emitted script is never committed** | committed   |
+| Piece             | Location                                                                            | Status      |
+| ----------------- | ----------------------------------------------------------------------------------- | ----------- |
+| Baker CLI (Bazel) | `bazel run //apps/server:bake_open_kots` (`apps/server` module `bake-open-kots.ts`) | implemented |
+| Emitted artifact  | `tmp/kitchen-kot/send-open-kots.js` (under `/tmp/` gitignore; never committed)      | generated   |
+| Probe tooling     | Baker lives in the repo permanently; the **emitted script is never committed**      | committed   |
 
 Flow:
 
@@ -72,10 +70,10 @@ Precedence (first match wins):
 | 3        | `SPICYHOME_DB` from `.env.worktree` (if unset) | set by worktree bootstrap          |
 | 4        | Default                                        | `./data/spicyhome.db`              |
 
-`--out` overrides the emit path (default
-`scripts/printing/kitchen/out/send-open-kots.js`). After worktree bootstrap
-`.env.worktree` already carries `SPICYHOME_DB`, so the default invocation
-just works.
+`--out` overrides the emit path (default `tmp/kitchen-kot/send-open-kots.js`,
+resolved against the workspace root; `tmp/` is gitignored). After worktree
+bootstrap `.env.worktree` already carries `SPICYHOME_DB`, so the default
+invocation just works.
 
 ### 3.2 Selections
 
@@ -114,7 +112,7 @@ one to the ledger.
 
 ## 4. Emit script contract
 
-`scripts/printing/kitchen/out/send-open-kots.js` (generated):
+`tmp/kitchen-kot/send-open-kots.js` (generated):
 
 - **Node 18 compatible** (runs on the Win7 box's portable Node 18), single
   file, no dependencies.
@@ -143,9 +141,9 @@ Bake on the dev machine (from repo root; after worktree bootstrap so
 
 ```sh
 # from repo root
-node scripts/printing/kitchen/bake-open-kots.mjs
+bazel run //apps/server:bake_open_kots
 # optional overrides:
-node scripts/printing/kitchen/bake-open-kots.mjs --db path/to.db --out scripts/printing/kitchen/out/send-open-kots.js
+bazel run //apps/server:bake_open_kots -- --db path/to.db --out tmp/kitchen-kot/send-open-kots.js
 ```
 
 Copy the emit script to the Win7 POS machine, then:
@@ -188,14 +186,14 @@ resolution rules as the production server.
 
 ## 8. Code pointers
 
-| Concern                           | Where                                                                                                                                                                  |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Baker (bake + emit CLI)           | `apps/server/src/modules/printers/bake-open-kots.ts` (wired as `bazel run //apps/server:bake_open_kots` via the wrapper `scripts/printing/kitchen/bake-open-kots.mjs`) |
-| Ticket builder (shared with prod) | `apps/server/src/modules/printers/kitchen-ticket-builder.ts`                                                                                                           |
-| Production full reprint path      | `printKitchenTickets` in `apps/server/src/modules/printers/print-job.service.ts`                                                                                       |
-| TCP transport                     | `apps/server/src/modules/printers/printer-transport.ts`                                                                                                                |
-| Windows transport                 | `apps/server/src/modules/printers/win-rawprint-transport.ts` (+ `win-rawprint-helpers.ts` for exe resolution)                                                          |
-| Analogous probe pattern           | `scripts/arabic-print-probes.mjs` + `apps/server/src/modules/printers/arabic-probe-bins.ts` + `docs/printing/arabic-thermal.md`                                        |
+| Concern                           | Where                                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Baker (bake + emit CLI)           | `apps/server/src/modules/printers/bake-open-kots.ts` — `bazel run //apps/server:bake_open_kots`                                 |
+| Ticket builder (shared with prod) | `apps/server/src/modules/printers/kitchen-ticket-builder.ts`                                                                    |
+| Production full reprint path      | `printKitchenTickets` in `apps/server/src/modules/printers/print-job.service.ts`                                                |
+| TCP transport                     | `apps/server/src/modules/printers/printer-transport.ts`                                                                         |
+| Windows transport                 | `apps/server/src/modules/printers/win-rawprint-transport.ts` (+ `win-rawprint-helpers.ts` for exe resolution)                   |
+| Analogous probe pattern           | `scripts/arabic-print-probes.mjs` + `apps/server/src/modules/printers/arabic-probe-bins.ts` + `docs/printing/arabic-thermal.md` |
 
 The baker must call the same `KitchenTicketBuilder` used by
 `printKitchenTickets` — a probe that re-implements layout is a probe that

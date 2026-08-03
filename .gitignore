@@ -18,9 +18,6 @@ MODULE.bazel.lock
 # Local scratch output (Arabic probe bins, etc.)
 /tmp/
 
-# Open-orders KOT bake emit script (base64 buffers; regenerate locally)
-scripts/printing/kitchen/out/
-
 # Repo-local Rust toolchain (must not commit)
 /.cargo/
 /.rustup/
