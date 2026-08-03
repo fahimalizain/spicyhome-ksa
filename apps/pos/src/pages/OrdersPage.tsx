@@ -316,6 +316,7 @@ export function OrdersPage() {
                   </div>
                   <div className="flex items-center justify-between gap-3 mt-1 text-xs text-gray-400">
                     <div className="flex flex-wrap items-center gap-3 min-w-0">
+                      <span>#{order.orderNo}</span>
                       <span>{formatOrderTypeLabel(order)}</span>
                       {order.tableId != null && (
                         <span>Table #{order.tableId as unknown as number}</span>

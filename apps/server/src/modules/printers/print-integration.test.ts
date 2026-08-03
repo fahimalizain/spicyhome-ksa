@@ -225,18 +225,16 @@ describe('Print Integration', () => {
 
       for (const print of kitchenPrints) {
         const str = print.data.toString('ascii');
-        // Item blocks: dash-prefixed name line + indented Qty line
-        expect(str).toContain('- Zinger Burger');
-        expect(str).toContain('    Qty: 2x');
-        expect(str).toContain('- Pepsi');
-        expect(str).toContain('    Qty: 1x');
-        // No old "qty name" single-line item format
-        expect(str).not.toContain('2 Zinger Burger');
+        const hex = print.data.toString('hex');
+        // Item names are raster (GS v 0); at least one item line per ticket
+        expect(hex).toContain('1d7630');
+        expect(str).not.toContain('Qty:');
         // Big header id is the ZATCA documentId, NOT the order number
         expect(str).toContain(orderRes.body.documentId);
         expect(str).not.toContain(`ORDER #${orderRes.body.orderNo}`);
-        // Dine-in on table T4 → table on its own big line
-        expect(str).toContain('TABLE T4');
+        // Dine-in on table T4 → TABLE #4
+        expect(str).toContain('TABLE #4');
+        expect(str).toContain('>>>> Dine-in <<<<');
       }
 
       // Each fan-out target receives its OWN buffer, naming its station in
@@ -418,15 +416,20 @@ describe('Print Integration', () => {
 
       await new Promise((r) => setTimeout(r, 300));
 
-      // Should have printed the delta (3) to the kitchen
+      // Should have printed the delta to the kitchen (item name is raster)
       const kitchenPrints = transport.sent.filter(
-        (s) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+        (s) => s.ip !== '192.168.1.50' && s.data.toString('hex').includes('1d7630'),
       );
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-      const deltaStr = kitchenPrints[0].data.toString('ascii');
-      // Single delta item → dash-prefixed name block with the delta qty
-      expect(deltaStr).toContain('- Zinger Burger');
-      expect(deltaStr).toContain('    Qty: 3x');
+      const deltaHex = kitchenPrints[0].data.toString('hex');
+      // Single delta item → one GS v 0 raster name line
+      let gsCount = 0;
+      let idx = 0;
+      while ((idx = deltaHex.indexOf('1d7630', idx)) !== -1) {
+        gsCount++;
+        idx += 6;
+      }
+      expect(gsCount).toBe(1);
     });
   });
 
@@ -752,8 +755,9 @@ describe('Print Integration', () => {
       const kitchenPrints = transport.sent.filter((s) => s.ip !== '192.168.1.50');
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const kitchenStr = kitchenPrints[0].data.toString('ascii');
-      expect(kitchenStr).toContain('Delivery: HungerStation');
-      expect(kitchenStr).toContain('App order #: HS-883129');
+      expect(kitchenStr).toContain('HungerStation / HS-883129');
+      expect(kitchenStr).toContain('>>>> Takeaway <<<<');
+      expect(kitchenStr).not.toContain('Delivery:');
 
       // Receipt: pay through the partner's own method + submit (2 × 2300)
       transport.sent = [];
@@ -848,9 +852,8 @@ describe('Print Integration', () => {
       expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
       const kitchenStr = kitchenPrints[0].data.toString('ascii');
       expect(kitchenStr).toContain('NOTES: call on arrival');
-      // Item notes still flow on the same ticket — item as its own block
-      expect(kitchenStr).toContain('- Zinger Burger');
-      expect(kitchenStr).toContain('    Qty: 2x');
+      // Item names are raster; ticket still has item content via GS v 0
+      expect(kitchenPrints[0].data.toString('hex')).toContain('1d7630');
     });
 
     it('notes-only meta PATCH does not enqueue kitchen prints; notes appear on next send-to-kitchen', async () => {

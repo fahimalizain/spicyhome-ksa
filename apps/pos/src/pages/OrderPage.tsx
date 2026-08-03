@@ -22,7 +22,7 @@ import { OrderPageItems } from '../components/orders/OrderPageItems';
 import { filterMenuItems } from '../lib/filterMenuItems';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
 import { hasUnsentKitchenDeltas } from '../lib/kitchen-printed';
-import { calcOutstandingHalalas } from '../lib/order-payments';
+import { calcOutstandingHalalas, summarizePaymentsByMethod } from '../lib/order-payments';
 import type { CartItem } from '../hooks/useCart';
 import type {
   CategoryResponse,
@@ -795,6 +795,8 @@ export function OrderPage() {
 
   /** Server view: total − SUM(payments). Negative = temporary overpay. */
   const outstandingHalalas = calcOutstandingHalalas(serverTotals.totalHalalas, payments);
+  /** Per-method net totals for the Payments tab summary strip. */
+  const paymentsByMethod = summarizePaymentsByMethod(payments);
   /** Kitchen delta view over the current (clean) cart vs the event ledger. */
   const hasUnsentKitchen = hasUnsentKitchenDeltas(cart.items, orderEvents);
 
@@ -1687,8 +1689,15 @@ export function OrderPage() {
           </div>
         )}
 
-        {/* Tab body — only this scrolls */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2">
+        {/* Tab body — other tabs scroll the whole body; Payments pins
+            Outstanding/By method and scrolls only the History list */}
+        <div
+          className={
+            currentOrder && activeTab === 'payments'
+              ? 'flex-1 min-h-0 overflow-hidden flex flex-col px-3 py-2'
+              : 'flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-2'
+          }
+        >
           {/* ── Items tab ── */}
           {(!currentOrder || activeTab === 'items') && (
             <OrderPageItems
@@ -1704,9 +1713,9 @@ export function OrderPage() {
 
           {/* ── Payments tab ── */}
           {currentOrder && activeTab === 'payments' && (
-            <>
+            <div className="flex flex-col flex-1 min-h-0 h-full">
               {/* Outstanding — from SERVER totals and SERVER payment ledger */}
-              <div className="mb-3">
+              <div className="mb-3 shrink-0">
                 <div className="text-xs text-gray-500 mb-1">Outstanding</div>
                 <div
                   className={`text-2xl font-bold ${
@@ -1724,40 +1733,68 @@ export function OrderPage() {
                 </div>
               </div>
 
-              {/* Append-only log, oldest-first (server returns payments by id) */}
-              {payments.length === 0 ? (
-                <div className="text-sm text-gray-500 text-center mt-8">No payments yet</div>
-              ) : (
-                <div className="space-y-1">
-                  {payments.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
-                    >
-                      <div className="min-w-0 mr-2">
-                        <div className="text-sm text-white truncate">{p.methodTitle}</div>
-                        <div className="text-xs text-gray-500">
-                          {formatPaymentTime(p.createdAt)}
-                          {p.tenderedHalalas != null &&
-                            ` · Tendered ${halalasToSar(p.tenderedHalalas)}`}
-                          {p.changeHalalas != null &&
-                            p.changeHalalas > 0 &&
-                            ` · Change ${halalasToSar(p.changeHalalas)}`}
-                        </div>
+              {/* Per-method net totals (summary of the ledger below) */}
+              {payments.length > 0 && (
+                <div className="bg-gray-800/60 rounded-lg px-3 py-2 mb-3 space-y-1 shrink-0">
+                  <div className="text-xs text-gray-500">By method</div>
+                  {paymentsByMethod.map((m) => (
+                    <div key={m.methodId} className="flex justify-between text-sm">
+                      <div className="min-w-0 mr-2 text-sm text-white truncate">
+                        {m.methodTitle}
                       </div>
                       <div
                         className={`text-sm font-mono shrink-0 ${
-                          p.amountHalalas < 0 ? 'text-red-400' : 'text-white'
+                          m.totalHalalas < 0 ? 'text-red-400' : 'text-white'
                         }`}
                       >
-                        {p.amountHalalas < 0 ? '−' : ''}
-                        {halalasToSar(Math.abs(p.amountHalalas))} SAR
+                        {m.totalHalalas < 0 ? '−' : ''}
+                        {halalasToSar(Math.abs(m.totalHalalas))} SAR
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </>
+
+              {/* Append-only log, oldest-first (server returns payments by id) */}
+              {payments.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center mt-8">No payments yet</div>
+              ) : (
+                <div className="flex flex-col flex-1 min-h-0">
+                  <div className="text-xs text-gray-500 mb-1 shrink-0">History</div>
+                  <div
+                    data-testid="payment-history-list"
+                    className="flex-1 min-h-0 overflow-y-auto scrollbar-thin space-y-1"
+                  >
+                    {payments.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+                      >
+                        <div className="min-w-0 mr-2">
+                          <div className="text-sm text-white truncate">{p.methodTitle}</div>
+                          <div className="text-xs text-gray-500">
+                            {formatPaymentTime(p.createdAt)}
+                            {p.tenderedHalalas != null &&
+                              ` · Tendered ${halalasToSar(p.tenderedHalalas)}`}
+                            {p.changeHalalas != null &&
+                              p.changeHalalas > 0 &&
+                              ` · Change ${halalasToSar(p.changeHalalas)}`}
+                          </div>
+                        </div>
+                        <div
+                          className={`text-sm font-mono shrink-0 ${
+                            p.amountHalalas < 0 ? 'text-red-400' : 'text-white'
+                          }`}
+                        >
+                          {p.amountHalalas < 0 ? '−' : ''}
+                          {halalasToSar(Math.abs(p.amountHalalas))} SAR
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── Summary tab ── */}

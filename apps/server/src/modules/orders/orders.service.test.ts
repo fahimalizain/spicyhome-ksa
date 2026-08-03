@@ -5962,14 +5962,14 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     // updatedAt bumped so the POS can detect the send
     expect(res1.body.updatedAt).toBeGreaterThanOrEqual(updatedAtAfterSync);
 
-    // Kitchen ticket actually printed (non-blocking)
+    // Kitchen ticket actually printed (non-blocking). Item names are raster
+    // (GS v 0), so match on the raster command rather than ASCII name text.
     await new Promise((r) => setTimeout(r, 200));
     const kitchenPrints = transport.sent.filter(
-      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('hex').includes('1d7630'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('- Zinger Burger');
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 5x');
+    expect(kitchenPrints[0].data.toString('hex')).toContain('1d7630');
 
     // Second send with no changes → 200 no-op, no new enqueued events
     const res2 = await sendToKitchen(orderId);
@@ -6005,11 +6005,18 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
     await new Promise((r) => setTimeout(r, 200));
     const kitchenPrints = transport.sent.filter(
-      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('ascii').includes('Zinger Burger'),
+      (s: any) => s.ip !== '192.168.1.50' && s.data.toString('hex').includes('1d7630'),
     );
     expect(kitchenPrints.length).toBeGreaterThanOrEqual(1);
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('- Zinger Burger');
-    expect(kitchenPrints[0].data.toString('ascii')).toContain('    Qty: 3x');
+    // Single delta line → one GS v 0 raster
+    let gsCount = 0;
+    let idx = 0;
+    const deltaHex = kitchenPrints[0].data.toString('hex');
+    while ((idx = deltaHex.indexOf('1d7630', idx)) !== -1) {
+      gsCount++;
+      idx += 6;
+    }
+    expect(gsCount).toBe(1);
   });
 
   it('qty decrease: send does not print negative; printed total stays high', async () => {

@@ -803,9 +803,9 @@ describe('PrintJobService', () => {
       expect(transport.sent.length).toBe(2);
       const str = transport.sent[0].data.toString('ascii');
       expect(str).toContain('NOTES: call on arrival');
-      expect(str).toContain('    Notes: no ice');
-      expect(str).toContain('- Test Item');
-      expect(str).toContain('    Qty: 2x');
+      expect(str).toContain('    no ice');
+      // Item name is raster (GS v 0), not ASCII text
+      expect(transport.sent[0].data.toString('hex')).toContain('1d7630');
     });
 
     it('prints "Created By: Admin" on kitchen tickets when the order has a creator', async () => {

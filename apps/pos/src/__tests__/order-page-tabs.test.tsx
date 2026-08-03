@@ -313,6 +313,10 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
     expect(screen.queryByText('57.50 SAR')).not.toBeInTheDocument();
     expect(screen.getByText('No payments yet')).toBeInTheDocument();
+    // No History heading when there are no ledger rows
+    expect(screen.queryByText('History')).not.toBeInTheDocument();
+    // No scrollable history list container either
+    expect(screen.queryByTestId('payment-history-list')).not.toBeInTheDocument();
   });
 
   it('payments tab: Add Payment disabled with hint when cart dirty', async () => {
@@ -478,8 +482,9 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     fireEvent.click(screen.getByText('Payments'));
 
     await waitFor(() => {
-      expect(screen.getByText('Cash')).toBeInTheDocument();
-      expect(screen.getByText('Card')).toBeInTheDocument();
+      // Method titles now appear in the summary strip AND the log rows
+      expect(screen.getAllByText('Cash').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Card').length).toBeGreaterThanOrEqual(1);
     });
 
     // Log rows in array (append) order: 46.00 before the −30.00 correction.
@@ -493,6 +498,52 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     expect(cashIdx).toBeGreaterThanOrEqual(0);
     expect(correctionIdx).toBeGreaterThanOrEqual(0);
     expect(cashIdx).toBeLessThan(correctionIdx);
+  });
+
+  it('payments tab: per-method totals strip shows Cash/Card nets above the individual log', async () => {
+    mockGetReturns(
+      makeOrder({
+        payments: [
+          makePayment({ id: 1, amountHalalas: 4600 }),
+          makePayment({
+            id: 2,
+            methodId: 'card',
+            methodTitle: 'Card',
+            zatcaPaymentMeansCode: '48',
+            amountHalalas: -3000,
+          }),
+          makePayment({ id: 3, amountHalalas: 1000 }),
+        ],
+      }),
+    );
+
+    renderOrderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Order INV26-0042')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Payments'));
+
+    // Summary strip with per-method nets under Outstanding
+    await waitFor(() => {
+      expect(screen.getByText('By method')).toBeInTheDocument();
+    });
+    // History heading separates the summary strip from the individual log
+    expect(screen.getByText('History')).toBeInTheDocument();
+    // History list is its own scroll region: Outstanding + By method stay
+    // pinned above while the ledger lines scroll inside the container
+    const historyList = screen.getByTestId('payment-history-list');
+    expect(historyList).toBeInTheDocument();
+    expect(historyList.className).toMatch(/overflow-y-auto/);
+    // Cash nets the two ledger lines (46.00 + 10.00 = 56.00) — unique to the strip
+    expect(screen.getByText('56.00 SAR')).toBeInTheDocument();
+    // Card nets −30.00: appears in BOTH the strip and the individual log row
+    expect(screen.getAllByText('−30.00 SAR').length).toBe(2);
+    // Individual log still renders: Cash has 2 log rows + 1 summary row,
+    // Card has 1 log row + 1 summary row
+    expect(screen.getAllByText('Cash').length).toBe(3);
+    expect(screen.getAllByText('Card').length).toBe(2);
   });
 
   // ---- ADR 0007: delivery-partner payment method filtering ----
