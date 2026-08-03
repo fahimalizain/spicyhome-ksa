@@ -296,6 +296,8 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     });
     expect(screen.queryByText('57.50 SAR')).not.toBeInTheDocument();
     expect(screen.getByText('No payments yet')).toBeInTheDocument();
+    // No History heading when there are no ledger rows
+    expect(screen.queryByText('History')).not.toBeInTheDocument();
   });
 
   it('payments tab: Add Payment disabled with hint when cart dirty', async () => {
@@ -508,6 +510,8 @@ describe('OrderPage — ADR 0006 tabs (Items | Payments | Summary)', () => {
     await waitFor(() => {
       expect(screen.getByText('By method')).toBeInTheDocument();
     });
+    // History heading separates the summary strip from the individual log
+    expect(screen.getByText('History')).toBeInTheDocument();
     // Cash nets the two ledger lines (46.00 + 10.00 = 56.00) — unique to the strip
     expect(screen.getByText('56.00 SAR')).toBeInTheDocument();
     // Card nets −30.00: appears in BOTH the strip and the individual log row
