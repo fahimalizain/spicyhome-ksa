@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,8 @@ data class SetupUiState(
 class SetupViewModel(
     private val preferencesManager: PreferencesManager,
     private val apiClientProvider: ApiClientProvider,
+    private val skipAutoConnect: Boolean = false,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SetupUiState())
@@ -32,20 +35,30 @@ class SetupViewModel(
         viewModelScope.launch {
             val savedUrl = preferencesManager.serverUrl.first()
             if (savedUrl != null) {
-                _uiState.value = _uiState.value.copy(
-                    serverUrl = savedUrl,
-                    isTesting = true,
-                    isAutoConnecting = true,
-                )
-                val reachable = withContext(Dispatchers.IO) {
-                    apiClientProvider.testConnectivity(savedUrl)
+                if (!skipAutoConnect) {
+                    _uiState.value = _uiState.value.copy(
+                        serverUrl = savedUrl,
+                        isTesting = true,
+                        isAutoConnecting = true,
+                    )
+                    val reachable = withContext(ioDispatcher) {
+                        apiClientProvider.testConnectivity(savedUrl)
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isTesting = false,
+                        isConnected = reachable,
+                        testResult = if (reachable) "Connected" else "Cannot reach server at $savedUrl",
+                        isAutoConnecting = false,
+                    )
+                } else {
+                    // Change Server path: prefill the saved URL but do not auto-test
+                    // connectivity or navigate away. The user must tap Connect.
+                    _uiState.value = _uiState.value.copy(
+                        serverUrl = savedUrl,
+                        isTesting = false,
+                        isAutoConnecting = false,
+                    )
                 }
-                _uiState.value = _uiState.value.copy(
-                    isTesting = false,
-                    isConnected = reachable,
-                    testResult = if (reachable) "Connected" else "Cannot reach server at $savedUrl",
-                    isAutoConnecting = false,
-                )
             }
         }
     }
@@ -63,7 +76,7 @@ class SetupViewModel(
         _uiState.value = _uiState.value.copy(isTesting = true, testResult = null)
 
         viewModelScope.launch {
-            val reachable = withContext(Dispatchers.IO) {
+            val reachable = withContext(ioDispatcher) {
                 apiClientProvider.testConnectivity(url)
             }
             if (reachable) {
@@ -86,10 +99,11 @@ class SetupViewModel(
     class Factory(
         private val preferencesManager: PreferencesManager,
         private val apiClientProvider: ApiClientProvider,
+        private val skipAutoConnect: Boolean = false,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SetupViewModel(preferencesManager, apiClientProvider) as T
+            return SetupViewModel(preferencesManager, apiClientProvider, skipAutoConnect) as T
         }
     }
 }
