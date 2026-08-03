@@ -103,7 +103,13 @@ export function collectOpenKotJobs(db: BakeDb): BakeOpenKotsResult {
     }
 
     const header = resolveKotHeader(db, order);
-    const items = oiRows.map((oi) => ({ qty: oi.qty, name: oi.itemName, notes: oi.notes }));
+    const items = oiRows.map((oi) => ({
+      qty: oi.qty,
+      name: oi.itemName,
+      notes: oi.notes,
+      unitPriceHalalas: oi.unitPriceHalalas,
+      totalHalalas: oi.totalHalalas,
+    }));
 
     for (const printer of kitchenPrinters) {
       // Build per printer so each ticket's header names its own station —
@@ -118,6 +124,7 @@ export function collectOpenKotJobs(db: BakeDb): BakeOpenKotsResult {
         deliveryExternalRef: order.deliveryExternalRef ?? undefined,
         orderNotes: order.notes,
         createdByName: header.createdByName,
+        totalHalalas: order.totalHalalas,
         items,
       });
       jobs.push({

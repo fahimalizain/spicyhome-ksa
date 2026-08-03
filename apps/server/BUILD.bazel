@@ -132,6 +132,8 @@ js_binary(
         ":node_modules/@spicyhome/shared",
         ":node_modules/better-sqlite3",
         ":node_modules/drizzle-orm",
+        # KOT item lines rasterize via the Arabic glyph atlas (ASCII coverage).
+        "assets/arabic-glyph-atlas.json",
     ],
     entry_point = "src/modules/printers/bake-open-kots.js",
     env = {

@@ -197,14 +197,16 @@ describe('bake-open-kots', () => {
       expect(job.buffer[0]).toBe(0x1b);
       expect(job.buffer[1]).toBe(0x40);
       const ascii = job.buffer.toString('ascii');
+      const hex = job.buffer.toString('hex');
       expect(ascii).toContain('INV26-0001');
-      expect(ascii).toContain('Zinger Burger');
-      expect(ascii).toContain('Pepsi');
       expect(ascii).toContain('Printer: Kitchen A');
-      expect(ascii).toContain('TABLE T1');
+      expect(ascii).toContain('TABLE #1');
+      expect(ascii).toContain('>>>> Dine-in <<<<');
       expect(ascii).toContain('Created By: Ali Kasim');
       expect(ascii).toContain('NOTES: No onions please');
-      expect(ascii).toContain('Qty: 2x');
+      // Item names are raster (GS v 0); notes + prices remain ASCII
+      expect(hex).toContain('1d7630');
+      expect(ascii).toContain('no onion');
       // Target fields match the printers row
       expect(job.printer.printerName).toBe('Kitchen A');
       expect(job.printer.connectionType).toBe('tcp');
@@ -236,9 +238,10 @@ describe('bake-open-kots', () => {
       const result = collectOpenKotJobs(db);
       const job = result.jobs.find((j) => j.orderId === orderDeliveryId)!;
       const ascii = job.buffer.toString('ascii');
-      expect(ascii).toContain('Delivery: HungerStation');
-      expect(ascii).toContain('App order #: HS-883129');
-      expect(ascii).toContain('Type: Takeaway');
+      expect(ascii).toContain('HungerStation / HS-883129');
+      expect(ascii).toContain('>>>> Takeaway <<<<');
+      expect(ascii).not.toContain('Delivery:');
+      expect(ascii).not.toContain('App order #:');
     });
 
     it('carries the Windows queue name on windows targets', () => {
