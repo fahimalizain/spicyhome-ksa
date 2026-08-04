@@ -1547,7 +1547,7 @@ export function OrderPage() {
           {/* Right of the rail: subcategory chips + search, then item grid */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Subcategory chips + inline search */}
-            <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2">
+            <div className="flex items-center gap-2 bg-gray-850 border-b border-gray-700 shrink-0 px-2 py-1">
               {/* Scroll region wrapper for subcategory chips */}
               <div className="relative min-w-0 flex-1">
                 <div
