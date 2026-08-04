@@ -1,16 +1,12 @@
 
-# ItemResponse
+# SubcategoryResponse
 
 ## Properties
 | Name | Type | Description | Notes |
 | ------------ | ------------- | ------------- | ------------- |
 | **id** | **kotlin.Long** |  |  |
-| **categoryId** | **kotlin.Long** | Parent category (denormalized from subcategory) |  |
-| **subcategoryId** | **kotlin.Long** |  |  |
+| **categoryId** | **kotlin.Long** |  |  |
 | **name** | **kotlin.String** |  |  |
-| **nameAr** | **kotlin.String** |  |  |
-| **priceHalalas** | **kotlin.Long** | VAT-inclusive price in halalas |  |
-| **vatRateBp** | **kotlin.Int** | VAT rate in basis points |  |
 | **sortOrder** | **kotlin.Int** |  |  |
 | **isActive** | **kotlin.Boolean** |  |  |
 | **createdAt** | **kotlin.Long** |  |  |

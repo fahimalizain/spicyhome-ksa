@@ -162,6 +162,44 @@ describe('seed', () => {
     });
   });
 
+  it('inserts 17 sub-categories (SubCourses, Title Case, linked to parents)', () => {
+    seedRaw(sqlite);
+
+    const subcategories = sqlite
+      .prepare(
+        `SELECT sc.*, c.name as category_name
+         FROM item_subcategories sc
+         JOIN item_categories c ON c.id = sc.category_id
+         ORDER BY c.sort_order, sc.sort_order`,
+      )
+      .all() as any[];
+    expect(subcategories.length).toBe(17);
+    expect(subcategories.map((s: any) => `${s.category_name} / ${s.name}`)).toEqual([
+      'Soup / Veg',
+      'Soup / Non Veg',
+      'Starters / Starters',
+      'Starters / Salads',
+      'Tandoori / Grill',
+      'Main Course / Chicken',
+      'Main Course / Mutton',
+      'Main Course / Seafood',
+      'Main Course / Vegetable',
+      'Main Course / Delivery',
+      'Rice & Noodles / Rice',
+      'Rice & Noodles / Noodles',
+      'Breads / Breads',
+      'Desserts / Juices',
+      'Desserts / Ice Creams',
+      'Desserts / Beverages',
+      'Desserts / Sweets',
+    ]);
+    subcategories.forEach((s: any) => {
+      expect(s.is_active).toBe(1);
+      expect(Number.isInteger(s.sort_order)).toBe(true);
+      expect(s.sort_order).toBeGreaterThan(0);
+    });
+  });
+
   it('inserts all 204 RMS items (170 active, 34 inactive)', () => {
     seedRaw(sqlite);
 
@@ -177,6 +215,7 @@ describe('seed', () => {
 
     items.forEach((i: any) => {
       expect(i.category_id).toBeGreaterThan(0);
+      expect(i.subcategory_id).toBeGreaterThan(0);
       expect(Number.isInteger(i.price_halalas)).toBe(true);
       expect(i.price_halalas).toBeGreaterThanOrEqual(0); // 0 allowed for freebies
       expect(i.vat_rate_bp).toBe(1500);
@@ -189,7 +228,8 @@ describe('seed', () => {
     const getItem = (name: string): any =>
       sqlite.prepare('SELECT * FROM items WHERE name = ?').get(name);
 
-    // Prawn Soup: rate 20 SAR -> 2000 halalas, Soup category, Arabic name intact
+    // Prawn Soup: rate 20 SAR -> 2000 halalas, Soup category + Non Veg
+    // sub-category, Arabic name intact
     const prawnSoup = getItem('Prawn Soup');
     expect(prawnSoup).toBeDefined();
     expect(prawnSoup.price_halalas).toBe(2000);
@@ -200,6 +240,10 @@ describe('seed', () => {
       .prepare('SELECT name FROM item_categories WHERE id = ?')
       .get(prawnSoup.category_id) as any;
     expect(prawnCategory.name).toBe('Soup');
+    const prawnSubcategory = sqlite
+      .prepare('SELECT name FROM item_subcategories WHERE id = ?')
+      .get(prawnSoup.subcategory_id) as any;
+    expect(prawnSubcategory.name).toBe('Non Veg');
 
     // Chicken Biryani: dump rate is 40 SAR -> 4000 halalas
     const chickenBiryani = getItem('Chicken Biryani');
@@ -210,6 +254,10 @@ describe('seed', () => {
       .prepare('SELECT name FROM item_categories WHERE id = ?')
       .get(chickenBiryani.category_id) as any;
     expect(biryaniCategory.name).toBe('Rice & Noodles');
+    const biryaniSubcategory = sqlite
+      .prepare('SELECT name FROM item_subcategories WHERE id = ?')
+      .get(chickenBiryani.subcategory_id) as any;
+    expect(biryaniSubcategory.name).toBe('Rice');
 
     // Free Nan: rate 0 -> 0 halalas (dump marks it active)
     const freeNan = getItem('Free Nan');
@@ -283,6 +331,11 @@ describe('seed', () => {
 
     const categories = sqlite.prepare('SELECT COUNT(*) as cnt FROM item_categories').get() as any;
     expect(categories.cnt).toBe(7);
+
+    const subcategories = sqlite
+      .prepare('SELECT COUNT(*) as cnt FROM item_subcategories')
+      .get() as any;
+    expect(subcategories.cnt).toBe(17);
 
     const items = sqlite.prepare('SELECT COUNT(*) as cnt FROM items').get() as any;
     expect(items.cnt).toBe(204);

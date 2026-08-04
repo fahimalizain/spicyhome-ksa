@@ -5,6 +5,7 @@ import { OrderPage } from '../pages/OrderPage';
 import { DayPage } from '../pages/DayPage';
 
 const mockListCategories = vi.fn();
+const mockListSubcategories = vi.fn();
 const mockListItems = vi.fn();
 const mockTablesList = vi.fn();
 const mockOrdersList = vi.fn().mockResolvedValue([]);
@@ -23,6 +24,7 @@ vi.mock('../api', () => ({
     },
     menu: {
       listCategories: (...args: any[]) => mockListCategories(...args),
+      listSubcategories: (...args: any[]) => mockListSubcategories(...args),
       listItems: (...args: any[]) => mockListItems(...args),
     },
     tables: {
@@ -84,6 +86,20 @@ const categories = [
   { id: 1, name: 'Burgers', sortOrder: 0, isActive: true, createdAt: 0, updatedAt: 0 },
 ];
 
+const subcategories = [
+  {
+    id: 1,
+    categoryId: 1,
+    name: 'Chicken',
+    sortOrder: 0,
+    isActive: true,
+    createdAt: 0,
+    updatedAt: 0,
+    createdBy: null,
+    updatedBy: null,
+  },
+];
+
 const items = [
   {
     id: 1,
@@ -135,6 +151,7 @@ function renderOrderPage(initialEntries: string[] = ['/']) {
 function setupOpenDay() {
   mockDayCurrent.mockResolvedValue({ status: 'open', businessDate: '2026-07-22' });
   mockListCategories.mockResolvedValue(categories);
+  mockListSubcategories.mockResolvedValue(subcategories);
   mockListItems.mockResolvedValue(items);
   mockTablesList.mockResolvedValue(tables);
 }

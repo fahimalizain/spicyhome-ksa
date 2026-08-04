@@ -10,6 +10,8 @@ import {
 import { MenuService } from './menu.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/create-category.dto';
 import { CategoryResponse } from './dto/category-response.dto';
+import { CreateSubcategoryDto, UpdateSubcategoryDto } from './dto/create-subcategory.dto';
+import { SubcategoryResponse } from './dto/subcategory-response.dto';
 import { CreateItemDto, UpdateItemDto } from './dto/create-item.dto';
 import { ItemResponse } from './dto/item-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
@@ -57,12 +59,55 @@ export class MenuController {
     return this.menuService.updateCategory(id, dto, user.sub);
   }
 
-  @Get('items')
-  @ApiOperation({ summary: 'List all items, optionally filtered by category' })
-  @ApiOkResponse({ description: 'List of items', type: [ItemResponse] })
-  listItems(@Query('categoryId') categoryId?: string) {
+  @Get('subcategories')
+  @ApiOperation({ summary: 'List all sub-categories, optionally filtered by category' })
+  @ApiOkResponse({ description: 'List of sub-categories', type: [SubcategoryResponse] })
+  listSubcategories(@Query('categoryId') categoryId?: string) {
     const catId = categoryId ? parseInt(categoryId, 10) : undefined;
-    return this.menuService.listItems(catId);
+    return this.menuService.listSubcategories(catId);
+  }
+
+  @Get('subcategories/:id')
+  @ApiOperation({ summary: 'Get sub-category by ID' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Sub-category details', type: SubcategoryResponse })
+  getSubcategory(@Param('id', ParseIntPipe) id: number) {
+    return this.menuService.getSubcategory(id);
+  }
+
+  @Post('subcategories')
+  @RequiresPermission('manage_menu')
+  @ApiOperation({ summary: 'Create a sub-category' })
+  @ApiCreatedResponse({ description: 'Created sub-category', type: SubcategoryResponse })
+  createSubcategory(@Body() dto: CreateSubcategoryDto, @CurrentUser() user: any) {
+    return this.menuService.createSubcategory(dto, user.sub);
+  }
+
+  @Put('subcategories/:id')
+  @RequiresPermission('manage_menu')
+  @ApiOperation({ summary: 'Update a sub-category' })
+  @ApiParam({ name: 'id', type: 'integer', format: 'int64' })
+  @ApiOkResponse({ description: 'Updated sub-category', type: SubcategoryResponse })
+  updateSubcategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSubcategoryDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.menuService.updateSubcategory(id, dto, user.sub);
+  }
+
+  @Get('items')
+  @ApiOperation({
+    summary: 'List all items, optionally filtered by category or sub-category',
+  })
+  @ApiOkResponse({ description: 'List of items', type: [ItemResponse] })
+  listItems(
+    @Query('categoryId') categoryId?: string,
+    @Query('subcategoryId') subcategoryId?: string,
+  ) {
+    const catId = categoryId ? parseInt(categoryId, 10) : undefined;
+    const subId = subcategoryId ? parseInt(subcategoryId, 10) : undefined;
+    return this.menuService.listItems(catId, subId);
   }
 
   @Get('items/:id')

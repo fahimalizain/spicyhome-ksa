@@ -64,7 +64,9 @@ afterAll(async () => {
 
 describe('Client contract test', () => {
   let categoryId: number;
+  let subcategoryId: number;
   let itemId: number;
+  let otherCategoryId: number;
   let orderId: number;
 
   it('login succeeds with correct credentials', async () => {
@@ -131,9 +133,52 @@ describe('Client contract test', () => {
     expect(res.name).toBe('Burgers');
   });
 
+  it('creates a subcategory', async () => {
+    const res: any = await client.menu.createSubcategory({
+      categoryId,
+      name: 'Chicken',
+      sortOrder: 0,
+      isActive: true,
+    });
+    expect(res.id).toBeDefined();
+    expect(res.categoryId).toBe(categoryId);
+    expect(res.name).toBe('Chicken');
+    subcategoryId = res.id;
+  });
+
+  it('lists subcategories', async () => {
+    const res: any = await client.menu.listSubcategories();
+    expect(Array.isArray(res)).toBe(true);
+    expect(res.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lists subcategories filtered by category', async () => {
+    const res: any = await client.menu.listSubcategories(categoryId);
+    expect(Array.isArray(res)).toBe(true);
+    const chicken = res.find((s: any) => s.id === subcategoryId);
+    expect(chicken).toBeDefined();
+    expect(chicken.name).toBe('Chicken');
+  });
+
+  it('gets a subcategory by id', async () => {
+    const res: any = await client.menu.getSubcategory(subcategoryId);
+    expect(res.id).toBe(subcategoryId);
+    expect(res.name).toBe('Chicken');
+  });
+
+  it('updates a subcategory', async () => {
+    const res: any = await client.menu.updateSubcategory(subcategoryId, {
+      name: 'Fried Chicken',
+      sortOrder: 1,
+    });
+    expect(res.name).toBe('Fried Chicken');
+    expect(res.sortOrder).toBe(1);
+    expect(res.categoryId).toBe(categoryId);
+  });
+
   it('creates an item', async () => {
     const res: any = await client.menu.createItem({
-      categoryId,
+      subcategoryId,
       name: 'Zinger Burger',
       priceHalalas: 2300,
       vatRateBp: 1500,
@@ -142,6 +187,9 @@ describe('Client contract test', () => {
     });
     expect(res.id).toBeDefined();
     expect(res.name).toBe('Zinger Burger');
+    // categoryId must be derived from the subcategory's parent
+    expect(res.categoryId).toBe(categoryId);
+    expect(res.subcategoryId).toBe(subcategoryId);
     itemId = res.id;
   });
 
@@ -157,10 +205,48 @@ describe('Client contract test', () => {
     expect(res.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('lists items filtered by subcategory', async () => {
+    const res: any = await client.menu.listItems(undefined, subcategoryId);
+    expect(Array.isArray(res)).toBe(true);
+    expect(res.length).toBeGreaterThanOrEqual(1);
+    expect(res.every((i: any) => i.subcategoryId === subcategoryId)).toBe(true);
+  });
+
   it('gets an item by id', async () => {
     const res: any = await client.menu.getItem(itemId);
     expect(res.id).toBe(itemId);
     expect(res.priceHalalas).toBe(2300);
+    expect(res.subcategoryId).toBe(subcategoryId);
+  });
+
+  it('creates a second category for reparenting tests', async () => {
+    const res: any = await client.menu.createCategory({
+      name: 'Pizza',
+      sortOrder: 1,
+      isActive: true,
+    });
+    expect(res.id).toBeDefined();
+    otherCategoryId = res.id;
+  });
+
+  it('updateItem with only categoryId keeps the category derived from the subcategory', async () => {
+    const res: any = await client.menu.updateItem(itemId, {
+      categoryId: otherCategoryId,
+    });
+    // categoryId alone must be ignored — never written directly.
+    expect(res.categoryId).toBe(categoryId);
+    expect(res.subcategoryId).toBe(subcategoryId);
+  });
+
+  it('updateSubcategory reparent cascades the new parent onto items', async () => {
+    const sub: any = await client.menu.updateSubcategory(subcategoryId, {
+      categoryId: otherCategoryId,
+    });
+    expect(sub.categoryId).toBe(otherCategoryId);
+    const item: any = await client.menu.getItem(itemId);
+    // Denormalized items.category_id must follow the subcategory's parent.
+    expect(item.categoryId).toBe(otherCategoryId);
+    expect(item.subcategoryId).toBe(subcategoryId);
   });
 
   it('opens a business day', async () => {

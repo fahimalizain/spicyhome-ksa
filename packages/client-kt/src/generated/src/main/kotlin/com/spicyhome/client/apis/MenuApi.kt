@@ -9,9 +9,12 @@ import com.squareup.moshi.Json
 import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.CreateCategoryDto
 import com.spicyhome.client.models.CreateItemDto
+import com.spicyhome.client.models.CreateSubcategoryDto
 import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.SubcategoryResponse
 import com.spicyhome.client.models.UpdateCategoryDto
 import com.spicyhome.client.models.UpdateItemDto
+import com.spicyhome.client.models.UpdateSubcategoryDto
 
 interface MenuApi {
     /**
@@ -41,6 +44,19 @@ interface MenuApi {
     fun menuControllerCreateItem(@Body createItemDto: CreateItemDto): Call<ItemResponse>
 
     /**
+     * POST menu/subcategories
+     * Create a sub-category
+     * 
+     * Responses:
+     *  - 201: Created sub-category
+     *
+     * @param createSubcategoryDto 
+     * @return [Call]<[SubcategoryResponse]>
+     */
+    @POST("menu/subcategories")
+    fun menuControllerCreateSubcategory(@Body createSubcategoryDto: CreateSubcategoryDto): Call<SubcategoryResponse>
+
+    /**
      * GET menu/categories/{id}
      * Get category by ID
      * 
@@ -67,6 +83,19 @@ interface MenuApi {
     fun menuControllerGetItem(@Path("id") id: kotlin.Long): Call<ItemResponse>
 
     /**
+     * GET menu/subcategories/{id}
+     * Get sub-category by ID
+     * 
+     * Responses:
+     *  - 200: Sub-category details
+     *
+     * @param id 
+     * @return [Call]<[SubcategoryResponse]>
+     */
+    @GET("menu/subcategories/{id}")
+    fun menuControllerGetSubcategory(@Path("id") id: kotlin.Long): Call<SubcategoryResponse>
+
+    /**
      * GET menu/categories
      * List all categories
      * 
@@ -80,16 +109,30 @@ interface MenuApi {
 
     /**
      * GET menu/items
-     * List all items, optionally filtered by category
+     * List all items, optionally filtered by category or sub-category
      * 
      * Responses:
      *  - 200: List of items
      *
      * @param categoryId 
+     * @param subcategoryId 
      * @return [Call]<[kotlin.collections.List<ItemResponse>]>
      */
     @GET("menu/items")
-    fun menuControllerListItems(@Query("categoryId") categoryId: kotlin.String): Call<kotlin.collections.List<ItemResponse>>
+    fun menuControllerListItems(@Query("categoryId") categoryId: kotlin.String, @Query("subcategoryId") subcategoryId: kotlin.String): Call<kotlin.collections.List<ItemResponse>>
+
+    /**
+     * GET menu/subcategories
+     * List all sub-categories, optionally filtered by category
+     * 
+     * Responses:
+     *  - 200: List of sub-categories
+     *
+     * @param categoryId 
+     * @return [Call]<[kotlin.collections.List<SubcategoryResponse>]>
+     */
+    @GET("menu/subcategories")
+    fun menuControllerListSubcategories(@Query("categoryId") categoryId: kotlin.String): Call<kotlin.collections.List<SubcategoryResponse>>
 
     /**
      * PUT menu/categories/{id}
@@ -118,5 +161,19 @@ interface MenuApi {
      */
     @PUT("menu/items/{id}")
     fun menuControllerUpdateItem(@Path("id") id: kotlin.Long, @Body updateItemDto: UpdateItemDto): Call<ItemResponse>
+
+    /**
+     * PUT menu/subcategories/{id}
+     * Update a sub-category
+     * 
+     * Responses:
+     *  - 200: Updated sub-category
+     *
+     * @param id 
+     * @param updateSubcategoryDto 
+     * @return [Call]<[SubcategoryResponse]>
+     */
+    @PUT("menu/subcategories/{id}")
+    fun menuControllerUpdateSubcategory(@Path("id") id: kotlin.Long, @Body updateSubcategoryDto: UpdateSubcategoryDto): Call<SubcategoryResponse>
 
 }

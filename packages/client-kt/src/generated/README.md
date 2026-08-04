@@ -67,12 +67,16 @@ All URIs are relative to *http://localhost*
 | *DeliveryPartnersApi* | [**deliveryPartnersControllerUpdate**](docs/DeliveryPartnersApi.md#deliverypartnerscontrollerupdate) | **PATCH** delivery-partners/{id} | Update a delivery partner (title / enabled / sort_order; mirrors title + enabled to the owned payment method) |
 | *MenuApi* | [**menuControllerCreateCategory**](docs/MenuApi.md#menucontrollercreatecategory) | **POST** menu/categories | Create a category |
 | *MenuApi* | [**menuControllerCreateItem**](docs/MenuApi.md#menucontrollercreateitem) | **POST** menu/items | Create an item |
+| *MenuApi* | [**menuControllerCreateSubcategory**](docs/MenuApi.md#menucontrollercreatesubcategory) | **POST** menu/subcategories | Create a sub-category |
 | *MenuApi* | [**menuControllerGetCategory**](docs/MenuApi.md#menucontrollergetcategory) | **GET** menu/categories/{id} | Get category by ID |
 | *MenuApi* | [**menuControllerGetItem**](docs/MenuApi.md#menucontrollergetitem) | **GET** menu/items/{id} | Get item by ID |
+| *MenuApi* | [**menuControllerGetSubcategory**](docs/MenuApi.md#menucontrollergetsubcategory) | **GET** menu/subcategories/{id} | Get sub-category by ID |
 | *MenuApi* | [**menuControllerListCategories**](docs/MenuApi.md#menucontrollerlistcategories) | **GET** menu/categories | List all categories |
-| *MenuApi* | [**menuControllerListItems**](docs/MenuApi.md#menucontrollerlistitems) | **GET** menu/items | List all items, optionally filtered by category |
+| *MenuApi* | [**menuControllerListItems**](docs/MenuApi.md#menucontrollerlistitems) | **GET** menu/items | List all items, optionally filtered by category or sub-category |
+| *MenuApi* | [**menuControllerListSubcategories**](docs/MenuApi.md#menucontrollerlistsubcategories) | **GET** menu/subcategories | List all sub-categories, optionally filtered by category |
 | *MenuApi* | [**menuControllerUpdateCategory**](docs/MenuApi.md#menucontrollerupdatecategory) | **PUT** menu/categories/{id} | Update a category |
 | *MenuApi* | [**menuControllerUpdateItem**](docs/MenuApi.md#menucontrollerupdateitem) | **PUT** menu/items/{id} | Update an item |
+| *MenuApi* | [**menuControllerUpdateSubcategory**](docs/MenuApi.md#menucontrollerupdatesubcategory) | **PUT** menu/subcategories/{id} | Update a sub-category |
 | *OrdersApi* | [**ordersControllerAddOrderPayment**](docs/OrdersApi.md#orderscontrolleraddorderpayment) | **POST** orders/{id}/payments | Append one payment line to an open order (status stays open) |
 | *OrdersApi* | [**ordersControllerCreateOrder**](docs/OrdersApi.md#orderscontrollercreateorder) | **POST** orders | Create a new order |
 | *OrdersApi* | [**ordersControllerGetOrder**](docs/OrdersApi.md#orderscontrollergetorder) | **GET** orders/{id} | Get order by ID with items and events |
@@ -151,6 +155,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreatePrinterDto](docs/CreatePrinterDto.md)
  - [com.spicyhome.client.models.CreateRefundDto](docs/CreateRefundDto.md)
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
+ - [com.spicyhome.client.models.CreateSubcategoryDto](docs/CreateSubcategoryDto.md)
  - [com.spicyhome.client.models.CreateTableDto](docs/CreateTableDto.md)
  - [com.spicyhome.client.models.CreateUserDto](docs/CreateUserDto.md)
  - [com.spicyhome.client.models.CurrentDayResponse](docs/CurrentDayResponse.md)
@@ -181,6 +186,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.SetSettingDto](docs/SetSettingDto.md)
  - [com.spicyhome.client.models.SettingResponse](docs/SettingResponse.md)
  - [com.spicyhome.client.models.StatusResponse](docs/StatusResponse.md)
+ - [com.spicyhome.client.models.SubcategoryResponse](docs/SubcategoryResponse.md)
  - [com.spicyhome.client.models.SubmitOrderDto](docs/SubmitOrderDto.md)
  - [com.spicyhome.client.models.SuccessResponse](docs/SuccessResponse.md)
  - [com.spicyhome.client.models.SyncOrderItemDto](docs/SyncOrderItemDto.md)
@@ -196,6 +202,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
+ - [com.spicyhome.client.models.UpdateSubcategoryDto](docs/UpdateSubcategoryDto.md)
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)
  - [com.spicyhome.client.models.UpdateUserDto](docs/UpdateUserDto.md)
  - [com.spicyhome.client.models.UserOptionResponse](docs/UserOptionResponse.md)

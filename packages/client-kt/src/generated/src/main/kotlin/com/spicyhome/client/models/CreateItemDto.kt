@@ -22,9 +22,10 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param categoryId 
+ * @param subcategoryId 
  * @param name 
  * @param priceHalalas VAT-inclusive price in halalas (23.00 SAR)
+ * @param categoryId Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts.
  * @param nameAr 
  * @param vatRateBp VAT rate in basis points (1500 = 15%)
  * @param sortOrder 
@@ -34,8 +35,8 @@ import com.squareup.moshi.JsonClass
 
 data class CreateItemDto (
 
-    @Json(name = "categoryId")
-    val categoryId: kotlin.Long,
+    @Json(name = "subcategoryId")
+    val subcategoryId: kotlin.Long,
 
     @Json(name = "name")
     val name: kotlin.String,
@@ -43,6 +44,10 @@ data class CreateItemDto (
     /* VAT-inclusive price in halalas (23.00 SAR) */
     @Json(name = "priceHalalas")
     val priceHalalas: kotlin.Long,
+
+    /* Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts. */
+    @Json(name = "categoryId")
+    val categoryId: kotlin.Long? = null,
 
     @Json(name = "nameAr")
     val nameAr: kotlin.String? = null,

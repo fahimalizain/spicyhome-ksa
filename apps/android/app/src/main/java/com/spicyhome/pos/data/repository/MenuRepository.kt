@@ -3,6 +3,7 @@ package com.spicyhome.pos.data.repository
 import com.spicyhome.client.apis.MenuApi
 import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.ItemResponse
+import com.spicyhome.client.models.SubcategoryResponse
 import retrofit2.Call
 
 class MenuRepository(private val menuApi: MenuApi) {
@@ -11,7 +12,11 @@ class MenuRepository(private val menuApi: MenuApi) {
         return menuApi.menuControllerListCategories()
     }
 
-    fun listItems(categoryId: String? = null): Call<List<ItemResponse>> {
-        return menuApi.menuControllerListItems(categoryId ?: "")
+    fun listSubcategories(categoryId: String? = null): Call<List<SubcategoryResponse>> {
+        return menuApi.menuControllerListSubcategories(categoryId ?: "")
+    }
+
+    fun listItems(categoryId: String? = null, subcategoryId: String? = null): Call<List<ItemResponse>> {
+        return menuApi.menuControllerListItems(categoryId ?: "", subcategoryId ?: "")
     }
 }

@@ -25,10 +25,10 @@ class CreateItemDtoTest : ShouldSpec() {
         // uncomment below to create an instance of CreateItemDto
         //val modelInstance = CreateItemDto()
 
-        // to test the property `categoryId`
-        should("test categoryId") {
+        // to test the property `subcategoryId`
+        should("test subcategoryId") {
             // uncomment below to test the property
-            //modelInstance.categoryId shouldBe ("TODO")
+            //modelInstance.subcategoryId shouldBe ("TODO")
         }
 
         // to test the property `name`
@@ -41,6 +41,12 @@ class CreateItemDtoTest : ShouldSpec() {
         should("test priceHalalas") {
             // uncomment below to test the property
             //modelInstance.priceHalalas shouldBe ("TODO")
+        }
+
+        // to test the property `categoryId` - Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts.
+        should("test categoryId") {
+            // uncomment below to test the property
+            //modelInstance.categoryId shouldBe ("TODO")
         }
 
         // to test the property `nameAr`

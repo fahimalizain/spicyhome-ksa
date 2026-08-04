@@ -7,6 +7,7 @@ import com.spicyhome.client.models.CategoryResponse
 import com.spicyhome.client.models.ItemResponse
 import com.spicyhome.client.models.MeResponse
 import com.spicyhome.client.models.OrderResponse
+import com.spicyhome.client.models.SubcategoryResponse
 import com.spicyhome.client.models.SyncOrderItemDto
 import com.spicyhome.client.models.TableResponse
 import com.spicyhome.pos.data.PreferencesManager
@@ -88,9 +89,11 @@ data class OrderUiState(
     /** Display name for the user menu (from prefs username, refined with me.name when available). */
     val username: String = "",
     val categories: List<CategoryResponse> = emptyList(),
+    val subcategories: List<SubcategoryResponse> = emptyList(),
     val items: List<ItemResponse> = emptyList(),
     val tables: List<TableResponse> = emptyList(),
     val selectedCategoryId: Long? = null,
+    val selectedSubcategoryId: Long? = null,
     val cart: List<CartItem> = emptyList(),
     val orderType: OrderType = OrderType.DINE_IN,
     val selectedTableId: Long? = null,
@@ -116,10 +119,15 @@ data class OrderUiState(
 ) {
     val filteredItems: List<ItemResponse>
         get() {
-            val categoryFiltered = if (selectedCategoryId == null) {
-                items
-            } else {
-                items.filter { it.categoryId.toLong() == selectedCategoryId }
+            // A selected subcategory takes precedence over the category.
+            val categoryFiltered = when {
+                selectedSubcategoryId != null -> {
+                    items.filter { it.subcategoryId.toLong() == selectedSubcategoryId }
+                }
+                selectedCategoryId != null -> {
+                    items.filter { it.categoryId.toLong() == selectedCategoryId }
+                }
+                else -> items
             }
             val q = itemSearchQuery.trim()
             if (q.isEmpty()) return categoryFiltered
@@ -329,15 +337,24 @@ class OrderViewModel(
                 val catsDeferred = async(ioDispatcher) {
                     menuRepo!!.listCategories().execute()
                 }
+                val subsDeferred = async(ioDispatcher) {
+                    menuRepo!!.listSubcategories().execute()
+                }
                 val itemsDeferred = async(ioDispatcher) {
                     menuRepo!!.listItems().execute()
                 }
 
                 val catsResponse = catsDeferred.await()
+                val subsResponse = subsDeferred.await()
                 val itemsResponse = itemsDeferred.await()
 
                 val cats = if (catsResponse.isSuccessful) {
                     (catsResponse.body() ?: emptyList()).filter { it.isActive }
+                } else {
+                    emptyList()
+                }
+                val subs = if (subsResponse.isSuccessful) {
+                    (subsResponse.body() ?: emptyList()).filter { it.isActive }
                 } else {
                     emptyList()
                 }
@@ -351,12 +368,16 @@ class OrderViewModel(
                 if (!catsResponse.isSuccessful) {
                     error = "Failed to load categories (${catsResponse.code()})"
                 }
+                if (!subsResponse.isSuccessful) {
+                    error = "Failed to load subcategories (${subsResponse.code()})"
+                }
                 if (!itemsResponse.isSuccessful) {
                     error = "Failed to load items (${itemsResponse.code()})"
                 }
 
                 _uiState.value = _uiState.value.copy(
                     categories = cats,
+                    subcategories = subs,
                     items = allItems,
                     categoriesLoaded = true,
                     error = error,
@@ -385,8 +406,16 @@ class OrderViewModel(
     }
 
     fun selectCategory(categoryId: Long?) {
+        // Changing category resets the subcategory chip to "All" (null).
         _uiState.value = _uiState.value.copy(
             selectedCategoryId = categoryId,
+            selectedSubcategoryId = null,
+        )
+    }
+
+    fun selectSubcategory(subcategoryId: Long?) {
+        _uiState.value = _uiState.value.copy(
+            selectedSubcategoryId = subcategoryId,
         )
     }
 
@@ -780,6 +809,7 @@ class OrderViewModel(
             val item = menuItem ?: ItemResponse(
                 id = oi.itemId ?: 0L,
                 categoryId = 0L,
+                subcategoryId = 0L,
                 name = oi.itemName,
                 nameAr = null,
                 priceHalalas = oi.unitPriceHalalas,
@@ -829,6 +859,7 @@ class OrderViewModel(
     fun newOrder() {
         _uiState.value = OrderUiState(
             categories = _uiState.value.categories,
+            subcategories = _uiState.value.subcategories,
             items = _uiState.value.items,
             tables = _uiState.value.tables,
             categoriesLoaded = _uiState.value.categoriesLoaded,

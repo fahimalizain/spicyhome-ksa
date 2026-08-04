@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
-import type { ItemResponse, CategoryResponse } from '@spicyhome/client-ts';
+import type { ItemResponse, CategoryResponse, SubcategoryResponse } from '@spicyhome/client-ts';
 
 export function ItemsPage() {
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [subcategories, setSubcategories] = useState<SubcategoryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: '',
     categoryId: 0,
+    subcategoryId: 0,
     priceHalalas: 0,
     vatRateBp: 1500,
     sortOrder: 0,
@@ -25,12 +27,14 @@ export function ItemsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [itemList, catList] = await Promise.all([
+      const [itemList, catList, subList] = await Promise.all([
         client.menu.listItems(),
         client.menu.listCategories(),
+        client.menu.listSubcategories(),
       ]);
       setItems(itemList);
       setCategories(catList);
+      setSubcategories(subList);
     } catch {
       setError('Failed to load items');
     } finally {
@@ -38,10 +42,19 @@ export function ItemsPage() {
     }
   }
 
+  /** Active subcategories of the currently selected category (by sortOrder). */
+  function subcategoryOptions(categoryId: number): SubcategoryResponse[] {
+    return subcategories
+      .filter((s) => s.categoryId === categoryId)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  }
+
   function resetForm() {
+    const firstCategoryId = categories[0]?.id || 0;
     setForm({
       name: '',
-      categoryId: categories[0]?.id || 0,
+      categoryId: firstCategoryId,
+      subcategoryId: subcategoryOptions(firstCategoryId)[0]?.id || 0,
       priceHalalas: 0,
       vatRateBp: 1500,
       sortOrder: 0,
@@ -54,6 +67,7 @@ export function ItemsPage() {
     setForm({
       name: item.name,
       categoryId: item.categoryId,
+      subcategoryId: item.subcategoryId,
       priceHalalas: item.priceHalalas,
       vatRateBp: item.vatRateBp,
       sortOrder: item.sortOrder,
@@ -65,17 +79,35 @@ export function ItemsPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!form.subcategoryId) {
+      setError('Please select a subcategory');
+      return;
+    }
     try {
+      // categoryId is derived server-side from the subcategory's parent.
+      const payload = {
+        subcategoryId: form.subcategoryId,
+        name: form.name,
+        priceHalalas: form.priceHalalas,
+        vatRateBp: form.vatRateBp,
+        sortOrder: form.sortOrder,
+        isActive: form.isActive,
+      };
       if (editId) {
-        await client.menu.updateItem(editId, form);
+        await client.menu.updateItem(editId, payload);
       } else {
-        await client.menu.createItem(form);
+        await client.menu.createItem(payload);
       }
       resetForm();
       await loadData();
     } catch (e: any) {
       setError(e.message || 'Failed to save');
     }
+  }
+
+  /** Subcategory display name for an item row. */
+  function subcategoryLabel(item: ItemResponse): string {
+    return subcategories.find((s) => s.id === item.subcategoryId)?.name ?? `#${item.subcategoryId}`;
   }
 
   if (loading) return <div className="p-4 text-gray-400">Loading...</div>;
@@ -103,11 +135,33 @@ export function ItemsPage() {
             <select
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
               value={form.categoryId}
-              onChange={(e) => setForm((f) => ({ ...f, categoryId: Number(e.target.value) }))}
+              onChange={(e) => {
+                const categoryId = Number(e.target.value);
+                // Reset subcategory to the first of the new category.
+                setForm((f) => ({
+                  ...f,
+                  categoryId,
+                  subcategoryId: subcategoryOptions(categoryId)[0]?.id || 0,
+                }));
+              }}
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Subcategory</label>
+            <select
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              value={form.subcategoryId}
+              onChange={(e) => setForm((f) => ({ ...f, subcategoryId: Number(e.target.value) }))}
+            >
+              {subcategoryOptions(form.categoryId).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -156,6 +210,7 @@ export function ItemsPage() {
           >
             <div>
               <span className="text-sm text-white">{item.name}</span>
+              <span className="text-xs text-gray-500 ml-2">{subcategoryLabel(item)}</span>
               <span className="text-xs text-gray-500 ml-2">
                 {halalasToSar(item.priceHalalas)} SAR
               </span>

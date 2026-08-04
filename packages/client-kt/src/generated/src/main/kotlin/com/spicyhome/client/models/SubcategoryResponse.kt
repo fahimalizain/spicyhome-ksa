@@ -23,12 +23,8 @@ import com.squareup.moshi.JsonClass
  * 
  *
  * @param id 
- * @param categoryId Parent category (denormalized from subcategory)
- * @param subcategoryId 
+ * @param categoryId 
  * @param name 
- * @param nameAr 
- * @param priceHalalas VAT-inclusive price in halalas
- * @param vatRateBp VAT rate in basis points
  * @param sortOrder 
  * @param isActive 
  * @param createdAt 
@@ -38,31 +34,16 @@ import com.squareup.moshi.JsonClass
  */
 
 
-data class ItemResponse (
+data class SubcategoryResponse (
 
     @Json(name = "id")
     val id: kotlin.Long,
 
-    /* Parent category (denormalized from subcategory) */
     @Json(name = "categoryId")
     val categoryId: kotlin.Long,
 
-    @Json(name = "subcategoryId")
-    val subcategoryId: kotlin.Long,
-
     @Json(name = "name")
     val name: kotlin.String,
-
-    @Json(name = "nameAr")
-    val nameAr: kotlin.String?,
-
-    /* VAT-inclusive price in halalas */
-    @Json(name = "priceHalalas")
-    val priceHalalas: kotlin.Long,
-
-    /* VAT rate in basis points */
-    @Json(name = "vatRateBp")
-    val vatRateBp: kotlin.Int,
 
     @Json(name = "sortOrder")
     val sortOrder: kotlin.Int,

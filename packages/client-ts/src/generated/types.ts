@@ -179,6 +179,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/menu/subcategories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all sub-categories, optionally filtered by category */
+    get: operations['MenuController_listSubcategories'];
+    put?: never;
+    /** Create a sub-category */
+    post: operations['MenuController_createSubcategory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/menu/subcategories/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get sub-category by ID */
+    get: operations['MenuController_getSubcategory'];
+    /** Update a sub-category */
+    put: operations['MenuController_updateSubcategory'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/menu/items': {
     parameters: {
       query?: never;
@@ -186,7 +222,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List all items, optionally filtered by category */
+    /** List all items, optionally filtered by category or sub-category */
     get: operations['MenuController_listItems'];
     put?: never;
     /** Create an item */
@@ -1525,7 +1561,7 @@ export interface components {
       printerId?: number;
       isActive?: boolean;
     };
-    ItemResponse: {
+    SubcategoryResponse: {
       /**
        * Format: int64
        * @example 1
@@ -1536,6 +1572,82 @@ export interface components {
        * @example 1
        */
       categoryId: number;
+      /** @example Non Veg */
+      name: string;
+      /**
+       * Format: int32
+       * @example 0
+       */
+      sortOrder: number;
+      /** @example true */
+      isActive: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreateSubcategoryDto: {
+      /**
+       * Format: int64
+       * @description Parent category ID
+       * @example 1
+       */
+      categoryId: number;
+      /** @example Non Veg */
+      name: string;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      sortOrder: number;
+      /** @default true */
+      isActive: boolean;
+    };
+    UpdateSubcategoryDto: {
+      /**
+       * Format: int64
+       * @description Parent category ID
+       */
+      categoryId?: number;
+      /** @example Non Veg */
+      name?: string;
+      /** Format: int32 */
+      sortOrder?: number;
+      isActive?: boolean;
+    };
+    ItemResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /**
+       * Format: int64
+       * @description Parent category (denormalized from subcategory)
+       * @example 1
+       */
+      categoryId: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      subcategoryId: number;
       /** @example Zinger Burger */
       name: string;
       /** @example زنجر برجر */
@@ -1585,7 +1697,13 @@ export interface components {
        * Format: int64
        * @example 1
        */
-      categoryId: number;
+      subcategoryId: number;
+      /**
+       * Format: int64
+       * @description Derived from subcategoryId by the server (the subcategory's parent). Ignored when it conflicts.
+       * @example 1
+       */
+      categoryId?: number;
       /** @example Zinger Burger */
       name: string;
       /** @example زنجر برجر */
@@ -1611,6 +1729,11 @@ export interface components {
       isActive: boolean;
     };
     UpdateItemDto: {
+      /**
+       * Format: int64
+       * @description When provided, categoryId is derived from the subcategory's parent.
+       */
+      subcategoryId?: number;
       /** Format: int64 */
       categoryId?: number;
       name?: string;
@@ -3285,10 +3408,105 @@ export interface operations {
       };
     };
   };
+  MenuController_listSubcategories: {
+    parameters: {
+      query: {
+        categoryId: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of sub-categories */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubcategoryResponse'][];
+        };
+      };
+    };
+  };
+  MenuController_createSubcategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateSubcategoryDto'];
+      };
+    };
+    responses: {
+      /** @description Created sub-category */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubcategoryResponse'];
+        };
+      };
+    };
+  };
+  MenuController_getSubcategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sub-category details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubcategoryResponse'];
+        };
+      };
+    };
+  };
+  MenuController_updateSubcategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateSubcategoryDto'];
+      };
+    };
+    responses: {
+      /** @description Updated sub-category */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubcategoryResponse'];
+        };
+      };
+    };
+  };
   MenuController_listItems: {
     parameters: {
       query: {
         categoryId: string;
+        subcategoryId: string;
       };
       header?: never;
       path?: never;

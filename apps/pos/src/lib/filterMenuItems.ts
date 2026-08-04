@@ -1,7 +1,13 @@
 import type { ItemResponse } from '@spicyhome/client-ts';
 
 export interface FilterMenuItemsOptions {
+  /**
+   * When `subcategoryId` is set it takes precedence (items are filtered by
+   * subcategory only). Otherwise `categoryId` filters by parent category.
+   * Both null → all items.
+   */
   categoryId: number | null;
+  subcategoryId: number | null;
   query: string;
 }
 
@@ -20,17 +26,21 @@ function matchesQuery(item: ItemResponse, query: string): boolean {
 }
 
 /**
- * Filters a list of active items by optional category and text query.
- * Items are expected to already be active-only before calling this function.
+ * Filters a list of active items by optional subcategory / category and
+ * text query. Items are expected to already be active-only before calling
+ * this function.
  */
 export function filterMenuItems(
   items: ItemResponse[],
   options: FilterMenuItemsOptions,
 ): ItemResponse[] {
-  const { categoryId, query } = options;
+  const { categoryId, subcategoryId, query } = options;
 
   return items.filter((item) => {
-    if (categoryId !== null && item.categoryId !== categoryId) return false;
+    if (subcategoryId !== null && item.subcategoryId !== subcategoryId) return false;
+    if (subcategoryId === null && categoryId !== null && item.categoryId !== categoryId) {
+      return false;
+    }
     return matchesQuery(item, query);
   });
 }

@@ -6,6 +6,7 @@ import type { ItemResponse, OrderResponse } from '@spicyhome/client-ts';
 const mockItem: ItemResponse = {
   id: 1,
   categoryId: 1,
+  subcategoryId: 1,
   name: 'Zinger Burger',
   priceHalalas: 2300,
   vatRateBp: 1500,

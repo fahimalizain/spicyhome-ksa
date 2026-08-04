@@ -323,144 +323,184 @@ private fun OrderEditingPanel(
                 onLogout = { viewModel.logout(); onLogout() },
             )
 
-            // Category tabs + inline search
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Left: horizontally scrollable category chips with right-edge fade
-                val listState = rememberLazyListState()
-
-                val showRightFade by remember {
-                    derivedStateOf {
-                        val info = listState.layoutInfo
-                        val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
-                        last.index < info.totalItemsCount - 1 ||
-                            last.offset + last.size > info.viewportEndOffset
+            // Menu area: vertical category rail + subcategory chips + items
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Vertical category rail — "All" clears category + subcategory
+                LazyColumn(
+                    modifier = Modifier
+                        .width(116.dp)
+                        .fillMaxHeight()
+                        .background(DarkSurfaceVariant.copy(alpha = 0.4f))
+                        .border(0.dp, Color.Transparent)
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    item {
+                        RailCategoryButton(
+                            label = "All",
+                            selected = state.selectedCategoryId == null,
+                            onClick = { viewModel.selectCategory(null) },
+                        )
+                    }
+                    items(state.categories) { cat ->
+                        RailCategoryButton(
+                            label = cat.name,
+                            selected = state.selectedCategoryId == cat.id.toLong(),
+                            onClick = { viewModel.selectCategory(cat.id.toLong()) },
+                        )
                     }
                 }
 
-                val density = LocalDensity.current
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    // Subcategory chips + inline search
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Left: horizontally scrollable subcategory chips with right-edge fade
+                        val listState = rememberLazyListState()
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .drawWithContent {
-                            drawContent()
-                            if (showRightFade) {
-                                val fadeW = with(density) { 32.dp.toPx() }
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color.Transparent, DarkSurfaceVariant),
-                                        startX = size.width - fadeW,
-                                        endX = size.width,
-                                    ),
-                                    topLeft = Offset(size.width - fadeW, 0f),
-                                    size = Size(fadeW, size.height),
+                        val showRightFade by remember {
+                            derivedStateOf {
+                                val info = listState.layoutInfo
+                                val last = info.visibleItemsInfo.lastOrNull()
+                                    ?: return@derivedStateOf false
+                                last.index < info.totalItemsCount - 1 ||
+                                    last.offset + last.size > info.viewportEndOffset
+                            }
+                        }
+
+                        val density = LocalDensity.current
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .drawWithContent {
+                                    drawContent()
+                                    if (showRightFade) {
+                                        val fadeW = with(density) { 32.dp.toPx() }
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(Color.Transparent, DarkSurfaceVariant),
+                                                startX = size.width - fadeW,
+                                                endX = size.width,
+                                            ),
+                                            topLeft = Offset(size.width - fadeW, 0f),
+                                            size = Size(fadeW, size.height),
+                                        )
+                                    }
+                                },
+                        ) {
+                            LazyRow(
+                                state = listState,
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                // Subcategory chips only apply within a selected category
+                                if (state.selectedCategoryId != null) {
+                                    item {
+                                        FilterChip(
+                                            selected = state.selectedSubcategoryId == null,
+                                            onClick = { viewModel.selectSubcategory(null) },
+                                            label = { Text("All", fontSize = 15.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Accent,
+                                            ),
+                                        )
+                                    }
+                                }
+                                items(
+                                    state.subcategories.filter {
+                                        it.categoryId.toLong() == state.selectedCategoryId
+                                    },
+                                    key = { it.id },
+                                ) { sub ->
+                                    FilterChip(
+                                        selected = state.selectedSubcategoryId == sub.id.toLong(),
+                                        onClick = { viewModel.selectSubcategory(sub.id.toLong()) },
+                                        label = {
+                                            Text(
+                                                text = sub.name,
+                                                fontSize = 15.sp,
+                                                maxLines = 1,
+                                            )
+                                        },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Accent,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Right: compact search, fixed width
+                        OutlinedTextField(
+                            value = state.itemSearchQuery,
+                            onValueChange = { viewModel.setItemSearch(it) },
+                            singleLine = true,
+                            placeholder = { Text("Search\u2026", color = OnDarkSecondary) },
+                            modifier = Modifier
+                                .widthIn(min = 140.dp, max = 200.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Accent,
+                                unfocusedBorderColor = DarkSurfaceVariant,
+                                focusedTextColor = OnDark,
+                                unfocusedTextColor = OnDark,
+                                cursorColor = Accent,
+                                focusedContainerColor = DarkSurface,
+                                unfocusedContainerColor = DarkSurface,
+                            ),
+                            trailingIcon = {
+                                if (state.itemSearchQuery.isNotEmpty()) {
+                                    TextButton(
+                                        onClick = { viewModel.setItemSearch("") },
+                                        modifier = Modifier.width(32.dp).height(32.dp),
+                                        contentPadding = PaddingValues(0.dp),
+                                    ) {
+                                        Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
+                                    }
+                                }
+                            },
+                        )
+                    }
+
+                    // Item grid
+                    if (state.isLoading) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = Accent)
+                        }
+                    } else if (state.filteredItems.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("No items match", color = OnDarkSecondary, fontSize = 16.sp)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            items(state.filteredItems, key = { it.id }) { item ->
+                                ItemCard(
+                                    item = item,
+                                    onClick = {
+                                        // D6/D14: All cart mutations are local — never call server directly
+                                        viewModel.addToCart(item)
+                                    },
+                                    enabled = !isServerSynced || state.permissions.updateOrder,
                                 )
                             }
-                        },
-                ) {
-                    LazyRow(
-                        state = listState,
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = state.selectedCategoryId == null,
-                                onClick = { viewModel.selectCategory(null) },
-                                label = { Text("All", fontSize = 15.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Accent,
-                                ),
-                            )
                         }
-                        items(state.categories) { cat ->
-                            FilterChip(
-                                selected = state.selectedCategoryId == cat.id.toLong(),
-                                onClick = { viewModel.selectCategory(cat.id.toLong()) },
-                                label = {
-                                    Text(
-                                        text = cat.name,
-                                        fontSize = 15.sp,
-                                        maxLines = 1,
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Accent,
-                                ),
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                // Right: compact search, fixed width
-                OutlinedTextField(
-                    value = state.itemSearchQuery,
-                    onValueChange = { viewModel.setItemSearch(it) },
-                    singleLine = true,
-                    placeholder = { Text("Search\u2026", color = OnDarkSecondary) },
-                    modifier = Modifier
-                        .widthIn(min = 140.dp, max = 200.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Accent,
-                        unfocusedBorderColor = DarkSurfaceVariant,
-                        focusedTextColor = OnDark,
-                        unfocusedTextColor = OnDark,
-                        cursorColor = Accent,
-                        focusedContainerColor = DarkSurface,
-                        unfocusedContainerColor = DarkSurface,
-                    ),
-                    trailingIcon = {
-                        if (state.itemSearchQuery.isNotEmpty()) {
-                            TextButton(
-                                onClick = { viewModel.setItemSearch("") },
-                                modifier = Modifier.width(32.dp).height(32.dp),
-                                contentPadding = PaddingValues(0.dp),
-                            ) {
-                                Text("\u00D7", color = OnDarkSecondary, fontSize = 18.sp)
-                            }
-                        }
-                    },
-                )
-            }
-
-            // Item grid
-            if (state.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Accent)
-                }
-            } else if (state.filteredItems.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("No items match", color = OnDarkSecondary, fontSize = 16.sp)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(state.filteredItems, key = { it.id }) { item ->
-                        ItemCard(
-                            item = item,
-                            onClick = {
-                                // D6/D14: All cart mutations are local — never call server directly
-                                viewModel.addToCart(item)
-                            },
-                            enabled = !isServerSynced || state.permissions.updateOrder,
-                        )
                     }
                 }
             }
@@ -571,6 +611,28 @@ private fun ItemCard(item: ItemResponse, onClick: () -> Unit, enabled: Boolean =
             )
         }
     }
+}
+
+/** Vertical rail button for a category (large touch target, dark theme). */
+@Composable
+private fun RailCategoryButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        fontSize = 15.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        color = if (selected) Accent else OnDarkSecondary,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) DarkSurfaceVariant.copy(alpha = 0.9f) else Color.Transparent,
+                RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 8.dp, vertical = 14.dp)
+            .clickable(onClick = onClick),
+    )
 }
 
 // ── Unified Cart Panel ──

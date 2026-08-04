@@ -22,6 +22,7 @@ vi.mock('../api', () => ({
     },
     menu: {
       listCategories: vi.fn().mockResolvedValue([]),
+      listSubcategories: vi.fn().mockResolvedValue([]),
       listItems: vi.fn().mockResolvedValue([]),
     },
     tables: {

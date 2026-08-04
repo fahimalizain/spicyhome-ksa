@@ -22,37 +22,21 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param subcategoryId When provided, categoryId is derived from the subcategory's parent.
- * @param categoryId 
+ * @param categoryId Parent category ID
  * @param name 
- * @param nameAr 
- * @param priceHalalas 
- * @param vatRateBp 
  * @param sortOrder 
  * @param isActive 
  */
 
 
-data class UpdateItemDto (
+data class UpdateSubcategoryDto (
 
-    /* When provided, categoryId is derived from the subcategory's parent. */
-    @Json(name = "subcategoryId")
-    val subcategoryId: kotlin.Long? = null,
-
+    /* Parent category ID */
     @Json(name = "categoryId")
     val categoryId: kotlin.Long? = null,
 
     @Json(name = "name")
     val name: kotlin.String? = null,
-
-    @Json(name = "nameAr")
-    val nameAr: kotlin.String? = null,
-
-    @Json(name = "priceHalalas")
-    val priceHalalas: kotlin.Long? = null,
-
-    @Json(name = "vatRateBp")
-    val vatRateBp: kotlin.Int? = null,
 
     @Json(name = "sortOrder")
     val sortOrder: kotlin.Int? = null,
