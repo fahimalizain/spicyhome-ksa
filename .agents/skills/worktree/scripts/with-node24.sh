@@ -3,14 +3,21 @@
 # Used by VS Code launch configs so GUI-launched debug does not pick
 # Homebrew Node 26+ (breaks better-sqlite3 native ABI).
 #
+# Lives in: .agents/skills/worktree/scripts/with-node24.sh
+#
 # Usage:
-#   scripts/worktree/with-node24.sh node -e 'console.log(process.version)'
-#   scripts/worktree/with-node24.sh pnpm exec vite
+#   bash .agents/skills/worktree/scripts/with-node24.sh node -e 'console.log(process.version)'
+#   bash .agents/skills/worktree/scripts/with-node24.sh pnpm exec vite
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Prefer git toplevel from cwd (VS Code launch cwd is apps/*); fall back to skill→repo.
+if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  :
+else
+  ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+fi
 WANT="$(tr -d '[:space:]' <"$ROOT/.nvmrc" 2>/dev/null || echo 24)"
 # major or full — nvm paths use full when present
 MAJOR="${WANT%%.*}"
