@@ -161,6 +161,8 @@ describe('OrderPage — menu item tile overflow containment', () => {
     expect(tileButton).toHaveClass('overflow-hidden');
     expect(tileButton).toHaveClass('justify-start');
     expect(tileButton).toHaveClass('touch-target');
+    expect(tileButton).toHaveClass('h-full');
+    expect(tileButton).toHaveClass('min-h-[96px]');
 
     // Name span: wraps long unbroken tokens, clamps to 3 lines, full width,
     // and exposes the full name via title for clamped text
