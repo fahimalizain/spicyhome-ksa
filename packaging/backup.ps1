@@ -68,12 +68,24 @@ function Copy-Stream {
 
 # Zip via System.IO.Compression.ZipFile (.NET 4.5+ when present). Any
 # failure aborts with $false, so a partial zip is never accepted.
+#
+# Load BOTH compression assemblies, mirroring a working manual probe:
+# ZipFile lives in System.IO.Compression.FileSystem, while the
+# ZipArchiveMode enum (Create) used by Open() lives in
+# System.IO.Compression. Loading only the FileSystem assembly can fail
+# type resolution in PowerShell even when the CLR could load the
+# dependency, which silently dropped us to the Shell fallback.
 function New-ZipDotNet {
   param([string]$ZipPath, [string]$DataDir, [object[]]$Files)
   try {
+    $script:LastZipDotNetError = $null
     # Throws when .NET 4.5+ is missing or cannot load (e.g. PS 2.0 on
     # CLR 2.0) -> caller falls back to Shell.Application.
+    Add-Type -AssemblyName System.IO.Compression | Out-Null
     Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+    # Canonical FullName so the Substring prefix below always matches the
+    # paths Get-ChildItem produced (trailing slashes, 8.3 names, etc.).
+    $dataFull = (Get-Item -LiteralPath $DataDir).FullName
     $zip = [System.IO.Compression.ZipFile]::Open(
       $ZipPath,
       [System.IO.Compression.ZipArchiveMode]::Create)
@@ -81,7 +93,7 @@ function New-ZipDotNet {
       foreach ($file in $Files) {
         # Entry relative to data dir, forward slashes: contents at zip
         # root, no nested top-level data folder.
-        $rel = $file.FullName.Substring($DataDir.Length)
+        $rel = $file.FullName.Substring($dataFull.Length)
         $rel = $rel.TrimStart("\").TrimStart("/").Replace("\", "/")
         $entry = $zip.CreateEntry($rel)
         $out = $entry.Open()
@@ -107,6 +119,13 @@ function New-ZipDotNet {
     }
     return $true
   } catch {
+    # Surface the failure reason (the caller prints it next to the NOTE)
+    # instead of a silent fallback; still return $false so the
+    # Shell.Application path is used.
+    $script:LastZipDotNetError = $_.Exception.Message
+    if ($_.Exception.InnerException) {
+      $script:LastZipDotNetError += " | " + $_.Exception.InnerException.Message
+    }
     return $false
   }
 }
@@ -240,9 +259,14 @@ try {
   Write-Host ""
 
   $ok = New-ZipDotNet $zipPath $dataDir $dataFiles
-  if (-not $ok) {
+  if ($ok) {
+    Write-Host "Engine:  .NET ZipFile"
+  } else {
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
     Write-Host "NOTE: .NET zip path failed; falling back to Shell.Application."
+    if ($script:LastZipDotNetError) {
+      Write-Host "      $($script:LastZipDotNetError)"
+    }
     # CopyHere copies top-level items (files + folders); the recursive
     # file count would under-count when data\ contains subdirectories.
     $topLevelCount = @(Get-ChildItem $dataDir -Force).Count
