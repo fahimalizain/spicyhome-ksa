@@ -613,7 +613,7 @@ function Start-NssmService {
 function Copy-StickyScripts {
   param([string]$ReleaseDir, [string]$InstallRoot, [string]$EngineScriptDir)
   # Try to copy from release package first (if the package includes them)
-  $releaseScripts = @("spicyhome.ps1", "install.bat", "update.bat", "rollback.bat", "check.bat")
+  $releaseScripts = @("spicyhome.ps1", "install.bat", "update.bat", "rollback.bat", "check.bat", "backup.bat", "backup.ps1")
   $copied = $false
   foreach ($s in $releaseScripts) {
     $src = Join-Path $ReleaseDir $s
@@ -1250,6 +1250,7 @@ if ($modeCount -eq 0) {
   Write-Host "  update.bat    [-InstallDir X:\path]                        Update to latest"
   Write-Host "  check.bat     [-InstallDir X:\path]                        Show installed vs latest"
   Write-Host "  rollback.bat  [-InstallDir X:\path]                        Rollback to previous"
+  Write-Host "  backup.bat    [-InstallDir X:\path] [-OutDir Y:\path]      Backup data\ to backups\ zip"
   Write-Host ""
   Write-Host "  spicyhome.ps1 -InstallService  [-InstallDir X:\path]        Install/repair NSSM service"
   Write-Host "  spicyhome.ps1 -UninstallService [-InstallDir X:\path]       Remove NSSM service"

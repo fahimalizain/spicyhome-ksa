@@ -45,6 +45,8 @@ install directory — e.g. `D:\SpicyHomePOS` on a dedicated data partition.
   install.bat                # sticky: wrapped by update engine
   update.bat                 # sticky: wrapped by update engine
   rollback.bat               # sticky: wrapped by update engine
+  backup.bat                 # sticky: wrapped by backup engine
+  backup.ps1                 # sticky: backup engine
   tools\nssm.exe             # downloaded on first -InstallService
   data\spicyhome.db          # persistent data outside releases
   logs\server\server.out.log # server stdout capture

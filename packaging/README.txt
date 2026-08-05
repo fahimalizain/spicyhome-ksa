@@ -103,8 +103,10 @@ File Structure (side-by-side)
   update.bat                Thin wrapper: engine -Update
   rollback.bat              Thin wrapper: engine -Rollback
   check.bat                 Thin wrapper: engine -Check (version status)
+  backup.bat / backup.ps1   Data backup (see Data Backup below)
   tools\nssm.exe            NSSM service manager (downloaded on first use)
   data\spicyhome.db         SQLite database (persists across updates)
+  backups\                  Backup zips (created on first backup run)
   logs\server\              Server stdout/stderr logs
   logs\updater\             Engine/update logs
   releases\{version}\       Side-by-side release directories
@@ -118,11 +120,13 @@ File Structure (flat unzip)
   pos\                      POS SPA (served by the server)
   prebuilt\                 Native binaries (better-sqlite3, win_rawprint.exe)
   data\spicyhome.db         SQLite database (created automatically)
+  backups\                  Backup zips (created on first backup run)
   logs\server\              Server logs (created at runtime)
   VERSION                   Release version file
   start-server.bat          Launch script
   spicyhome.ps1             Install/update engine (use from install root)
   install.bat / update.bat  Engine wrappers
+  backup.bat / backup.ps1   Data backup (see Data Backup below)
 
 Production vs Debug
 -------------------
@@ -176,12 +180,41 @@ All timestamps and business dates are in +03:00.
 
 Database
 --------
-Data is stored in data\spicyhome.db (SQLite).
-Backup this file regularly. It contains all orders,
-menu items, user accounts, and settings.
+Data is stored in data\spicyhome.db (SQLite). It contains all orders,
+menu items, user accounts, and settings. Backup it regularly with
+backup.bat (see Data Backup below).
 
 In side-by-side layout, data\ is outside the releases\ tree,
 so it survives version updates and rollbacks.
+
+Data Backup
+-----------
+backup.bat zips the entire data\ directory (spicyhome.db plus any
+WAL/SHM sidecars and other files under data\) into:
+
+  {installDir}\backups\spicyhomepos_YYYYMMDDThhmm+AST.zip
+
+The timestamp is Asia/Riyadh wall-clock time at backup start.
+AST = Arabia Standard Time (UTC+3, no DST), computed from UTC, so
+it is correct regardless of the PC timezone.
+
+How to run:
+
+  backup.bat
+  backup.bat -OutDir "\\server\share\spicyhome-backups"
+  backup.bat -InstallDir D:\SpicyHomePOS
+
+Default output directory is {installDir}\backups\ (created on
+first run). The backup is "hot": the service can keep running
+while it is taken. For a perfectly consistent SQLite snapshot,
+stop the service first ("cold" backup) and start it again after.
+
+backup.bat is intended to be run from a Windows Scheduled Task.
+Optionally copy the resulting zips offsite with rclone (same
+pattern as the existing MSSQL offsite backup); the script does
+not hardcode any offsite path. Side-by-side installs keep
+backup.bat sticky at the install root next to data\; flat unzips
+just run it from the package root.
 
 Troubleshooting
 ---------------
