@@ -1639,10 +1639,15 @@ export function OrderPage() {
                       key={item.id}
                       onClick={() => handleAddItem(item)}
                       disabled={cartDisabled}
-                      className="touch-target flex flex-col items-start bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
+                      className="touch-target flex w-full min-w-0 flex-col items-start justify-start overflow-hidden bg-gray-800 hover:bg-gray-700 active:bg-gray-600 rounded-xl p-3 text-left disabled:opacity-50"
                     >
-                      <span className="text-sm font-medium text-white">{item.name}</span>
-                      <span className="text-xs text-brand-400 mt-1">
+                      <span
+                        className="w-full break-words line-clamp-3 text-sm font-medium text-white"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                      <span className="mt-1 shrink-0 text-xs text-brand-400">
                         {halalasToSar(item.priceHalalas)} SAR
                       </span>
                     </button>
