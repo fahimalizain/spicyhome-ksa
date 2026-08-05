@@ -14,6 +14,7 @@ set -euo pipefail
 #   spicyhome.ps1                 — install/update/service engine
 #   install.bat / update.bat      — engine wrappers
 #   rollback.bat / check.bat      — engine wrappers
+#   backup.bat / backup.ps1       — data backup (zips data\ to backups\)
 #   spicyhome.config.example.json — example config
 #   README.txt                    — setup instructions
 #   data/                         — created at runtime (flat layout: under package dir;
@@ -620,8 +621,11 @@ echo "Copying install/update engine and wrappers..."
 # Main engine script
 cp "$SCRIPT_DIR/spicyhome.ps1" "$PACKAGE_DIR/spicyhome.ps1"
 
-# Bat wrappers (install, update, rollback, check)
-for bat in install.bat update.bat rollback.bat check.bat; do
+# Backup script (ps1, not a bat wrapper)
+cp "$SCRIPT_DIR/backup.ps1" "$PACKAGE_DIR/backup.ps1"
+
+# Bat wrappers (install, update, rollback, check, backup)
+for bat in install.bat update.bat rollback.bat check.bat backup.bat; do
   if [ -f "$SCRIPT_DIR/$bat" ]; then
     cp "$SCRIPT_DIR/$bat" "$PACKAGE_DIR/$bat"
   fi
@@ -745,6 +749,8 @@ for f in \
   update.bat \
   rollback.bat \
   check.bat \
+  backup.bat \
+  backup.ps1 \
   spicyhome.config.example.json
 do
   if [ -f "$PACKAGE_DIR/$f" ]; then

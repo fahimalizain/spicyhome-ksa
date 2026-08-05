@@ -2,8 +2,9 @@
 .SYNOPSIS
   SpicyHome POS - Data backup for Windows 7+
 .DESCRIPTION
-  Zips the entire data directory (spicyhome.db, -wal, -shm, logs, etc.)
-  into spicyhomepos_YYYYMMDDThhmm+AST.zip. The timestamp is Arabia
+  Zips the entire data directory (spicyhome.db, any WAL/SHM sidecars,
+  and other files under data\) into spicyhomepos_YYYYMMDDThhmm+AST.zip.
+  The timestamp is Arabia
   Standard Time (UTC+3, fixed - no DST) computed from UTC, so machine
   local timezone / TZ env do not matter.
 
@@ -242,7 +243,10 @@ try {
   if (-not $ok) {
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
     Write-Host "NOTE: .NET zip path failed; falling back to Shell.Application."
-    $ok = New-ZipShell $zipPath $dataDir $dataFiles.Count
+    # CopyHere copies top-level items (files + folders); the recursive
+    # file count would under-count when data\ contains subdirectories.
+    $topLevelCount = @(Get-ChildItem $dataDir -Force).Count
+    $ok = New-ZipShell $zipPath $dataDir $topLevelCount
   }
   if (-not $ok) {
     if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
