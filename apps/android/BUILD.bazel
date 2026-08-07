@@ -9,11 +9,18 @@
 # Or set them in a local (uncommitted) user.bazelrc:
 #   build --action_env=ANDROID_HOME=/path/to/sdk
 #   build --action_env=JAVA_HOME=/path/to/jdk
+#
+# Dual mode: the target produces a DEBUG-signed APK when no distribution
+# keystore env vars are passed, or a distribution-signed RELEASE APK when
+# ANDROID_KEYSTORE_PATH / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS /
+# ANDROID_KEY_PASSWORD are passed via --action_env (release workflow only).
+# The genrule output file name stays the same in both modes.
 
 genrule(
     name = "assemble_debug",
     srcs = [
         "build_apk.sh",
+        "//:VERSION",
     ] + glob([
         "**/*.kt",
         "**/*.kts",
@@ -36,6 +43,7 @@ genrule(
     visibility = ["//visibility:public"],
 )
 
+# Kept for compatibility; may produce a release or debug APK depending on env.
 alias(
     name = "apk",
     actual = ":assemble_debug",
@@ -56,6 +64,7 @@ sh_test(
     ]) + [
         "//packages/client-kt:sources",
         "//:MODULE.bazel",
+        "//:VERSION",
     ],
     args = ["$(rootpath //:MODULE.bazel)"],
     size = "large",

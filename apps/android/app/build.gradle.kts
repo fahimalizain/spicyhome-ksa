@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,8 @@ val appVersion = if (versionFile.exists()) {
     "0.0.1"
 }
 
-// Read Sentry DSN from local.properties (gitignored) or environment
-fun getLocalProperty(key: String, default: String = ""): String {
+// Read a key from local.properties (gitignored). Returns null when missing.
+fun readLocalProperty(key: String): String? {
     val localProps = file("${rootDir}/local.properties")
     if (localProps.exists()) {
         for (line in localProps.readLines()) {
@@ -24,15 +26,26 @@ fun getLocalProperty(key: String, default: String = ""): String {
             }
         }
     }
-    return System.getenv(key) ?: default
+    return null
 }
+
+// Existing helper kept with identical behavior: local.properties first, then env.
+fun getLocalProperty(key: String, default: String = ""): String =
+    readLocalProperty(key) ?: System.getenv(key) ?: default
+
+// Distribution-signing secrets: environment variables take priority, then
+// local.properties. Used by the stable signing config below.
+fun resolveDistributionSecret(key: String): String? =
+    System.getenv(key)?.takeIf { it.isNotBlank() } ?: readLocalProperty(key)?.takeIf { it.isNotBlank() }
 
 val sentryDsn = getLocalProperty("SENTRY_DSN")
 val sentryEnvironment = getLocalProperty("SENTRY_ENVIRONMENT", "development")
 
 /** Derive a monotonic integer versionCode from a date-based version string.
  *  Format: YYYYMM.DD.N → YYYYMM * 10000 + DD * 100 + min(N, 99).
- *  Returns 1 if parsing fails. */
+ *  Returns 1 if parsing fails.
+ *  Keep in sync with AppVersion.toVersionCode() in
+ *  apps/android/app/src/main/java/com/spicyhome/pos/update/AppVersion.kt. */
 fun computeVersionCode(version: String): Int {
     val regex = Regex("""^(\d{6})\.(\d{2})\.(\d+)$""")
     val match = regex.matchEntire(version) ?: return 1
@@ -42,15 +55,45 @@ fun computeVersionCode(version: String): Int {
     return yyyymm * 10000 + dd * 100 + n
 }
 
+val appVersionCode = computeVersionCode(appVersion)
+
+// Distribution signing: a stable keystore so production side-load upgrades
+// install in place (Android refuses to upgrade an APK signed with a different
+// key). Credentials resolve from environment variables first, then
+// local.properties: ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
+// ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. The path must be absolute (relative
+// paths resolve against the repository root).
+val keystorePath = resolveDistributionSecret("ANDROID_KEYSTORE_PATH")
+val keystoreFile = keystorePath?.let { path ->
+    val f = File(path)
+    if (f.isAbsolute) file(path) else file("${rootDir}/../..").resolve(path)
+}
+val hasDistributionSigning = keystoreFile != null &&
+    keystoreFile.isFile &&
+    !resolveDistributionSecret("ANDROID_KEYSTORE_PASSWORD").isNullOrEmpty() &&
+    !resolveDistributionSecret("ANDROID_KEY_ALIAS").isNullOrEmpty() &&
+    !resolveDistributionSecret("ANDROID_KEY_PASSWORD").isNullOrEmpty()
+
 android {
     namespace = "com.spicyhome.pos"
     compileSdk = 36
+
+    signingConfigs {
+        create("distribution") {
+            if (hasDistributionSigning) {
+                storeFile = keystoreFile
+                storePassword = resolveDistributionSecret("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = resolveDistributionSecret("ANDROID_KEY_ALIAS")
+                keyPassword = resolveDistributionSecret("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.spicyhome.pos"
         minSdk = 26
         targetSdk = 36
-        versionCode = computeVersionCode(appVersion)
+        versionCode = appVersionCode
         versionName = appVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -73,6 +116,12 @@ android {
                 "proguard-rules.pro"
             )
             manifestPlaceholders["sentryDebug"] = "false"
+            // Sign release builds with the distribution keystore when present.
+            // Without a keystore the release build type stays unsigned; local
+            // day-to-day work uses the debug build type (default debug key).
+            if (hasDistributionSigning) {
+                signingConfig = signingConfigs.getByName("distribution")
+            }
         }
     }
 
@@ -100,6 +149,12 @@ android {
     }
 }
 
+// One clear line in build logs so CI/local output shows the resolved version.
+println(
+    "spicyhome-android: versionName=$appVersion versionCode=$appVersionCode " +
+        "signing=${if (hasDistributionSigning) "distribution" else "debug (no distribution keystore)"}"
+)
+
 dependencies {
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
@@ -117,6 +172,9 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // FileProvider for the in-app APK updater
+    implementation("androidx.core:core-ktx:1.13.1")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.5")
