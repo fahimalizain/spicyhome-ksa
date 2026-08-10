@@ -121,21 +121,24 @@ js_binary(
 )
 
 js_binary(
-    name = "bake_open_kots",
+    name = "bake_print_probe",
     data = [
         ":lib",
-        # Baker imports the DB schema, shared role enum, and sqlite directly
-        # (see bake-open-kots.ts). better-sqlite3 is a native addon and must
-        # be in data for `bazel run` to load it; drizzle-orm is a direct
-        # import even though @spicyhome/db also carries it transitively.
+        # The baker imports the DB schema, shared enums, and sqlite directly
+        # (see bake/cli.ts). better-sqlite3 is a native addon and must be in
+        # data for `bazel run` to load it; drizzle-orm is a direct import even
+        # though @spicyhome/db also carries it transitively.
         ":node_modules/@spicyhome/db",
         ":node_modules/@spicyhome/shared",
         ":node_modules/better-sqlite3",
         ":node_modules/drizzle-orm",
-        # KOT item lines rasterize via the Arabic glyph atlas (ASCII coverage).
+        # Kitchen ticket item lines rasterize via the Arabic glyph atlas
+        # (ASCII coverage). The thermal logo is only read lazily by receipt
+        # formats (later slices) — included now so the data list is stable.
         "assets/arabic-glyph-atlas.json",
+        "assets/logo-thermal-192.png",
     ],
-    entry_point = "src/modules/printers/bake-open-kots.js",
+    entry_point = "src/modules/printers/bake/cli.js",
     env = {
         "TZ": "Asia/Riyadh",
     },
