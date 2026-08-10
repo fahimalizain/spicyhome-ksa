@@ -3,13 +3,11 @@
  *
  * Every collector is read-only: only ever SELECTs. Never INSERT/UPDATE/DELETE.
  *
- * This slice implements **kitchen**, **open_order**, **receipt**, and
- * **credit_note** on top of the shared print-documents helpers
- * (`buildKitchenTicketBuffer`, `buildOpenOrderReceiptBuffer`,
- * `buildSimplifiedInvoiceBuffer`, `buildCreditNoteBuffer`) — the same builders
- * the production print paths use, so the baked buffers cannot drift from real
- * documents. The `test` format throws a "not implemented yet" error and is
- * added in a later slice.
+ * All five formats are implemented on top of the shared print-documents
+ * helpers (`buildKitchenTicketBuffer`, `buildOpenOrderReceiptBuffer`,
+ * `buildSimplifiedInvoiceBuffer`, `buildCreditNoteBuffer`,
+ * `buildTestTicketBuffer`) — the same builders the production print paths
+ * use, so the baked buffers cannot drift from real documents.
  */
 
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
@@ -27,6 +25,7 @@ import {
   buildKitchenTicketBuffer,
   buildOpenOrderReceiptBuffer,
   buildSimplifiedInvoiceBuffer,
+  buildTestTicketBuffer,
   PRINTABLE_QR_STATUSES,
   type PrintDocumentsDb,
 } from '../print-documents';
@@ -65,8 +64,11 @@ export function collectPrintJobs(
       return collectReceiptJobs(db, filters);
     case 'credit_note':
       return collectCreditNoteJobs(db, filters);
+    case 'test':
+      return collectTestJobs(db, filters);
     default:
-      throw new Error(`format '${format}' is not implemented yet`);
+      // Unreachable: every ProbeFormat has a case above.
+      throw new Error(`Unknown format: ${format}`);
   }
 }
 
@@ -429,6 +431,58 @@ function resolveEligibleRefunds(db: PrintDocumentsDb, filters: BakeFilters): Ref
     .filter((r) => hasPrintableCreditNoteQr(db, r.id));
 }
 
+// ── Test ticket (printer diagnostic) ─────────────────────────────────────────
+
+/**
+ * Collect one baked diagnostic test ticket per eligible printer (any role),
+ * building each buffer via `buildTestTicketBuffer` (the same builder
+ * `printTestTicket` uses). Synthetic: no orders, no refunds — the buffer is
+ * pure printer row (name/ip/port/config), no document lookups.
+ *
+ * Default: every active printer (receipt + kitchen, id ascending).
+ * `--printer` restricts to the given ids and hard-fails on missing or
+ * inactive printers; any role is acceptable. `--limit` caps the selected set
+ * to the first N by printer id ascending. `--order` and `--refund` are
+ * rejected — test tickets are synthetic. `--kick-drawer` is rejected — the
+ * diagnostic ticket has its own content. `--all` is a soft no-op (all active
+ * printers are already included by default).
+ */
+function collectTestJobs(db: PrintDocumentsDb, filters: BakeFilters): BakeCollectResult {
+  if (filters.orderIds && filters.orderIds.length > 0) {
+    throw new BakeFilterError(
+      `--order is not valid for format 'test' (test tickets are synthetic — no orders)`,
+    );
+  }
+  if (filters.refundIds && filters.refundIds.length > 0) {
+    throw new BakeFilterError(
+      `--refund is not valid for format 'test' (test tickets are synthetic — no refunds)`,
+    );
+  }
+  if (filters.kickDrawer) {
+    throw new BakeFilterError(
+      `--kick-drawer is not valid for format 'test' (the diagnostic ticket has its own content)`,
+    );
+  }
+
+  const notes: string[] = [];
+  if (filters.all) {
+    notes.push('--all ignored for test: all active printers are included by default');
+  }
+
+  const targetPrinters = resolveTestPrinters(db, filters, notes);
+  const bakePrinters = applyLimit(targetPrinters, filters.limit);
+
+  const jobs: BakedPrintJob[] = bakePrinters.map((printer) => ({
+    format: 'test',
+    label: 'test',
+    sourceId: null,
+    printer: toBakedPrinterTarget(printer),
+    buffer: buildTestTicketBuffer(printer),
+  }));
+
+  return { jobs, notes };
+}
+
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -501,15 +555,32 @@ function resolveReceiptPrinters(
 }
 
 /**
+ * Eligible test printers: explicit validated ids (any role), or every active
+ * printer (id ascending). With no explicit ids and no active printer the bake
+ * is empty and a note explains why.
+ */
+function resolveTestPrinters(
+  db: PrintDocumentsDb,
+  filters: BakeFilters,
+  notes: string[],
+): PrinterRow[] {
+  const targets = resolveRolePrinters(db, filters, null);
+  if (targets.length === 0 && !(filters.printerIds && filters.printerIds.length > 0)) {
+    notes.push('no active printers — no jobs to bake');
+  }
+  return targets;
+}
+
+/**
  * Eligible printers: explicit validated ids, or every active printer with the
  * given role (id ascending). Explicit ids are validated hard: missing,
  * inactive, or wrong-role printers throw a `BakeFilterError` naming the id and
- * the reason.
+ * the reason. `role = null` accepts any role (test tickets).
  */
 function resolveRolePrinters(
   db: PrintDocumentsDb,
   filters: BakeFilters,
-  role: PrinterRole,
+  role: PrinterRole | null,
 ): PrinterRow[] {
   if (filters.printerIds && filters.printerIds.length > 0) {
     const selected: PrinterRow[] = [];
@@ -519,7 +590,7 @@ function resolveRolePrinters(
       seen.add(id);
       const printer = db.select().from(printers).where(eq(printers.id, id)).get();
       if (!printer) throw new BakeFilterError(`Printer ${id}: not found`);
-      if (printer.role !== role) {
+      if (role !== null && printer.role !== role) {
         throw new BakeFilterError(`Printer ${id}: role '${printer.role}' is not '${role}'`);
       }
       if (printer.isActive !== 1) {
@@ -532,7 +603,11 @@ function resolveRolePrinters(
   return db
     .select()
     .from(printers)
-    .where(and(eq(printers.role, role), eq(printers.isActive, 1)))
+    .where(
+      role === null
+        ? eq(printers.isActive, 1)
+        : and(eq(printers.role, role), eq(printers.isActive, 1)),
+    )
     .orderBy(printers.id)
     .all();
 }

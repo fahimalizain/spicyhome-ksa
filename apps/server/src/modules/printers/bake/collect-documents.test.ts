@@ -11,7 +11,6 @@
  *  - credit_note: printable-CN-QR eligibility, default most-recent-1,
  *    --refund/--order selection + hard-fails, union when both given
  *  - buffers come from the print-documents helpers (shared, no drift)
- *  - 'test' format stays unimplemented
  */
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -550,11 +549,5 @@ describe('collectPrintJobs — open_order, receipt, credit_note', () => {
         emptySqlite.close();
       }
     });
-  });
-
-  // ── unimplemented formats ──────────────────────────────────────────────────
-
-  it("format 'test' is not implemented yet", () => {
-    expect(() => collectPrintJobs(db, 'test', {})).toThrow(`format 'test' is not implemented yet`);
   });
 });

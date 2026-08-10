@@ -353,10 +353,4 @@ describe('collectPrintJobs — kitchen', () => {
       '--all ignored for kitchen: all eligible open orders are included by default',
     );
   });
-
-  // ── unimplemented formats ──────────────────────────────────────────────────
-
-  it("format 'test' is not implemented yet", () => {
-    expect(() => collectPrintJobs(db, 'test', {})).toThrow(`format 'test' is not implemented yet`);
-  });
 });

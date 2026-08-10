@@ -3,7 +3,10 @@
  *
  * - parseBakeProbeCliArgs: required --format, unknown flags, bad numbers
  * - bakePrintProbeCli: kitchen happy path writes the emit script; empty bakes
- *   and explicit filter hard-fails exit 1 without writing/overwriting
+ *   and explicit filter hard-fails exit 1 without writing/overwriting;
+ *   format-invalid flag combos across all formats map to exit 1
+ * - --format test positive path writes the emit script with both active
+ *   printers (any role), inactive excluded
  * - resolveBakeDbPath precedence + parseEnvWorktreeContents (ported from the
  *   KOT baker — behavior unchanged)
  */
@@ -43,6 +46,19 @@ function seedKitchenDb(dbPath: string): void {
     VALUES (9001, 'cli-open-1', 'dine_in', 1, 'open', 10000, 1500, 11500, 'INV26-CLI-1', ${NOW}, ${NOW});
     INSERT INTO order_items (order_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
     VALUES (1, 'Kabsa', 11500, 1500, 1, 11500, ${NOW}, ${NOW});
+  `);
+  sqliteFile.close();
+}
+
+/** Seed a file DB with an active receipt + active kitchen + inactive printer. */
+function seedTestDb(dbPath: string): void {
+  const sqliteFile = createFileDb(dbPath);
+  sqliteFile.exec(`
+    INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
+    VALUES
+      (1, 'Counter A', '192.168.1.50', 9100, 'receipt', 1, ${NOW}, ${NOW}),
+      (2, 'Kitchen A', '192.168.1.51', 9100, 'kitchen', 1, ${NOW}, ${NOW}),
+      (3, 'Counter Inactive', '192.168.1.52', 9100, 'receipt', 0, ${NOW}, ${NOW});
   `);
   sqliteFile.close();
 }
@@ -208,6 +224,111 @@ describe('bakePrintProbeCli', () => {
       dbPath,
       '--refund',
       '1',
+      '--out',
+      out,
+    ]);
+    expect(code).toBe(1);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('exits 1 without writing for every format-invalid flag combo', () => {
+    // Collectors throw BakeFilterError for these; the CLI must map them to
+    // exit 1 and never write/overwrite the emit script.
+    const combos: Array<[string, string[]]> = [
+      ['kitchen', ['--kick-drawer']],
+      ['open_order', ['--refund', '1']],
+      ['open_order', ['--kick-drawer']],
+      ['receipt', ['--refund', '1']],
+      ['test', ['--order', '1']],
+      ['test', ['--refund', '1']],
+      ['test', ['--kick-drawer']],
+    ];
+    for (const [format, flags] of combos) {
+      const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
+      const dbPath = join(dir, `${format}.db`);
+      createFileDb(dbPath).close(); // filter errors throw before any data is read
+
+      const out = join(dir, 'out', `send-${format}.js`);
+      const code = bakePrintProbeCli([
+        'node',
+        'bake-print-probe',
+        '--format',
+        format,
+        '--db',
+        dbPath,
+        ...flags,
+        '--out',
+        out,
+      ]);
+      expect(code).toBe(1);
+      expect(existsSync(out)).toBe(false);
+    }
+  });
+
+  it('surfaces the BakeFilterError message on stderr for test --order', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
+    const dbPath = join(dir, 'test-order.db');
+    createFileDb(dbPath).close();
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const code = bakePrintProbeCli([
+        'node',
+        'bake-print-probe',
+        '--format',
+        'test',
+        '--db',
+        dbPath,
+        '--order',
+        '1',
+      ]);
+      expect(code).toBe(1);
+      const stderr = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(stderr).toContain("--order is not valid for format 'test'");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('bakes --format test, writes the emit script and exits 0', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
+    const dbPath = join(dir, 'test.db');
+    seedTestDb(dbPath); // 2 active printers (receipt + kitchen), 1 inactive
+
+    const out = join(dir, 'out', 'send-test.js');
+    const code = bakePrintProbeCli([
+      'node',
+      'bake-print-probe',
+      '--format',
+      'test',
+      '--db',
+      dbPath,
+      '--out',
+      out,
+    ]);
+    expect(code).toBe(0);
+    expect(existsSync(out)).toBe(true);
+    const source = readFileSync(out, 'utf8');
+    expect(source).toContain("BAKE_FORMAT = 'test';");
+    // Both active printers baked (any role); inactive excluded.
+    expect(source).toContain('Counter A');
+    expect(source).toContain('Kitchen A');
+    expect(source).not.toContain('Counter Inactive');
+  });
+
+  it('exits 1 without writing when --format test has no active printers', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
+    const dbPath = join(dir, 'empty.db');
+    createFileDb(dbPath).close();
+
+    const out = join(dir, 'out', 'send-test.js');
+    const code = bakePrintProbeCli([
+      'node',
+      'bake-print-probe',
+      '--format',
+      'test',
+      '--db',
+      dbPath,
       '--out',
       out,
     ]);
