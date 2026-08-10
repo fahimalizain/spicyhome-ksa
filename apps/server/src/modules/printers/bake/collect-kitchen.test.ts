@@ -356,12 +356,7 @@ describe('collectPrintJobs — kitchen', () => {
 
   // ── unimplemented formats ──────────────────────────────────────────────────
 
-  it.each(['receipt', 'open_order', 'credit_note', 'test'] as const)(
-    "format '%s' is not implemented yet",
-    (format) => {
-      expect(() => collectPrintJobs(db, format, {})).toThrow(
-        `format '${format}' is not implemented yet`,
-      );
-    },
-  );
+  it("format 'test' is not implemented yet", () => {
+    expect(() => collectPrintJobs(db, 'test', {})).toThrow(`format 'test' is not implemented yet`);
+  });
 });
