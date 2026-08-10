@@ -488,7 +488,13 @@ describe('collectPrintJobs — open_order, receipt, credit_note', () => {
       expect(new Set(both.jobs.map((j) => j.sourceId))).toEqual(new Set([refund1Id, refund3Id]));
     });
 
-    it('orderIds hard-fails when an order has no printable refund', () => {
+    it('orderIds hard-fails with "not found" for a missing order', () => {
+      expect(() => collectPrintJobs(db, 'credit_note', { orderIds: [999999] })).toThrow(
+        /Order 999999: not found/,
+      );
+    });
+
+    it('orderIds hard-fails when an existing order has no printable refund', () => {
       expect(() =>
         collectPrintJobs(db, 'credit_note', { orderIds: [orderPendingRefundId] }),
       ).toThrow(/Order \d+: no refunds with a printable ZATCA credit note QR/);

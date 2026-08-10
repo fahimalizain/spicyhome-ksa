@@ -394,10 +394,12 @@ function resolveEligibleRefunds(db: PrintDocumentsDb, filters: BakeFilters): Ref
       selected.push(refund);
     }
 
-    // Explicit order ids: the eligible refunds of those orders; an order with
-    // zero eligible refunds hard-fails (missing orders included — they have
-    // no refunds at all).
+    // Explicit order ids: the eligible refunds of those orders; a missing
+    // order hard-fails with "not found" and an order with zero eligible
+    // refunds hard-fails with the no-printable-QR message.
     for (const orderId of explicitOrderIds) {
+      const order = db.select().from(orders).where(eq(orders.id, orderId)).get();
+      if (!order) throw new BakeFilterError(`Order ${orderId}: not found`);
       const refunds = db
         .select()
         .from(orderRefunds)
