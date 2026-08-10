@@ -76,13 +76,13 @@ writing the emit script.
 
 ## 4. Formats
 
-| Format        | Builder helper                              | Default selection (no filters)                         | Printer role(s) | `--all`                    | Recent-1 default |
-| ------------- | ------------------------------------------- | ------------------------------------------------------ | --------------- | -------------------------- | ---------------- |
-| `kitchen`     | `buildKitchenTicketBuffer`                  | every **open** order with items × every active kitchen printer | kitchen | soft no-op (already all)   | no               |
-| `receipt`     | `buildSimplifiedInvoiceBuffer`              | the **single most recent** eligible order (paid + printable ZATCA invoice QR) | receipt | widens to every eligible paid order | yes |
-| `open_order`  | `buildOpenOrderReceiptBuffer`               | every **open** order with items × every active receipt printer | receipt | soft no-op (already all)   | no               |
-| `credit_note` | `buildCreditNoteBuffer`                     | the **single most recent** eligible refund (printable ZATCA credit-note QR) | receipt | widens to every eligible refund | yes |
-| `test`        | `buildTestTicketBuffer`                     | every active printer (any role)                        | any              | soft no-op (already all)   | no               |
+| Format        | Builder helper                 | Default selection (no filters)                                                | Printer role(s) | `--all`                             | Recent-1 default |
+| ------------- | ------------------------------ | ----------------------------------------------------------------------------- | --------------- | ----------------------------------- | ---------------- |
+| `kitchen`     | `buildKitchenTicketBuffer`     | every **open** order with items × every active kitchen printer                | kitchen         | soft no-op (already all)            | no               |
+| `receipt`     | `buildSimplifiedInvoiceBuffer` | the **single most recent** eligible order (paid + printable ZATCA invoice QR) | receipt         | widens to every eligible paid order | yes              |
+| `open_order`  | `buildOpenOrderReceiptBuffer`  | every **open** order with items × every active receipt printer                | receipt         | soft no-op (already all)            | no               |
+| `credit_note` | `buildCreditNoteBuffer`        | the **single most recent** eligible refund (printable ZATCA credit-note QR)   | receipt         | widens to every eligible refund     | yes              |
+| `test`        | `buildTestTicketBuffer`        | every active printer (any role)                                               | any             | soft no-op (already all)            | no               |
 
 Notes:
 
@@ -100,26 +100,26 @@ Notes:
 
 ## 5. Flags
 
-| Flag            | Meaning                                                                                                   | Valid formats                      |
-| --------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `--format`      | **Required.** `kitchen` \| `receipt` \| `open_order` \| `credit_note` \| `test`                           | all                                |
-| `--db`          | SQLite path override. Default: `SPICYHOME_DB` env → `.env.worktree` → `./data/spicyhome.db` (first match wins; relative paths resolve against the workspace root) | all |
-| `--out`         | Emit script path override. Default: `tmp/print-probe/send-<format>.js` (workspace root; `tmp/` gitignored) | all |
-| `--order <id>`  | Explicit order id (repeatable). Open with items for `kitchen`/`open_order`; paid + printable QR for `receipt`; order's eligible refunds for `credit_note` | kitchen, receipt, open_order, credit_note |
-| `--refund <id>` | Explicit refund id (repeatable). Must exist with a printable credit-note QR                                | credit_note only                   |
-| `--printer <id>`| Explicit printer id (repeatable). Must be active; kitchen-role for `kitchen`, receipt-role for `receipt`/`open_order`/`credit_note`, any role for `test` | all |
-| `--limit <n>`   | Cap to the first N sources by id ascending (order id for order formats, refund id for `credit_note`, printer id for `test`) | all |
-| `--all`         | Widen `receipt`/`credit_note` from most-recent-1 to every eligible source; soft no-op (with a note) elsewhere | receipt, credit_note |
-| `--kick-drawer` | **Opt-in** cash-drawer kick on the printed receipt/credit note                                             | receipt, credit_note only          |
+| Flag             | Meaning                                                                                                                                                           | Valid formats                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `--format`       | **Required.** `kitchen` \| `receipt` \| `open_order` \| `credit_note` \| `test`                                                                                   | all                                       |
+| `--db`           | SQLite path override. Default: `SPICYHOME_DB` env → `.env.worktree` → `./data/spicyhome.db` (first match wins; relative paths resolve against the workspace root) | all                                       |
+| `--out`          | Emit script path override. Default: `tmp/print-probe/send-<format>.js` (workspace root; `tmp/` gitignored)                                                        | all                                       |
+| `--order <id>`   | Explicit order id (repeatable). Open with items for `kitchen`/`open_order`; paid + printable QR for `receipt`; order's eligible refunds for `credit_note`         | kitchen, receipt, open_order, credit_note |
+| `--refund <id>`  | Explicit refund id (repeatable). Must exist with a printable credit-note QR                                                                                       | credit_note only                          |
+| `--printer <id>` | Explicit printer id (repeatable). Must be active; kitchen-role for `kitchen`, receipt-role for `receipt`/`open_order`/`credit_note`, any role for `test`          | all                                       |
+| `--limit <n>`    | Cap to the first N sources by id ascending (order id for order formats, refund id for `credit_note`, printer id for `test`)                                       | all                                       |
+| `--all`          | Widen `receipt`/`credit_note` from most-recent-1 to every eligible source; soft no-op (with a note) elsewhere                                                     | receipt, credit_note                      |
+| `--kick-drawer`  | **Opt-in** cash-drawer kick on the printed receipt/credit note                                                                                                    | receipt, credit_note only                 |
 
 Invalid combinations **hard-fail** (exit 1, no emit script):
 
-| Combination                                        | Why                                                                    |
-| -------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--kick-drawer` with `kitchen` / `open_order` / `test` | kitchen tickets have no drawer; open-order receipts are deliberately not tax invoices and never kick (builder hard-codes `kickDrawer` false); the diagnostic ticket has its own content |
-| `--refund` with `kitchen` / `open_order` / `receipt` / `test` | those formats bake orders, not refunds |
-| `--order` with `test`                               | test tickets are synthetic — no orders                                 |
-| `--order`/`--refund`/`--printer` id that is missing, wrong status, item-less, inactive, or wrong role | hard `BakeFilterError` naming the id and the reason |
+| Combination                                                                                           | Why                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--kick-drawer` with `kitchen` / `open_order` / `test`                                                | kitchen tickets have no drawer; open-order receipts are deliberately not tax invoices and never kick (builder hard-codes `kickDrawer` false); the diagnostic ticket has its own content |
+| `--refund` with `kitchen` / `open_order` / `receipt` / `test`                                         | those formats bake orders, not refunds                                                                                                                                                  |
+| `--order` with `test`                                                                                 | test tickets are synthetic — no orders                                                                                                                                                  |
+| `--order`/`--refund`/`--printer` id that is missing, wrong status, item-less, inactive, or wrong role | hard `BakeFilterError` naming the id and the reason                                                                                                                                     |
 
 `--refund` + `--order` together are **allowed** for `credit_note`: the sets
 are unioned and every explicitly listed refund is validated.
@@ -270,22 +270,22 @@ same resolution rules as the production server.
 
 ## 12. Code pointers
 
-| Concern                          | Where                                                                                                                      |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Bake CLI + entry                 | `apps/server/src/modules/printers/bake/cli.ts` — `bazel run //apps/server:bake_print_probe`                                |
-| Job collection (eligibility/filters) | `apps/server/src/modules/printers/bake/collect.ts` (`BakeFilterError`, per-format collectors)                          |
-| Emit script generation + write   | `apps/server/src/modules/printers/bake/emit.ts` (`buildEmitScriptSource`, `writeEmitScript`)                               |
-| Shared bake types + formats      | `apps/server/src/modules/printers/bake/types.ts` (`ProbeFormat`, `BakedPrintJob`, `BakeFilters`)                           |
-| Bake DB path resolution          | `apps/server/src/modules/printers/bake/db-path.ts` (`resolveBakeDbPath`)                                                   |
+| Concern                                  | Where                                                                                                                                                                                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bake CLI + entry                         | `apps/server/src/modules/printers/bake/cli.ts` — `bazel run //apps/server:bake_print_probe`                                                                                                                                  |
+| Job collection (eligibility/filters)     | `apps/server/src/modules/printers/bake/collect.ts` (`BakeFilterError`, per-format collectors)                                                                                                                                |
+| Emit script generation + write           | `apps/server/src/modules/printers/bake/emit.ts` (`buildEmitScriptSource`, `writeEmitScript`)                                                                                                                                 |
+| Shared bake types + formats              | `apps/server/src/modules/printers/bake/types.ts` (`ProbeFormat`, `BakedPrintJob`, `BakeFilters`)                                                                                                                             |
+| Bake DB path resolution                  | `apps/server/src/modules/printers/bake/db-path.ts` (`resolveBakeDbPath`)                                                                                                                                                     |
 | Shared buffer helpers (all five formats) | `apps/server/src/modules/printers/print-documents.ts` (`buildKitchenTicketBuffer`, `buildOpenOrderReceiptBuffer`, `buildSimplifiedInvoiceBuffer`, `buildCreditNoteBuffer`, `buildTestTicketBuffer`, `PRINTABLE_QR_STATUSES`) |
-| Kitchen ticket builder           | `apps/server/src/modules/printers/kitchen-ticket-builder.ts` (`KitchenTicketBuilder`)                                      |
-| Receipt / credit-note builder    | `apps/server/src/modules/printers/receipt-builder.ts` (`ReceiptBuilder`)                                                   |
-| Test ticket builder              | `apps/server/src/modules/printers/test-ticket-builder.ts` (`TestTicketBuilder`)                                            |
-| Production wrappers              | `printKitchenTickets`, `printReceipt`, `printOpenOrderReceipt`, `printRefundReceipt`, `printTestTicket` in `apps/server/src/modules/printers/print-job.service.ts` |
-| Bazel target                     | `js_binary bake_print_probe` in `apps/server/BUILD.bazel`                                                                  |
-| TCP transport                    | `apps/server/src/modules/printers/printer-transport.ts`                                                                    |
-| Windows transport                | `apps/server/src/modules/printers/win-rawprint-transport.ts` (+ `win-rawprint-helpers.ts` for exe resolution)              |
-| Analogous probe pattern          | `scripts/arabic-print-probes.mjs` + `apps/server/src/modules/printers/arabic-probe-bins.ts` + `docs/printing/arabic-thermal.md` |
+| Kitchen ticket builder                   | `apps/server/src/modules/printers/kitchen-ticket-builder.ts` (`KitchenTicketBuilder`)                                                                                                                                        |
+| Receipt / credit-note builder            | `apps/server/src/modules/printers/receipt-builder.ts` (`ReceiptBuilder`)                                                                                                                                                     |
+| Test ticket builder                      | `apps/server/src/modules/printers/test-ticket-builder.ts` (`TestTicketBuilder`)                                                                                                                                              |
+| Production wrappers                      | `printKitchenTickets`, `printReceipt`, `printOpenOrderReceipt`, `printRefundReceipt`, `printTestTicket` in `apps/server/src/modules/printers/print-job.service.ts`                                                           |
+| Bazel target                             | `js_binary bake_print_probe` in `apps/server/BUILD.bazel`                                                                                                                                                                    |
+| TCP transport                            | `apps/server/src/modules/printers/printer-transport.ts`                                                                                                                                                                      |
+| Windows transport                        | `apps/server/src/modules/printers/win-rawprint-transport.ts` (+ `win-rawprint-helpers.ts` for exe resolution)                                                                                                                |
+| Analogous probe pattern                  | `scripts/arabic-print-probes.mjs` + `apps/server/src/modules/printers/arabic-probe-bins.ts` + `docs/printing/arabic-thermal.md`                                                                                              |
 
 The baker must call the same `print-documents.ts` helpers the production
 paths use — a probe that re-implements layout is a probe that lies.
