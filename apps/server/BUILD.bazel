@@ -76,7 +76,6 @@ js_binary(
         ":node_modules/@spicyhome/shared",
         ":node_modules/node-forge",
         "assets/logo-thermal.png",
-        "assets/logo-thermal-192.png",
     ],
     entry_point = "src/main.js",
     env = {
@@ -97,7 +96,6 @@ js_binary(
         ":node_modules/@spicyhome/shared",
         ":node_modules/node-forge",
         "assets/logo-thermal.png",
-        "assets/logo-thermal-192.png",
     ],
     entry_point = "src/main.js",
     env = {
@@ -133,10 +131,9 @@ js_binary(
         ":node_modules/better-sqlite3",
         ":node_modules/drizzle-orm",
         # Kitchen ticket item lines rasterize via the Arabic glyph atlas
-        # (ASCII coverage). The thermal logo is only read lazily by receipt
-        # formats (later slices) — included now so the data list is stable.
+        # (ASCII coverage). Receipt formats load logo-thermal.png via loadThermalLogo().
         "assets/arabic-glyph-atlas.json",
-        "assets/logo-thermal-192.png",
+        "assets/logo-thermal.png",
     ],
     entry_point = "src/modules/printers/bake/cli.js",
     env = {
@@ -222,7 +219,6 @@ jest_test(
         "//packages/api-spec:openapi_json",
         "//packages/db:migrations",
         "assets/logo-thermal.png",
-        "assets/logo-thermal-192.png",
         "assets/arabic-glyph-atlas.json",
     ],
     node_modules = ":node_modules",

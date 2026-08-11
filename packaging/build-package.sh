@@ -181,7 +181,6 @@ fi
 if [ -d "$ROOT_DIR/apps/server/assets" ]; then
   mkdir -p "$PACKAGE_DIR/server/assets"
   cp -f "$ROOT_DIR/apps/server/assets/logo-thermal.png" "$PACKAGE_DIR/server/assets/" 2>/dev/null || true
-  cp -f "$ROOT_DIR/apps/server/assets/logo-thermal-192.png" "$PACKAGE_DIR/server/assets/" 2>/dev/null || true
   # Arabic raster glyph atlas (joined Arabic receipt lines via GS v 0)
   cp -f "$ROOT_DIR/apps/server/assets/arabic-glyph-atlas.json" "$PACKAGE_DIR/server/assets/" 2>/dev/null || true
 fi

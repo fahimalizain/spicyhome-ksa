@@ -187,9 +187,6 @@ export class ReceiptBuilder {
     if (opts.deliveryExternalRef) {
       eb.text(`App order #: ${opts.deliveryExternalRef}`);
     }
-    if (!isOpenOrder && opts.orderNo != null) {
-      eb.text(`Order ref: #${opts.orderNo}`);
-    }
     eb.separator();
 
     // Items
@@ -393,7 +390,7 @@ export class ReceiptBuilder {
   private resolveLogo(logo: ReceiptOptions['logo']): MonoBitmap | null {
     if (logo === false) return null;
     if (logo && typeof logo === 'object') return logo;
-    return loadThermalLogo({ size: 240 });
+    return loadThermalLogo();
   }
 
   private truncate(s: string, max = 28): string {
