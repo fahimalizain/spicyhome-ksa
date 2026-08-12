@@ -132,8 +132,7 @@ describe('ReceiptBuilder', () => {
   it('renders seller address lines when provided', () => {
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('King Fahd Rd 1234');
-    expect(str(buf)).toContain('Riyadh 12211');
-    expect(str(buf)).toContain('SA');
+    expect(str(buf)).toContain('Riyadh 12211 SA');
   });
 
   it('skips empty seller address lines', () => {
@@ -210,15 +209,28 @@ describe('ReceiptBuilder', () => {
     expect(s).not.toContain('App order #:');
   });
 
-  it('renders Arabic item name as primary line with configured encoding', () => {
+  it('renders single-line item headers Qty / Item / Rate / Total', () => {
+    const s = str(builder.build(baseOpts));
+    const header = s.split('\n').find((l) => l.includes('Qty') && l.includes('Total'));
+    expect(header).toBeDefined();
+    expect(header!).toContain('Item');
+    expect(header!).toContain('Rate');
+    // Rate sits immediately before Total on the same header line
+    expect(header!.indexOf('Rate')).toBeLessThan(header!.indexOf('Total'));
+  });
+
+  it('renders qty + EN + AR on name line; rate/total on next line', () => {
     const buf = builder.build({
       ...baseOpts,
       arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
     });
-    // زنجر برجر in PC864 (prefixed with "2x ")
     expect(
-      findSequence(buf, encodePc864('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+      findSequence(buf, encodePc864('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
     ).toBe(true);
+    const s = str(buf);
+    expect(s).toContain('Zinger Burger');
+    expect(s).toContain('23.00'); // rate incl. VAT
+    expect(s).toContain('46.00'); // line total
   });
 
   it('renders Arabic item name as UTF-8 with default (none) encoding', () => {
@@ -226,12 +238,12 @@ describe('ReceiptBuilder', () => {
     expect(
       findSequence(
         buf,
-        encodeUtf8(shapeArabic('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+        encodeUtf8(shapeArabic('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
       ),
     ).toBe(true);
   });
 
-  it('renders English secondary line when Arabic name differs', () => {
+  it('inlines English name on the qty/name line (no secondary name line)', () => {
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('Zinger Burger');
   });
@@ -254,21 +266,24 @@ describe('ReceiptBuilder', () => {
       totalHalalas: 575,
     };
     const s = str(builder.build(opts));
-    expect(s).toContain('1x Pepsi');
+    expect(s).toMatch(/1\s+Pepsi/);
   });
 
-  it('prints English-only lines when nameAr is null', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('1x Pepsi');
-  });
-
-  it('renders unit net price and line total (unit 2300 incl @15% → net 20.00)', () => {
+  it('prints English-only name line when nameAr is null', () => {
     const buf = builder.build(baseOpts);
     const s = str(buf);
-    // 2300 halalas incl. VAT @ 15% → 300 VAT, 2000 net = 20.00
-    expect(s).toContain('@20.00');
+    expect(s).toMatch(/1\s+Pepsi/);
+    expect(s).toContain('5.75');
+  });
+
+  it('renders VAT-inclusive unit rate and line total (2300 incl → 23.00)', () => {
+    const buf = builder.build(baseOpts);
+    const s = str(buf);
+    // unitPriceHalalas is VAT-inclusive — do not decompose to net
+    expect(s).toContain('23.00');
     expect(s).toContain('46.00');
     expect(s).toContain('5.75');
+    expect(s).not.toContain('@20.00');
   });
 
   it('renders totals block with correct money formatting', () => {
@@ -298,11 +313,6 @@ describe('ReceiptBuilder', () => {
     expect(findSequence(buf, encodeUtf8(shapeArabic(arLine)))).toBe(true);
   });
 
-  it('renders SAR marker', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('SAR');
-  });
-
   it('never renders PAID/AMOUNT DUE on ZATCA documents (open order only)', () => {
     const s = str(builder.build({ ...baseOpts, paidHalalas: 2000 }));
     expect(s).not.toContain('AMOUNT DUE');
@@ -320,14 +330,28 @@ describe('ReceiptBuilder', () => {
     expect(idxBoldOff).not.toBe(-1);
   });
 
-  it('renders default footer thank you message', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('Thank you! Visit again.');
+  it('renders default footer thank you message framed by stars', () => {
+    const s = str(builder.build(baseOpts));
+    expect(s).toContain('Thank you! Visit again.');
+    expect(s).toContain('********');
+    const thankIdx = s.indexOf('Thank you! Visit again.');
+    const firstStars = s.indexOf('********');
+    const secondStars = s.indexOf('********', firstStars + 8);
+    expect(firstStars).toBeGreaterThanOrEqual(0);
+    expect(firstStars).toBeLessThan(thankIdx);
+    expect(secondStars).toBeGreaterThan(thankIdx);
   });
 
   it('renders custom footer when provided', () => {
     const buf = builder.build({ ...baseOpts, footer: 'Custom footer' });
     expect(str(buf)).toContain('Custom footer');
+  });
+
+  it('renders Home Delivery contact at the bottom', () => {
+    const s = str(builder.build(baseOpts));
+    expect(s).toContain('Home Delivery');
+    expect(s).toContain('0112357926 | 0533243439');
+    expect(s).toContain('Thank you! Visit again.');
   });
 
   // ── Credit note ─────────────────────────────────────────────────────────────
@@ -438,7 +462,6 @@ describe('ReceiptBuilder', () => {
       expect(s).toContain('VAT (15.0%)');
       expect(s).toContain('TOTAL (incl. VAT)');
       expect(s).toContain('51.75');
-      expect(s).toContain('SAR');
     });
 
     it('always renders AMOUNT DUE, equal to the total when nothing is paid', () => {
@@ -551,13 +574,13 @@ describe('ReceiptBuilder', () => {
       ).toBe(false);
     });
 
-    it('still renders item lines with Arabic primary names', () => {
+    it('still renders item name lines with Arabic', () => {
       const buf = builder.build({
         ...openOpts,
         arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
       });
       expect(
-        findSequence(buf, encodePc864('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+        findSequence(buf, encodePc864('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
       ).toBe(true);
       expect(str(buf)).toContain('Zinger Burger');
     });
@@ -591,6 +614,33 @@ describe('ReceiptBuilder', () => {
     const titleIdx = h.indexOf(Buffer.from('SIMPLIFIED TAX INVOICE', 'ascii').toString('hex'));
     expect(rasterIdx).toBeGreaterThanOrEqual(0);
     expect(titleIdx).toBeGreaterThan(rasterIdx);
+  });
+
+  it('sets ~5% left margin (GS L) after logo, before body text', () => {
+    const bits = new Uint8Array(8);
+    bits[0] = 1;
+    const buf = builder.build({
+      ...baseOpts,
+      logo: { width: 8, height: 1, bits },
+    });
+    const h = hex(buf);
+    // test builder is 42 cols → 504 dots → 5% = 25 → GS L 19 00
+    expect(h).toContain('1d4c1900');
+    const logoIdx = h.indexOf('1d7630');
+    const marginIdx = h.indexOf('1d4c1900');
+    const titleIdx = h.indexOf(Buffer.from('SIMPLIFIED TAX INVOICE', 'ascii').toString('hex'));
+    expect(logoIdx).toBeGreaterThanOrEqual(0);
+    expect(marginIdx).toBeGreaterThan(logoIdx);
+    expect(titleIdx).toBeGreaterThan(marginIdx);
+  });
+
+  it('defaults to 45-char paper width', () => {
+    const def = new ReceiptBuilder();
+    const buf = def.build({ ...baseOpts, logo: false });
+    const h = hex(buf);
+    // 45×12 = 540 dots → 5% = 27 → GS L 1b 00
+    expect(h).toContain('1d4c1b00');
+    expect(buf.toString('latin1')).toContain('-'.repeat(45));
   });
 
   it('does not emit raster when logo is false', () => {

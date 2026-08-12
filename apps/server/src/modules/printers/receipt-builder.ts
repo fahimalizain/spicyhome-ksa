@@ -1,10 +1,14 @@
 import { EscPosBuilder, Align, CutType } from './esc-pos-builder';
-import { decomposeVat, halalasToSar } from '@spicyhome/shared';
+import { halalasToSar } from '@spicyhome/shared';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterArabicConfig } from '@spicyhome/shared';
 import { encodeArabicText } from './arabic-encode';
-import { renderArabicLineFromLogical } from './arabic-raster';
+import { renderArabicLineFromLogical, renderLeftRightLineFromLogical } from './arabic-raster';
 import { loadThermalLogo, type MonoBitmap } from './thermal-logo';
+
+/** Column widths for money on the item rate/total line (chars). */
+const ITEM_RATE_W = 10;
+const ITEM_TOTAL_W = 10;
 
 export interface ReceiptOptions {
   // Document
@@ -106,7 +110,8 @@ const AR_COLLECT_STI =
 export class ReceiptBuilder {
   private readonly width: number;
 
-  constructor(width = 42) {
+  /** Default 45 chars (80mm; between standard 42 and full 48). */
+  constructor(width = 45) {
     this.width = width;
   }
 
@@ -125,12 +130,16 @@ export class ReceiptBuilder {
     eb.init();
     eb.align(Align.Center);
 
-    // Thermal logo (centered), then document title
+    // Thermal logo (GS v 0 is left-origin on most printers — leave unpadded).
     const logo = this.resolveLogo(opts.logo);
     if (logo) {
       eb.rasterBitImage(logo.width, logo.height, logo.bits);
       eb.blankLine();
     }
+
+    // Text block: ~5% left margin so content isn't flush-left against the
+    // paper edge (uses spare space that otherwise shows as a right-side gap).
+    eb.leftMargin(Math.round(this.maxWidthDots() * 0.05));
 
     // Document title (EN) + Arabic title
     const titleEn = isCreditNote
@@ -157,9 +166,10 @@ export class ReceiptBuilder {
     if (!isOpenOrder) {
       const street = [opts.sellerStreet, opts.sellerBuilding].filter(Boolean).join(' ');
       if (street) eb.text(street);
-      const city = [opts.sellerCity, opts.sellerPostal].filter(Boolean).join(' ');
-      if (city) eb.text(city);
-      if (opts.sellerCountry) eb.text(opts.sellerCountry);
+      const cityLine = [opts.sellerCity, opts.sellerPostal, opts.sellerCountry]
+        .filter(Boolean)
+        .join(' ');
+      if (cityLine) eb.text(cityLine);
       if (opts.vatNumber) {
         eb.text(`VAT: ${opts.vatNumber}`);
       }
@@ -189,7 +199,9 @@ export class ReceiptBuilder {
     }
     eb.separator();
 
-    // Items
+    // Items table (separator above header is the one just emitted)
+    this.printItemHeader(eb);
+    eb.separator();
     for (const item of opts.items) {
       this.printItem(eb, item, arabic);
     }
@@ -209,9 +221,6 @@ export class ReceiptBuilder {
       eb.text('Amount includes VAT');
       this.writeArabicLine(eb, AR_AMOUNT_INCLUDES_VAT, arabic);
     }
-    eb.align(Align.Center);
-    eb.text('SAR');
-    eb.align(Align.Left);
 
     eb.separator();
 
@@ -257,7 +266,14 @@ export class ReceiptBuilder {
       eb.text('at the end of your visit.');
       this.writeArabicCentered(eb, AR_COLLECT_STI, arabic);
     } else {
+      eb.align(Align.Center);
+
+      // Store contact (all receipt kinds)
+      eb.text('Home Delivery');
+      eb.text('0112357926 | 0533243439');
+      eb.text('********');
       eb.text(opts.footer ?? 'Thank you! Visit again.');
+      eb.text('********');
       eb.blankLine();
 
       // ZATCA QR (optional slot) — never on open order receipts.
@@ -274,35 +290,91 @@ export class ReceiptBuilder {
     return eb.getBuffer();
   }
 
-  // ── Item lines ─────────────────────────────────────────────────────────────
+  // ── Item table ─────────────────────────────────────────────────────────────
+
+  private printItemHeader(eb: EscPosBuilder): void {
+    // Single header line; item body is still 2 lines (name, then rate+total).
+    const money = 'Rate'.padStart(ITEM_RATE_W) + ' ' + 'Total'.padStart(ITEM_TOTAL_W);
+    const leftW = Math.max(0, this.width - money.length);
+    const left = 'Qty  Item'.slice(0, leftW).padEnd(leftW);
+    eb.bold(true);
+    eb.text((left + money).slice(0, this.width));
+    eb.bold(false);
+  }
+
+  /** Left half of the name line: "2  Zinger Burger". */
+  private formatQtyEnLeft(qty: number, nameEn: string): string {
+    const en = (nameEn || '').trim();
+    const prefix = `${qty}  `;
+    if (!en) return prefix.trimEnd();
+    const maxEn = Math.max(0, this.width - prefix.length);
+    return prefix + en.slice(0, maxEn);
+  }
 
   /**
-   * Print one item line block:
-   *   {qty}x {nameAr|name}          Arabic primary when present, else English
-   *      {name}                     English secondary (indented, when both differ)
-   *      @{unitNet}    {lineTotal}  unit net excl. VAT + line total columns
+   * One item = two lines:
+   *   1) Qty  ItemNameEn …… ItemNameAr   (AR flush to the right paper edge)
+   *   2)                Rate …… Total
    */
   private printItem(eb: EscPosBuilder, item: ReceiptItem, arabic: PrinterArabicConfig): void {
     const nameAr = item.nameAr && item.nameAr.length > 0 ? item.nameAr : null;
-    const qtyPrefix = `${item.qty}x `;
-    const primary = nameAr ?? item.name;
-    const showEnSecondary = nameAr != null && item.name !== nameAr && item.name.length > 0;
+    const left = this.formatQtyEnLeft(item.qty, item.name);
 
-    // Primary name line (Arabic via code page, or ASCII)
     if (nameAr != null) {
-      this.writeArabicLine(eb, qtyPrefix + nameAr, arabic);
+      this.printQtyNameLine(eb, left, nameAr, arabic);
     } else {
-      eb.text(`${qtyPrefix}${this.truncate(primary)}`);
+      eb.text(left.slice(0, this.width));
     }
 
-    // English secondary line
-    if (showEnSecondary) {
-      eb.text(`    ${this.truncate(item.name)}`);
+    // Rate (VAT-incl) right-aligned just before Total (both on trailing money cols).
+    const rate = halalasToSar(item.unitPriceHalalas).padStart(ITEM_RATE_W);
+    const total = halalasToSar(item.totalHalalas).padStart(ITEM_TOTAL_W);
+    const money = `${rate} ${total}`;
+    const pad = Math.max(0, this.width - money.length);
+    eb.text((' '.repeat(pad) + money).slice(0, this.width));
+  }
+
+  /**
+   * Qty+EN on the left, Arabic flush-right on the same line.
+   * Raster: composite two bitmaps so glyph advances don't leave AR short of the edge.
+   * Charset: ASCII left + space pad + encoded AR (1 cell/byte for w1256/pc864).
+   */
+  private printQtyNameLine(
+    eb: EscPosBuilder,
+    left: string,
+    nameAr: string,
+    arabic: PrinterArabicConfig,
+  ): void {
+    if (arabic.renderMode === 'raster') {
+      const bmp = renderLeftRightLineFromLogical(left, nameAr, arabic, {
+        maxWidthDots: this.maxWidthDots(),
+      });
+      if (bmp) {
+        eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+        return;
+      }
+      // Atlas missing — fall through to charset.
     }
 
-    // Unit net price + line total (ASCII columns)
-    const unitNet = decomposeVat(item.unitPriceHalalas, item.vatRateBp).priceExclHalalas;
-    eb.columns(`    @${halalasToSar(unitNet)}`, halalasToSar(item.totalHalalas));
+    const arBytes = encodeArabicText(arabic, nameAr);
+    if (arBytes.length === 0) {
+      eb.text(left.slice(0, this.width));
+      return;
+    }
+    // Single-byte code pages: 1 byte ≈ 1 cell. UTF-8: use code-point count.
+    const arCells =
+      arabic.encoding === 'utf8' || arabic.encoding === 'none'
+        ? Array.from(nameAr).length
+        : arBytes.length;
+    const leftMax = Math.max(0, this.width - arCells);
+    const leftText = left.slice(0, leftMax);
+    const pad = Math.max(0, this.width - leftText.length - arCells);
+    const needCP = this.needCodePage(arabic);
+    if (needCP) eb.codePage(arabic.codePage);
+    eb.raw(Buffer.from(leftText, 'ascii'));
+    if (pad > 0) eb.raw(new Array(pad).fill(0x20));
+    eb.rawLine(arBytes);
+    if (needCP) eb.codePage(0);
   }
 
   // ── Arabic line helpers ─────────────────────────────────────────────────────
@@ -350,7 +422,6 @@ export class ReceiptBuilder {
       });
       if (bmp) {
         eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
-        eb.blankLine();
         return;
       }
       // Atlas missing — fall through to charset bytes.

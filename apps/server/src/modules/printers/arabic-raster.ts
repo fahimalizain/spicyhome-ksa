@@ -53,7 +53,7 @@ export interface RasterLineOptions {
   /** Max line width in dots. Default 384 (fits 58mm/80mm at 203dpi). */
   maxWidthDots?: number;
   /** Horizontal alignment inside maxWidthDots. Default 'left'. */
-  align?: 'left' | 'center';
+  align?: 'left' | 'center' | 'right';
 }
 
 const DEFAULT_MAX_WIDTH_DOTS = 384;
@@ -141,7 +141,12 @@ export function renderArabicLineToMonoBitmap(
   const layout = layoutLine(shapedAndOrdered, glyphsByCp);
   const contentWidth = Math.min(layout.width, maxWidth);
   const align = opts?.align ?? 'left';
-  const offset = align === 'center' ? Math.floor((maxWidth - contentWidth) / 2) : 0;
+  const offset =
+    align === 'center'
+      ? Math.floor((maxWidth - contentWidth) / 2)
+      : align === 'right'
+        ? Math.max(0, maxWidth - contentWidth)
+        : 0;
 
   // Second pass: blit glyphs into the bitmap.
   const width = maxWidth;
@@ -172,6 +177,74 @@ export function renderArabicLineFromLogical(
   const shaped = shapeArabic(logical);
   const ordered = visualOrderForThermal(shaped, config.visualRtl);
   return renderArabicLineToMonoBitmap(ordered, opts);
+}
+
+/**
+ * One mixed line: `leftLogical` flush left, `rightLogical` flush right
+ * (typical: "2  Zinger Burger" + Arabic name). Composites two raster passes
+ * so Arabic truly starts from the right paper edge regardless of glyph widths.
+ * Returns null if the atlas is missing or either side fails to render.
+ */
+export function renderLeftRightLineFromLogical(
+  leftLogical: string,
+  rightLogical: string,
+  config: PrinterArabicConfig,
+  opts?: { maxWidthDots?: number; gapDots?: number },
+): MonoBitmap | null {
+  const maxWidth = Math.max(1, opts?.maxWidthDots ?? DEFAULT_MAX_WIDTH_DOTS);
+  const gap = Math.max(0, opts?.gapDots ?? 6);
+  const leftBmp = renderArabicLineFromLogical(leftLogical.length > 0 ? leftLogical : ' ', config, {
+    maxWidthDots: maxWidth,
+    align: 'left',
+  });
+  const rightBmp = renderArabicLineFromLogical(rightLogical, config, {
+    maxWidthDots: maxWidth,
+    align: 'left',
+  });
+  if (!leftBmp || !rightBmp) return null;
+
+  const leftExtent = Math.max(0, rightmostInkX(leftBmp) + 1);
+  const rightExtent = Math.max(0, rightmostInkX(rightBmp) + 1);
+  const height = Math.max(leftBmp.height, rightBmp.height);
+  const bits = new Uint8Array(maxWidth * height);
+
+  // Prefer right edge for the Arabic side; clip left if they would collide.
+  const rightX = Math.max(0, maxWidth - rightExtent);
+  const leftMax = Math.max(0, Math.min(leftExtent, rightX - gap));
+
+  blitMonoRegion(leftBmp, bits, maxWidth, height, 0, leftMax);
+  blitMonoRegion(rightBmp, bits, maxWidth, height, rightX, rightExtent);
+  return { width: maxWidth, height, bits };
+}
+
+/** Rightmost column with any ink, or -1 if blank. */
+function rightmostInkX(bmp: MonoBitmap): number {
+  for (let x = bmp.width - 1; x >= 0; x--) {
+    for (let y = 0; y < bmp.height; y++) {
+      if (bmp.bits[y * bmp.width + x]) return x;
+    }
+  }
+  return -1;
+}
+
+/** Copy src columns [0, srcCols) into dst at dstX (OR ink). */
+function blitMonoRegion(
+  src: MonoBitmap,
+  dst: Uint8Array,
+  dstW: number,
+  dstH: number,
+  dstX: number,
+  srcCols: number,
+): void {
+  const cols = Math.min(srcCols, src.width);
+  const rows = Math.min(src.height, dstH);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const dx = dstX + x;
+      if (dx < 0 || dx >= dstW) continue;
+      if (src.bits[y * src.width + x]) dst[y * dstW + dx] = 1;
+    }
+  }
 }
 
 // ── Internals ────────────────────────────────────────────────────────────────

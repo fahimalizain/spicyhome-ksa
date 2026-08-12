@@ -12,6 +12,24 @@ describe('EscPosBuilder', () => {
     });
   });
 
+  describe('leftMargin', () => {
+    it('emits GS L nL nH', () => {
+      const eb = new EscPosBuilder();
+      eb.leftMargin(25);
+      const buf = eb.getBuffer();
+      expect([...buf]).toEqual([0x1d, 0x4c, 25, 0x00]);
+    });
+
+    it('clamps negative to 0 and encodes high bytes', () => {
+      const eb = new EscPosBuilder();
+      eb.leftMargin(-3);
+      expect([...eb.getBuffer()]).toEqual([0x1d, 0x4c, 0, 0]);
+      const eb2 = new EscPosBuilder();
+      eb2.leftMargin(300);
+      expect([...eb2.getBuffer()]).toEqual([0x1d, 0x4c, 300 & 0xff, (300 >> 8) & 0xff]);
+    });
+  });
+
   describe('align', () => {
     it('emits ESC a for left alignment', () => {
       const eb = new EscPosBuilder();

@@ -36,6 +36,16 @@ export class EscPosBuilder {
     return this;
   }
 
+  /**
+   * GS L nL nH — set left margin in horizontal motion units (dots at 203dpi).
+   * Resets on `init()`. Affects subsequent text/raster within the print area.
+   */
+  leftMargin(dots: number): this {
+    const n = Math.max(0, Math.min(Math.round(dots), 65535));
+    this.cmd([GS, 0x4c, n & 0xff, (n >> 8) & 0xff]);
+    return this;
+  }
+
   align(a: Align): this {
     this.cmd([ESC, 0x61, a]); // ESC a n
     return this;

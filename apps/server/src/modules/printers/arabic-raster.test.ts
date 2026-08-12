@@ -4,6 +4,7 @@ import {
   arabicAtlasCandidates,
   renderArabicLineToMonoBitmap,
   renderArabicLineFromLogical,
+  renderLeftRightLineFromLogical,
 } from './arabic-raster';
 import { shapeArabic, visualOrderForThermal } from './arabic-encode';
 import type { PrinterArabicConfig } from '@spicyhome/shared';
@@ -102,6 +103,59 @@ describe('arabic-raster', () => {
     };
     const firstInkCenter = firstInkLeft(center);
     expect(firstInkCenter).toBeGreaterThan(firstInkLeft(left));
+  });
+
+  it('right-aligns content when align=right', () => {
+    const right = renderArabicLineFromLogical('\u0645\u0631\u062D\u0628\u0627', RASTER_CONFIG, {
+      maxWidthDots: 384,
+      align: 'right',
+    })!;
+    let lastInk = -1;
+    for (let x = right.width - 1; x >= 0; x--) {
+      for (let y = 0; y < right.height; y++) {
+        if (right.bits[y * right.width + x]) {
+          lastInk = x;
+          break;
+        }
+      }
+      if (lastInk >= 0) break;
+    }
+    // Ink should reach near the right edge (within a few dots of advance slack).
+    expect(lastInk).toBeGreaterThan(384 - 40);
+  });
+
+  it('renderLeftRightLineFromLogical pins Arabic to the right edge', () => {
+    const bmp = renderLeftRightLineFromLogical(
+      '2  Zinger Burger',
+      '\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631',
+      RASTER_CONFIG,
+      { maxWidthDots: 504 },
+    )!;
+    expect(bmp).not.toBeNull();
+    let lastInk = -1;
+    for (let x = bmp.width - 1; x >= 0; x--) {
+      for (let y = 0; y < bmp.height; y++) {
+        if (bmp.bits[y * bmp.width + x]) {
+          lastInk = x;
+          break;
+        }
+      }
+      if (lastInk >= 0) break;
+    }
+    expect(lastInk).toBeGreaterThan(504 - 40);
+    // Left side also has ink (qty/EN)
+    let firstInk = -1;
+    for (let x = 0; x < bmp.width; x++) {
+      for (let y = 0; y < bmp.height; y++) {
+        if (bmp.bits[y * bmp.width + x]) {
+          firstInk = x;
+          break;
+        }
+      }
+      if (firstInk >= 0) break;
+    }
+    expect(firstInk).toBeGreaterThanOrEqual(0);
+    expect(firstInk).toBeLessThan(100);
   });
 
   it('renders the empty string as a blank bitmap', () => {
