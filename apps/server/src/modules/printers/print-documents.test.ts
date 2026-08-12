@@ -77,9 +77,12 @@ describe('print-documents', () => {
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
       INSERT INTO settings (key, value) VALUES ('vat_number', '300123456789003');
       INSERT INTO settings (key, value) VALUES ('seller_name', 'Test');
+      INSERT INTO settings (key, value) VALUES ('seller_name_ar', 'مطعم الاختبار');
       INSERT INTO settings (key, value) VALUES ('seller_street', 'Main St');
+      INSERT INTO settings (key, value) VALUES ('seller_street_ar', 'شارع الاختبار');
       INSERT INTO settings (key, value) VALUES ('seller_building', '1234');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
+      INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
       INSERT INTO settings (key, value) VALUES ('seller_postal', '12345');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
     `);

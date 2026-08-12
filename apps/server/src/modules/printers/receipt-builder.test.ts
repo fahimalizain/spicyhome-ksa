@@ -135,6 +135,27 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('Riyadh 12211 SA');
   });
 
+  // ── Arabic seller fields (wired through, not printed yet) ──────────────────
+
+  it('builds with optional Arabic seller fields and still prints English seller', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
+      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+    });
+    const s = str(buf);
+    expect(s).toContain('SpicyHome Restaurant'); // English seller still prints
+    expect(s).toContain('King Fahd Rd 1234'); // English address still prints
+    expect(s).toContain('Riyadh 12211 SA');
+  });
+
+  it('does not require Arabic seller fields', () => {
+    // baseOpts has no sellerNameAr/sellerStreetAr/sellerCityAr — must build fine.
+    const buf = builder.build(baseOpts);
+    expect(str(buf)).toContain('SpicyHome Restaurant');
+  });
+
   it('skips empty seller address lines', () => {
     const buf = builder.build({
       ...baseOpts,

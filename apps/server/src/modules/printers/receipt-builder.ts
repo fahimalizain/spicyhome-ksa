@@ -38,6 +38,12 @@ export interface ReceiptOptions {
   sellerPostal?: string;
   /** Two-letter country code, e.g. SA. Defaults to 'SA'. */
   sellerCountry?: string;
+  /** Arabic seller legal name (settings.seller_name_ar). Not printed until layout is defined. */
+  sellerNameAr?: string;
+  /** Arabic street (settings.seller_street_ar). */
+  sellerStreetAr?: string;
+  /** Arabic city (settings.seller_city_ar). */
+  sellerCityAr?: string;
   // Order meta
   orderType: 'dine_in' | 'takeaway';
   tableName?: string;

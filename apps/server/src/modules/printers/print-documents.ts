@@ -93,6 +93,11 @@ export function buildSimplifiedInvoiceBuffer(
   const sellerCity = getSetting(db, 'seller_city', 'Riyadh');
   const sellerPostal = getSetting(db, 'seller_postal', '');
   const sellerCountry = getSetting(db, 'seller_country', 'SA');
+  // Arabic seller fields (settings keys shared with ZATCA) — wired through for
+  // the upcoming receipt layout; not printed yet.
+  const sellerNameAr = getSetting(db, 'seller_name_ar', '');
+  const sellerStreetAr = getSetting(db, 'seller_street_ar', '');
+  const sellerCityAr = getSetting(db, 'seller_city_ar', '');
 
   // Load QR from a printable zatca_invoices row if not provided by caller.
   // Printable statuses:
@@ -130,6 +135,9 @@ export function buildSimplifiedInvoiceBuffer(
     sellerCity,
     sellerPostal,
     sellerCountry,
+    sellerNameAr,
+    sellerStreetAr,
+    sellerCityAr,
     orderType: order.type as 'dine_in' | 'takeaway',
     tableName: resolveTableName(db, order),
     deliveryPartnerTitle: getDeliveryPartnerTitle(db, order),
@@ -236,6 +244,11 @@ export function buildCreditNoteBuffer(
   const sellerCity = getSetting(db, 'seller_city', 'Riyadh');
   const sellerPostal = getSetting(db, 'seller_postal', '');
   const sellerCountry = getSetting(db, 'seller_country', 'SA');
+  // Arabic seller fields (settings keys shared with ZATCA) — wired through for
+  // the upcoming receipt layout; not printed yet.
+  const sellerNameAr = getSetting(db, 'seller_name_ar', '');
+  const sellerStreetAr = getSetting(db, 'seller_street_ar', '');
+  const sellerCityAr = getSetting(db, 'seller_city_ar', '');
 
   // Arabic name fallback: refund rows predating the snapshot fall back to
   // the snapshotted order_items.item_name_ar via order_item_id.
@@ -300,6 +313,9 @@ export function buildCreditNoteBuffer(
     sellerCity,
     sellerPostal,
     sellerCountry,
+    sellerNameAr,
+    sellerStreetAr,
+    sellerCityAr,
     orderType: order.type as 'dine_in' | 'takeaway',
     tableName: resolveTableName(db, order),
     deliveryPartnerTitle: getDeliveryPartnerTitle(db, order),
