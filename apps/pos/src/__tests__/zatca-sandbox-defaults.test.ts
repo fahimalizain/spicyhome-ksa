@@ -53,6 +53,9 @@ describe('ZATCA sandbox defaults', () => {
   it('all required string fields are non-empty (server MinLength(1))', () => {
     const required = [
       'sellerName',
+      'sellerNameAr',
+      'sellerStreetAr',
+      'sellerCityAr',
       'vatNumber',
       'crNumber',
       'street',

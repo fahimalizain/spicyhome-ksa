@@ -51,6 +51,9 @@ vi.mock('../api', () => ({
 
 const sampleConfig = {
   sellerName: 'Test',
+  sellerNameAr: 'مطعم تجريبي',
+  sellerStreetAr: 'شارع الاختبار',
+  sellerCityAr: 'الرياض',
   vatNumber: '300123456789003',
   crNumber: '',
   street: '',

@@ -48,6 +48,9 @@ vi.mock('../api', () => ({
 /** Empty/minimal config to start with — fields should be overridden on Sandbox click. */
 const emptyConfig = {
   sellerName: '',
+  sellerNameAr: '',
+  sellerStreetAr: '',
+  sellerCityAr: '',
   vatNumber: '',
   crNumber: '',
   street: '',
@@ -171,6 +174,9 @@ describe('ZatcaPage — sandbox autofill', () => {
 
     // Values should still be present (not cleared)
     expect(screen.getByDisplayValue('Test POS Sandbox')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('مطعم تجريبي')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('شارع الاختبار')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('الرياض')).toBeInTheDocument();
     expect(screen.getByDisplayValue('399999999900003')).toBeInTheDocument();
   });
 
