@@ -243,9 +243,10 @@ describe('PrintJobService', () => {
       expect(s).toContain(`Invoice #: INV26-TEST-${orderSeq}`);
       // seller fields from settings
       expect(s).toContain('Test'); // seller_name
-      expect(s).toContain('Main St 1234'); // seller_street + seller_building
-      expect(s).toContain('Riyadh 12345'); // seller_city + seller_postal
-      expect(s).toContain('SA'); // seller_country
+      expect(s).toContain('1234 Main St'); // seller_building + seller_street
+      expect(s).toContain('Riyadh'); // seller_city
+      expect(s).toContain('Kingdom of Saudi Arabia'); // full country name (no ISO code)
+      expect(s).not.toContain('12345'); // seller_postal no longer printed
       expect(s).toContain('Amount includes VAT');
       expect(s).toContain('TOTAL (incl. VAT)');
       expect(s).toContain('SAR');
@@ -553,7 +554,7 @@ describe('PrintJobService', () => {
         const s = transport.sent[0].data.toString('ascii');
         expect(s).toContain('SpicyHome'); // settings.restaurant_name
         expect(s).not.toContain('SellerXYZ'); // settings.seller_name must NOT be used
-        expect(s).not.toContain('Main St 1234'); // seller address must NOT be used
+        expect(s).not.toContain('1234 Main St'); // seller address must NOT be used
         expect(s).not.toContain('300123456789003'); // settings.vat_number must NOT be used
       } finally {
         sqlite.exec(`UPDATE settings SET value = 'Test' WHERE key = 'seller_name'`);

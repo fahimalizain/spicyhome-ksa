@@ -21,6 +21,7 @@ import {
   type PrintDocumentPrinter,
   type PrintDocumentsDb,
 } from './print-documents';
+import { encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('print-documents', () => {
   let sqlite: Database.Database;
@@ -95,6 +96,16 @@ describe('print-documents', () => {
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function findSequence(buf: Buffer, seq: number[]): boolean {
+    const bufArray = Array.from(buf);
+    for (let i = 0; i <= bufArray.length - seq.length; i++) {
+      if (seq.every((b, j) => bufArray[i + j] === b)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /** Paid order with one item (115.00 incl. VAT) + a printable ZATCA invoice row. */
   function createBasicOrder(): number {
@@ -206,8 +217,20 @@ describe('print-documents', () => {
       expect(s).toContain(`Invoice #: INV26-TEST-${orderSeq}`);
       // Seller fields from settings
       expect(s).toContain('Test'); // seller_name
-      expect(s).toContain('Main St 1234'); // seller_street + seller_building
-      expect(s).toContain('Riyadh 12345'); // seller_city + seller_postal
+      expect(s).toContain('1234 Main St'); // seller_building + seller_street
+      expect(s).toContain('Riyadh'); // seller_city (left side of the bilingual line)
+      expect(s).not.toContain('12345'); // seller_postal no longer printed
+      // Bilingual seller lines: Arabic country name bytes present (UTF-8 charset)
+      expect(
+        findSequence(
+          buf,
+          encodeUtf8(
+            shapeArabic(
+              '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629',
+            ),
+          ),
+        ),
+      ).toBe(true);
       expect(s).toContain('TOTAL (incl. VAT)');
       // QR payload from the printable zatca_invoices row
       expect(s).toContain('SIGNED_QR_PAYLOAD');

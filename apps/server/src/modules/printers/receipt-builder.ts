@@ -10,6 +10,13 @@ import { loadThermalLogo, type MonoBitmap } from './thermal-logo';
 const ITEM_RATE_W = 10;
 const ITEM_TOTAL_W = 10;
 
+/**
+ * Scale for item-name raster lines (qty + EN | AR). Atlas cell is 32 dots
+ * (~native Font A height). 1.25 is a slight bump; kitchen tickets use 1.5.
+ * Seller/title rasters stay unscaled.
+ */
+const ITEM_NAME_LINE_SCALE = 1.25;
+
 export interface ReceiptOptions {
   // Document
   /**
@@ -38,11 +45,11 @@ export interface ReceiptOptions {
   sellerPostal?: string;
   /** Two-letter country code, e.g. SA. Defaults to 'SA'. */
   sellerCountry?: string;
-  /** Arabic seller legal name (settings.seller_name_ar). Not printed until layout is defined. */
+  /** Arabic seller legal name (settings.seller_name_ar) — right-aligned next to the English name on ZATCA receipts. */
   sellerNameAr?: string;
-  /** Arabic street (settings.seller_street_ar). */
+  /** Arabic street (settings.seller_street_ar) — right-aligned on the seller street/building line. */
   sellerStreetAr?: string;
-  /** Arabic city (settings.seller_city_ar). */
+  /** Arabic city (settings.seller_city_ar) — right-aligned on the seller city/country line. */
   sellerCityAr?: string;
   // Order meta
   orderType: 'dine_in' | 'takeaway';
@@ -105,6 +112,11 @@ const AR_TITLE_CREDIT_NOTE = '\u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\
 const AR_AMOUNT_INCLUDES_VAT =
   '\u0627\u0644\u0645\u0628\u0644\u063A \u0634\u0627\u0645\u0644 \u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629'; // المبلغ شامل ضريبة القيمة المضافة
 
+/** Full country names for the seller city/country line — never the ISO code on the receipt. */
+const SELLER_COUNTRY_EN = 'Kingdom of Saudi Arabia';
+const SELLER_COUNTRY_AR =
+  '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629'; // المملكة العربية السعودية
+
 /** Arabic strings used on the non-ZATCA open order receipt. */
 const AR_TITLE_OPEN_ORDER =
   '\u0625\u064A\u0635\u0627\u0644 \u0637\u0644\u0628 \u0645\u0641\u062A\u0648\u062D'; // إيصال طلب مفتوح
@@ -166,16 +178,36 @@ export class ReceiptBuilder {
 
     // Seller block — open order receipts show only the display name
     // (restaurant_name), never the ZATCA legal name/address/VAT number.
-    eb.bold(true);
-    eb.text(opts.sellerName);
-    eb.bold(false);
-    if (!isOpenOrder) {
-      const street = [opts.sellerStreet, opts.sellerBuilding].filter(Boolean).join(' ');
-      if (street) eb.text(street);
-      const cityLine = [opts.sellerCity, opts.sellerPostal, opts.sellerCountry]
-        .filter(Boolean)
-        .join(' ');
-      if (cityLine) eb.text(cityLine);
+    if (isOpenOrder) {
+      eb.bold(true);
+      eb.text(opts.sellerName);
+      eb.bold(false);
+    } else {
+      // ZATCA documents: bilingual seller lines — English flush left, Arabic
+      // flush right on the same line.
+      // 1. Legal name — kept bold (bold wraps the whole line, AR included).
+      const sellerNameAr =
+        opts.sellerNameAr && opts.sellerNameAr.length > 0 ? opts.sellerNameAr : null;
+      eb.bold(true);
+      if (sellerNameAr) {
+        this.printLeftRightLine(eb, opts.sellerName, sellerNameAr, arabic);
+      } else {
+        eb.text(opts.sellerName);
+      }
+      eb.bold(false);
+
+      // 2. Street/building: EN "building street" (1234 King Fahd Rd),
+      //    AR "streetAr building" (شارع … 1234).
+      const streetEn = [opts.sellerBuilding, opts.sellerStreet].filter(Boolean).join(' ');
+      const streetAr = [opts.sellerStreetAr, opts.sellerBuilding].filter(Boolean).join(' ');
+      this.printSellerLine(eb, streetEn, streetAr, arabic);
+
+      // 3. City/country: full country names only — no postal code, no ISO
+      //    country code on the receipt.
+      const cityEn = [opts.sellerCity, SELLER_COUNTRY_EN].filter(Boolean).join(' ');
+      const cityAr = [opts.sellerCityAr, SELLER_COUNTRY_AR].filter(Boolean).join(' ');
+      this.printSellerLine(eb, cityEn, cityAr, arabic);
+
       if (opts.vatNumber) {
         eb.text(`VAT: ${opts.vatNumber}`);
       }
@@ -327,7 +359,7 @@ export class ReceiptBuilder {
     const left = this.formatQtyEnLeft(item.qty, item.name);
 
     if (nameAr != null) {
-      this.printQtyNameLine(eb, left, nameAr, arabic);
+      this.printQtyNameLine(eb, left, nameAr, arabic, ITEM_NAME_LINE_SCALE);
     } else {
       eb.text(left.slice(0, this.width));
     }
@@ -344,19 +376,26 @@ export class ReceiptBuilder {
    * Qty+EN on the left, Arabic flush-right on the same line.
    * Raster: composite two bitmaps so glyph advances don't leave AR short of the edge.
    * Charset: ASCII left + space pad + encoded AR (1 cell/byte for w1256/pc864).
+   * @param scale nearest-neighbor scale for raster output (item names only; default 1).
    */
   private printQtyNameLine(
     eb: EscPosBuilder,
     left: string,
     nameAr: string,
     arabic: PrinterArabicConfig,
+    scale = 1,
   ): void {
     if (arabic.renderMode === 'raster') {
+      const s = scale > 0 ? scale : 1;
+      const maxDots = this.maxWidthDots();
+      // Render into a narrower canvas when scaling up so scaled width still fits.
+      const renderWidth = s === 1 ? maxDots : Math.max(1, Math.floor(maxDots / s));
       const bmp = renderLeftRightLineFromLogical(left, nameAr, arabic, {
-        maxWidthDots: this.maxWidthDots(),
+        maxWidthDots: renderWidth,
       });
       if (bmp) {
-        eb.rasterBitImage(bmp.width, bmp.height, bmp.bits);
+        const out = s === 1 ? bmp : scaleMonoBitmap(bmp, s, maxDots);
+        eb.rasterBitImage(out.width, out.height, out.bits);
         return;
       }
       // Atlas missing — fall through to charset.
@@ -381,6 +420,43 @@ export class ReceiptBuilder {
     if (pad > 0) eb.raw(new Array(pad).fill(0x20));
     eb.rawLine(arBytes);
     if (needCP) eb.codePage(0);
+  }
+
+  // ── Seller block lines ──────────────────────────────────────────────────────
+
+  /**
+   * One bilingual seller line: English flush left, Arabic flush right (same
+   * left-right machinery as item name lines). Skip the line when both sides
+   * are empty; print EN alone when AR is missing; right-align AR alone when
+   * EN is missing.
+   */
+  private printSellerLine(
+    eb: EscPosBuilder,
+    leftEn: string,
+    rightAr: string,
+    arabic: PrinterArabicConfig,
+  ): void {
+    const ar = rightAr && rightAr.length > 0 ? rightAr : null;
+    if (!leftEn && !ar) return;
+    if (ar == null) {
+      eb.text(leftEn.slice(0, this.width));
+      return;
+    }
+    this.printLeftRightLine(eb, leftEn, ar, arabic);
+  }
+
+  /**
+   * Generic left/right bilingual line — alias over the item-name machinery
+   * (raster composite + charset padding) so raster/charset logic lives in one
+   * place for both item names and seller lines.
+   */
+  private printLeftRightLine(
+    eb: EscPosBuilder,
+    left: string,
+    rightAr: string,
+    arabic: PrinterArabicConfig,
+  ): void {
+    this.printQtyNameLine(eb, left, rightAr, arabic);
   }
 
   // ── Arabic line helpers ─────────────────────────────────────────────────────
@@ -503,4 +579,20 @@ export class ReceiptBuilder {
       };
     }
   }
+}
+
+/** Nearest-neighbor scale; width is capped at maxWidthDots (right side cropped). */
+function scaleMonoBitmap(src: MonoBitmap, scale: number, maxWidthDots: number): MonoBitmap {
+  const rawW = Math.max(1, Math.round(src.width * scale));
+  const w = Math.min(rawW, maxWidthDots);
+  const h = Math.max(1, Math.round(src.height * scale));
+  const bits = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(src.height - 1, Math.floor(y / scale));
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(src.width - 1, Math.floor(x / scale));
+      bits[y * w + x] = src.bits[sy * src.width + sx];
+    }
+  }
+  return { width: w, height: h, bits };
 }

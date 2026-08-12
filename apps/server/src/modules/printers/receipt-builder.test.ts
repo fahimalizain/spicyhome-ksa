@@ -131,11 +131,18 @@ describe('ReceiptBuilder', () => {
 
   it('renders seller address lines when provided', () => {
     const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('King Fahd Rd 1234');
-    expect(str(buf)).toContain('Riyadh 12211 SA');
+    const s = str(buf);
+    // Street line: building first, then street
+    expect(s).toContain('1234 King Fahd Rd');
+    // City line: city + full country name — no postal code, no ISO code
+    const cityLine = s.split('\n').find((l) => l.includes('Riyadh'));
+    expect(cityLine).toBeDefined();
+    expect(cityLine!).toContain('Kingdom of Saudi Arabia');
+    expect(cityLine!).not.toContain('12211');
+    expect(cityLine!.trim().endsWith('SA')).toBe(false);
   });
 
-  // ── Arabic seller fields (wired through, not printed yet) ──────────────────
+  // ── Bilingual seller block (ZATCA documents) ───────────────────────────────
 
   it('builds with optional Arabic seller fields and still prints English seller', () => {
     const buf = builder.build({
@@ -145,15 +152,119 @@ describe('ReceiptBuilder', () => {
       sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
     });
     const s = str(buf);
-    expect(s).toContain('SpicyHome Restaurant'); // English seller still prints
-    expect(s).toContain('King Fahd Rd 1234'); // English address still prints
-    expect(s).toContain('Riyadh 12211 SA');
+    expect(s).toContain('SpicyHome Restaurant'); // English seller still prints (left)
+    expect(s).toContain('1234 King Fahd Rd'); // English address still prints (left)
+    expect(s).toContain('Riyadh'); // English city still prints (left)
+    expect(s).not.toContain('12211'); // postal code no longer printed
   });
 
   it('does not require Arabic seller fields', () => {
     // baseOpts has no sellerNameAr/sellerStreetAr/sellerCityAr — must build fine.
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('SpicyHome Restaurant');
+  });
+
+  it('prints Arabic seller bytes right-aligned with charset pc864', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
+      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+    });
+    // Name line: Arabic legal name
+    expect(
+      findSequence(
+        buf,
+        encodePc864('\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
+      ),
+    ).toBe(true);
+    // Street line: AR side = streetAr + building number
+    expect(
+      findSequence(
+        buf,
+        encodePc864(
+          '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 1234',
+        ),
+      ),
+    ).toBe(true);
+    // City line: AR side = cityAr + full Arabic country name
+    expect(
+      findSequence(
+        buf,
+        encodePc864(
+          '\u0627\u0644\u0631\u064A\u0627\u0636 \u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('prints Arabic seller bytes as UTF-8 with default (none) encoding', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
+      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+    });
+    // Name line
+    expect(
+      findSequence(
+        buf,
+        encodeUtf8(
+          shapeArabic('\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
+        ),
+      ),
+    ).toBe(true);
+    // Street line: AR side = streetAr + building number
+    expect(
+      findSequence(
+        buf,
+        encodeUtf8(
+          shapeArabic(
+            '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 1234',
+          ),
+        ),
+      ),
+    ).toBe(true);
+    // City line: AR side = cityAr + full Arabic country name
+    expect(
+      findSequence(
+        buf,
+        encodeUtf8(
+          shapeArabic(
+            '\u0627\u0644\u0631\u064A\u0627\u0636 \u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629',
+          ),
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('right-aligns Arabic alone on a seller line when English is empty', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: {
+        encoding: 'pc864' as const,
+        codePage: 22,
+        visualRtl: false,
+        renderMode: 'charset' as const,
+      },
+      sellerStreet: undefined,
+      sellerBuilding: undefined,
+      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+    });
+    // Street line has no EN side — AR still printed (right-aligned)
+    expect(
+      findSequence(
+        buf,
+        encodePc864('\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
+      ),
+    ).toBe(true);
   });
 
   it('skips empty seller address lines', () => {
@@ -168,6 +279,8 @@ describe('ReceiptBuilder', () => {
     const s = str(buf);
     expect(s).not.toContain('King Fahd Rd');
     expect(s).not.toContain('Riyadh 12211');
+    // Street line skipped entirely; city line prints the full country names alone
+    expect(s).toContain('Kingdom of Saudi Arabia');
   });
 
   it('renders date in YYYY-MM-DD format (Asia/Riyadh)', () => {
@@ -413,6 +526,13 @@ describe('ReceiptBuilder', () => {
       const s = str(builder.build(opts));
       expect(s).not.toContain('Original Invoice:');
       expect(s).not.toContain('Reason:');
+    });
+
+    it('renders the bilingual seller block (same as the invoice)', () => {
+      const s = str(builder.build(cnOpts));
+      expect(s).toContain('1234 King Fahd Rd');
+      expect(s).toContain('Kingdom of Saudi Arabia');
+      expect(s).toContain('VAT: 300123456789');
     });
   });
 
@@ -778,6 +898,41 @@ describe('ReceiptBuilder', () => {
     const h = hex(buf);
     // raster lines are GS v 0 images (never raw Arabic bytes in CP50)
     expect(h).toContain('1d7630');
-    expect(h).not.toContain('1b7432');
+  });
+
+  it('item name raster lines are taller than unscaled atlas cell (1.25x)', () => {
+    // Atlas cellHeight is 32; item name scale 1.25 → height 40.
+    // GS v 0 header: 1d 76 30 m xL xH yL yH  → height = yL + 256*yH at bytes +6,+7 after 1d7630.
+    const opts: ReceiptOptions = {
+      ...baseOpts,
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'raster' },
+      items: [
+        {
+          qty: 2,
+          name: 'Zinger',
+          nameAr: '\u0632\u0646\u062C\u0631', // زنجر
+          unitPriceHalalas: 2300,
+          totalHalalas: 4600,
+          vatRateBp: 1500,
+        },
+      ],
+      // No seller AR so seller lines stay charset/EN and only item name is the tall raster among content.
+      sellerNameAr: undefined,
+      sellerStreetAr: undefined,
+      sellerCityAr: undefined,
+    };
+    const buf = builder.build(opts);
+    const bytes = Array.from(buf);
+    const heights: number[] = [];
+    for (let i = 0; i < bytes.length - 7; i++) {
+      if (bytes[i] === 0x1d && bytes[i + 1] === 0x76 && bytes[i + 2] === 0x30) {
+        const yL = bytes[i + 6];
+        const yH = bytes[i + 7];
+        heights.push(yL + 256 * yH);
+      }
+    }
+    // Title/VAT/etc may be 32; at least one raster (item name) must be 40.
+    expect(heights.some((h) => h === 40)).toBe(true);
+    expect(heights.some((h) => h === 32)).toBe(true);
   });
 });
