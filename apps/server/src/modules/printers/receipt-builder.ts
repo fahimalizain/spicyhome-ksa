@@ -197,16 +197,24 @@ export class ReceiptBuilder {
       eb.bold(false);
 
       // 2. Street/building: EN "building street" (1234 King Fahd Rd),
-      //    AR "streetAr building" (شارع … 1234).
+      //    AR "streetAr building" only when streetAr is set (don't mirror
+      //    bare building digits on the right).
       const streetEn = [opts.sellerBuilding, opts.sellerStreet].filter(Boolean).join(' ');
-      const streetAr = [opts.sellerStreetAr, opts.sellerBuilding].filter(Boolean).join(' ');
+      const streetAr =
+        opts.sellerStreetAr && opts.sellerStreetAr.length > 0
+          ? [opts.sellerStreetAr, opts.sellerBuilding].filter(Boolean).join(' ')
+          : '';
       this.printSellerLine(eb, streetEn, streetAr, arabic);
 
-      // 3. City/country: full country names only — no postal code, no ISO
-      //    country code on the receipt.
-      const cityEn = [opts.sellerCity, SELLER_COUNTRY_EN].filter(Boolean).join(' ');
-      const cityAr = [opts.sellerCityAr, SELLER_COUNTRY_AR].filter(Boolean).join(' ');
+      // 3. City — bilingual when cityAr set. No postal / ISO country code.
+      const cityEn = (opts.sellerCity ?? '').trim();
+      const cityAr = (opts.sellerCityAr ?? '').trim();
       this.printSellerLine(eb, cityEn, cityAr, arabic);
+
+      // 4. Country — full names. Too long for one EN|AR row on 42–45 col
+      //    paper, so EN is a full left line and AR is right-aligned alone.
+      eb.text(SELLER_COUNTRY_EN.slice(0, this.width));
+      this.printSellerLine(eb, '', SELLER_COUNTRY_AR, arabic);
 
       if (opts.vatNumber) {
         eb.text(`VAT: ${opts.vatNumber}`);

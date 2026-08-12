@@ -218,9 +218,11 @@ describe('print-documents', () => {
       // Seller fields from settings
       expect(s).toContain('Test'); // seller_name
       expect(s).toContain('1234 Main St'); // seller_building + seller_street
-      expect(s).toContain('Riyadh'); // seller_city (left side of the bilingual line)
-      expect(s).not.toContain('12345'); // seller_postal no longer printed
-      // Bilingual seller lines: Arabic country name bytes present (UTF-8 charset)
+      expect(s).toContain('Riyadh'); // seller_city
+      expect(s).toContain('Kingdom of Saudi Arabia'); // full country EN line
+      // Postal must not appear as its own address token (VAT may contain "12345")
+      expect(s.split('\n').some((l) => l.includes('Riyadh') && l.includes('12345'))).toBe(false);
+      // Arabic country name bytes present (UTF-8 charset default)
       expect(
         findSequence(
           buf,

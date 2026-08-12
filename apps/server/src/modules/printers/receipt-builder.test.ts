@@ -1,5 +1,5 @@
 import { ReceiptBuilder, ReceiptOptions } from './receipt-builder';
-import { encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
+import { encodeArabicText, encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('ReceiptBuilder', () => {
   const builder = new ReceiptBuilder(42);
@@ -113,13 +113,10 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('Invoice #: INV26-0042');
   });
 
-  it('renders Order ref line when orderNo provided', () => {
+  it('does not render a separate Order ref line on ZATCA invoices', () => {
+    // documentId is printed as Invoice #; orderNo is not a secondary ref line.
     const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('Order ref: #42');
-  });
-
-  it('does not render Order ref line when orderNo omitted', () => {
-    const buf = builder.build({ ...baseOpts, orderNo: undefined });
+    expect(str(buf)).toContain('Invoice #: INV26-0042');
     expect(str(buf)).not.toContain('Order ref:');
   });
 
@@ -132,14 +129,14 @@ describe('ReceiptBuilder', () => {
   it('renders seller address lines when provided', () => {
     const buf = builder.build(baseOpts);
     const s = str(buf);
-    // Street line: building first, then street
+    // Street line: building first, then street (EN only when no streetAr)
     expect(s).toContain('1234 King Fahd Rd');
-    // City line: city + full country name — no postal code, no ISO code
-    const cityLine = s.split('\n').find((l) => l.includes('Riyadh'));
-    expect(cityLine).toBeDefined();
-    expect(cityLine!).toContain('Kingdom of Saudi Arabia');
-    expect(cityLine!).not.toContain('12211');
-    expect(cityLine!.trim().endsWith('SA')).toBe(false);
+    // City and country are separate lines — no postal, no ISO SA
+    expect(s).toContain('Riyadh');
+    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).not.toContain('12211');
+    // No bare ISO country token on its own (full name is used instead)
+    expect(s.split('\n').some((l) => l.trim() === 'SA')).toBe(false);
   });
 
   // ── Bilingual seller block (ZATCA documents) ───────────────────────────────
@@ -171,100 +168,65 @@ describe('ReceiptBuilder', () => {
       visualRtl: false,
       renderMode: 'charset' as const,
     };
+    const nameAr = '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'; // مطعم الاختبار
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'; // شارع الاختبار
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const countryAr =
+      '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629';
     const buf = builder.build({
       ...baseOpts,
       arabic: ar,
-      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
-      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
-      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+      sellerNameAr: nameAr,
+      sellerStreetAr: streetAr,
+      sellerCityAr: cityAr,
     });
-    // Name line: Arabic legal name
-    expect(
-      findSequence(
-        buf,
-        encodePc864('\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
-      ),
-    ).toBe(true);
-    // Street line: AR side = streetAr + building number
-    expect(
-      findSequence(
-        buf,
-        encodePc864(
-          '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 1234',
-        ),
-      ),
-    ).toBe(true);
-    // City line: AR side = cityAr + full Arabic country name
-    expect(
-      findSequence(
-        buf,
-        encodePc864(
-          '\u0627\u0644\u0631\u064A\u0627\u0636 \u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629',
-        ),
-      ),
-    ).toBe(true);
+    // Match the same shape+order+encode pipeline the builder uses
+    expect(findSequence(buf, encodeArabicText(ar, nameAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, `${streetAr} 1234`))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, countryAr))).toBe(true);
   });
 
   it('prints Arabic seller bytes as UTF-8 with default (none) encoding', () => {
+    const noneAr = {
+      encoding: 'none' as const,
+      codePage: 0,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const nameAr = '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636';
+    const countryAr =
+      '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629';
     const buf = builder.build({
       ...baseOpts,
-      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
-      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
-      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+      sellerNameAr: nameAr,
+      sellerStreetAr: streetAr,
+      sellerCityAr: cityAr,
     });
-    // Name line
-    expect(
-      findSequence(
-        buf,
-        encodeUtf8(
-          shapeArabic('\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
-        ),
-      ),
-    ).toBe(true);
-    // Street line: AR side = streetAr + building number
-    expect(
-      findSequence(
-        buf,
-        encodeUtf8(
-          shapeArabic(
-            '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 1234',
-          ),
-        ),
-      ),
-    ).toBe(true);
-    // City line: AR side = cityAr + full Arabic country name
-    expect(
-      findSequence(
-        buf,
-        encodeUtf8(
-          shapeArabic(
-            '\u0627\u0644\u0631\u064A\u0627\u0636 \u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629',
-          ),
-        ),
-      ),
-    ).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, nameAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, `${streetAr} 1234`))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, countryAr))).toBe(true);
   });
 
   it('right-aligns Arabic alone on a seller line when English is empty', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
     const buf = builder.build({
       ...baseOpts,
-      arabic: {
-        encoding: 'pc864' as const,
-        codePage: 22,
-        visualRtl: false,
-        renderMode: 'charset' as const,
-      },
+      arabic: ar,
       sellerStreet: undefined,
       sellerBuilding: undefined,
-      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+      sellerStreetAr: streetAr,
     });
-    // Street line has no EN side — AR still printed (right-aligned)
-    expect(
-      findSequence(
-        buf,
-        encodePc864('\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'),
-      ),
-    ).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, streetAr))).toBe(true);
   });
 
   it('skips empty seller address lines', () => {
@@ -321,7 +283,8 @@ describe('ReceiptBuilder', () => {
     // Near the order type / order ref header section
     expect(s.indexOf('Type: Takeaway')).toBeLessThan(s.indexOf('Delivery: HungerStation'));
     expect(s.indexOf('Delivery: HungerStation')).toBeLessThan(s.indexOf('App order #: HS-883129'));
-    expect(s.indexOf('App order #: HS-883129')).toBeLessThan(s.indexOf('Order ref: #42'));
+    // Delivery block sits in the header before the items separator
+    expect(s.indexOf('App order #: HS-883129')).toBeLessThan(s.indexOf('Qty  Item'));
   });
 
   it('renders Delivery title but no App order # when ref is omitted', () => {
