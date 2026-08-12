@@ -144,6 +144,9 @@ export class ZatcaController {
   getConfig(): ZatcaConfigDto {
     return {
       sellerName: this.printersService.getSetting('seller_name', ''),
+      sellerNameAr: this.printersService.getSetting('seller_name_ar', ''),
+      sellerStreetAr: this.printersService.getSetting('seller_street_ar', ''),
+      sellerCityAr: this.printersService.getSetting('seller_city_ar', ''),
       vatNumber: this.printersService.getSetting('vat_number', ''),
       crNumber: this.printersService.getSetting('cr_number', ''),
       street: this.printersService.getSetting('seller_street', ''),
@@ -167,6 +170,9 @@ export class ZatcaController {
   @ApiOkResponse({ description: 'Updated configuration', type: ZatcaConfigDto })
   updateConfig(@Body() dto: ZatcaConfigDto): ZatcaConfigDto {
     this.printersService.setSetting('seller_name', dto.sellerName);
+    this.printersService.setSetting('seller_name_ar', dto.sellerNameAr);
+    this.printersService.setSetting('seller_street_ar', dto.sellerStreetAr);
+    this.printersService.setSetting('seller_city_ar', dto.sellerCityAr);
     this.printersService.setSetting('vat_number', dto.vatNumber);
     this.printersService.setSetting('cr_number', dto.crNumber);
     this.printersService.setSetting('seller_street', dto.street);

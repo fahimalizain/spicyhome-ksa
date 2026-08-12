@@ -2712,10 +2712,25 @@ export interface components {
     };
     ZatcaConfigDto: {
       /**
-       * @description Legal seller name for CSR and invoice XML
+       * @description English / Latin seller display name (receipts, admin). Not used for ZATCA RegistrationName or CSR organizationName
        * @example SpicyHome Restaurant
        */
       sellerName: string;
+      /**
+       * @description Arabic legal seller name for ZATCA invoice XML RegistrationName, QR TLV tag 1, and CSR organizationName
+       * @example مطعم سبايسي هوم
+       */
+      sellerNameAr: string;
+      /**
+       * @description Arabic street name
+       * @example شارع الملك فهد
+       */
+      sellerStreetAr: string;
+      /**
+       * @description Arabic city name
+       * @example الرياض
+       */
+      sellerCityAr: string;
       /**
        * @description 15-digit KSA VAT number (starts and ends with 3)
        * @example 300123456789003

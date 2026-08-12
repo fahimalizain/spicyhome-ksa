@@ -156,7 +156,7 @@ export class ZatcaOnboardingService {
       );
     }
 
-    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
+    const sellerNameAr = this.printersService.getSetting('seller_name_ar', '');
     const city = this.printersService.getSetting('seller_city', 'Riyadh').toUpperCase();
 
     const randomHex = () => randomBytes(4).toString('hex');
@@ -190,7 +190,7 @@ export class ZatcaOnboardingService {
     const csrDer = buildCSR(
       {
         commonName,
-        organizationName: sellerName,
+        organizationName: sellerNameAr,
         organizationalUnit: orgUnit,
         country: 'SA',
       },

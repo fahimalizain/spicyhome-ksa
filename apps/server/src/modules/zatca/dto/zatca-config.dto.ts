@@ -5,11 +5,37 @@ import type { ZATCAEnvironment } from '@spicyhome/shared';
 export class ZatcaConfigDto {
   @ApiProperty({
     example: 'SpicyHome Restaurant',
-    description: 'Legal seller name for CSR and invoice XML',
+    description:
+      'English / Latin seller display name (receipts, admin). Not used for ZATCA RegistrationName or CSR organizationName',
   })
   @IsString()
   @MinLength(1)
   sellerName!: string;
+
+  @ApiProperty({
+    example: 'مطعم سبايسي هوم',
+    description:
+      'Arabic legal seller name for ZATCA invoice XML RegistrationName, QR TLV tag 1, and CSR organizationName',
+  })
+  @IsString()
+  @MinLength(1)
+  sellerNameAr!: string;
+
+  @ApiProperty({
+    example: 'شارع الملك فهد',
+    description: 'Arabic street name',
+  })
+  @IsString()
+  @MinLength(1)
+  sellerStreetAr!: string;
+
+  @ApiProperty({
+    example: 'الرياض',
+    description: 'Arabic city name',
+  })
+  @IsString()
+  @MinLength(1)
+  sellerCityAr!: string;
 
   @ApiProperty({
     example: '300123456789003',

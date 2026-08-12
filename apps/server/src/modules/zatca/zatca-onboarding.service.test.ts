@@ -77,7 +77,7 @@ function parseComplianceResults(store: Map<string, string>): ComplianceResultEnt
 function setupCsrSettings(store: Map<string, string>) {
   store.set('vat_number', '300123456789003');
   store.set('zatca_org_unit', 'SpicyHome POS');
-  store.set('seller_name', 'SpicyHome Restaurant');
+  store.set('seller_name_ar', 'مطعم سبايسي هوم');
   store.set('seller_city', 'Riyadh');
   store.set('zatca_invoice_type', '1100');
   store.set('zatca_business_category', 'Retail');
@@ -1076,6 +1076,48 @@ describe('generateCSR subject OU', () => {
     await expect(service.generateCSR()).rejects.toThrow(
       'Org Unit not configured. Set Org Unit in ZATCA settings first.',
     );
+  });
+});
+
+// ── generateCSR: subject organization name ────────────────────────────────
+
+describe('generateCSR subject organization name', () => {
+  let store: Map<string, string>;
+  let invoiceService: MockInvoiceService;
+  let httpClient: MockHttpClient;
+  let service: ZatcaOnboardingService;
+
+  beforeEach(() => {
+    store = createSettingsStore();
+    const printersService = createMockPrintersService(store);
+    invoiceService = createMockInvoiceService();
+    httpClient = createMockHttpClient();
+    service = new ZatcaOnboardingService(
+      invoiceService as any,
+      httpClient as any,
+      printersService as any,
+    );
+  });
+
+  function extractCsrPayload(csrPem: string): Buffer {
+    const lines = csrPem
+      .split('\n')
+      .filter((l) => !l.startsWith('-----'))
+      .join('');
+    return Buffer.from(lines, 'base64');
+  }
+
+  it('populates CSR subject organizationName from seller_name_ar setting', async () => {
+    setupCsrSettings(store);
+    // Seed a distinct Latin name to prove the AR value wins (no fallback).
+    store.set('seller_name', 'SpicyHome Restaurant');
+
+    const { csr } = await service.generateCSR();
+    const payload = extractCsrPayload(csr);
+
+    // Organization name value should be present in the CSR DER payload
+    expect(payload.indexOf('مطعم سبايسي هوم')).toBeGreaterThan(-1);
+    expect(payload.indexOf('SpicyHome Restaurant')).toBe(-1);
   });
 });
 

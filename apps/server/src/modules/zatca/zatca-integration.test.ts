@@ -96,6 +96,9 @@ describe('ZATCA Integration', () => {
       INSERT INTO settings (key, value) VALUES ('restaurant_name', 'SpicyHome');
       INSERT INTO settings (key, value) VALUES ('vat_number', '300123456789');
       INSERT INTO settings (key, value) VALUES ('seller_name', 'SpicyHome Restaurant');
+      INSERT INTO settings (key, value) VALUES ('seller_name_ar', 'مطعم سبايسي هوم');
+      INSERT INTO settings (key, value) VALUES ('seller_street_ar', 'شارع الملك فهد');
+      INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
       INSERT INTO settings (key, value) VALUES ('zatca_org_unit', 'SpicyHome POS');
@@ -1075,9 +1078,9 @@ describe('ZATCA Integration', () => {
 
   describe('Config', () => {
     it('GET /zatca/config returns defaults when nothing is set', async () => {
-      // Note: the test setup already inserts some settings (seller_name, vat_number, etc.)
-      // so these are NOT empty in this integration test. We test that unset fields
-      // pick up sensible defaults.
+      // Note: the test setup already inserts some settings (seller_name,
+      // seller_name_ar, vat_number, etc.) so these are NOT empty in this
+      // integration test. We test that unset fields pick up sensible defaults.
       const res = await request(app.getHttpServer())
         .get('/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
@@ -1085,6 +1088,10 @@ describe('ZATCA Integration', () => {
 
       // seller_name is pre-seeded as 'SpicyHome Restaurant'
       expect(res.body.sellerName).toBe('SpicyHome Restaurant');
+      // seller_name_ar / seller_street_ar / seller_city_ar are pre-seeded
+      expect(res.body.sellerNameAr).toBe('مطعم سبايسي هوم');
+      expect(res.body.sellerStreetAr).toBe('شارع الملك فهد');
+      expect(res.body.sellerCityAr).toBe('الرياض');
       expect(res.body.vatNumber).toBe('300123456789');
       // cr_number is not set, should default to ''
       expect(res.body.crNumber).toBe('');
@@ -1116,8 +1123,11 @@ describe('ZATCA Integration', () => {
       expect(keys).not.toContain('privateKey');
       expect(keys).not.toContain('cert');
       expect(keys).not.toContain('secret');
-      expect(keys).toHaveLength(11);
+      expect(keys).toHaveLength(14);
       expect(keys).toContain('sellerName');
+      expect(keys).toContain('sellerNameAr');
+      expect(keys).toContain('sellerStreetAr');
+      expect(keys).toContain('sellerCityAr');
       expect(keys).toContain('vatNumber');
       expect(keys).toContain('crNumber');
       expect(keys).toContain('street');
@@ -1133,6 +1143,9 @@ describe('ZATCA Integration', () => {
     it('PUT /zatca/config saves and returns all fields', async () => {
       const payload = {
         sellerName: 'Test Restaurant',
+        sellerNameAr: 'مطعم الاختبار الجديد',
+        sellerStreetAr: 'شارع الاختبار الجديد',
+        sellerCityAr: 'جدة',
         vatNumber: '300123456789003',
         crNumber: '1234567890',
         street: 'Test Street',
@@ -1151,6 +1164,9 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       expect(res.body.sellerName).toBe('Test Restaurant');
+      expect(res.body.sellerNameAr).toBe('مطعم الاختبار الجديد');
+      expect(res.body.sellerStreetAr).toBe('شارع الاختبار الجديد');
+      expect(res.body.sellerCityAr).toBe('جدة');
       expect(res.body.vatNumber).toBe('300123456789003');
       expect(res.body.crNumber).toBe('1234567890');
       expect(res.body.street).toBe('Test Street');
@@ -1168,6 +1184,9 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       expect(getRes.body.sellerName).toBe('Test Restaurant');
+      expect(getRes.body.sellerNameAr).toBe('مطعم الاختبار الجديد');
+      expect(getRes.body.sellerStreetAr).toBe('شارع الاختبار الجديد');
+      expect(getRes.body.sellerCityAr).toBe('جدة');
       expect(getRes.body.vatNumber).toBe('300123456789003');
       expect(getRes.body.crNumber).toBe('1234567890');
       expect(getRes.body.city).toBe('Jeddah');
@@ -1180,6 +1199,9 @@ describe('ZATCA Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
+          sellerNameAr: 'مطعم',
+          sellerStreetAr: 'شارع',
+          sellerCityAr: 'جدة',
           vatNumber: '12345',
           crNumber: '1234567890',
           street: 'S',
@@ -1200,6 +1222,9 @@ describe('ZATCA Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
+          sellerNameAr: 'مطعم',
+          sellerStreetAr: 'شارع',
+          sellerCityAr: 'جدة',
           vatNumber: '100123456789001',
           crNumber: '1234567890',
           street: 'S',
@@ -1220,6 +1245,9 @@ describe('ZATCA Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
+          sellerNameAr: 'مطعم',
+          sellerStreetAr: 'شارع',
+          sellerCityAr: 'جدة',
           vatNumber: '300123456789003',
           crNumber: '12345',
           street: 'S',
@@ -1240,6 +1268,9 @@ describe('ZATCA Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
+          sellerNameAr: 'مطعم',
+          sellerStreetAr: 'شارع',
+          sellerCityAr: 'جدة',
           vatNumber: '300123456789003',
           crNumber: '1234567890',
           street: 'S',

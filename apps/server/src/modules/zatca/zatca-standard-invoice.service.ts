@@ -1414,7 +1414,7 @@ export class ZatcaStandardInvoiceService {
   }
 
   private buildSellerConfig(): SellerInfo {
-    const sellerName = this.printersService.getSetting('seller_name', 'SpicyHome');
+    const sellerName = this.printersService.getSetting('seller_name_ar', '');
     const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
     const crNumber = this.printersService.getSetting('cr_number', '');
     const sellerStreet = this.printersService.getSetting('seller_street', '');
