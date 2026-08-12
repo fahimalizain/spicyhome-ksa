@@ -186,3 +186,7 @@ node scripts/make-arabic-glyph-atlas.mjs
   probes and live printing can never drift apart.
 - Transport details: `native/win_rawprint/README.md` (CLI contract, exit
   codes), `apps/server/src/modules/printers/win-rawprint-transport.ts`.
+- Sibling tooling: `docs/printing/print-probe.md` — the generic bake-and-send
+  probe (`bazel run //apps/server:bake_print_probe`) for all production print
+  layouts, including Arabic receipts. The 01–06 `.bin` probes here stay a
+  separate laptop-side charset/raster validation set.

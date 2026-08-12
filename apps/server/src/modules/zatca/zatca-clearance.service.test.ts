@@ -60,6 +60,9 @@ describe('ZatcaClearanceService', () => {
     `);
     sqlite.exec(`
       INSERT INTO settings (key, value) VALUES ('seller_name', 'Test Restaurant');
+      INSERT INTO settings (key, value) VALUES ('seller_name_ar', 'مطعم الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_street_ar', 'شارع الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
       INSERT INTO settings (key, value) VALUES ('vat_number', '300123456789003');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');

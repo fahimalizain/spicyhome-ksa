@@ -91,6 +91,9 @@ describe('ZatcaInvoiceService — credit notes', () => {
     `);
     sqlite.exec(`
       INSERT INTO settings (key, value) VALUES ('seller_name', 'Test Restaurant');
+      INSERT INTO settings (key, value) VALUES ('seller_name_ar', 'مطعم الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_street_ar', 'شارع الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
       INSERT INTO settings (key, value) VALUES ('vat_number', '300123456789003');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
@@ -308,8 +311,16 @@ describe('ZatcaInvoiceService — credit notes', () => {
         '<cbc:InstructionNote>Item was cold | Cash | 115.00 SAR</cbc:InstructionNote>',
       );
 
+      // Seller name must come from seller_name_ar (Arabic), not seller_name
+      expect(row.xml).toContain('<cbc:RegistrationName>مطعم الاختبار</cbc:RegistrationName>');
+      expect(row.xml).not.toContain('<cbc:RegistrationName>Test Restaurant</cbc:RegistrationName>');
+
       // QR TLV should be present
       expect(row.qr_tlv).toBeTruthy();
+
+      // QR TLV tag 1 (seller name) carries the Arabic seller name
+      const tlvText = Buffer.from(row.qr_tlv, 'base64').toString('utf8');
+      expect(tlvText).toContain('مطعم الاختبار');
 
       // invoice_hash should be set
       expect(row.invoice_hash).toBeTruthy();

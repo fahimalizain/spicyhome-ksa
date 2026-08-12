@@ -8,31 +8,28 @@ import { decodeMonoPng, type MonoBitmap } from './mono-png';
 
 export type { MonoBitmap };
 
-const cache = new Map<string, MonoBitmap | null>();
+const LOGO_FILE = 'logo-thermal.png';
 
-function logoFileName(size: 240 | 192): string {
-  return size === 192 ? 'logo-thermal-192.png' : 'logo-thermal.png';
-}
+let cache: MonoBitmap | null | undefined;
 
 /** Candidate absolute paths for the logo asset. */
-export function thermalLogoCandidates(size: 240 | 192 = 240): string[] {
-  const file = logoFileName(size);
+export function thermalLogoCandidates(): string[] {
   const cwd = process.cwd();
   const here = __dirname;
   return [
     // Packaged: cwd = server/
-    join(cwd, 'assets', file),
+    join(cwd, 'assets', LOGO_FILE),
     // Packaged: cwd = package root
-    join(cwd, 'server', 'assets', file),
+    join(cwd, 'server', 'assets', LOGO_FILE),
     // Monorepo root
-    join(cwd, 'apps', 'server', 'assets', file),
+    join(cwd, 'apps', 'server', 'assets', LOGO_FILE),
     // Bazel / jest often cwd = apps/server
-    join(cwd, 'assets', file),
+    join(cwd, 'assets', LOGO_FILE),
     // Compiled: .../src/modules/printers → apps/server/assets
-    join(here, '..', '..', '..', 'assets', file),
+    join(here, '..', '..', '..', 'assets', LOGO_FILE),
     // bazel-bin/apps/server/src/modules/printers → apps/server/assets (source tree)
-    join(here, '..', '..', '..', '..', 'assets', file),
-    join(here, '..', '..', '..', '..', '..', 'apps', 'server', 'assets', file),
+    join(here, '..', '..', '..', '..', 'assets', LOGO_FILE),
+    join(here, '..', '..', '..', '..', '..', 'apps', 'server', 'assets', LOGO_FILE),
   ];
 }
 
@@ -40,30 +37,28 @@ export function thermalLogoCandidates(size: 240 | 192 = 240): string[] {
  * Load and decode the thermal logo. Returns null if missing or invalid.
  * Successful loads are cached for the process lifetime.
  */
-export function loadThermalLogo(opts?: { size?: 240 | 192 }): MonoBitmap | null {
-  const size = opts?.size ?? 240;
-  const key = String(size);
-  if (cache.has(key)) {
-    return cache.get(key) ?? null;
+export function loadThermalLogo(): MonoBitmap | null {
+  if (cache !== undefined) {
+    return cache;
   }
 
-  for (const p of thermalLogoCandidates(size)) {
+  for (const p of thermalLogoCandidates()) {
     try {
       if (!existsSync(p)) continue;
       const buf = readFileSync(p);
       const bmp = decodeMonoPng(buf);
-      cache.set(key, bmp);
+      cache = bmp;
       return bmp;
     } catch {
       // try next candidate
     }
   }
 
-  cache.set(key, null);
+  cache = null;
   return null;
 }
 
 /** Test helper — clear module cache. */
 export function clearThermalLogoCache(): void {
-  cache.clear();
+  cache = undefined;
 }

@@ -61,6 +61,9 @@ describe('ZatcaReportingService', () => {
     `);
     sqlite.exec(`
       INSERT INTO settings (key, value) VALUES ('seller_name', 'Test Restaurant');
+      INSERT INTO settings (key, value) VALUES ('seller_name_ar', 'مطعم الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_street_ar', 'شارع الاختبار');
+      INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
       INSERT INTO settings (key, value) VALUES ('vat_number', '300123456789003');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
@@ -251,6 +254,9 @@ describe('ZatcaReportingService', () => {
       'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
     );
     printersService.setSetting('seller_name', 'Test Restaurant');
+    printersService.setSetting('seller_name_ar', 'مطعم الاختبار');
+    printersService.setSetting('seller_street_ar', 'شارع الاختبار');
+    printersService.setSetting('seller_city_ar', 'الرياض');
     printersService.setSetting('vat_number', '300123456789003');
     printersService.setSetting('seller_city', 'Riyadh');
     printersService.setSetting('seller_country', 'SA');

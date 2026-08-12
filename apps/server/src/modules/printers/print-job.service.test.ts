@@ -15,7 +15,7 @@ import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
 import { FakePrinterTransport } from './printer-transport';
 import { DRIZZLE } from '../database/database.module';
-import { encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
+import { encodeArabicText, encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('PrintJobService', () => {
   let sqlite: Database.Database;
@@ -243,12 +243,14 @@ describe('PrintJobService', () => {
       expect(s).toContain(`Invoice #: INV26-TEST-${orderSeq}`);
       // seller fields from settings
       expect(s).toContain('Test'); // seller_name
-      expect(s).toContain('Main St 1234'); // seller_street + seller_building
-      expect(s).toContain('Riyadh 12345'); // seller_city + seller_postal
-      expect(s).toContain('SA'); // seller_country
+      expect(s).toContain('1234 Main St'); // seller_building + seller_street
+      expect(s).toContain('Riyadh'); // seller_city
+      expect(s).toContain('Kingdom of Saudi Arabia'); // full country name (no ISO code)
+      // Postal must not appear on the city line (VAT may contain "12345")
+      expect(s.split('\n').some((l) => l.includes('Riyadh') && l.includes('12345'))).toBe(false);
       expect(s).toContain('Amount includes VAT');
       expect(s).toContain('TOTAL (incl. VAT)');
-      expect(s).toContain('SAR');
+      expect(s).toContain('115.00'); // order total (halalas → SAR string, no currency code)
     });
 
     it('encodes item_name_ar when receipt printer has Arabic encoding configured', async () => {
@@ -268,7 +270,14 @@ describe('PrintJobService', () => {
 
         expect(transport.sent.length).toBe(1);
         const buf = transport.sent[0].data;
-        expect(findSequence(buf, encodePc864(`1x ${itemNameAr}`))).toBe(true);
+        // Item line is EN left + AR right; assert AR bytes via the encode pipeline
+        const arCfg = {
+          encoding: 'pc864' as const,
+          codePage: 22,
+          visualRtl: false,
+          renderMode: 'charset' as const,
+        };
+        expect(findSequence(buf, encodeArabicText(arCfg, itemNameAr))).toBe(true);
         expect(buf.toString('hex')).toContain('1b7416'); // ESC t 22 (PC864)
       } finally {
         sqlite.exec(`UPDATE printers SET config = '{}' WHERE id = 1`);
@@ -298,10 +307,17 @@ describe('PrintJobService', () => {
 
       expect(transport.sent.length).toBe(1);
       const buf = transport.sent[0].data;
+      const noneAr = {
+        encoding: 'none' as const,
+        codePage: 0,
+        visualRtl: false,
+        renderMode: 'charset' as const,
+      };
+      // Catalog AR name only (EN qty+name is ASCII on the left)
       expect(
         findSequence(
           buf,
-          encodeUtf8(shapeArabic('1x \u0628\u0631\u062C\u0631 \u0637\u0627\u0632\u062C')),
+          encodeArabicText(noneAr, '\u0628\u0631\u062C\u0631 \u0637\u0627\u0632\u062C'),
         ),
       ).toBe(true);
     });
@@ -553,7 +569,7 @@ describe('PrintJobService', () => {
         const s = transport.sent[0].data.toString('ascii');
         expect(s).toContain('SpicyHome'); // settings.restaurant_name
         expect(s).not.toContain('SellerXYZ'); // settings.seller_name must NOT be used
-        expect(s).not.toContain('Main St 1234'); // seller address must NOT be used
+        expect(s).not.toContain('1234 Main St'); // seller address must NOT be used
         expect(s).not.toContain('300123456789003'); // settings.vat_number must NOT be used
       } finally {
         sqlite.exec(`UPDATE settings SET value = 'Test' WHERE key = 'seller_name'`);
@@ -623,7 +639,13 @@ describe('PrintJobService', () => {
 
         expect(transport.sent.length).toBe(1);
         const buf = transport.sent[0].data;
-        expect(findSequence(buf, encodePc864(`1x ${itemNameAr}`))).toBe(true);
+        const arCfg = {
+          encoding: 'pc864' as const,
+          codePage: 22,
+          visualRtl: false,
+          renderMode: 'charset' as const,
+        };
+        expect(findSequence(buf, encodeArabicText(arCfg, itemNameAr))).toBe(true);
       } finally {
         sqlite.exec(`UPDATE printers SET config = '{}' WHERE id = 1`);
       }

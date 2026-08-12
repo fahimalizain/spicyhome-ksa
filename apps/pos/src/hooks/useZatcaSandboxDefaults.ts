@@ -6,6 +6,9 @@ import type { ZatcaConfigDto } from '@spicyhome/client-ts';
  */
 export const ZATCA_SANDBOX_DEFAULTS: ZatcaConfigDto = {
   sellerName: 'Test POS Sandbox',
+  sellerNameAr: 'مطعم تجريبي',
+  sellerStreetAr: 'شارع الاختبار',
+  sellerCityAr: 'الرياض',
   vatNumber: '399999999900003',
   crNumber: '1234567890',
   street: 'Test Street',

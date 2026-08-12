@@ -1,5 +1,5 @@
 import { ReceiptBuilder, ReceiptOptions } from './receipt-builder';
-import { encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
+import { encodeArabicText, encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('ReceiptBuilder', () => {
   const builder = new ReceiptBuilder(42);
@@ -113,13 +113,10 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('Invoice #: INV26-0042');
   });
 
-  it('renders Order ref line when orderNo provided', () => {
+  it('does not render a separate Order ref line on ZATCA invoices', () => {
+    // documentId is printed as Invoice #; orderNo is not a secondary ref line.
     const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('Order ref: #42');
-  });
-
-  it('does not render Order ref line when orderNo omitted', () => {
-    const buf = builder.build({ ...baseOpts, orderNo: undefined });
+    expect(str(buf)).toContain('Invoice #: INV26-0042');
     expect(str(buf)).not.toContain('Order ref:');
   });
 
@@ -131,9 +128,105 @@ describe('ReceiptBuilder', () => {
 
   it('renders seller address lines when provided', () => {
     const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('King Fahd Rd 1234');
-    expect(str(buf)).toContain('Riyadh 12211');
-    expect(str(buf)).toContain('SA');
+    const s = str(buf);
+    // Street line: building first, then street (EN only when no streetAr)
+    expect(s).toContain('1234 King Fahd Rd');
+    // City and country are separate lines — no postal, no ISO SA
+    expect(s).toContain('Riyadh');
+    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).not.toContain('12211');
+    // No bare ISO country token on its own (full name is used instead)
+    expect(s.split('\n').some((l) => l.trim() === 'SA')).toBe(false);
+  });
+
+  // ── Bilingual seller block (ZATCA documents) ───────────────────────────────
+
+  it('builds with optional Arabic seller fields and still prints English seller', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      sellerNameAr: '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // مطعم الاختبار
+      sellerStreetAr: '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631', // شارع الاختبار
+      sellerCityAr: '\u0627\u0644\u0631\u064A\u0627\u0636', // الرياض
+    });
+    const s = str(buf);
+    expect(s).toContain('SpicyHome Restaurant'); // English seller still prints (left)
+    expect(s).toContain('1234 King Fahd Rd'); // English address still prints (left)
+    expect(s).toContain('Riyadh'); // English city still prints (left)
+    expect(s).not.toContain('12211'); // postal code no longer printed
+  });
+
+  it('does not require Arabic seller fields', () => {
+    // baseOpts has no sellerNameAr/sellerStreetAr/sellerCityAr — must build fine.
+    const buf = builder.build(baseOpts);
+    expect(str(buf)).toContain('SpicyHome Restaurant');
+  });
+
+  it('prints Arabic seller bytes right-aligned with charset pc864', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const nameAr = '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'; // مطعم الاختبار
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631'; // شارع الاختبار
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const countryAr =
+      '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629';
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerNameAr: nameAr,
+      sellerStreetAr: streetAr,
+      sellerCityAr: cityAr,
+    });
+    // Match the same shape+order+encode pipeline the builder uses
+    expect(findSequence(buf, encodeArabicText(ar, nameAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, `${streetAr} 1234`))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, countryAr))).toBe(true);
+  });
+
+  it('prints Arabic seller bytes as UTF-8 with default (none) encoding', () => {
+    const noneAr = {
+      encoding: 'none' as const,
+      codePage: 0,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const nameAr = '\u0645\u0637\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636';
+    const countryAr =
+      '\u0627\u0644\u0645\u0645\u0644\u0643\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0627\u0644\u0633\u0639\u0648\u062F\u064A\u0629';
+    const buf = builder.build({
+      ...baseOpts,
+      sellerNameAr: nameAr,
+      sellerStreetAr: streetAr,
+      sellerCityAr: cityAr,
+    });
+    expect(findSequence(buf, encodeArabicText(noneAr, nameAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, `${streetAr} 1234`))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(noneAr, countryAr))).toBe(true);
+  });
+
+  it('right-aligns Arabic alone on a seller line when English is empty', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const streetAr = '\u0634\u0627\u0631\u0639 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631';
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerStreet: undefined,
+      sellerBuilding: undefined,
+      sellerStreetAr: streetAr,
+    });
+    expect(findSequence(buf, encodeArabicText(ar, streetAr))).toBe(true);
   });
 
   it('skips empty seller address lines', () => {
@@ -148,6 +241,8 @@ describe('ReceiptBuilder', () => {
     const s = str(buf);
     expect(s).not.toContain('King Fahd Rd');
     expect(s).not.toContain('Riyadh 12211');
+    // Street line skipped entirely; city line prints the full country names alone
+    expect(s).toContain('Kingdom of Saudi Arabia');
   });
 
   it('renders date in YYYY-MM-DD format (Asia/Riyadh)', () => {
@@ -188,7 +283,8 @@ describe('ReceiptBuilder', () => {
     // Near the order type / order ref header section
     expect(s.indexOf('Type: Takeaway')).toBeLessThan(s.indexOf('Delivery: HungerStation'));
     expect(s.indexOf('Delivery: HungerStation')).toBeLessThan(s.indexOf('App order #: HS-883129'));
-    expect(s.indexOf('App order #: HS-883129')).toBeLessThan(s.indexOf('Order ref: #42'));
+    // Delivery block sits in the header before the items separator
+    expect(s.indexOf('App order #: HS-883129')).toBeLessThan(s.indexOf('Qty  Item'));
   });
 
   it('renders Delivery title but no App order # when ref is omitted', () => {
@@ -210,15 +306,28 @@ describe('ReceiptBuilder', () => {
     expect(s).not.toContain('App order #:');
   });
 
-  it('renders Arabic item name as primary line with configured encoding', () => {
+  it('renders single-line item headers Qty / Item / Rate / Total', () => {
+    const s = str(builder.build(baseOpts));
+    const header = s.split('\n').find((l) => l.includes('Qty') && l.includes('Total'));
+    expect(header).toBeDefined();
+    expect(header!).toContain('Item');
+    expect(header!).toContain('Rate');
+    // Rate sits immediately before Total on the same header line
+    expect(header!.indexOf('Rate')).toBeLessThan(header!.indexOf('Total'));
+  });
+
+  it('renders qty + EN + AR on name line; rate/total on next line', () => {
     const buf = builder.build({
       ...baseOpts,
       arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
     });
-    // زنجر برجر in PC864 (prefixed with "2x ")
     expect(
-      findSequence(buf, encodePc864('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+      findSequence(buf, encodePc864('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
     ).toBe(true);
+    const s = str(buf);
+    expect(s).toContain('Zinger Burger');
+    expect(s).toContain('23.00'); // rate incl. VAT
+    expect(s).toContain('46.00'); // line total
   });
 
   it('renders Arabic item name as UTF-8 with default (none) encoding', () => {
@@ -226,12 +335,12 @@ describe('ReceiptBuilder', () => {
     expect(
       findSequence(
         buf,
-        encodeUtf8(shapeArabic('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+        encodeUtf8(shapeArabic('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
       ),
     ).toBe(true);
   });
 
-  it('renders English secondary line when Arabic name differs', () => {
+  it('inlines English name on the qty/name line (no secondary name line)', () => {
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('Zinger Burger');
   });
@@ -254,21 +363,24 @@ describe('ReceiptBuilder', () => {
       totalHalalas: 575,
     };
     const s = str(builder.build(opts));
-    expect(s).toContain('1x Pepsi');
+    expect(s).toMatch(/1\s+Pepsi/);
   });
 
-  it('prints English-only lines when nameAr is null', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('1x Pepsi');
-  });
-
-  it('renders unit net price and line total (unit 2300 incl @15% → net 20.00)', () => {
+  it('prints English-only name line when nameAr is null', () => {
     const buf = builder.build(baseOpts);
     const s = str(buf);
-    // 2300 halalas incl. VAT @ 15% → 300 VAT, 2000 net = 20.00
-    expect(s).toContain('@20.00');
+    expect(s).toMatch(/1\s+Pepsi/);
+    expect(s).toContain('5.75');
+  });
+
+  it('renders VAT-inclusive unit rate and line total (2300 incl → 23.00)', () => {
+    const buf = builder.build(baseOpts);
+    const s = str(buf);
+    // unitPriceHalalas is VAT-inclusive — do not decompose to net
+    expect(s).toContain('23.00');
     expect(s).toContain('46.00');
     expect(s).toContain('5.75');
+    expect(s).not.toContain('@20.00');
   });
 
   it('renders totals block with correct money formatting', () => {
@@ -298,11 +410,6 @@ describe('ReceiptBuilder', () => {
     expect(findSequence(buf, encodeUtf8(shapeArabic(arLine)))).toBe(true);
   });
 
-  it('renders SAR marker', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('SAR');
-  });
-
   it('never renders PAID/AMOUNT DUE on ZATCA documents (open order only)', () => {
     const s = str(builder.build({ ...baseOpts, paidHalalas: 2000 }));
     expect(s).not.toContain('AMOUNT DUE');
@@ -320,14 +427,28 @@ describe('ReceiptBuilder', () => {
     expect(idxBoldOff).not.toBe(-1);
   });
 
-  it('renders default footer thank you message', () => {
-    const buf = builder.build(baseOpts);
-    expect(str(buf)).toContain('Thank you! Visit again.');
+  it('renders default footer thank you message framed by stars', () => {
+    const s = str(builder.build(baseOpts));
+    expect(s).toContain('Thank you! Visit again.');
+    expect(s).toContain('********');
+    const thankIdx = s.indexOf('Thank you! Visit again.');
+    const firstStars = s.indexOf('********');
+    const secondStars = s.indexOf('********', firstStars + 8);
+    expect(firstStars).toBeGreaterThanOrEqual(0);
+    expect(firstStars).toBeLessThan(thankIdx);
+    expect(secondStars).toBeGreaterThan(thankIdx);
   });
 
   it('renders custom footer when provided', () => {
     const buf = builder.build({ ...baseOpts, footer: 'Custom footer' });
     expect(str(buf)).toContain('Custom footer');
+  });
+
+  it('renders Home Delivery contact at the bottom', () => {
+    const s = str(builder.build(baseOpts));
+    expect(s).toContain('Home Delivery');
+    expect(s).toContain('0112357926 | 0533243439');
+    expect(s).toContain('Thank you! Visit again.');
   });
 
   // ── Credit note ─────────────────────────────────────────────────────────────
@@ -368,6 +489,13 @@ describe('ReceiptBuilder', () => {
       const s = str(builder.build(opts));
       expect(s).not.toContain('Original Invoice:');
       expect(s).not.toContain('Reason:');
+    });
+
+    it('renders the bilingual seller block (same as the invoice)', () => {
+      const s = str(builder.build(cnOpts));
+      expect(s).toContain('1234 King Fahd Rd');
+      expect(s).toContain('Kingdom of Saudi Arabia');
+      expect(s).toContain('VAT: 300123456789');
     });
   });
 
@@ -438,7 +566,6 @@ describe('ReceiptBuilder', () => {
       expect(s).toContain('VAT (15.0%)');
       expect(s).toContain('TOTAL (incl. VAT)');
       expect(s).toContain('51.75');
-      expect(s).toContain('SAR');
     });
 
     it('always renders AMOUNT DUE, equal to the total when nothing is paid', () => {
@@ -551,13 +678,13 @@ describe('ReceiptBuilder', () => {
       ).toBe(false);
     });
 
-    it('still renders item lines with Arabic primary names', () => {
+    it('still renders item name lines with Arabic', () => {
       const buf = builder.build({
         ...openOpts,
         arabic: { encoding: 'pc864', codePage: 22, visualRtl: false, renderMode: 'charset' },
       });
       expect(
-        findSequence(buf, encodePc864('2x \u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
+        findSequence(buf, encodePc864('\u0632\u0646\u062C\u0631 \u0628\u0631\u062C\u0631')),
       ).toBe(true);
       expect(str(buf)).toContain('Zinger Burger');
     });
@@ -591,6 +718,33 @@ describe('ReceiptBuilder', () => {
     const titleIdx = h.indexOf(Buffer.from('SIMPLIFIED TAX INVOICE', 'ascii').toString('hex'));
     expect(rasterIdx).toBeGreaterThanOrEqual(0);
     expect(titleIdx).toBeGreaterThan(rasterIdx);
+  });
+
+  it('sets ~5% left margin (GS L) after logo, before body text', () => {
+    const bits = new Uint8Array(8);
+    bits[0] = 1;
+    const buf = builder.build({
+      ...baseOpts,
+      logo: { width: 8, height: 1, bits },
+    });
+    const h = hex(buf);
+    // test builder is 42 cols → 504 dots → 5% = 25 → GS L 19 00
+    expect(h).toContain('1d4c1900');
+    const logoIdx = h.indexOf('1d7630');
+    const marginIdx = h.indexOf('1d4c1900');
+    const titleIdx = h.indexOf(Buffer.from('SIMPLIFIED TAX INVOICE', 'ascii').toString('hex'));
+    expect(logoIdx).toBeGreaterThanOrEqual(0);
+    expect(marginIdx).toBeGreaterThan(logoIdx);
+    expect(titleIdx).toBeGreaterThan(marginIdx);
+  });
+
+  it('defaults to 45-char paper width', () => {
+    const def = new ReceiptBuilder();
+    const buf = def.build({ ...baseOpts, logo: false });
+    const h = hex(buf);
+    // 45×12 = 540 dots → 5% = 27 → GS L 1b 00
+    expect(h).toContain('1d4c1b00');
+    expect(buf.toString('latin1')).toContain('-'.repeat(45));
   });
 
   it('does not emit raster when logo is false', () => {
@@ -707,6 +861,41 @@ describe('ReceiptBuilder', () => {
     const h = hex(buf);
     // raster lines are GS v 0 images (never raw Arabic bytes in CP50)
     expect(h).toContain('1d7630');
-    expect(h).not.toContain('1b7432');
+  });
+
+  it('item name raster lines are taller than unscaled atlas cell (1.25x)', () => {
+    // Atlas cellHeight is 32; item name scale 1.25 → height 40.
+    // GS v 0 header: 1d 76 30 m xL xH yL yH  → height = yL + 256*yH at bytes +6,+7 after 1d7630.
+    const opts: ReceiptOptions = {
+      ...baseOpts,
+      arabic: { encoding: 'w1256', codePage: 50, visualRtl: true, renderMode: 'raster' },
+      items: [
+        {
+          qty: 2,
+          name: 'Zinger',
+          nameAr: '\u0632\u0646\u062C\u0631', // زنجر
+          unitPriceHalalas: 2300,
+          totalHalalas: 4600,
+          vatRateBp: 1500,
+        },
+      ],
+      // No seller AR so seller lines stay charset/EN and only item name is the tall raster among content.
+      sellerNameAr: undefined,
+      sellerStreetAr: undefined,
+      sellerCityAr: undefined,
+    };
+    const buf = builder.build(opts);
+    const bytes = Array.from(buf);
+    const heights: number[] = [];
+    for (let i = 0; i < bytes.length - 7; i++) {
+      if (bytes[i] === 0x1d && bytes[i + 1] === 0x76 && bytes[i + 2] === 0x30) {
+        const yL = bytes[i + 6];
+        const yH = bytes[i + 7];
+        heights.push(yL + 256 * yH);
+      }
+    }
+    // Title/VAT/etc may be 32; at least one raster (item name) must be 40.
+    expect(heights.some((h) => h === 40)).toBe(true);
+    expect(heights.some((h) => h === 32)).toBe(true);
   });
 });

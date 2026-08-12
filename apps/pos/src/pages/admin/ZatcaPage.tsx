@@ -29,6 +29,9 @@ export function ZatcaPage() {
   // ── Seller Config state ──
   const [config, setConfig] = useState<ZatcaConfigDto>({
     sellerName: '',
+    sellerNameAr: '',
+    sellerStreetAr: '',
+    sellerCityAr: '',
     vatNumber: '',
     crNumber: '',
     street: '',
@@ -427,6 +430,15 @@ export function ZatcaPage() {
                 />
               </div>
               <div>
+                <label className="block text-xs text-gray-500 mb-1">Seller Name (Arabic)</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={config.sellerNameAr}
+                  onChange={(e) => setConfig((f) => ({ ...f, sellerNameAr: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
                 <label className="block text-xs text-gray-500 mb-1">VAT Number</label>
                 <input
                   className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -465,6 +477,15 @@ export function ZatcaPage() {
                 />
               </div>
               <div>
+                <label className="block text-xs text-gray-500 mb-1">Street (Arabic)</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={config.sellerStreetAr}
+                  onChange={(e) => setConfig((f) => ({ ...f, sellerStreetAr: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
                 <label className="block text-xs text-gray-500 mb-1">Building Number</label>
                 <input
                   className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -479,6 +500,15 @@ export function ZatcaPage() {
                   className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                   value={config.city}
                   onChange={(e) => setConfig((f) => ({ ...f, city: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">City (Arabic)</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={config.sellerCityAr}
+                  onChange={(e) => setConfig((f) => ({ ...f, sellerCityAr: e.target.value }))}
                   required
                 />
               </div>

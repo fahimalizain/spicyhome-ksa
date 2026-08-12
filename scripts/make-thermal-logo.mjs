@@ -48,8 +48,8 @@
  *   MTL_ASCII=1             print a coarse ASCII preview of each output
  *
  * Outputs:
- *   apps/server/assets/logo-thermal.png       (240x240, primary)
- *   apps/server/assets/logo-thermal-192.png   (192x192, compact variant)
+ *   apps/server/assets/logo-thermal.png       (240x240)
+ *   // apps/server/assets/logo-thermal-192.png (192x192, unused compact variant)
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -64,7 +64,7 @@ const SRC_LOGO = join(ROOT, 'apps/android/app/src/main/res/drawable/logo.png');
 const OUT_DIR = join(ROOT, 'apps/server/assets');
 const SIZES = [
   { width: 240, file: 'logo-thermal.png' },
-  { width: 192, file: 'logo-thermal-192.png' },
+  // { width: 192, file: 'logo-thermal-192.png' },
 ];
 
 // Warm-lift / tone-curve tuning (see header docs).
