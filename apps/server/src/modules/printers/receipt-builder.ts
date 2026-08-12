@@ -309,6 +309,7 @@ export class ReceiptBuilder {
       // Store contact (all receipt kinds)
       eb.text('Home Delivery');
       eb.text('0112357926 | 0533243439');
+      eb.blankLine();
       eb.text('********');
       eb.text(opts.footer ?? 'Thank you! Visit again.');
       eb.text('********');
