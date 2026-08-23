@@ -76,6 +76,7 @@ function renderLayout() {
             <Route path="/day" element={<div>Day Page</div>} />
             <Route path="/orders" element={<div>Orders Page</div>} />
             <Route path="/tables" element={<div>Tables Page</div>} />
+            <Route path="/reports" element={<div>Reports Page</div>} />
             <Route path="/admin" element={<div>Admin Page</div>} />
           </Route>
           <Route path="/login" element={<div>Login Page</div>} />
@@ -105,6 +106,8 @@ describe('Layout TopBar', () => {
     expect(screen.getByRole('link', { name: 'Orders' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Tables' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Day' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reports' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports');
 
     // Admin is not a left-nav link even with manageMenu — it lives in the user menu.
     expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
