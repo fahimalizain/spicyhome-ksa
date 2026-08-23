@@ -101,9 +101,10 @@ describe('ItemWiseSalesPage', () => {
     });
 
     // Gross / net / VAT appear in both the row and the footer.
-    expect(screen.getAllByText('69.00 SAR').length).toBeGreaterThanOrEqual(1); // gross
-    expect(screen.getAllByText('46.00 SAR').length).toBeGreaterThanOrEqual(1); // net
-    expect(screen.getAllByText('6.00 SAR').length).toBeGreaterThanOrEqual(1); // VAT
+    expect(screen.getAllByLabelText('SAR 69.00').length).toBeGreaterThanOrEqual(1); // gross
+    expect(screen.getAllByLabelText('SAR 23.00').length).toBeGreaterThanOrEqual(1); // refunded
+    expect(screen.getAllByLabelText('SAR 46.00').length).toBeGreaterThanOrEqual(1); // net
+    expect(screen.getAllByLabelText('SAR 6.00').length).toBeGreaterThanOrEqual(1); // VAT
     // Footer comes from the API footer, not client-side sums.
     expect(screen.getByText('Totals')).toBeInTheDocument();
   });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { halalasToSar, getServiceDayString } from '@spicyhome/shared';
+import { getServiceDayString } from '@spicyhome/shared';
 import type {
   CategoryResponse,
   DeliveryPartnerResponse,
@@ -8,6 +8,7 @@ import type {
 } from '@spicyhome/client-ts';
 import { client } from '../api';
 import { ReportFilters } from '../components/reports/ReportFilters';
+import { SarAmount } from '../components/reports/SarAmount';
 
 export function ItemWiseSalesPage() {
   // Posting-time service-day window; defaults to the current service day
@@ -162,18 +163,26 @@ export function ItemWiseSalesPage() {
                   <td className="px-3 py-2">{row.categoryName}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{row.qtySold}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.grossHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.grossHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{row.refundedQty}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.refundedHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.refundedHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.netQty}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                    {halalasToSar(row.netHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.netHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.vatHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.vatHalalas} />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -193,18 +202,26 @@ export function ItemWiseSalesPage() {
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{footer.qtySold}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.grossHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.grossHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{footer.refundedQty}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.refundedHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.refundedHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{footer.netQty}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.netHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.netHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.vatHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.vatHalalas} />
+                    </span>
                   </td>
                 </tr>
               </tfoot>

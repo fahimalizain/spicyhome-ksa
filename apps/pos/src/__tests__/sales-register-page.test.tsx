@@ -114,12 +114,13 @@ describe('SalesRegisterPage', () => {
     await waitFor(() => {
       expect(screen.getByText('INV26-0001')).toBeInTheDocument();
       expect(screen.getAllByText('Sale').length).toBeGreaterThanOrEqual(1); // Kind badge (option in filter bar also matches)
-      expect(screen.getByText('23.00 SAR')).toBeInTheDocument();
+      // Sale total 2300 halalas; the sale and refund tender cells also show 23.00.
+      expect(screen.getAllByLabelText('SAR 23.00').length).toBeGreaterThanOrEqual(1);
     });
 
     expect(screen.getByText('CR26-0001')).toBeInTheDocument();
     expect(screen.getAllByText('Refund').length).toBeGreaterThanOrEqual(1); // Kind badge
-    expect(screen.getByText('-23.00 SAR')).toBeInTheDocument();
+    expect(screen.getByLabelText('− SAR 23.00')).toBeInTheDocument();
     expect(screen.getByText('Refund of INV26-0001')).toBeInTheDocument();
   });
 
@@ -132,7 +133,7 @@ describe('SalesRegisterPage', () => {
       expect(screen.getByText('1 sales · 1 refunds')).toBeInTheDocument();
     });
     // Footer signed subtotal / VAT / total all net to zero in this fixture.
-    expect(screen.getAllByText('0.00 SAR').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByLabelText('SAR 0.00').length).toBeGreaterThanOrEqual(3);
   });
 
   it('recalls with kind refund when the Kind filter changes', async () => {

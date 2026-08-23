@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { halalasToSar, getServiceDayString } from '@spicyhome/shared';
+import type { ReactNode } from 'react';
+import { getServiceDayString } from '@spicyhome/shared';
 import type {
   DeliveryPartnerResponse,
   SalesRegisterFooter,
@@ -9,6 +10,7 @@ import type {
 import { client } from '../api';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
 import { ReportFilters } from '../components/reports/ReportFilters';
+import { SarAmount } from '../components/reports/SarAmount';
 
 /** "Table / Partner" cell: dine-in shows the table, takeaway the partner
  * (title + external ref via formatOrderTypeLabel) or Walk-in when no partner. */
@@ -22,9 +24,19 @@ function tableOrPartner(row: SalesRegisterRow): string {
   return 'Walk-in';
 }
 
-/** Tender cell: "Cash 23.00 · Card 50.00" (one entry per payment line). */
-function tenderSummary(row: SalesRegisterRow): string {
-  return row.tenders.map((t) => `${t.methodTitle} ${halalasToSar(t.amountHalalas)}`).join(' · ');
+/** Tender cell: "Cash 23.00 · Card 50.00" (one entry per payment line).
+ *  Titles stay as plain text; amounts use the SAR-style format. */
+function tenderSummary(row: SalesRegisterRow): ReactNode {
+  return (
+    <>
+      {row.tenders.map((t, i) => (
+        <span key={`${t.methodId}-${i}`}>
+          {i > 0 && ' · '}
+          {t.methodTitle} <SarAmount halalas={t.amountHalalas} />
+        </span>
+      ))}
+    </>
+  );
 }
 
 export function SalesRegisterPage() {
@@ -183,13 +195,19 @@ export function SalesRegisterPage() {
                   <td className="px-3 py-2">{formatOrderTypeLabel(row)}</td>
                   <td className="px-3 py-2">{tableOrPartner(row)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.subtotalHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.subtotalHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.vatHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.vatHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(row.totalHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={row.totalHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2">{tenderSummary(row)}</td>
                   <td className="px-3 py-2">{row.cashierName}</td>
@@ -211,13 +229,19 @@ export function SalesRegisterPage() {
                     {footer.saleCount} sales · {footer.refundCount} refunds
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.subtotalHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.subtotalHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.vatHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.vatHalalas} />
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {halalasToSar(footer.totalHalalas)} SAR
+                    <span className="flex justify-end">
+                      <SarAmount halalas={footer.totalHalalas} />
+                    </span>
                   </td>
                   <td colSpan={3} />
                 </tr>
