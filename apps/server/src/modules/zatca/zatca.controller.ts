@@ -147,11 +147,13 @@ export class ZatcaController {
       sellerNameAr: this.printersService.getSetting('seller_name_ar', ''),
       sellerStreetAr: this.printersService.getSetting('seller_street_ar', ''),
       sellerCityAr: this.printersService.getSetting('seller_city_ar', ''),
+      sellerDistrictAr: this.printersService.getSetting('seller_district_ar', ''),
       vatNumber: this.printersService.getSetting('vat_number', ''),
       crNumber: this.printersService.getSetting('cr_number', ''),
       street: this.printersService.getSetting('seller_street', ''),
       building: this.printersService.getSetting('seller_building', ''),
       city: this.printersService.getSetting('seller_city', ''),
+      sellerDistrict: this.printersService.getSetting('seller_district', ''),
       postalCode: this.printersService.getSetting('seller_postal', ''),
       country: this.printersService.getSetting('seller_country', 'SA'),
       orgUnit: this.printersService.getSetting('zatca_org_unit', ''),
@@ -173,11 +175,13 @@ export class ZatcaController {
     this.printersService.setSetting('seller_name_ar', dto.sellerNameAr);
     this.printersService.setSetting('seller_street_ar', dto.sellerStreetAr);
     this.printersService.setSetting('seller_city_ar', dto.sellerCityAr);
+    this.printersService.setSetting('seller_district_ar', dto.sellerDistrictAr);
     this.printersService.setSetting('vat_number', dto.vatNumber);
     this.printersService.setSetting('cr_number', dto.crNumber);
     this.printersService.setSetting('seller_street', dto.street);
     this.printersService.setSetting('seller_building', dto.building);
     this.printersService.setSetting('seller_city', dto.city);
+    this.printersService.setSetting('seller_district', dto.sellerDistrict);
     this.printersService.setSetting('seller_postal', dto.postalCode);
     this.printersService.setSetting('seller_country', dto.country);
     this.printersService.setSetting('zatca_org_unit', dto.orgUnit);

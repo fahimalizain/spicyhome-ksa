@@ -84,6 +84,8 @@ describe('print-documents', () => {
       INSERT INTO settings (key, value) VALUES ('seller_building', '1234');
       INSERT INTO settings (key, value) VALUES ('seller_city', 'Riyadh');
       INSERT INTO settings (key, value) VALUES ('seller_city_ar', 'الرياض');
+      INSERT INTO settings (key, value) VALUES ('seller_district', 'Al Olaya');
+      INSERT INTO settings (key, value) VALUES ('seller_district_ar', 'العليا');
       INSERT INTO settings (key, value) VALUES ('seller_postal', '12345');
       INSERT INTO settings (key, value) VALUES ('seller_country', 'SA');
     `);
@@ -218,6 +220,7 @@ describe('print-documents', () => {
       // Seller fields from settings
       expect(s).toContain('Test'); // seller_name
       expect(s).toContain('1234 Main St'); // seller_building + seller_street
+      expect(s).toContain('Al Olaya, Riyadh'); // seller_district + seller_city on one line
       expect(s).toContain('Riyadh'); // seller_city
       expect(s).toContain('Kingdom of Saudi'); // country EN (same line as AR)
       // Postal must not appear as its own address token (VAT may contain "12345")

@@ -49,6 +49,10 @@ export interface ReceiptOptions {
   sellerStreetAr?: string;
   /** Arabic city (settings.seller_city_ar) — right-aligned on the seller city/country line. */
   sellerCityAr?: string;
+  /** District (settings.seller_district) — receipt-only, printed before the city on the seller city line. */
+  sellerDistrict?: string;
+  /** Arabic district (settings.seller_district_ar) — receipt-only, printed before the Arabic city on the seller city line. */
+  sellerDistrictAr?: string;
   // Order meta
   orderType: 'dine_in' | 'takeaway';
   tableName?: string;
@@ -205,9 +209,16 @@ export class ReceiptBuilder {
       this.printSellerLine(eb, streetEn, streetAr, arabic);
 
       // 3. City — bilingual when cityAr set. No postal / ISO country code.
+      //    District (receipt-only) joins the same line: "Al Olaya, Riyadh"
+      //    EN left / "العليا، الرياض" AR right; empty parts are dropped so
+      //    a missing district never leaves a stray comma.
+      const districtEn = (opts.sellerDistrict ?? '').trim();
       const cityEn = (opts.sellerCity ?? '').trim();
+      const districtAr = (opts.sellerDistrictAr ?? '').trim();
       const cityAr = (opts.sellerCityAr ?? '').trim();
-      this.printSellerLine(eb, cityEn, cityAr, arabic);
+      const cityLineEn = [districtEn, cityEn].filter(Boolean).join(', ');
+      const cityLineAr = [districtAr, cityAr].filter(Boolean).join('\u060c '); // Arabic comma + space
+      this.printSellerLine(eb, cityLineEn, cityLineAr, arabic);
 
       // 4. Country — full names, EN left / AR right (AR kept whole).
       this.printSellerLine(eb, SELLER_COUNTRY_EN, SELLER_COUNTRY_AR, arabic);

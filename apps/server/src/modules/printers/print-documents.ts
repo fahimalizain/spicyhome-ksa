@@ -98,6 +98,9 @@ export function buildSimplifiedInvoiceBuffer(
   const sellerNameAr = getSetting(db, 'seller_name_ar', '');
   const sellerStreetAr = getSetting(db, 'seller_street_ar', '');
   const sellerCityAr = getSetting(db, 'seller_city_ar', '');
+  // District (receipt-only — never in ZATCA XML / CSR).
+  const sellerDistrict = getSetting(db, 'seller_district', '');
+  const sellerDistrictAr = getSetting(db, 'seller_district_ar', '');
 
   // Load QR from a printable zatca_invoices row if not provided by caller.
   // Printable statuses:
@@ -137,6 +140,8 @@ export function buildSimplifiedInvoiceBuffer(
     sellerNameAr,
     sellerStreetAr,
     sellerCityAr,
+    sellerDistrict,
+    sellerDistrictAr,
     orderType: order.type as 'dine_in' | 'takeaway',
     tableName: resolveTableName(db, order),
     deliveryPartnerTitle: getDeliveryPartnerTitle(db, order),
@@ -247,6 +252,9 @@ export function buildCreditNoteBuffer(
   const sellerNameAr = getSetting(db, 'seller_name_ar', '');
   const sellerStreetAr = getSetting(db, 'seller_street_ar', '');
   const sellerCityAr = getSetting(db, 'seller_city_ar', '');
+  // District (receipt-only — never in ZATCA XML / CSR).
+  const sellerDistrict = getSetting(db, 'seller_district', '');
+  const sellerDistrictAr = getSetting(db, 'seller_district_ar', '');
 
   // Arabic name fallback: refund rows predating the snapshot fall back to
   // the snapshotted order_items.item_name_ar via order_item_id.
@@ -313,6 +321,8 @@ export function buildCreditNoteBuffer(
     sellerNameAr,
     sellerStreetAr,
     sellerCityAr,
+    sellerDistrict,
+    sellerDistrictAr,
     orderType: order.type as 'dine_in' | 'takeaway',
     tableName: resolveTableName(db, order),
     deliveryPartnerTitle: getDeliveryPartnerTitle(db, order),

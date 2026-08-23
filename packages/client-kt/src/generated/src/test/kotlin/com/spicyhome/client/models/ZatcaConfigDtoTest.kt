@@ -25,10 +25,34 @@ class ZatcaConfigDtoTest : ShouldSpec() {
         // uncomment below to create an instance of ZatcaConfigDto
         //val modelInstance = ZatcaConfigDto()
 
-        // to test the property `sellerName` - Legal seller name for CSR and invoice XML
+        // to test the property `sellerName` - English / Latin seller display name (receipts, admin). Not used for ZATCA RegistrationName or CSR organizationName
         should("test sellerName") {
             // uncomment below to test the property
             //modelInstance.sellerName shouldBe ("TODO")
+        }
+
+        // to test the property `sellerNameAr` - Arabic legal seller name for ZATCA invoice XML RegistrationName, QR TLV tag 1, and CSR organizationName
+        should("test sellerNameAr") {
+            // uncomment below to test the property
+            //modelInstance.sellerNameAr shouldBe ("TODO")
+        }
+
+        // to test the property `sellerStreetAr` - Arabic street name
+        should("test sellerStreetAr") {
+            // uncomment below to test the property
+            //modelInstance.sellerStreetAr shouldBe ("TODO")
+        }
+
+        // to test the property `sellerCityAr` - Arabic city name
+        should("test sellerCityAr") {
+            // uncomment below to test the property
+            //modelInstance.sellerCityAr shouldBe ("TODO")
+        }
+
+        // to test the property `sellerDistrictAr` - Arabic district name (receipts only — not used in ZATCA XML or CSR)
+        should("test sellerDistrictAr") {
+            // uncomment below to test the property
+            //modelInstance.sellerDistrictAr shouldBe ("TODO")
         }
 
         // to test the property `vatNumber` - 15-digit KSA VAT number (starts and ends with 3)
@@ -59,6 +83,12 @@ class ZatcaConfigDtoTest : ShouldSpec() {
         should("test city") {
             // uncomment below to test the property
             //modelInstance.city shouldBe ("TODO")
+        }
+
+        // to test the property `sellerDistrict` - District name (receipts only — not used in ZATCA XML or CSR)
+        should("test sellerDistrict") {
+            // uncomment below to test the property
+            //modelInstance.sellerDistrict shouldBe ("TODO")
         }
 
         // to test the property `postalCode` - 5-digit postal code

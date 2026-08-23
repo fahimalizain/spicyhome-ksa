@@ -22,12 +22,17 @@ import com.squareup.moshi.JsonClass
 /**
  * 
  *
- * @param sellerName Legal seller name for CSR and invoice XML
+ * @param sellerName English / Latin seller display name (receipts, admin). Not used for ZATCA RegistrationName or CSR organizationName
+ * @param sellerNameAr Arabic legal seller name for ZATCA invoice XML RegistrationName, QR TLV tag 1, and CSR organizationName
+ * @param sellerStreetAr Arabic street name
+ * @param sellerCityAr Arabic city name
+ * @param sellerDistrictAr Arabic district name (receipts only — not used in ZATCA XML or CSR)
  * @param vatNumber 15-digit KSA VAT number (starts and ends with 3)
  * @param crNumber 10-digit Commercial Registration number
  * @param street Street name
  * @param building Building number
  * @param city City name
+ * @param sellerDistrict District name (receipts only — not used in ZATCA XML or CSR)
  * @param postalCode 5-digit postal code
  * @param country 2-letter ISO country code
  * @param orgUnit Organizational unit for CSR
@@ -38,9 +43,25 @@ import com.squareup.moshi.JsonClass
 
 data class ZatcaConfigDto (
 
-    /* Legal seller name for CSR and invoice XML */
+    /* English / Latin seller display name (receipts, admin). Not used for ZATCA RegistrationName or CSR organizationName */
     @Json(name = "sellerName")
     val sellerName: kotlin.String,
+
+    /* Arabic legal seller name for ZATCA invoice XML RegistrationName, QR TLV tag 1, and CSR organizationName */
+    @Json(name = "sellerNameAr")
+    val sellerNameAr: kotlin.String,
+
+    /* Arabic street name */
+    @Json(name = "sellerStreetAr")
+    val sellerStreetAr: kotlin.String,
+
+    /* Arabic city name */
+    @Json(name = "sellerCityAr")
+    val sellerCityAr: kotlin.String,
+
+    /* Arabic district name (receipts only — not used in ZATCA XML or CSR) */
+    @Json(name = "sellerDistrictAr")
+    val sellerDistrictAr: kotlin.String,
 
     /* 15-digit KSA VAT number (starts and ends with 3) */
     @Json(name = "vatNumber")
@@ -61,6 +82,10 @@ data class ZatcaConfigDto (
     /* City name */
     @Json(name = "city")
     val city: kotlin.String,
+
+    /* District name (receipts only — not used in ZATCA XML or CSR) */
+    @Json(name = "sellerDistrict")
+    val sellerDistrict: kotlin.String,
 
     /* 5-digit postal code */
     @Json(name = "postalCode")

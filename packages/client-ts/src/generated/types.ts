@@ -2732,6 +2732,11 @@ export interface components {
        */
       sellerCityAr: string;
       /**
+       * @description Arabic district name (receipts only — not used in ZATCA XML or CSR)
+       * @example العليا
+       */
+      sellerDistrictAr: string;
+      /**
        * @description 15-digit KSA VAT number (starts and ends with 3)
        * @example 300123456789003
        */
@@ -2756,6 +2761,11 @@ export interface components {
        * @example Riyadh
        */
       city: string;
+      /**
+       * @description District name (receipts only — not used in ZATCA XML or CSR)
+       * @example Al Olaya
+       */
+      sellerDistrict: string;
       /**
        * @description 5-digit postal code
        * @example 12345

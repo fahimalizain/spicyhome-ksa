@@ -160,6 +160,73 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('SpicyHome Restaurant');
   });
 
+  // ── District on the city line (receipt-only) ────────────────────────────────
+
+  it('prints "district, city" on the EN city line when sellerDistrict is set', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      sellerDistrict: 'Al Olaya',
+      sellerCity: 'Riyadh',
+    });
+    const s = str(buf);
+    expect(s).toContain('Al Olaya, Riyadh');
+  });
+
+  it('prints city alone when sellerDistrict is empty or undefined (no stray comma)', () => {
+    const s = str(builder.build(baseOpts)); // no district
+    expect(s).toContain('Riyadh');
+    expect(s).not.toContain(', Riyadh');
+    const s2 = str(builder.build({ ...baseOpts, sellerDistrict: '' }));
+    expect(s2).toContain('Riyadh');
+    expect(s2).not.toContain(', Riyadh');
+    // District alone without city must not print a trailing comma either
+    const s3 = str(
+      builder.build({ ...baseOpts, sellerCity: undefined, sellerDistrict: 'Al Olaya' }),
+    );
+    expect(s3).toContain('Al Olaya');
+    expect(s3).not.toContain('Al Olaya,');
+  });
+
+  it('prints districtAr + Arabic comma + cityAr on the AR city line', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const districtAr = '\u0627\u0644\u0639\u0644\u064A\u0627'; // العليا
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerDistrict: 'Al Olaya',
+      sellerCity: 'Riyadh',
+      sellerDistrictAr: districtAr,
+      sellerCityAr: cityAr,
+    });
+    // AR side: districtAr + Arabic comma (U+060C) + space + cityAr
+    expect(findSequence(buf, encodeArabicText(ar, `${districtAr}\u060c ${cityAr}`))).toBe(true);
+    // EN side still prints the joined English pair
+    expect(str(buf)).toContain('Al Olaya, Riyadh');
+  });
+
+  it('prints cityAr alone on the AR city line when sellerDistrictAr is unset', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerCityAr: cityAr,
+    });
+    expect(findSequence(buf, encodeArabicText(ar, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, `\u060c ${cityAr}`))).toBe(false);
+  });
+
   it('prints Arabic seller bytes right-aligned with charset pc864', () => {
     const ar = {
       encoding: 'pc864' as const,

@@ -32,11 +32,13 @@ export function ZatcaPage() {
     sellerNameAr: '',
     sellerStreetAr: '',
     sellerCityAr: '',
+    sellerDistrictAr: '',
     vatNumber: '',
     crNumber: '',
     street: '',
     building: '',
     city: '',
+    sellerDistrict: '',
     postalCode: '',
     country: 'SA',
     orgUnit: '',
@@ -509,6 +511,24 @@ export function ZatcaPage() {
                   className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                   value={config.sellerCityAr}
                   onChange={(e) => setConfig((f) => ({ ...f, sellerCityAr: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">District</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={config.sellerDistrict}
+                  onChange={(e) => setConfig((f) => ({ ...f, sellerDistrict: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">District (Arabic)</label>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                  value={config.sellerDistrictAr}
+                  onChange={(e) => setConfig((f) => ({ ...f, sellerDistrictAr: e.target.value }))}
                   required
                 />
               </div>
