@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
+import { BadRequestException } from '@nestjs/common';
+import { getServiceDayBoundsUnix } from '@spicyhome/shared';
 import { ReportsService } from './reports.service';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
@@ -160,6 +162,16 @@ describe('ReportsService', () => {
         created_by INTEGER REFERENCES users(id),
         updated_by INTEGER REFERENCES users(id)
       );
+      CREATE TABLE IF NOT EXISTS delivery_partners (
+        id TEXT PRIMARY KEY NOT NULL,
+        title TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        updated_by INTEGER REFERENCES users(id)
+      );
       CREATE TABLE IF NOT EXISTS order_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         order_id INTEGER NOT NULL REFERENCES orders(id),
@@ -215,6 +227,10 @@ describe('ReportsService', () => {
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('hungerstation', 'HungerStation', 1, 3, '30', ${now}, ${now});
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('keeta', 'Keeta', 1, 4, '30', ${now}, ${now});
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('hungerstation', 'HungerStation', 1, 0, ${now}, ${now});
+      INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+      VALUES ('keeta', 'Keeta', 1, 1, ${now}, ${now});
     `);
 
     sqlite.exec(`
@@ -531,6 +547,702 @@ describe('ReportsService', () => {
       expect(result.grandTotal.salesInclHalalas).toBe(2300);
       expect(result.grandTotal.vatHalalas).toBe(300);
       expect(result.grandTotal.salesExclHalalas).toBe(2000);
+    });
+  });
+
+  describe('getSalesRegister', () => {
+    // Fixed service-day windows around 2026-08-20 (Riyadh 05:00 = UTC 02:00).
+    const D = getServiceDayBoundsUnix('2026-08-20')!; // [D 05:00, D+1 05:00)
+    const D1 = getServiceDayBoundsUnix('2026-08-21')!; // D+1
+    const D2 = getServiceDayBoundsUnix('2026-08-22')!; // D+2
+    const dayId1 = 100;
+    const dayId2 = 101;
+
+    const insertDay = (id: number, businessDate: string, openedAt: number) => {
+      sqlite.exec(
+        `INSERT INTO day_openings (id, business_date, status, opened_at, opened_by, created_at, updated_at)
+         VALUES (${id}, '${businessDate}', 'closed', ${openedAt}, 1, ${openedAt}, ${openedAt})`,
+      );
+    };
+
+    const insertOrder = (o: {
+      id: number;
+      status: string;
+      totalHalalas: number;
+      documentId: string;
+      type?: string;
+      dayOpeningId?: number;
+      subtotalHalalas?: number;
+      vatHalalas?: number;
+      orderNo?: number;
+      tableId?: number | null;
+      deliveryPartnerId?: string | null;
+      notes?: string | null;
+      createdBy?: number | null;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO orders (id, order_no, uuid, type, table_id, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, delivery_partner_id, notes, created_at, updated_at, created_by)
+         VALUES (${o.id}, ${o.orderNo ?? o.id}, 'uuid-${o.id}', '${o.type ?? 'dine_in'}', ${
+           o.tableId === undefined ? 'NULL' : o.tableId
+         }, ${o.dayOpeningId ?? dayId1}, '${o.status}', ${o.subtotalHalalas ?? 0}, ${
+           o.vatHalalas ?? 0
+         }, ${o.totalHalalas}, '${o.documentId}', ${
+           o.deliveryPartnerId === undefined || o.deliveryPartnerId === null
+             ? 'NULL'
+             : `'${o.deliveryPartnerId}'`
+         }, ${o.notes === undefined || o.notes === null ? 'NULL' : `'${o.notes}'`}, ${now}, ${now}, ${
+           o.createdBy === undefined || o.createdBy === null ? 'NULL' : o.createdBy
+         })`,
+      );
+    };
+
+    const insertPayment = (p: {
+      id: number;
+      orderId: number;
+      methodId: string;
+      methodTitle?: string;
+      amountHalalas: number;
+      createdAt: number;
+      createdBy?: number | null;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_payments (id, order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at, created_by)
+         VALUES (${p.id}, ${p.orderId}, '${p.methodId}', '${p.methodTitle ?? p.methodId}', '10', ${
+           p.amountHalalas
+         }, ${p.createdAt}, ${
+           p.createdBy === undefined || p.createdBy === null ? 'NULL' : p.createdBy
+         })`,
+      );
+    };
+
+    const insertRefund = (r: {
+      id: number;
+      orderId: number;
+      methodId: string;
+      methodTitle?: string;
+      subtotalHalalas: number;
+      vatHalalas: number;
+      totalHalalas: number;
+      documentId: string;
+      createdAt: number;
+      userId?: number;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_refunds (id, order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+         VALUES (${r.id}, ${r.orderId}, ${r.userId ?? 1}, '${r.methodId}', '${
+           r.methodTitle ?? r.methodId
+         }', '10', ${r.subtotalHalalas}, ${r.vatHalalas}, ${r.totalHalalas}, '${
+           r.documentId
+         }', ${r.createdAt})`,
+      );
+    };
+
+    beforeEach(() => {
+      insertDay(dayId1, '2026-08-20', D.startUnix);
+      insertDay(dayId2, '2026-08-21', D1.startUnix);
+      sqlite.exec(
+        `INSERT INTO tables (id, name, sort_order, is_active, created_at, updated_at)
+         VALUES (1, 'T1', 0, 1, ${now}, ${now})`,
+      );
+    });
+
+    it('throws 400 for missing or invalid from/to', () => {
+      expect(() => service.getSalesRegister({})).toThrow(BadRequestException);
+      expect(() => service.getSalesRegister({ from: '2026-08-20' })).toThrow(BadRequestException);
+      expect(() => service.getSalesRegister({ to: '2026-08-20' })).toThrow(BadRequestException);
+      expect(() => service.getSalesRegister({ from: '20-08-2026', to: '2026-08-21' })).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.getSalesRegister({ from: '2026-13-01', to: '2026-08-21' })).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.getSalesRegister({ from: '2026-08-20', to: 'not-a-date' })).toThrow(
+        BadRequestException,
+      );
+      // Same wording as OrdersService.listOrders
+      expect(() => service.getSalesRegister({ from: 'bogus', to: '2026-08-21' })).toThrow(
+        'Invalid date: bogus (expected YYYY-MM-DD)',
+      );
+    });
+
+    it('throws 400 when from > to', () => {
+      expect(() => service.getSalesRegister({ from: '2026-08-22', to: '2026-08-20' })).toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('throws 400 for invalid type or kind filters', () => {
+      expect(() =>
+        service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20', type: 'delivery' }),
+      ).toThrow(BadRequestException);
+      expect(() =>
+        service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20', kind: 'invoice' }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('excludes open and voided orders, and paid orders without payments', () => {
+      insertOrder({ id: 1, status: 'open', totalHalalas: 1000, documentId: 'INV-OPEN' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 60,
+      });
+      insertOrder({ id: 2, status: 'voided', totalHalalas: 2000, documentId: 'INV-VOID' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 120,
+      });
+      insertOrder({ id: 3, status: 'paid', totalHalalas: 3000, documentId: 'INV-NOPAY' });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(0);
+      expect(result.footer).toEqual({
+        saleCount: 0,
+        refundCount: 0,
+        subtotalHalalas: 0,
+        vatHalalas: 0,
+        totalHalalas: 0,
+      });
+    });
+
+    it('returns a paid order as a positive sale row with tenders and cashier', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'dine_in',
+        tableId: 1,
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'INV26-0001',
+        notes: 'Call on arrival',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 300,
+        createdBy: 1,
+      });
+      // A second paid order whose payments carry no cashier
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        type: 'takeaway',
+        subtotalHalalas: 1000,
+        vatHalalas: 150,
+        totalHalalas: 1150,
+        documentId: 'INV26-0002',
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'card',
+        methodTitle: 'Card',
+        amountHalalas: 1150,
+        createdAt: D.startUnix + 400,
+        createdBy: null,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(2);
+
+      const sale = result.rows[0];
+      expect(sale.kind).toBe('sale');
+      expect(sale.postedAt).toBe(D.startUnix + 300);
+      expect(sale.businessDate).toBe('2026-08-20');
+      expect(sale.documentId).toBe('INV26-0001');
+      expect(sale.orderId).toBe(1);
+      expect(sale.refundId).toBeNull();
+      expect(sale.orderNo).toBe(1);
+      expect(sale.type).toBe('dine_in');
+      expect(sale.tableId).toBe(1);
+      expect(sale.tableName).toBe('T1');
+      expect(sale.deliveryPartnerId).toBeNull();
+      expect(sale.deliveryPartnerTitle).toBeNull();
+      expect(sale.subtotalHalalas).toBe(2000);
+      expect(sale.vatHalalas).toBe(300);
+      expect(sale.totalHalalas).toBe(2300);
+      expect(sale.tenders).toEqual([
+        { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 },
+      ]);
+      expect(sale.cashierUserId).toBe(1);
+      expect(sale.cashierName).toBe('Admin');
+      expect(sale.notes).toBe('Call on arrival');
+
+      const noCashier = result.rows[1];
+      expect(noCashier.cashierUserId).toBeNull();
+      expect(noCashier.cashierName).toBe('Unknown');
+    });
+
+    it('returns a refund as a separate negative row sorted after its sale', () => {
+      insertOrder({
+        id: 1,
+        status: 'refunded',
+        type: 'dine_in',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'INV26-0001',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 400,
+        createdBy: 1,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'REF26-0001',
+        createdAt: D.startUnix + 900,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows[0].kind).toBe('sale');
+      expect(result.rows[1].kind).toBe('refund');
+
+      const refund = result.rows[1];
+      expect(refund.postedAt).toBe(D.startUnix + 900);
+      expect(refund.businessDate).toBe('2026-08-20');
+      expect(refund.documentId).toBe('REF26-0001');
+      expect(refund.orderId).toBe(1);
+      expect(refund.refundId).toBe(1);
+      expect(refund.orderNo).toBe(1);
+      expect(refund.type).toBe('dine_in');
+      expect(refund.subtotalHalalas).toBe(-2000);
+      expect(refund.vatHalalas).toBe(-300);
+      expect(refund.totalHalalas).toBe(-2300);
+      expect(refund.tenders).toEqual([
+        { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 },
+      ]);
+      expect(refund.cashierUserId).toBe(1);
+      expect(refund.cashierName).toBe('Admin');
+      expect(refund.notes).toBe('Refund of INV26-0001');
+
+      // The sale row survives with positive amounts
+      expect(result.rows[0].totalHalalas).toBe(2300);
+      expect(result.rows[0].refundId).toBeNull();
+    });
+
+    it('ties at the same postedAt: sale before refund', () => {
+      insertOrder({
+        id: 1,
+        status: 'refunded',
+        totalHalalas: 2300,
+        documentId: 'INV26-0001',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 500,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'REF26-0001',
+        createdAt: D.startUnix + 500,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows.map((r) => r.kind)).toEqual(['sale', 'refund']);
+    });
+
+    it('posts a sale and its later refund to their own service days', () => {
+      insertOrder({
+        id: 1,
+        status: 'refunded',
+        type: 'takeaway',
+        subtotalHalalas: 1000,
+        vatHalalas: 150,
+        totalHalalas: 1150,
+        documentId: 'INV26-0100',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 1150,
+        createdAt: D.startUnix + 100,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 1000,
+        vatHalalas: 150,
+        totalHalalas: 1150,
+        documentId: 'REF26-0100',
+        createdAt: D2.startUnix + 50, // D+2
+      });
+
+      const onlyD = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(onlyD.rows).toHaveLength(1);
+      expect(onlyD.rows[0].kind).toBe('sale');
+      expect(onlyD.rows[0].businessDate).toBe('2026-08-20');
+
+      const onlyD2 = service.getSalesRegister({ from: '2026-08-22', to: '2026-08-22' });
+      expect(onlyD2.rows).toHaveLength(1);
+      expect(onlyD2.rows[0].kind).toBe('refund');
+      expect(onlyD2.rows[0].businessDate).toBe('2026-08-22');
+      expect(onlyD2.rows[0].notes).toBe('Refund of INV26-0100');
+
+      const both = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-22' });
+      expect(both.rows).toHaveLength(2);
+      expect(both.rows[0].kind).toBe('sale');
+      expect(both.rows[1].kind).toBe('refund');
+      expect(both.rows[1].businessDate).toBe('2026-08-22');
+    });
+
+    it('posts a payment after 05:00 to the next service day regardless of day_opening', () => {
+      // Order opened under the 2026-08-20 business day, but paid at
+      // 2026-08-21 05:00:10 — the sale must post to 2026-08-21.
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        dayOpeningId: dayId1,
+        subtotalHalalas: 5000,
+        vatHalalas: 750,
+        totalHalalas: 5750,
+        documentId: 'INV26-0200',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'card',
+        methodTitle: 'Card',
+        amountHalalas: 5750,
+        createdAt: D1.startUnix + 10,
+      });
+
+      const onD = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(onD.rows).toHaveLength(0);
+
+      const onD1 = service.getSalesRegister({ from: '2026-08-21', to: '2026-08-21' });
+      expect(onD1.rows).toHaveLength(1);
+      expect(onD1.rows[0].kind).toBe('sale');
+      expect(onD1.rows[0].postedAt).toBe(D1.startUnix + 10);
+      expect(onD1.rows[0].businessDate).toBe('2026-08-21');
+    });
+
+    it('filters by type on the parent order, excluding takeaway refunds too', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'dine_in',
+        totalHalalas: 1000,
+        documentId: 'INV-A',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 2000,
+        documentId: 'INV-B',
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 20,
+      });
+      insertOrder({
+        id: 3,
+        status: 'refunded',
+        type: 'takeaway',
+        subtotalHalalas: 3000,
+        vatHalalas: 0,
+        totalHalalas: 3000,
+        documentId: 'INV-C',
+      });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 3000,
+        createdAt: D.startUnix + 30,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 3000,
+        vatHalalas: 0,
+        totalHalalas: 3000,
+        documentId: 'REF-C',
+        createdAt: D.startUnix + 40,
+      });
+
+      const result = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        type: 'dine_in',
+      });
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0].documentId).toBe('INV-A');
+      expect(result.footer.refundCount).toBe(0);
+    });
+
+    it('filters by partner: none for walk-ins, slug for exact partner', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 1000,
+        documentId: 'INV-P1',
+        deliveryPartnerId: 'hungerstation',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'hungerstation',
+        methodTitle: 'HungerStation',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 2000,
+        documentId: 'INV-P2',
+        deliveryPartnerId: null,
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 20,
+      });
+
+      const walkIns = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'none',
+      });
+      expect(walkIns.rows).toHaveLength(1);
+      expect(walkIns.rows[0].documentId).toBe('INV-P2');
+
+      const hungerstation = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'hungerstation',
+      });
+      expect(hungerstation.rows).toHaveLength(1);
+      expect(hungerstation.rows[0].documentId).toBe('INV-P1');
+      expect(hungerstation.rows[0].deliveryPartnerId).toBe('hungerstation');
+      expect(hungerstation.rows[0].deliveryPartnerTitle).toBe('HungerStation');
+
+      const unknown = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'keeta',
+      });
+      expect(unknown.rows).toHaveLength(0);
+    });
+
+    it('kind=refund returns only refund rows', () => {
+      insertOrder({
+        id: 1,
+        status: 'refunded',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'INV26-0001',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 100,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'REF26-0001',
+        createdAt: D.startUnix + 200,
+      });
+
+      const refunds = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        kind: 'refund',
+      });
+      expect(refunds.rows).toHaveLength(1);
+      expect(refunds.rows[0].kind).toBe('refund');
+      expect(refunds.footer.saleCount).toBe(0);
+      expect(refunds.footer.refundCount).toBe(1);
+
+      const sales = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        kind: 'sale',
+      });
+      expect(sales.rows).toHaveLength(1);
+      expect(sales.rows[0].kind).toBe('sale');
+      expect(sales.footer.saleCount).toBe(1);
+      expect(sales.footer.refundCount).toBe(0);
+    });
+
+    it('computes footer counts and signed totals across sales and refunds', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'INV26-0001',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        subtotalHalalas: 4000,
+        vatHalalas: 600,
+        totalHalalas: 4600,
+        documentId: 'INV26-0002',
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'card',
+        methodTitle: 'Card',
+        amountHalalas: 4600,
+        createdAt: D.startUnix + 200,
+      });
+      insertOrder({
+        id: 3,
+        status: 'refunded',
+        subtotalHalalas: 1000,
+        vatHalalas: 150,
+        totalHalalas: 1150,
+        documentId: 'INV26-0003',
+      });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 1150,
+        createdAt: D.startUnix + 300,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 1000,
+        vatHalalas: 150,
+        totalHalalas: 1150,
+        documentId: 'REF26-0001',
+        createdAt: D.startUnix + 400,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.footer).toEqual({
+        saleCount: 3,
+        refundCount: 1,
+        subtotalHalalas: 2000 + 4000 + 1000 - 1000,
+        vatHalalas: 300 + 600 + 150 - 150,
+        totalHalalas: 2300 + 4600 + 1150 - 1150,
+      });
+    });
+
+    it('lists every tender on a split-tender sale and uses the earliest as cashier', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        subtotalHalalas: 8000,
+        vatHalalas: 250,
+        totalHalalas: 8250,
+        documentId: 'INV-SPLIT',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'card',
+        methodTitle: 'Card',
+        amountHalalas: 5000,
+        createdAt: D.startUnix + 10,
+        createdBy: 1,
+      });
+      insertPayment({
+        id: 2,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 3250,
+        createdAt: D.startUnix + 20,
+        createdBy: 1,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(1);
+      const sale = result.rows[0];
+      expect(sale.postedAt).toBe(D.startUnix + 10);
+      expect(sale.tenders).toEqual([
+        { methodId: 'card', methodTitle: 'Card', amountHalalas: 5000 },
+        { methodId: 'cash', methodTitle: 'Cash', amountHalalas: 3250 },
+      ]);
+      expect(sale.cashierUserId).toBe(1);
+      expect(sale.cashierName).toBe('Admin');
+      expect(sale.totalHalalas).toBe(8250);
     });
   });
 });

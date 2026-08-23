@@ -1,11 +1,22 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { eq, inArray, and } from 'drizzle-orm';
-import { orders, orderPayments, paymentMethods, dayOpenings, users } from '@spicyhome/db';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { eq, inArray, and, isNull } from 'drizzle-orm';
+import {
+  orders,
+  orderPayments,
+  orderRefunds,
+  paymentMethods,
+  dayOpenings,
+  users,
+  tables,
+  deliveryPartners,
+} from '@spicyhome/db';
+import { getServiceDayString } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
 import { buildXReportBuffer, buildZReportBuffer } from '../printers/print-documents';
 import { loadDayCategorySales } from './day-sales';
+import { parseReportPeriod } from './report-period';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -37,6 +48,48 @@ export interface XReport {
 
 export interface ZReport extends XReport {
   closingCashHalalas: number;
+}
+
+export interface SalesRegisterTender {
+  methodId: string;
+  methodTitle: string;
+  amountHalalas: number;
+}
+
+export interface SalesRegisterRow {
+  kind: 'sale' | 'refund';
+  postedAt: number;
+  businessDate: string;
+  documentId: string;
+  orderId: number;
+  refundId: number | null;
+  orderNo: number;
+  type: string;
+  tableId: number | null;
+  tableName: string | null;
+  deliveryPartnerId: string | null;
+  deliveryPartnerTitle: string | null;
+  deliveryExternalRef: string | null;
+  subtotalHalalas: number;
+  vatHalalas: number;
+  totalHalalas: number;
+  tenders: SalesRegisterTender[];
+  cashierUserId: number | null;
+  cashierName: string;
+  notes: string | null;
+}
+
+export interface SalesRegisterFooter {
+  saleCount: number;
+  refundCount: number;
+  subtotalHalalas: number;
+  vatHalalas: number;
+  totalHalalas: number;
+}
+
+export interface SalesRegisterResponse {
+  rows: SalesRegisterRow[];
+  footer: SalesRegisterFooter;
 }
 
 @Injectable()
@@ -218,6 +271,213 @@ export class ReportsService {
     );
 
     return { days, grandTotal };
+  }
+
+  /**
+   * Sales register — a document day-book of paid invoices (sales) and
+   * refunds (credit notes) over a business-date range, filtered by document
+   * **posting time** (earliest `order_payments.created_at` for sales,
+   * `order_refunds.created_at` for refunds), not by `day_opening_id`.
+   *
+   * - One row per paid/refunded order that has at least one payment whose
+   *   earliest `created_at` falls in `[from 05:00, (to+1) 05:00)` Asia/Riyadh.
+   * - One row per refund whose `created_at` falls in the window (parent order
+   *   any status — open/voided orders can never be refunded).
+   * - Refund rows carry negative amounts and `notes = "Refund of <parent
+   *   document id>"`. A later-refunded order keeps its sale row at pay time.
+   * - Rows sort by `postedAt` ascending (day-book); ties: sale before refund,
+   *   then `documentId`.
+   */
+  getSalesRegister(query: {
+    from?: string;
+    to?: string;
+    type?: string;
+    partner?: string;
+    kind?: string;
+  }): SalesRegisterResponse {
+    const { startUnix, endUnix } = parseReportPeriod(query.from, query.to);
+
+    if (query.type !== undefined && query.type !== 'dine_in' && query.type !== 'takeaway') {
+      throw new BadRequestException(`Invalid type: ${query.type}`);
+    }
+    if (query.kind !== undefined && query.kind !== 'sale' && query.kind !== 'refund') {
+      throw new BadRequestException(`Invalid kind: ${query.kind}`);
+    }
+
+    // Candidate parent orders: only paid/refunded orders can have produced a
+    // payment or a refund. Order-level filters (type / partner) apply to the
+    // parent order for both sales and refunds.
+    const orderConditions: any[] = [inArray(orders.status, ['paid', 'refunded'])];
+    if (query.type !== undefined) {
+      orderConditions.push(eq(orders.type, query.type));
+    }
+    if (query.partner === 'none') {
+      orderConditions.push(isNull(orders.deliveryPartnerId));
+    } else if (query.partner !== undefined) {
+      orderConditions.push(eq(orders.deliveryPartnerId, query.partner));
+    }
+
+    const candidateOrders = this.db
+      .select()
+      .from(orders)
+      .where(and(...orderConditions))
+      .all();
+    if (candidateOrders.length === 0) {
+      return { rows: [], footer: this.emptyFooter() };
+    }
+    const orderById = new Map(candidateOrders.map((o) => [o.id, o]));
+    const orderIds = [...orderById.keys()];
+
+    const tableMap = new Map(
+      this.db
+        .select({ id: tables.id, name: tables.name })
+        .from(tables)
+        .all()
+        .map((t) => [t.id, t.name]),
+    );
+    const partnerMap = new Map(
+      this.db
+        .select({ id: deliveryPartners.id, title: deliveryPartners.title })
+        .from(deliveryPartners)
+        .all()
+        .map((p) => [p.id, p.title]),
+    );
+    const userMap = new Map(
+      this.db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .all()
+        .map((u) => [u.id, u.name]),
+    );
+
+    const rows: SalesRegisterRow[] = [];
+
+    // ── Sales: earliest payment per order must post inside the window ────────
+    if (query.kind !== 'refund') {
+      const paymentRows = this.db
+        .select()
+        .from(orderPayments)
+        .where(inArray(orderPayments.orderId, orderIds))
+        .all();
+
+      const paymentsByOrder = new Map<number, typeof paymentRows>();
+      for (const p of paymentRows) {
+        const list = paymentsByOrder.get(p.orderId) ?? [];
+        list.push(p);
+        paymentsByOrder.set(p.orderId, list);
+      }
+
+      for (const [orderId, payments] of paymentsByOrder) {
+        const earliest = payments.reduce((min, p) =>
+          p.createdAt < min.createdAt || (p.createdAt === min.createdAt && p.id < min.id) ? p : min,
+        );
+        if (earliest.createdAt < startUnix || earliest.createdAt >= endUnix) continue;
+
+        const order = orderById.get(orderId)!;
+        rows.push({
+          kind: 'sale',
+          postedAt: earliest.createdAt,
+          businessDate: getServiceDayString(earliest.createdAt * 1000),
+          documentId: order.documentId,
+          orderId: order.id,
+          refundId: null,
+          orderNo: order.orderNo,
+          type: order.type,
+          tableId: order.tableId,
+          tableName: order.tableId != null ? (tableMap.get(order.tableId) ?? null) : null,
+          deliveryPartnerId: order.deliveryPartnerId,
+          deliveryPartnerTitle:
+            order.deliveryPartnerId != null
+              ? (partnerMap.get(order.deliveryPartnerId) ?? null)
+              : null,
+          deliveryExternalRef: order.deliveryExternalRef,
+          subtotalHalalas: order.subtotalHalalas,
+          vatHalalas: order.vatHalalas,
+          totalHalalas: order.totalHalalas,
+          tenders: payments.map((p) => ({
+            methodId: p.methodId,
+            methodTitle: p.methodTitle,
+            amountHalalas: p.amountHalalas,
+          })),
+          cashierUserId: earliest.createdBy,
+          cashierName:
+            earliest.createdBy != null ? (userMap.get(earliest.createdBy) ?? 'Unknown') : 'Unknown',
+          notes: order.notes,
+        });
+      }
+    }
+
+    // ── Refunds: refund posting time is order_refunds.created_at ─────────────
+    if (query.kind !== 'sale') {
+      const refundRows = this.db
+        .select()
+        .from(orderRefunds)
+        .where(inArray(orderRefunds.orderId, orderIds))
+        .all()
+        .filter((r) => r.createdAt >= startUnix && r.createdAt < endUnix);
+
+      for (const refund of refundRows) {
+        const order = orderById.get(refund.orderId)!;
+        rows.push({
+          kind: 'refund',
+          postedAt: refund.createdAt,
+          businessDate: getServiceDayString(refund.createdAt * 1000),
+          documentId: refund.documentId,
+          orderId: order.id,
+          refundId: refund.id,
+          orderNo: order.orderNo,
+          type: order.type,
+          tableId: order.tableId,
+          tableName: order.tableId != null ? (tableMap.get(order.tableId) ?? null) : null,
+          deliveryPartnerId: order.deliveryPartnerId,
+          deliveryPartnerTitle:
+            order.deliveryPartnerId != null
+              ? (partnerMap.get(order.deliveryPartnerId) ?? null)
+              : null,
+          deliveryExternalRef: order.deliveryExternalRef,
+          subtotalHalalas: -refund.subtotalHalalas,
+          vatHalalas: -refund.vatHalalas,
+          totalHalalas: -refund.totalHalalas,
+          tenders: [
+            {
+              methodId: refund.methodId,
+              methodTitle: refund.methodTitle,
+              amountHalalas: refund.totalHalalas,
+            },
+          ],
+          cashierUserId: refund.userId,
+          cashierName: userMap.get(refund.userId) ?? 'Unknown',
+          notes: `Refund of ${order.documentId}`,
+        });
+      }
+    }
+
+    // Day-book order: postedAt ascending; ties — sale before refund, then documentId.
+    rows.sort((a, b) => {
+      if (a.postedAt !== b.postedAt) return a.postedAt - b.postedAt;
+      const aKind = a.kind === 'sale' ? 0 : 1;
+      const bKind = b.kind === 'sale' ? 0 : 1;
+      if (aKind !== bKind) return aKind - bKind;
+      return a.documentId.localeCompare(b.documentId);
+    });
+
+    const footer = rows.reduce<SalesRegisterFooter>(
+      (acc, r) => {
+        if (r.kind === 'sale') acc.saleCount++;
+        else acc.refundCount++;
+        acc.subtotalHalalas += r.subtotalHalalas;
+        acc.vatHalalas += r.vatHalalas;
+        acc.totalHalalas += r.totalHalalas;
+        return acc;
+      },
+      { saleCount: 0, refundCount: 0, subtotalHalalas: 0, vatHalalas: 0, totalHalalas: 0 },
+    );
+
+    return { rows, footer };
+  }
+
+  private emptyFooter(): SalesRegisterFooter {
+    return { saleCount: 0, refundCount: 0, subtotalHalalas: 0, vatHalalas: 0, totalHalalas: 0 };
   }
 
   async printZReport(dayId: number): Promise<{ success: boolean; message: string }> {

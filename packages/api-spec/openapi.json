@@ -3010,6 +3010,79 @@
         ]
       }
     },
+    "/reports/sales-register": {
+      "get": {
+        "operationId": "ReportsController_getSalesRegister",
+        "summary": "Sales register (day-book of invoices and refunds) over a date range",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by parent order type: dine_in | takeaway. Omit → all types.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partner",
+            "required": false,
+            "in": "query",
+            "description": "Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "Filter by document kind: sale | refund. Omit → both.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales register rows sorted by posting time, with signed footer totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesRegisterResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/reports/z/{dayId}/print": {
       "post": {
         "operationId": "ReportsController_printZReport",
@@ -6415,6 +6488,224 @@
         },
         "required": [
           "open"
+        ]
+      },
+      "SalesRegisterTenderDto": {
+        "type": "object",
+        "properties": {
+          "methodId": {
+            "type": "string",
+            "example": "cash"
+          },
+          "methodTitle": {
+            "type": "string",
+            "example": "Cash"
+          },
+          "amountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2300
+          }
+        },
+        "required": [
+          "methodId",
+          "methodTitle",
+          "amountHalalas"
+        ]
+      },
+      "SalesRegisterRowDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "example": "sale",
+            "description": "Document kind: sale (invoice) or refund (credit note)"
+          },
+          "postedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1787220000,
+            "description": "Posting time (Unix seconds): earliest payment for sales, refund creation for refunds"
+          },
+          "businessDate": {
+            "type": "string",
+            "example": "2026-08-20",
+            "description": "Service-day label (Asia/Riyadh) of postedAt — the business date the document posts to"
+          },
+          "documentId": {
+            "type": "string",
+            "example": "INV26-0001"
+          },
+          "orderId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "refundId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5,
+            "nullable": true,
+            "description": "Refund id; null on sale rows"
+          },
+          "orderNo": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "description": "Parent order number (same on refund rows)"
+          },
+          "type": {
+            "type": "string",
+            "example": "dine_in"
+          },
+          "tableId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2,
+            "nullable": true
+          },
+          "tableName": {
+            "type": "string",
+            "example": "T1",
+            "nullable": true
+          },
+          "deliveryPartnerId": {
+            "type": "string",
+            "example": "hungerstation",
+            "nullable": true
+          },
+          "deliveryPartnerTitle": {
+            "type": "string",
+            "example": "HungerStation",
+            "nullable": true
+          },
+          "deliveryExternalRef": {
+            "type": "string",
+            "example": "HS-883129",
+            "nullable": true
+          },
+          "subtotalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2000,
+            "description": "Sale: order subtotal; refund: negative"
+          },
+          "vatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 300,
+            "description": "Sale: order VAT; refund: negative"
+          },
+          "totalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2300,
+            "description": "Sale: order total; refund: negative"
+          },
+          "tenders": {
+            "description": "Sale: all order payments; refund: single entry with the refund method",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesRegisterTenderDto"
+            }
+          },
+          "cashierUserId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "cashierName": {
+            "type": "string",
+            "example": "Admin",
+            "description": "users.name, or \"Unknown\" when the user is gone"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Call on arrival",
+            "nullable": true,
+            "description": "Sale: order notes; refund: \"Refund of <parent document id>\""
+          }
+        },
+        "required": [
+          "kind",
+          "postedAt",
+          "businessDate",
+          "documentId",
+          "orderId",
+          "refundId",
+          "orderNo",
+          "type",
+          "tableId",
+          "tableName",
+          "deliveryPartnerId",
+          "deliveryPartnerTitle",
+          "deliveryExternalRef",
+          "subtotalHalalas",
+          "vatHalalas",
+          "totalHalalas",
+          "tenders",
+          "cashierUserId",
+          "cashierName",
+          "notes"
+        ]
+      },
+      "SalesRegisterFooterDto": {
+        "type": "object",
+        "properties": {
+          "saleCount": {
+            "type": "integer",
+            "format": "int64",
+            "example": 12
+          },
+          "refundCount": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2
+          },
+          "subtotalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 27600,
+            "description": "Signed sum of row subtotals"
+          },
+          "vatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 4140,
+            "description": "Signed sum of row VAT"
+          },
+          "totalHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 31740,
+            "description": "Signed sum of row totals"
+          }
+        },
+        "required": [
+          "saleCount",
+          "refundCount",
+          "subtotalHalalas",
+          "vatHalalas",
+          "totalHalalas"
+        ]
+      },
+      "SalesRegisterResponseDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesRegisterRowDto"
+            }
+          },
+          "footer": {
+            "$ref": "#/components/schemas/SalesRegisterFooterDto"
+          }
+        },
+        "required": [
+          "rows",
+          "footer"
         ]
       },
       "PaymentMethodResponse": {
