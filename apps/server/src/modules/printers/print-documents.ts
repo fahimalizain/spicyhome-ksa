@@ -13,6 +13,7 @@
 
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import {
+  dayOpenings,
   deliveryPartners,
   items,
   orderItems,
@@ -20,6 +21,7 @@ import {
   orderRefunds,
   orderRefundItems,
   orders,
+  paymentMethods,
   settings,
   tables,
   users,
@@ -30,6 +32,8 @@ import { safeParsePrinterConfig } from '@spicyhome/shared';
 import { KitchenTicketBuilder, KitchenTicketItem } from './kitchen-ticket-builder';
 import { ReceiptBuilder, ReceiptItem } from './receipt-builder';
 import { TestTicketBuilder } from './test-ticket-builder';
+import { loadDayCategorySales, loadDayKitchenCancelled } from '../reports/day-sales';
+import { ZReportBuilder, type ZReportOptions } from '../reports/z-report-builder';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -466,6 +470,118 @@ export function buildTestTicketBuffer(
     printedAt: opts?.printedAt,
     config: safeParsePrinterConfig(printer.config),
   });
+}
+
+// ── X / Z report ─────────────────────────────────────────────────────────────
+
+const zReportBuilder = new ZReportBuilder();
+
+/**
+ * Build the Z-report buffer for a business day (the `printZReport` path).
+ * Recomputes sales/VAT/counts and expected cash from live orders/payments.
+ * Throws `Error` when the day does not exist.
+ */
+export function buildZReportBuffer(db: PrintDocumentsDb, dayId: number): Buffer {
+  return zReportBuilder.build(loadZReportPrintOptions(db, dayId));
+}
+
+/**
+ * Build the X-report buffer for an open business day (the `printXReport` path).
+ * Same numbers as the Z-report, with closing cash forced to 0 so the ticket
+ * prints as X-REPORT (no closing / expected / difference).
+ * Throws `Error` when the day does not exist.
+ */
+export function buildXReportBuffer(db: PrintDocumentsDb, dayId: number): Buffer {
+  const opts = loadZReportPrintOptions(db, dayId);
+  return zReportBuilder.build({ ...opts, closingCashHalalas: 0 });
+}
+
+function loadZReportPrintOptions(db: PrintDocumentsDb, dayId: number): ZReportOptions {
+  const day = db.select().from(dayOpenings).where(eq(dayOpenings.id, dayId)).get();
+  if (!day) throw new Error(`Business day ${dayId} not found`);
+
+  const allOrders = db.select().from(orders).where(eq(orders.dayOpeningId, dayId)).all();
+  const paidOrders = allOrders.filter((o) => o.status === 'paid');
+  const paidOrderIds = paidOrders.map((o) => o.id);
+  const voidedOrders = allOrders.filter((o) => o.status === 'voided');
+
+  const paymentTotals = loadDayPaymentTotals(db, dayId, allOrders);
+  const cashPayments = paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
+  const cashRefunds = loadDayCashRefunds(db, dayId);
+
+  return {
+    businessDate: day.businessDate,
+    status: day.status,
+    openingCashHalalas: day.openingCashHalalas,
+    closingCashHalalas: day.closingCashHalalas ?? 0,
+    totalSalesHalalas: paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0),
+    totalVatHalalas: paidOrders.reduce((sum, o) => sum + o.vatHalalas, 0),
+    paidOrderCount: paidOrders.length,
+    voidedOrderCount: voidedOrders.length,
+    restaurantName: getSetting(db, 'restaurant_name', 'SpicyHome'),
+    expectedCashHalalas: day.openingCashHalalas + cashPayments - cashRefunds,
+    paymentTotals,
+    salesByCategory: loadDayCategorySales(db, paidOrderIds),
+    kitchenCancelledByCategory: loadDayKitchenCancelled(db, paidOrderIds),
+  };
+}
+
+function loadDayPaymentTotals(
+  db: PrintDocumentsDb,
+  dayId: number,
+  allOrders: OrderRow[],
+): Array<{ methodId: string; methodTitle: string; totalHalalas: number }> {
+  const paidAndRefundedOrderIds = allOrders
+    .filter((o) => o.status === 'paid' || o.status === 'refunded')
+    .map((o) => o.id);
+  if (paidAndRefundedOrderIds.length === 0) return [];
+
+  const paymentRows = db
+    .select({
+      methodId: orderPayments.methodId,
+      total: orderPayments.amountHalalas,
+    })
+    .from(orderPayments)
+    .innerJoin(orders, eq(orderPayments.orderId, orders.id))
+    .where(and(eq(orders.dayOpeningId, dayId), inArray(orders.id, paidAndRefundedOrderIds)))
+    .all();
+
+  const agg = new Map<string, number>();
+  for (const row of paymentRows) {
+    agg.set(row.methodId, (agg.get(row.methodId) ?? 0) + row.total);
+  }
+
+  const totals: Array<{
+    methodId: string;
+    methodTitle: string;
+    totalHalalas: number;
+    sortOrder: number;
+  }> = [];
+  for (const [methodId, totalHalalas] of agg.entries()) {
+    const pm = db.select().from(paymentMethods).where(eq(paymentMethods.id, methodId)).get();
+    totals.push({
+      methodId,
+      methodTitle: pm?.title ?? methodId,
+      totalHalalas,
+      sortOrder: pm?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+    });
+  }
+  totals.sort((a, b) => a.sortOrder - b.sortOrder || a.methodTitle.localeCompare(b.methodTitle));
+  return totals.map(({ methodId, methodTitle, totalHalalas }) => ({
+    methodId,
+    methodTitle,
+    totalHalalas,
+  }));
+}
+
+function loadDayCashRefunds(db: PrintDocumentsDb, dayId: number): number {
+  const refundRows = db
+    .select({ totalHalalas: orderRefunds.totalHalalas })
+    .from(orderRefunds)
+    .innerJoin(orders, eq(orderRefunds.orderId, orders.id))
+    .where(and(eq(orders.dayOpeningId, dayId), eq(orderRefunds.methodId, 'cash')))
+    .all();
+  return refundRows.reduce((sum, r) => sum + r.totalHalalas, 0);
 }
 
 // ── Shared private helpers ───────────────────────────────────────────────────

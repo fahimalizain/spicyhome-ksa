@@ -12,7 +12,8 @@
  */
 
 /** Every format the probe knows about. Collectors are added per slice. */
-export type ProbeFormat = 'kitchen' | 'receipt' | 'open_order' | 'credit_note' | 'test';
+export type ProbeFormat =
+  'kitchen' | 'receipt' | 'open_order' | 'credit_note' | 'test' | 'x_report' | 'z_report';
 
 /** Valid `--format` values, in the order they should be listed in errors. */
 export const PROBE_FORMATS: readonly ProbeFormat[] = [
@@ -21,6 +22,8 @@ export const PROBE_FORMATS: readonly ProbeFormat[] = [
   'open_order',
   'credit_note',
   'test',
+  'x_report',
+  'z_report',
 ];
 
 /** Connection target baked into the emit script, straight from the printers row. */
@@ -53,8 +56,10 @@ export interface BakeFilters {
   refundIds?: number[];
   /** printers.id — repeatable */
   printerIds?: number[];
+  /** day_openings.id — repeatable; valid for x_report / z_report only */
+  dayOpeningIds?: number[];
   limit?: number;
-  /** Widen receipt/credit_note defaults (ignored for kitchen this slice) */
+  /** Widen receipt/credit_note/z_report defaults (ignored for kitchen this slice) */
   all?: boolean;
   kickDrawer?: boolean;
 }

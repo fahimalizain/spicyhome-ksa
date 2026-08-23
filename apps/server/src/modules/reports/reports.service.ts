@@ -1,20 +1,11 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq, inArray, and } from 'drizzle-orm';
-import {
-  orders,
-  orderItems,
-  orderPayments,
-  orderRefunds,
-  paymentMethods,
-  dayOpenings,
-  itemCategories,
-  items,
-  users,
-} from '@spicyhome/db';
+import { orders, orderPayments, paymentMethods, dayOpenings, users } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
-import { ZReportBuilder } from './z-report-builder';
+import { buildXReportBuffer, buildZReportBuffer } from '../printers/print-documents';
+import { loadDayCategorySales } from './day-sales';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
 
@@ -117,37 +108,10 @@ export class ReportsService {
       };
     });
 
-    // Per-category sales via order_items (includes deleted-item fallback)
-    const paidOrderIds = paidOrders.map((o) => o.id);
-    const oiRows =
-      paidOrderIds.length > 0
-        ? this.db.select().from(orderItems).where(inArray(orderItems.orderId, paidOrderIds)).all()
-        : [];
-
-    const allCategories = this.db.select().from(itemCategories).all();
-    const catMap = new Map(allCategories.map((c) => [c.id, c.name]));
-    const allItems = this.db
-      .select({ id: items.id, categoryId: items.categoryId })
-      .from(items)
-      .all();
-    const itemCatMap = new Map(allItems.map((i) => [i.id, i.categoryId]));
-
-    const catAgg = new Map<string, { itemCount: number; totalHalalas: number }>();
-    for (const oi of oiRows) {
-      const catId = oi.itemId ? (itemCatMap.get(oi.itemId) ?? null) : null;
-      const key = catId === null ? 'null' : String(catId);
-      if (!catAgg.has(key)) catAgg.set(key, { itemCount: 0, totalHalalas: 0 });
-      const agg = catAgg.get(key)!;
-      agg.itemCount += oi.qty;
-      agg.totalHalalas += oi.totalHalalas;
-    }
-
-    const salesByCategory = Array.from(catAgg.entries()).map(([key, agg]) => ({
-      categoryId: key === 'null' ? null : Number(key),
-      categoryName: key === 'null' ? 'Uncategorized' : (catMap.get(Number(key)) ?? 'Uncategorized'),
-      itemCount: agg.itemCount,
-      totalHalalas: agg.totalHalalas,
-    }));
+    const salesByCategory = loadDayCategorySales(
+      this.db,
+      paidOrders.map((o) => o.id),
+    );
 
     // Per-method payment totals — include payments from both paid and refunded orders
     // (original money in still happened even if items were later refunded)
@@ -257,25 +221,13 @@ export class ReportsService {
   }
 
   async printZReport(dayId: number): Promise<{ success: boolean; message: string }> {
-    const report = await this.getZReport(dayId);
+    await this.getZReport(dayId);
     const receiptPrinter = this.printersService.getActiveByRole('receipt');
     if (!receiptPrinter) {
       return { success: false, message: 'No active receipt printer configured' };
     }
 
-    const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
-    const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
-    const expectedCashHalalas = this.computeExpectedCash(
-      dayId,
-      report.openingCashHalalas,
-      cashTotal,
-    );
-    const builder = new ZReportBuilder();
-    const buffer = builder.build({
-      ...report,
-      restaurantName,
-      expectedCashHalalas,
-    });
+    const buffer = buildZReportBuffer(this.db, dayId);
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'Z-report printed' };
   }
@@ -291,42 +243,8 @@ export class ReportsService {
       return { success: false, message: 'No active receipt printer configured' };
     }
 
-    const restaurantName = this.printersService.getSetting('restaurant_name', 'SpicyHome');
-    const cashTotal = report.paymentTotals.find((pt) => pt.methodId === 'cash')?.totalHalalas ?? 0;
-    const expectedCashHalalas = this.computeExpectedCash(
-      report.dayId,
-      report.openingCashHalalas,
-      cashTotal,
-    );
-    const builder = new ZReportBuilder();
-    const buffer = builder.build({
-      ...report,
-      closingCashHalalas: 0,
-      restaurantName,
-      expectedCashHalalas,
-    });
+    const buffer = buildXReportBuffer(this.db, report.dayId);
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'X-report printed' };
-  }
-
-  /**
-   * Compute expected cash: opening + cash payments − cash refunds for the day.
-   * Integer halalas only.
-   */
-  private computeExpectedCash(
-    dayId: number,
-    openingCashHalalas: number,
-    cashPayments: number,
-  ): number {
-    const refundRows = this.db
-      .select({
-        totalHalalas: orderRefunds.totalHalalas,
-      })
-      .from(orderRefunds)
-      .innerJoin(orders, eq(orderRefunds.orderId, orders.id))
-      .where(and(eq(orders.dayOpeningId, dayId), eq(orderRefunds.methodId, 'cash')))
-      .all();
-    const cashRefunds = refundRows.reduce((sum, r) => sum + r.totalHalalas, 0);
-    return openingCashHalalas + cashPayments - cashRefunds;
   }
 }

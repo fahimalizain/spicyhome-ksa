@@ -18,6 +18,8 @@ import {
   buildOpenOrderReceiptBuffer,
   buildSimplifiedInvoiceBuffer,
   buildTestTicketBuffer,
+  buildXReportBuffer,
+  buildZReportBuffer,
   type PrintDocumentPrinter,
   type PrintDocumentsDb,
 } from './print-documents';
@@ -418,6 +420,197 @@ describe('print-documents', () => {
       expect(s).toContain('PRINT DIAGNOSTIC');
       expect(s).toContain('Printer: Counter');
       expect(s).toContain('IP: 192.168.1.50:9100');
+    });
+  });
+
+  // ── buildXReportBuffer / buildZReportBuffer ───────────────────────────────
+
+  describe('buildXReportBuffer / buildZReportBuffer', () => {
+    function seedReportDay(status: 'open' | 'closed'): number {
+      sqlite.exec(`
+        INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+        SELECT 'hungerstation', 'HungerStation', 1, 3, '30', ${now}, ${now}
+        WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE id = 'hungerstation');
+        INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+        SELECT 'keeta', 'Keeta', 1, 4, '30', ${now}, ${now}
+        WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE id = 'keeta');
+      `);
+
+      sqlite.exec(`
+        INSERT INTO day_openings (
+          business_date, status, opening_cash_halalas, opened_at, opened_by,
+          closed_at, closed_by, closing_cash_halalas, created_at, updated_at
+        ) VALUES (
+          '2026-08-22', '${status}', 50000, ${now}, 1,
+          ${status === 'closed' ? now : 'NULL'},
+          ${status === 'closed' ? '1' : 'NULL'},
+          ${status === 'closed' ? '52300' : 'NULL'},
+          ${now}, ${now}
+        )
+      `);
+      const dayId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (1, 'xz-cash-${dayId}', 'dine_in', ${dayId}, 'paid', 2000, 300, 2300, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (last_insert_rowid(), 'cash', 'Cash', '10', 2300, ${now});
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (2, 'xz-hs-${dayId}', 'takeaway', ${dayId}, 'paid', 2000, 300, 2300, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (last_insert_rowid(), 'hungerstation', 'HungerStation', '30', 2300, ${now});
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (3, 'xz-kt-${dayId}', 'takeaway', ${dayId}, 'paid', 4000, 600, 4600, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (last_insert_rowid(), 'keeta', 'Keeta', '30', 4600, ${now});
+      `);
+      return dayId;
+    }
+
+    it('builds an X-report for an open day (no closing cash)', () => {
+      const dayId = seedReportDay('open');
+      const buf = buildXReportBuffer(db, dayId);
+      const text = buf.toString('ascii');
+      expect(text).toContain('X-REPORT');
+      expect(text).toContain('2026-08-22');
+      expect(text).toContain('Opening Cash');
+      expect(text).not.toContain('Closing Cash');
+      expect(text).toContain('SALES BY PAYMENT METHOD');
+      expect(text).toContain('Cash');
+      expect(text).toContain('HungerStation');
+      expect(text).toContain('Keeta');
+      expect(text).toContain('23.00');
+      expect(text).toContain('46.00');
+    });
+
+    it('builds a Z-report for a closed day (closing + expected)', () => {
+      const dayId = seedReportDay('closed');
+      const buf = buildZReportBuffer(db, dayId);
+      const text = buf.toString('ascii');
+      expect(text).toContain('Z-REPORT');
+      expect(text).toContain('Closing Cash');
+      expect(text).toContain('Expected');
+      expect(text).toContain('523.00');
+      expect(text).toContain('SALES BY PAYMENT METHOD');
+      expect(text).toContain('Cash');
+      expect(text).toContain('HungerStation');
+      expect(text).toContain('Keeta');
+    });
+
+    it('rolls paid items up to top-level categories above SALES', () => {
+      const dayId = seedReportDay('closed');
+      sqlite.exec(`
+        INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
+        VALUES
+          (201, 'Breads', 0, 1, ${now}, ${now}),
+          (202, 'Starters', 1, 1, ${now}, ${now}),
+          (203, 'Mains', 2, 1, ${now}, ${now});
+        INSERT INTO item_subcategories (id, category_id, name, sort_order, is_active, created_at, updated_at)
+        VALUES
+          (201, 201, 'Naan', 0, 1, ${now}, ${now}),
+          (202, 201, 'Roti', 1, 1, ${now}, ${now}),
+          (203, 202, 'Veg', 0, 1, ${now}, ${now});
+        INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+        VALUES
+          (201, 201, 201, 'Garlic Naan', 1150, 1500, 0, 1, ${now}, ${now}),
+          (202, 201, 202, 'Roti', 500, 1500, 1, 1, ${now}, ${now}),
+          (203, 202, 203, 'Samosa', 800, 1500, 0, 1, ${now}, ${now});
+      `);
+      const paidOrderId = (
+        sqlite
+          .prepare(`SELECT id FROM orders WHERE day_opening_id = ? AND status = 'paid' LIMIT 1`)
+          .get(dayId) as { id: number }
+      ).id;
+      sqlite.exec(`
+        INSERT INTO order_items (order_id, item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+        VALUES
+          (${paidOrderId}, 201, 'Garlic Naan', 1150, 1500, 4, 4600, ${now}, ${now}),
+          (${paidOrderId}, 202, 'Roti', 500, 1500, 8, 4000, ${now}, ${now}),
+          (${paidOrderId}, 203, 'Samosa', 800, 1500, 5, 4000, ${now}, ${now});
+      `);
+
+      const text = buildZReportBuffer(db, dayId).toString('ascii');
+      expect(text).toContain('SALES BY CATEGORY');
+      expect(text).toContain('Breads');
+      expect(text).toContain('x12');
+      expect(text).toContain('86.00');
+      expect(text).toContain('Starters');
+      expect(text).toContain('x5');
+      expect(text).toContain('40.00');
+      expect(text).not.toContain('Mains');
+      expect(text).not.toContain('Naan');
+      expect(text).not.toContain('Roti');
+      expect(text.indexOf('SALES BY CATEGORY')).toBeLessThan(text.indexOf('Total Sales'));
+      expect(text.indexOf('Breads')).toBeLessThan(text.indexOf('Starters'));
+      expect(text).not.toContain('CANCELLATIONS AFTER KITCHEN PRINT');
+    });
+
+    it('prints kitchen cancellations after category sales', () => {
+      const dayId = seedReportDay('closed');
+      sqlite.exec(`
+        INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
+        VALUES (301, 'Breads', 0, 1, ${now}, ${now});
+        INSERT INTO item_subcategories (id, category_id, name, sort_order, is_active, created_at, updated_at)
+        VALUES (301, 301, 'Naan', 0, 1, ${now}, ${now});
+        INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+        VALUES (301, 301, 301, 'Butter Naan', 500, 1500, 0, 1, ${now}, ${now});
+      `);
+      const paidOrderId = (
+        sqlite
+          .prepare(`SELECT id FROM orders WHERE day_opening_id = ? AND status = 'paid' LIMIT 1`)
+          .get(dayId) as { id: number }
+      ).id;
+      sqlite.exec(`
+        INSERT INTO order_events (order_id, event_idx, user_id, type, payload, prev_hash, hash, created_at)
+        VALUES
+          (${paidOrderId}, 1, 1, 'item_added',
+            '{"orderItemId":401,"itemId":301,"qty":5,"unitPriceHalalas":500,"kitchenPrintedQty":0}',
+            '', 'h1', ${now}),
+          (${paidOrderId}, 2, 1, 'kitchen_print_enqueued',
+            '{"items":[{"orderItemId":401,"itemName":"Butter Naan","printedQty":5}]}',
+            'h1', 'h2', ${now}),
+          (${paidOrderId}, 3, 1, 'item_removed',
+            '{"orderItemId":401,"itemName":"Butter Naan","oldQty":5,"oldTotal":2500}',
+            'h2', 'h3', ${now});
+      `);
+
+      const text = buildZReportBuffer(db, dayId).toString('ascii');
+      expect(text).toContain('CANCELLATIONS AFTER KITCHEN PRINT');
+      expect(text).toContain('Breads');
+      expect(text).toContain('x5');
+      expect(text).toContain('25.00');
+      expect(text.indexOf('CANCELLATIONS AFTER KITCHEN PRINT')).toBeGreaterThan(
+        text.indexOf('SALES BY CATEGORY') === -1 ? 0 : text.indexOf('SALES BY CATEGORY'),
+      );
+      expect(text.indexOf('CANCELLATIONS AFTER KITCHEN PRINT')).toBeLessThan(
+        text.indexOf('Total Sales'),
+      );
+    });
+
+    it('lists only methods with payments, ordered by catalog sort_order', () => {
+      const dayId = seedReportDay('closed');
+      sqlite.exec(`
+        INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at)
+        SELECT 'card', 'Card', 1, 1, '48', ${now}, ${now}
+        WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE id = 'card');
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (4, 'xz-card-${dayId}', 'dine_in', ${dayId}, 'paid', 1000, 150, 1150, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (last_insert_rowid(), 'card', 'Card', '48', 1150, ${now});
+      `);
+
+      const text = buildZReportBuffer(db, dayId).toString('ascii');
+      const section = text.indexOf('SALES BY PAYMENT METHOD');
+      expect(section).toBeGreaterThan(-1);
+      expect(text).not.toContain('mada');
+      expect(text.indexOf('Cash', section)).toBeLessThan(text.indexOf('Card', section));
+      expect(text.indexOf('Card', section)).toBeLessThan(text.indexOf('HungerStation', section));
+      expect(text.indexOf('HungerStation', section)).toBeLessThan(text.indexOf('Keeta', section));
+    });
+
+    it('throws when the day does not exist', () => {
+      expect(() => buildZReportBuffer(db, 999999)).toThrow('Business day 999999 not found');
+      expect(() => buildXReportBuffer(db, 999999)).toThrow('Business day 999999 not found');
     });
   });
 });

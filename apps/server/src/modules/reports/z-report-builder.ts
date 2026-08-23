@@ -1,6 +1,18 @@
 import { EscPosBuilder, Align, CutType } from '../printers/esc-pos-builder';
 import { halalasToSar } from '@spicyhome/shared';
 
+export interface ZReportPaymentTotal {
+  methodId: string;
+  methodTitle: string;
+  totalHalalas: number;
+}
+
+export interface ZReportCategoryTotal {
+  categoryName: string;
+  itemCount: number;
+  totalHalalas: number;
+}
+
 export interface ZReportOptions {
   businessDate: string;
   status: string;
@@ -13,6 +25,12 @@ export interface ZReportOptions {
   restaurantName: string;
   /** Expected cash = opening cash + cash payments. Required — callers must compute explicitly. */
   expectedCashHalalas: number;
+  /** Live per-method payment totals. Printed as-is; empty/omitted skips the section. */
+  paymentTotals?: ZReportPaymentTotal[];
+  /** Top-level category sales. Printed as-is; empty/omitted skips the section. */
+  salesByCategory?: ZReportCategoryTotal[];
+  /** Kitchen-printed qty later reduced/removed. Empty/omitted skips the section. */
+  kitchenCancelledByCategory?: ZReportCategoryTotal[];
 }
 
 export class ZReportBuilder {
@@ -55,12 +73,49 @@ export class ZReportBuilder {
       eb.columnsWidth('Difference', halalasToSar(diff), 10);
     }
 
+    const salesByCategory = opts.salesByCategory ?? [];
+    if (salesByCategory.length > 0) {
+      eb.separator();
+      eb.bold(true);
+      eb.text('SALES BY CATEGORY');
+      eb.bold(false);
+      for (const cat of salesByCategory) {
+        const qty = `x${cat.itemCount}`.slice(0, 6).padStart(6);
+        const amount = halalasToSar(cat.totalHalalas).slice(0, 10).padStart(10);
+        eb.columnsWidth(cat.categoryName, qty + amount, 16);
+      }
+    }
+
+    const kitchenCancelled = opts.kitchenCancelledByCategory ?? [];
+    if (kitchenCancelled.length > 0) {
+      eb.separator();
+      eb.bold(true);
+      eb.text('CANCELLATIONS AFTER KITCHEN PRINT');
+      eb.bold(false);
+      for (const cat of kitchenCancelled) {
+        const qty = `x${cat.itemCount}`.slice(0, 6).padStart(6);
+        const amount = halalasToSar(cat.totalHalalas).slice(0, 10).padStart(10);
+        eb.columnsWidth(cat.categoryName, qty + amount, 16);
+      }
+    }
+
     eb.separator();
     eb.bold(true);
     eb.text('SALES');
     eb.bold(false);
     eb.columnsWidth('Total Sales', halalasToSar(opts.totalSalesHalalas), 10);
     eb.columnsWidth('Total VAT', halalasToSar(opts.totalVatHalalas), 10);
+
+    const paymentTotals = opts.paymentTotals ?? [];
+    if (paymentTotals.length > 0) {
+      eb.separator();
+      eb.bold(true);
+      eb.text('SALES BY PAYMENT METHOD');
+      eb.bold(false);
+      for (const pt of paymentTotals) {
+        eb.columnsWidth(pt.methodTitle, halalasToSar(pt.totalHalalas), 10);
+      }
+    }
     eb.separator();
 
     eb.columnsWidth('Paid Orders', String(opts.paidOrderCount), 10);

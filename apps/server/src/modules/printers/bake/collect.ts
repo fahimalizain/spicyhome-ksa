@@ -3,15 +3,17 @@
  *
  * Every collector is read-only: only ever SELECTs. Never INSERT/UPDATE/DELETE.
  *
- * All five formats are implemented on top of the shared print-documents
+ * All formats are implemented on top of the shared print-documents
  * helpers (`buildKitchenTicketBuffer`, `buildOpenOrderReceiptBuffer`,
  * `buildSimplifiedInvoiceBuffer`, `buildCreditNoteBuffer`,
- * `buildTestTicketBuffer`) — the same builders the production print paths
- * use, so the baked buffers cannot drift from real documents.
+ * `buildTestTicketBuffer`, `buildXReportBuffer`, `buildZReportBuffer`) —
+ * the same builders the production print paths use, so the baked buffers
+ * cannot drift from real documents.
  */
 
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
+  dayOpenings,
   orderItems,
   orderRefunds,
   orders,
@@ -26,6 +28,8 @@ import {
   buildOpenOrderReceiptBuffer,
   buildSimplifiedInvoiceBuffer,
   buildTestTicketBuffer,
+  buildXReportBuffer,
+  buildZReportBuffer,
   PRINTABLE_QR_STATUSES,
   type PrintDocumentsDb,
 } from '../print-documents';
@@ -55,6 +59,17 @@ export function collectPrintJobs(
   format: ProbeFormat,
   filters: BakeFilters,
 ): BakeCollectResult {
+  if (
+    format !== 'x_report' &&
+    format !== 'z_report' &&
+    filters.dayOpeningIds &&
+    filters.dayOpeningIds.length > 0
+  ) {
+    throw new BakeFilterError(
+      `--day-opening-id is not valid for format '${format}' (only x_report / z_report bake a business day)`,
+    );
+  }
+
   switch (format) {
     case 'kitchen':
       return collectKitchenJobs(db, filters);
@@ -66,6 +81,10 @@ export function collectPrintJobs(
       return collectCreditNoteJobs(db, filters);
     case 'test':
       return collectTestJobs(db, filters);
+    case 'x_report':
+      return collectXReportJobs(db, filters);
+    case 'z_report':
+      return collectZReportJobs(db, filters);
     default:
       // Unreachable: every ProbeFormat has a case above.
       throw new Error(`Unknown format: ${format}`);
@@ -77,6 +96,7 @@ export function collectPrintJobs(
 type PrinterRow = typeof printers.$inferSelect;
 type OrderRow = typeof orders.$inferSelect;
 type RefundRow = typeof orderRefunds.$inferSelect;
+type DayOpeningRow = typeof dayOpenings.$inferSelect;
 
 /**
  * Collect one baked kitchen ticket per (eligible open order with items x
@@ -481,6 +501,138 @@ function collectTestJobs(db: PrintDocumentsDb, filters: BakeFilters): BakeCollec
   }));
 
   return { jobs, notes };
+}
+
+// ── X-report / Z-report ──────────────────────────────────────────────────────
+
+/**
+ * Collect one baked X-report per (open business day × eligible receipt
+ * printer), building each buffer via `buildXReportBuffer` (the same builder
+ * `printXReport` uses).
+ *
+ * Default: the current open day. `--day-opening-id` validates each id hard:
+ * missing or not open throws a `BakeFilterError`. There is at most one open
+ * day, so `--all` is a soft no-op. `--order` / `--refund` / `--kick-drawer`
+ * are rejected.
+ */
+function collectXReportJobs(db: PrintDocumentsDb, filters: BakeFilters): BakeCollectResult {
+  rejectReportDocumentFilters('x_report', filters);
+
+  const notes: string[] = [];
+  if (filters.all) {
+    notes.push('--all ignored for x_report: there is at most one open business day');
+  }
+
+  const days = resolveEligibleDays(db, filters, 'open');
+  const targetPrinters = resolveReceiptPrinters(db, filters, notes);
+  const bakeDays = applyLimit(days, filters.limit);
+
+  return {
+    jobs: bakeReportJobs(db, bakeDays, targetPrinters, 'x_report'),
+    notes,
+  };
+}
+
+/**
+ * Collect one baked Z-report per (closed business day × eligible receipt
+ * printer), building each buffer via `buildZReportBuffer` (the same builder
+ * `printZReport` uses).
+ *
+ * Default (no --all, no --day-opening-id): the single most recent closed day
+ * (highest day id). `--all` widens to every closed day (id ascending).
+ * `--day-opening-id` validates each id hard: missing or still open throws a
+ * `BakeFilterError`. `--limit` caps the selected set. `--order` / `--refund`
+ * / `--kick-drawer` are rejected.
+ */
+function collectZReportJobs(db: PrintDocumentsDb, filters: BakeFilters): BakeCollectResult {
+  rejectReportDocumentFilters('z_report', filters);
+
+  const notes: string[] = [];
+  const days = resolveEligibleDays(db, filters, 'closed');
+  const targetPrinters = resolveReceiptPrinters(db, filters, notes);
+
+  let bakeDays = days;
+  if (!filters.dayOpeningIds?.length && !filters.all) {
+    const mostRecent = [...bakeDays].sort((a, b) => b.id - a.id)[0];
+    bakeDays = mostRecent ? [mostRecent] : [];
+  }
+  bakeDays = applyLimit(bakeDays, filters.limit);
+
+  return {
+    jobs: bakeReportJobs(db, bakeDays, targetPrinters, 'z_report'),
+    notes,
+  };
+}
+
+function rejectReportDocumentFilters(format: 'x_report' | 'z_report', filters: BakeFilters): void {
+  if (filters.orderIds && filters.orderIds.length > 0) {
+    throw new BakeFilterError(
+      `--order is not valid for format '${format}' (reports bake a business day, not an order)`,
+    );
+  }
+  if (filters.refundIds && filters.refundIds.length > 0) {
+    throw new BakeFilterError(
+      `--refund is not valid for format '${format}' (reports bake a business day, not a refund)`,
+    );
+  }
+  if (filters.kickDrawer) {
+    throw new BakeFilterError(
+      `--kick-drawer is not valid for format '${format}' (X/Z reports never kick the drawer)`,
+    );
+  }
+}
+
+function resolveEligibleDays(
+  db: PrintDocumentsDb,
+  filters: BakeFilters,
+  requiredStatus: 'open' | 'closed',
+): DayOpeningRow[] {
+  if (filters.dayOpeningIds && filters.dayOpeningIds.length > 0) {
+    const selected: DayOpeningRow[] = [];
+    const seen = new Set<number>();
+    for (const id of filters.dayOpeningIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const day = db.select().from(dayOpenings).where(eq(dayOpenings.id, id)).get();
+      if (!day) throw new BakeFilterError(`Day ${id}: not found`);
+      if (day.status !== requiredStatus) {
+        throw new BakeFilterError(`Day ${id}: not ${requiredStatus} (status '${day.status}')`);
+      }
+      selected.push(day);
+    }
+    return selected;
+  }
+
+  return db
+    .select()
+    .from(dayOpenings)
+    .where(eq(dayOpenings.status, requiredStatus))
+    .orderBy(dayOpenings.id)
+    .all();
+}
+
+function bakeReportJobs(
+  db: PrintDocumentsDb,
+  days: DayOpeningRow[],
+  targetPrinters: PrinterRow[],
+  format: 'x_report' | 'z_report',
+): BakedPrintJob[] {
+  const jobs: BakedPrintJob[] = [];
+  for (const day of days) {
+    const label = `${format === 'x_report' ? 'X' : 'Z'}-${day.businessDate}`;
+    const buffer =
+      format === 'x_report' ? buildXReportBuffer(db, day.id) : buildZReportBuffer(db, day.id);
+    for (const printer of targetPrinters) {
+      jobs.push({
+        format,
+        label,
+        sourceId: day.id,
+        printer: toBakedPrinterTarget(printer),
+        buffer,
+      });
+    }
+  }
+  return jobs;
 }
 
 // ── Shared helpers ───────────────────────────────────────────────────────────

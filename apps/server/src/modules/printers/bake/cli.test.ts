@@ -90,10 +90,24 @@ describe('parseBakeProbeCliArgs', () => {
       orderIds: [3, 5],
       refundIds: [],
       printerIds: [2],
+      dayOpeningIds: [],
       limit: 10,
       all: true,
       kickDrawer: true,
     });
+  });
+
+  it('parses --day-opening-id (repeatable)', () => {
+    const args = parseBakeProbeCliArgs([
+      '--format',
+      'z_report',
+      '--day-opening-id',
+      '4',
+      '--day-opening-id',
+      '7',
+    ]);
+    expect(args.format).toBe('z_report');
+    expect(args.dayOpeningIds).toEqual([4, 7]);
   });
 
   it('rejects unknown flags', () => {
@@ -108,7 +122,7 @@ describe('parseBakeProbeCliArgs', () => {
 
   it('rejects an unknown format and lists the valid ones', () => {
     expect(() => parseBakeProbeCliArgs(['--format', 'kot'])).toThrow(
-      /Unknown format 'kot'. Valid formats: kitchen, receipt, open_order, credit_note, test/,
+      /Unknown format 'kot'. Valid formats: kitchen, receipt, open_order, credit_note, test, x_report, z_report/,
     );
   });
 
@@ -121,6 +135,9 @@ describe('parseBakeProbeCliArgs', () => {
     );
     expect(() => parseBakeProbeCliArgs(['--format', 'kitchen', '--refund', ''])).toThrow(
       /Invalid value for --refund/,
+    );
+    expect(() => parseBakeProbeCliArgs(['--format', 'z_report', '--day-opening-id', 'x'])).toThrow(
+      /Invalid value for --day-opening-id/,
     );
   });
 
@@ -242,6 +259,13 @@ describe('bakePrintProbeCli', () => {
       ['test', ['--order', '1']],
       ['test', ['--refund', '1']],
       ['test', ['--kick-drawer']],
+      ['kitchen', ['--day-opening-id', '1']],
+      ['x_report', ['--order', '1']],
+      ['x_report', ['--refund', '1']],
+      ['x_report', ['--kick-drawer']],
+      ['z_report', ['--order', '1']],
+      ['z_report', ['--refund', '1']],
+      ['z_report', ['--kick-drawer']],
     ];
     for (const [format, flags] of combos) {
       const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
@@ -314,6 +338,45 @@ describe('bakePrintProbeCli', () => {
     expect(source).toContain('Counter A');
     expect(source).toContain('Kitchen A');
     expect(source).not.toContain('Counter Inactive');
+  });
+
+  it('bakes --format z_report --day-opening-id, writes the emit script and exits 0', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bake-print-probe-cli-'));
+    const dbPath = join(dir, 'z-report.db');
+    const sqliteFile = createFileDb(dbPath);
+    sqliteFile.exec(`
+      INSERT INTO user_roles (id, name, created_at, updated_at)
+      VALUES (1, 'admin', ${NOW}, ${NOW});
+      INSERT INTO users (id, username, pin_hash, name, role_id, is_active, created_at, updated_at)
+      VALUES (1, 'cli-admin', 'x', 'CLI Admin', 1, 1, ${NOW}, ${NOW});
+      INSERT INTO day_openings (
+        business_date, status, opening_cash_halalas, opened_at, opened_by,
+        closed_at, closed_by, closing_cash_halalas, created_at, updated_at
+      ) VALUES ('2026-08-21', 'closed', 20000, ${NOW}, 1, ${NOW}, 1, 25000, ${NOW}, ${NOW});
+      INSERT INTO printers (name, ip, port, role, is_active, created_at, updated_at)
+      VALUES ('Counter A', '192.168.1.50', 9100, 'receipt', 1, ${NOW}, ${NOW});
+    `);
+    sqliteFile.close();
+
+    const out = join(dir, 'out', 'send-z_report.js');
+    const code = bakePrintProbeCli([
+      'node',
+      'bake-print-probe',
+      '--format',
+      'z_report',
+      '--day-opening-id',
+      '1',
+      '--db',
+      dbPath,
+      '--out',
+      out,
+    ]);
+    expect(code).toBe(0);
+    expect(existsSync(out)).toBe(true);
+    const source = readFileSync(out, 'utf8');
+    expect(source).toContain("BAKE_FORMAT = 'z_report';");
+    expect(source).toContain('Z-2026-08-21');
+    expect(source).toContain('Counter A');
   });
 
   it('exits 1 without writing when --format test has no active printers', () => {
