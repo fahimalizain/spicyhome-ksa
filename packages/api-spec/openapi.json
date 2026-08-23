@@ -6008,6 +6008,11 @@
             "example": "الرياض",
             "description": "Arabic city name"
           },
+          "sellerDistrictAr": {
+            "type": "string",
+            "example": "العليا",
+            "description": "Arabic district name (receipts only — not used in ZATCA XML or CSR)"
+          },
           "vatNumber": {
             "type": "string",
             "example": "300123456789003",
@@ -6032,6 +6037,11 @@
             "type": "string",
             "example": "Riyadh",
             "description": "City name"
+          },
+          "sellerDistrict": {
+            "type": "string",
+            "example": "Al Olaya",
+            "description": "District name (receipts only — not used in ZATCA XML or CSR)"
           },
           "postalCode": {
             "type": "string",
@@ -6069,11 +6079,13 @@
           "sellerNameAr",
           "sellerStreetAr",
           "sellerCityAr",
+          "sellerDistrictAr",
           "vatNumber",
           "crNumber",
           "street",
           "building",
           "city",
+          "sellerDistrict",
           "postalCode",
           "country",
           "orgUnit"

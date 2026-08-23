@@ -189,6 +189,17 @@ describe('ReportsService', () => {
         updated_at INTEGER,
         updated_by INTEGER REFERENCES users(id)
       );
+      CREATE TABLE IF NOT EXISTS order_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        event_idx INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        prev_hash TEXT NOT NULL DEFAULT '',
+        hash TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -202,6 +213,8 @@ describe('ReportsService', () => {
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('cash', 'Cash', 1, 0, '10', ${now}, ${now});
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('card', 'Card', 1, 1, '48', ${now}, ${now});
       INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('mada', 'mada', 1, 2, '48', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('hungerstation', 'HungerStation', 1, 3, '30', ${now}, ${now});
+      INSERT INTO payment_methods (id, title, enabled, sort_order, zatca_payment_means_code, created_at, updated_at) VALUES ('keeta', 'Keeta', 1, 4, '30', ${now}, ${now});
     `);
 
     sqlite.exec(`
@@ -438,6 +451,40 @@ describe('ReportsService', () => {
 
     it('throws NotFoundException for non-existent day', async () => {
       await expect(service.getZReport(999)).rejects.toThrow('Business day not found');
+    });
+
+    it('prints sales by payment method from live payments on the Z-report', async () => {
+      dayService.openDay({ openingCashHalalas: 0 }, 1);
+      const day = dayService.getOpenDay()!;
+
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (1, 1, 'hs', 'takeaway', ${day.id}, 'paid', 2000, 300, 2300, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (1, 'hungerstation', 'HungerStation', '30', 2300, ${now});
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, created_at, updated_at)
+        VALUES (2, 2, 'kt', 'takeaway', ${day.id}, 'paid', 4000, 600, 4600, ${now}, ${now});
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (2, 'keeta', 'Keeta', '30', 4600, ${now});
+        INSERT INTO printers (id, name, ip, port, role, is_active, created_at, updated_at)
+        VALUES (1, 'Counter', '192.168.1.50', 9100, 'receipt', 1, ${now}, ${now});
+      `);
+
+      dayService.closeDay({ closingCashHalalas: 0 }, 1);
+
+      const transport = new FakePrinterTransport();
+      printersService.setTransport(transport);
+
+      const result = await service.printZReport(day.id);
+      expect(result.success).toBe(true);
+
+      const printData = transport.sent[transport.sent.length - 1].data.toString('ascii');
+      expect(printData).toContain('SALES BY PAYMENT METHOD');
+      expect(printData).toContain('HungerStation');
+      expect(printData).toContain('23.00');
+      expect(printData).toContain('Keeta');
+      expect(printData).toContain('46.00');
+      expect(printData).not.toContain('Card');
     });
   });
 

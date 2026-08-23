@@ -270,8 +270,7 @@ describe('collectPrintJobs — open_order, receipt, credit_note', () => {
       const result = collectPrintJobs(db, 'open_order', {});
       const job = result.jobs.find((j) => j.sourceId === openFallbackId)!;
       expect(job.label).toBe('Order-1003');
-      // Open order receipts print the internal order number, not the document id.
-      expect(job.buffer.toString('ascii')).toContain('Order #: 1003');
+      expect(job.buffer.toString('ascii')).not.toContain('Order #:');
     });
 
     it('carries the Windows queue name on windows targets', () => {

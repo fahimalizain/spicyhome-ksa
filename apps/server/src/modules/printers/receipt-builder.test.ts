@@ -6,7 +6,6 @@ describe('ReceiptBuilder', () => {
 
   const baseOpts: ReceiptOptions = {
     documentId: 'INV26-0042',
-    orderNo: 42,
     createdAt: 1700000000, // 2023-11-14T22:13:20Z = 2023-11-15T01:13:20+03
     sellerName: 'SpicyHome Restaurant',
     vatNumber: '300123456789',
@@ -113,10 +112,10 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('Invoice #: INV26-0042');
   });
 
-  it('does not render a separate Order ref line on ZATCA invoices', () => {
-    // documentId is printed as Invoice #; orderNo is not a secondary ref line.
+  it('does not render Order # or Order ref on ZATCA invoices', () => {
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('Invoice #: INV26-0042');
+    expect(str(buf)).not.toContain('Order #:');
     expect(str(buf)).not.toContain('Order ref:');
   });
 
@@ -133,7 +132,7 @@ describe('ReceiptBuilder', () => {
     expect(s).toContain('1234 King Fahd Rd');
     // City and country are separate lines — no postal, no ISO SA
     expect(s).toContain('Riyadh');
-    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).toContain('Kingdom of Saudi');
     expect(s).not.toContain('12211');
     // No bare ISO country token on its own (full name is used instead)
     expect(s.split('\n').some((l) => l.trim() === 'SA')).toBe(false);
@@ -159,6 +158,73 @@ describe('ReceiptBuilder', () => {
     // baseOpts has no sellerNameAr/sellerStreetAr/sellerCityAr — must build fine.
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('SpicyHome Restaurant');
+  });
+
+  // ── District on the city line (receipt-only) ────────────────────────────────
+
+  it('prints "district, city" on the EN city line when sellerDistrict is set', () => {
+    const buf = builder.build({
+      ...baseOpts,
+      sellerDistrict: 'Al Olaya',
+      sellerCity: 'Riyadh',
+    });
+    const s = str(buf);
+    expect(s).toContain('Al Olaya, Riyadh');
+  });
+
+  it('prints city alone when sellerDistrict is empty or undefined (no stray comma)', () => {
+    const s = str(builder.build(baseOpts)); // no district
+    expect(s).toContain('Riyadh');
+    expect(s).not.toContain(', Riyadh');
+    const s2 = str(builder.build({ ...baseOpts, sellerDistrict: '' }));
+    expect(s2).toContain('Riyadh');
+    expect(s2).not.toContain(', Riyadh');
+    // District alone without city must not print a trailing comma either
+    const s3 = str(
+      builder.build({ ...baseOpts, sellerCity: undefined, sellerDistrict: 'Al Olaya' }),
+    );
+    expect(s3).toContain('Al Olaya');
+    expect(s3).not.toContain('Al Olaya,');
+  });
+
+  it('prints districtAr + Arabic comma + cityAr on the AR city line', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const districtAr = '\u0627\u0644\u0639\u0644\u064A\u0627'; // العليا
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerDistrict: 'Al Olaya',
+      sellerCity: 'Riyadh',
+      sellerDistrictAr: districtAr,
+      sellerCityAr: cityAr,
+    });
+    // AR side: districtAr + Arabic comma (U+060C) + space + cityAr
+    expect(findSequence(buf, encodeArabicText(ar, `${districtAr}\u060c ${cityAr}`))).toBe(true);
+    // EN side still prints the joined English pair
+    expect(str(buf)).toContain('Al Olaya, Riyadh');
+  });
+
+  it('prints cityAr alone on the AR city line when sellerDistrictAr is unset', () => {
+    const ar = {
+      encoding: 'pc864' as const,
+      codePage: 22,
+      visualRtl: false,
+      renderMode: 'charset' as const,
+    };
+    const cityAr = '\u0627\u0644\u0631\u064A\u0627\u0636'; // الرياض
+    const buf = builder.build({
+      ...baseOpts,
+      arabic: ar,
+      sellerCityAr: cityAr,
+    });
+    expect(findSequence(buf, encodeArabicText(ar, cityAr))).toBe(true);
+    expect(findSequence(buf, encodeArabicText(ar, `\u060c ${cityAr}`))).toBe(false);
   });
 
   it('prints Arabic seller bytes right-aligned with charset pc864', () => {
@@ -242,7 +308,7 @@ describe('ReceiptBuilder', () => {
     expect(s).not.toContain('King Fahd Rd');
     expect(s).not.toContain('Riyadh 12211');
     // Street line skipped entirely; city line prints the full country names alone
-    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).toContain('Kingdom of Saudi');
   });
 
   it('renders date in YYYY-MM-DD format (Asia/Riyadh)', () => {
@@ -494,7 +560,7 @@ describe('ReceiptBuilder', () => {
     it('renders the bilingual seller block (same as the invoice)', () => {
       const s = str(builder.build(cnOpts));
       expect(s).toContain('1234 King Fahd Rd');
-      expect(s).toContain('Kingdom of Saudi Arabia');
+      expect(s).toContain('Kingdom of Saudi');
       expect(s).toContain('VAT: 300123456789');
     });
   });
@@ -540,9 +606,9 @@ describe('ReceiptBuilder', () => {
       expect(findSequence(buf, encodePc864(arTitle))).toBe(true);
     });
 
-    it('prints Order # from orderNo (internal reference, not documentId)', () => {
+    it('does not print Order # or Invoice #', () => {
       const s = str(builder.build(openOpts));
-      expect(s).toContain('Order #: 42');
+      expect(s).not.toContain('Order #:');
       expect(s).not.toContain('Invoice #');
       expect(s).not.toContain('Order ref:');
     });
@@ -630,6 +696,13 @@ describe('ReceiptBuilder', () => {
           ),
         ),
       ).toBe(true);
+    });
+
+    it('renders Home Delivery contact at the same place as tax receipts', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('Home Delivery');
+      expect(s).toContain('0112357926 | 0533243439');
+      expect(s.indexOf('Home Delivery')).toBeLessThan(s.indexOf('NOT A TAX INVOICE'));
     });
 
     it('renders the STI collect footer (EN + AR) and replaces the default footer', () => {

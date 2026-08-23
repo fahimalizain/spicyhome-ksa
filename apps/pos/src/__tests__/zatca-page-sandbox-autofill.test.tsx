@@ -51,6 +51,8 @@ const emptyConfig = {
   sellerNameAr: '',
   sellerStreetAr: '',
   sellerCityAr: '',
+  sellerDistrict: '',
+  sellerDistrictAr: '',
   vatNumber: '',
   crNumber: '',
   street: '',
@@ -112,6 +114,8 @@ describe('ZatcaPage — sandbox autofill', () => {
     expect(screen.getByDisplayValue('Test Street')).toBeInTheDocument();
     expect(screen.getByDisplayValue('1234')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Riyadh')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Al Olaya')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('العليا')).toBeInTheDocument();
     expect(screen.getByDisplayValue('12345')).toBeInTheDocument();
     expect(screen.getByDisplayValue('SA')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Riyadh Branch')).toBeInTheDocument();

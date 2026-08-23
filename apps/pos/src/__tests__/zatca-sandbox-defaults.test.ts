@@ -56,6 +56,8 @@ describe('ZATCA sandbox defaults', () => {
       'sellerNameAr',
       'sellerStreetAr',
       'sellerCityAr',
+      'sellerDistrict',
+      'sellerDistrictAr',
       'vatNumber',
       'crNumber',
       'street',

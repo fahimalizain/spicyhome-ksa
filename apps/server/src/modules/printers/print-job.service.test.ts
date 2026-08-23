@@ -245,7 +245,7 @@ describe('PrintJobService', () => {
       expect(s).toContain('Test'); // seller_name
       expect(s).toContain('1234 Main St'); // seller_building + seller_street
       expect(s).toContain('Riyadh'); // seller_city
-      expect(s).toContain('Kingdom of Saudi Arabia'); // full country name (no ISO code)
+      expect(s).toContain('Kingdom of Saudi'); // country EN (same line as AR)
       // Postal must not appear on the city line (VAT may contain "12345")
       expect(s.split('\n').some((l) => l.includes('Riyadh') && l.includes('12345'))).toBe(false);
       expect(s).toContain('Amount includes VAT');
@@ -541,7 +541,7 @@ describe('PrintJobService', () => {
       const buf = transport.sent[0].data;
       const s = buf.toString('ascii');
       expect(s).toContain('OPEN ORDER RECEIPT');
-      expect(s).toContain('Order #:');
+      expect(s).not.toContain('Order #:');
       expect(s).toContain('TOTAL (incl. VAT)');
       expect(s).toContain('AMOUNT DUE');
       expect(s).toContain('NOT A TAX INVOICE');

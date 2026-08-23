@@ -23,7 +23,7 @@ export interface ReceiptOptions {
    * Document kind. Defaults to 'simplified_invoice'.
    * - 'simplified_invoice' / 'credit_note': ZATCA documents (QR, VAT #, address).
    * - 'open_order': non-ZATCA open order slip — no QR, no VAT #, no address,
-   *   no "Invoice #" line, no drawer kick.
+   *   no "Invoice #" / "Order #" line, no drawer kick.
    */
   documentKind?: 'simplified_invoice' | 'credit_note' | 'open_order';
   /**
@@ -31,8 +31,6 @@ export interface ReceiptOptions {
    * ZATCA documents. Ignored for 'open_order' (never printed).
    */
   documentId: string;
-  /** Optional internal order reference — printed as a secondary "Order ref" line. Required for 'open_order' (printed as "Order #"). */
-  orderNo?: number;
   /** Unix epoch seconds — issue datetime, displayed in Asia/Riyadh. */
   createdAt: number;
   // Seller
@@ -51,6 +49,10 @@ export interface ReceiptOptions {
   sellerStreetAr?: string;
   /** Arabic city (settings.seller_city_ar) — right-aligned on the seller city/country line. */
   sellerCityAr?: string;
+  /** District (settings.seller_district) — receipt-only, printed before the city on the seller city line. */
+  sellerDistrict?: string;
+  /** Arabic district (settings.seller_district_ar) — receipt-only, printed before the Arabic city on the seller city line. */
+  sellerDistrictAr?: string;
   // Order meta
   orderType: 'dine_in' | 'takeaway';
   tableName?: string;
@@ -207,14 +209,19 @@ export class ReceiptBuilder {
       this.printSellerLine(eb, streetEn, streetAr, arabic);
 
       // 3. City — bilingual when cityAr set. No postal / ISO country code.
+      //    District (receipt-only) joins the same line: "Al Olaya, Riyadh"
+      //    EN left / "العليا، الرياض" AR right; empty parts are dropped so
+      //    a missing district never leaves a stray comma.
+      const districtEn = (opts.sellerDistrict ?? '').trim();
       const cityEn = (opts.sellerCity ?? '').trim();
+      const districtAr = (opts.sellerDistrictAr ?? '').trim();
       const cityAr = (opts.sellerCityAr ?? '').trim();
-      this.printSellerLine(eb, cityEn, cityAr, arabic);
+      const cityLineEn = [districtEn, cityEn].filter(Boolean).join(', ');
+      const cityLineAr = [districtAr, cityAr].filter(Boolean).join('\u060c '); // Arabic comma + space
+      this.printSellerLine(eb, cityLineEn, cityLineAr, arabic);
 
-      // 4. Country — full names. Too long for one EN|AR row on 42–45 col
-      //    paper, so EN is a full left line and AR is right-aligned alone.
-      eb.text(SELLER_COUNTRY_EN.slice(0, this.width));
-      this.printSellerLine(eb, '', SELLER_COUNTRY_AR, arabic);
+      // 4. Country — full names, EN left / AR right (AR kept whole).
+      this.printSellerLine(eb, SELLER_COUNTRY_EN, SELLER_COUNTRY_AR, arabic);
 
       if (opts.vatNumber) {
         eb.text(`VAT: ${opts.vatNumber}`);
@@ -224,10 +231,7 @@ export class ReceiptBuilder {
 
     // Document / order info
     eb.align(Align.Left);
-    if (isOpenOrder) {
-      // Internal order number — NOT the ZATCA IRN / documentId.
-      eb.text(`Order #: ${opts.orderNo ?? ''}`);
-    } else {
+    if (!isOpenOrder) {
       eb.text(`Invoice #: ${opts.documentId}`);
     }
     const dt = this.formatDateTime(opts.createdAt);
@@ -299,6 +303,12 @@ export class ReceiptBuilder {
 
     // Footer
     eb.align(Align.Center);
+
+    // Store contact (all receipt kinds)
+    eb.text('Home Delivery');
+    eb.text('0112357926 | 0533243439');
+    eb.blankLine();
+
     if (isOpenOrder) {
       // Non-ZATCA framing: NOT a tax invoice, and the guest must collect the
       // Simplified Tax Invoice at the end of the visit. Replaces the default
@@ -312,12 +322,6 @@ export class ReceiptBuilder {
       eb.text('at the end of your visit.');
       this.writeArabicCentered(eb, AR_COLLECT_STI, arabic);
     } else {
-      eb.align(Align.Center);
-
-      // Store contact (all receipt kinds)
-      eb.text('Home Delivery');
-      eb.text('0112357926 | 0533243439');
-      eb.blankLine();
       eb.text('********');
       eb.text(opts.footer ?? 'Thank you! Visit again.');
       eb.text('********');

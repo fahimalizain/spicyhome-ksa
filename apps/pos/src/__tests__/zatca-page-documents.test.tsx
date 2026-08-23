@@ -54,6 +54,8 @@ const sampleConfig = {
   sellerNameAr: 'مطعم تجريبي',
   sellerStreetAr: 'شارع الاختبار',
   sellerCityAr: 'الرياض',
+  sellerDistrict: 'Al Olaya',
+  sellerDistrictAr: 'العليا',
   vatNumber: '300123456789003',
   crNumber: '',
   street: '',

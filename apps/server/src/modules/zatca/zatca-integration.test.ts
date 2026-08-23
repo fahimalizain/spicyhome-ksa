@@ -1099,6 +1099,9 @@ describe('ZATCA Integration', () => {
       expect(res.body.building).toBe('');
       // seller_city is pre-seeded
       expect(res.body.city).toBe('Riyadh');
+      // seller_district / seller_district_ar are not set, should default to ''
+      expect(res.body.sellerDistrict).toBe('');
+      expect(res.body.sellerDistrictAr).toBe('');
       expect(res.body.postalCode).toBe('');
       expect(res.body.country).toBe('SA');
       // zatca_org_unit is pre-seeded
@@ -1123,11 +1126,13 @@ describe('ZATCA Integration', () => {
       expect(keys).not.toContain('privateKey');
       expect(keys).not.toContain('cert');
       expect(keys).not.toContain('secret');
-      expect(keys).toHaveLength(14);
+      expect(keys).toHaveLength(16);
       expect(keys).toContain('sellerName');
       expect(keys).toContain('sellerNameAr');
       expect(keys).toContain('sellerStreetAr');
       expect(keys).toContain('sellerCityAr');
+      expect(keys).toContain('sellerDistrict');
+      expect(keys).toContain('sellerDistrictAr');
       expect(keys).toContain('vatNumber');
       expect(keys).toContain('crNumber');
       expect(keys).toContain('street');
@@ -1146,11 +1151,13 @@ describe('ZATCA Integration', () => {
         sellerNameAr: 'مطعم الاختبار الجديد',
         sellerStreetAr: 'شارع الاختبار الجديد',
         sellerCityAr: 'جدة',
+        sellerDistrictAr: 'الروضة',
         vatNumber: '300123456789003',
         crNumber: '1234567890',
         street: 'Test Street',
         building: '9999',
         city: 'Jeddah',
+        sellerDistrict: 'Al Rawdah',
         postalCode: '54321',
         country: 'SA',
         orgUnit: 'Test Unit',
@@ -1167,11 +1174,13 @@ describe('ZATCA Integration', () => {
       expect(res.body.sellerNameAr).toBe('مطعم الاختبار الجديد');
       expect(res.body.sellerStreetAr).toBe('شارع الاختبار الجديد');
       expect(res.body.sellerCityAr).toBe('جدة');
+      expect(res.body.sellerDistrictAr).toBe('الروضة');
       expect(res.body.vatNumber).toBe('300123456789003');
       expect(res.body.crNumber).toBe('1234567890');
       expect(res.body.street).toBe('Test Street');
       expect(res.body.building).toBe('9999');
       expect(res.body.city).toBe('Jeddah');
+      expect(res.body.sellerDistrict).toBe('Al Rawdah');
       expect(res.body.postalCode).toBe('54321');
       expect(res.body.country).toBe('SA');
       expect(res.body.orgUnit).toBe('Test Unit');
@@ -1187,9 +1196,11 @@ describe('ZATCA Integration', () => {
       expect(getRes.body.sellerNameAr).toBe('مطعم الاختبار الجديد');
       expect(getRes.body.sellerStreetAr).toBe('شارع الاختبار الجديد');
       expect(getRes.body.sellerCityAr).toBe('جدة');
+      expect(getRes.body.sellerDistrictAr).toBe('الروضة');
       expect(getRes.body.vatNumber).toBe('300123456789003');
       expect(getRes.body.crNumber).toBe('1234567890');
       expect(getRes.body.city).toBe('Jeddah');
+      expect(getRes.body.sellerDistrict).toBe('Al Rawdah');
       expect(getRes.body.orgUnit).toBe('Test Unit');
     });
 
@@ -1202,11 +1213,13 @@ describe('ZATCA Integration', () => {
           sellerNameAr: 'مطعم',
           sellerStreetAr: 'شارع',
           sellerCityAr: 'جدة',
+          sellerDistrictAr: 'الروضة',
           vatNumber: '12345',
           crNumber: '1234567890',
           street: 'S',
           building: 'B',
           city: 'C',
+          sellerDistrict: 'D',
           postalCode: '12345',
           country: 'SA',
           orgUnit: 'O',
@@ -1225,11 +1238,13 @@ describe('ZATCA Integration', () => {
           sellerNameAr: 'مطعم',
           sellerStreetAr: 'شارع',
           sellerCityAr: 'جدة',
+          sellerDistrictAr: 'الروضة',
           vatNumber: '100123456789001',
           crNumber: '1234567890',
           street: 'S',
           building: 'B',
           city: 'C',
+          sellerDistrict: 'D',
           postalCode: '12345',
           country: 'SA',
           orgUnit: 'O',
@@ -1248,11 +1263,13 @@ describe('ZATCA Integration', () => {
           sellerNameAr: 'مطعم',
           sellerStreetAr: 'شارع',
           sellerCityAr: 'جدة',
+          sellerDistrictAr: 'الروضة',
           vatNumber: '300123456789003',
           crNumber: '12345',
           street: 'S',
           building: 'B',
           city: 'C',
+          sellerDistrict: 'D',
           postalCode: '12345',
           country: 'SA',
           orgUnit: 'O',
@@ -1271,11 +1288,13 @@ describe('ZATCA Integration', () => {
           sellerNameAr: 'مطعم',
           sellerStreetAr: 'شارع',
           sellerCityAr: 'جدة',
+          sellerDistrictAr: 'الروضة',
           vatNumber: '300123456789003',
           crNumber: '1234567890',
           street: 'S',
           building: 'B',
           city: 'C',
+          sellerDistrict: 'D',
           postalCode: '12',
           country: 'SA',
           orgUnit: 'O',
@@ -1291,6 +1310,8 @@ describe('ZATCA Integration', () => {
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
+          sellerDistrict: 'Al Olaya',
+          sellerDistrictAr: 'العليا',
           // missing vatNumber, crNumber, etc.
         })
         .expect(400);

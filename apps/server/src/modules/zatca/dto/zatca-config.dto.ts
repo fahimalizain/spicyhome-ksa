@@ -38,6 +38,14 @@ export class ZatcaConfigDto {
   sellerCityAr!: string;
 
   @ApiProperty({
+    example: 'العليا',
+    description: 'Arabic district name (receipts only — not used in ZATCA XML or CSR)',
+  })
+  @IsString()
+  @MinLength(1)
+  sellerDistrictAr!: string;
+
+  @ApiProperty({
     example: '300123456789003',
     description: '15-digit KSA VAT number (starts and ends with 3)',
   })
@@ -66,6 +74,14 @@ export class ZatcaConfigDto {
   @IsString()
   @MinLength(1)
   city!: string;
+
+  @ApiProperty({
+    example: 'Al Olaya',
+    description: 'District name (receipts only — not used in ZATCA XML or CSR)',
+  })
+  @IsString()
+  @MinLength(1)
+  sellerDistrict!: string;
 
   @ApiProperty({ example: '12345', description: '5-digit postal code' })
   @IsString()

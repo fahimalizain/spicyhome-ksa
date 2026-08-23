@@ -29,6 +29,7 @@ export interface BakeProbeCliArgs {
   orderIds: number[];
   refundIds: number[];
   printerIds: number[];
+  dayOpeningIds: number[];
   limit?: number;
   all: boolean;
   kickDrawer: boolean;
@@ -41,6 +42,7 @@ export function parseBakeProbeCliArgs(argv: string[]): BakeProbeCliArgs {
     orderIds: [],
     refundIds: [],
     printerIds: [],
+    dayOpeningIds: [],
     all: false,
     kickDrawer: false,
   };
@@ -69,6 +71,9 @@ export function parseBakeProbeCliArgs(argv: string[]): BakeProbeCliArgs {
         break;
       case '--printer':
         parsed.printerIds.push(parseId(takeValue(), '--printer'));
+        break;
+      case '--day-opening-id':
+        parsed.dayOpeningIds.push(parseId(takeValue(), '--day-opening-id'));
         break;
       case '--limit':
         parsed.limit = parseLimit(takeValue());
@@ -134,6 +139,7 @@ export function bakePrintProbeCli(argv: string[]): number {
       orderIds: args.orderIds.length > 0 ? args.orderIds : undefined,
       refundIds: args.refundIds.length > 0 ? args.refundIds : undefined,
       printerIds: args.printerIds.length > 0 ? args.printerIds : undefined,
+      dayOpeningIds: args.dayOpeningIds.length > 0 ? args.dayOpeningIds : undefined,
       limit: args.limit,
       all: args.all,
       kickDrawer: args.kickDrawer,
