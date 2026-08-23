@@ -201,6 +201,18 @@ describe('ReportsService', () => {
         updated_at INTEGER,
         updated_by INTEGER REFERENCES users(id)
       );
+      CREATE TABLE IF NOT EXISTS order_refund_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        refund_id INTEGER NOT NULL REFERENCES order_refunds(id) ON DELETE CASCADE,
+        order_item_id INTEGER REFERENCES order_items(id),
+        item_name TEXT NOT NULL,
+        item_name_ar TEXT,
+        unit_price_halalas INTEGER NOT NULL,
+        vat_rate_bp INTEGER NOT NULL,
+        qty INTEGER NOT NULL,
+        total_halalas INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS order_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         order_id INTEGER NOT NULL,
@@ -1243,6 +1255,804 @@ describe('ReportsService', () => {
       expect(sale.cashierUserId).toBe(1);
       expect(sale.cashierName).toBe('Admin');
       expect(sale.totalHalalas).toBe(8250);
+    });
+  });
+
+  describe('getItemWiseSales', () => {
+    // Fixed service-day windows around 2026-08-20 (Riyadh 05:00 = UTC 02:00).
+    const D = getServiceDayBoundsUnix('2026-08-20')!; // [D 05:00, D+1 05:00)
+    const D2 = getServiceDayBoundsUnix('2026-08-22')!; // D+2
+    const dayId1 = 100;
+    const dayId2 = 101;
+
+    const insertDay = (id: number, businessDate: string, openedAt: number) => {
+      sqlite.exec(
+        `INSERT INTO day_openings (id, business_date, status, opened_at, opened_by, created_at, updated_at)
+         VALUES (${id}, '${businessDate}', 'closed', ${openedAt}, 1, ${openedAt}, ${openedAt})`,
+      );
+    };
+
+    const insertOrder = (o: {
+      id: number;
+      status: string;
+      totalHalalas: number;
+      documentId: string;
+      type?: string;
+      deliveryPartnerId?: string | null;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO orders (id, order_no, uuid, type, table_id, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, delivery_partner_id, created_at, updated_at, created_by)
+         VALUES (${o.id}, ${o.id}, 'uuid-${o.id}', '${o.type ?? 'dine_in'}', NULL, ${dayId1}, '${
+           o.status
+         }', 0, 0, ${o.totalHalalas}, '${o.documentId}', ${
+           o.deliveryPartnerId === undefined || o.deliveryPartnerId === null
+             ? 'NULL'
+             : `'${o.deliveryPartnerId}'`
+         }, ${now}, ${now}, 1)`,
+      );
+    };
+
+    const insertPayment = (p: {
+      id: number;
+      orderId: number;
+      methodId: string;
+      amountHalalas: number;
+      createdAt: number;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_payments (id, order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at, created_by)
+         VALUES (${p.id}, ${p.orderId}, '${p.methodId}', '${p.methodId}', '10', ${p.amountHalalas}, ${
+           p.createdAt
+         }, 1)`,
+      );
+    };
+
+    const insertRefund = (r: {
+      id: number;
+      orderId: number;
+      methodId: string;
+      subtotalHalalas: number;
+      vatHalalas: number;
+      totalHalalas: number;
+      documentId: string;
+      createdAt: number;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_refunds (id, order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, document_id, created_at)
+         VALUES (${r.id}, ${r.orderId}, 1, '${r.methodId}', '${r.methodId}', '10', ${
+           r.subtotalHalalas
+         }, ${r.vatHalalas}, ${r.totalHalalas}, '${r.documentId}', ${r.createdAt})`,
+      );
+    };
+
+    const insertOrderItem = (o: {
+      id: number;
+      orderId: number;
+      itemId?: number | null;
+      itemName: string;
+      unitPriceHalalas: number;
+      qty: number;
+      totalHalalas: number;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_items (id, order_id, item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at, updated_at)
+         VALUES (${o.id}, ${o.orderId}, ${
+           o.itemId === undefined || o.itemId === null ? 'NULL' : o.itemId
+         }, '${o.itemName}', ${o.unitPriceHalalas}, 1500, ${o.qty}, ${o.totalHalalas}, ${now}, ${now})`,
+      );
+    };
+
+    const insertRefundItem = (r: {
+      id: number;
+      refundId: number;
+      orderItemId?: number | null;
+      itemName: string;
+      unitPriceHalalas: number;
+      qty: number;
+      totalHalalas: number;
+    }) => {
+      sqlite.exec(
+        `INSERT INTO order_refund_items (id, refund_id, order_item_id, item_name, unit_price_halalas, vat_rate_bp, qty, total_halalas, created_at)
+         VALUES (${r.id}, ${r.refundId}, ${
+           r.orderItemId === undefined || r.orderItemId === null ? 'NULL' : r.orderItemId
+         }, '${r.itemName}', ${r.unitPriceHalalas}, 1500, ${r.qty}, ${r.totalHalalas}, ${now})`,
+      );
+    };
+
+    const insertCategory = (id: number, name: string, sortOrder: number) => {
+      sqlite.exec(
+        `INSERT INTO item_categories (id, name, sort_order, is_active, created_at, updated_at)
+         VALUES (${id}, '${name}', ${sortOrder}, 1, ${now}, ${now})`,
+      );
+    };
+
+    const insertItem = (id: number, categoryId: number, name: string, priceHalalas: number) => {
+      sqlite.exec(
+        `INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, is_active, created_at, updated_at)
+         VALUES (${id}, ${categoryId}, 1, '${name}', ${priceHalalas}, 1500, 1, ${now}, ${now})`,
+      );
+    };
+
+    beforeEach(() => {
+      insertDay(dayId1, '2026-08-20', D.startUnix);
+      insertDay(dayId2, '2026-08-21', D2.startUnix - 86400);
+    });
+
+    it('throws 400 for missing or invalid from/to, type, and category', () => {
+      expect(() => service.getItemWiseSales({})).toThrow(BadRequestException);
+      expect(() => service.getItemWiseSales({ from: '2026-08-20' })).toThrow(BadRequestException);
+      expect(() => service.getItemWiseSales({ to: '2026-08-20' })).toThrow(BadRequestException);
+      expect(() => service.getItemWiseSales({ from: '20-08-2026', to: '2026-08-21' })).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.getItemWiseSales({ from: '2026-08-22', to: '2026-08-20' })).toThrow(
+        BadRequestException,
+      );
+      expect(() =>
+        service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20', type: 'delivery' }),
+      ).toThrow(BadRequestException);
+      expect(() =>
+        service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20', category: 'abc' }),
+      ).toThrow(BadRequestException);
+      expect(() =>
+        service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20', category: '1.5' }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('rolls two paid orders with the same item_id into one row, summing qty and gross', () => {
+      insertOrder({ id: 1, status: 'paid', totalHalalas: 4600, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 4600,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 2,
+        totalHalalas: 4600,
+      });
+      insertOrder({ id: 2, status: 'paid', totalHalalas: 2300, documentId: 'INV-2' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 200,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+
+      const result = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]).toEqual({
+        itemId: 1,
+        itemName: 'Zinger',
+        categoryId: 1,
+        categoryName: 'Burgers',
+        qtySold: 3,
+        grossHalalas: 6900,
+        refundedQty: 0,
+        refundedHalalas: 0,
+        netQty: 3,
+        netHalalas: 6900,
+        vatHalalas: 900, // decomposeVat(4600) + decomposeVat(2300)
+      });
+    });
+
+    it('keeps one row when the same item_id was sold at two different unit prices', () => {
+      insertOrder({ id: 1, status: 'paid', totalHalalas: 2300, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertOrder({ id: 2, status: 'paid', totalHalalas: 5000, documentId: 'INV-2' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 5000,
+        createdAt: D.startUnix + 200,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2500,
+        qty: 2,
+        totalHalalas: 5000,
+      });
+
+      const result = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0].qtySold).toBe(3);
+      expect(result.rows[0].grossHalalas).toBe(7300);
+      expect(result.rows[0].netQty).toBe(3);
+    });
+
+    it('groups item_id NULL lines by snapshot name under Uncategorized and shows the current catalog name for live items', () => {
+      insertItem(2, 1, 'Old Burger', 2300);
+      insertOrder({ id: 1, status: 'paid', totalHalalas: 1000, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: null,
+        itemName: 'Discontinued Salad',
+        unitPriceHalalas: 1000,
+        qty: 1,
+        totalHalalas: 1000,
+      });
+      insertOrder({ id: 2, status: 'paid', totalHalalas: 2300, documentId: 'INV-2' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 200,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 2,
+        itemName: 'Old Burger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      sqlite.exec(`UPDATE items SET name = 'New Burger' WHERE id = 2`);
+
+      const result = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(2);
+      // Burgers (sort 0) sorts before Uncategorized (MAX_SAFE_INTEGER).
+      expect(result.rows[0]).toMatchObject({
+        itemId: 2,
+        itemName: 'New Burger',
+        categoryId: 1,
+        categoryName: 'Burgers',
+        qtySold: 1,
+      });
+      expect(result.rows[1]).toMatchObject({
+        itemId: null,
+        itemName: 'Discontinued Salad',
+        categoryId: null,
+        categoryName: 'Uncategorized',
+        qtySold: 1,
+        grossHalalas: 1000,
+      });
+    });
+
+    it('posts refunds to their own service day and nets against the sold item', () => {
+      insertOrder({ id: 1, status: 'refunded', totalHalalas: 4600, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 4600,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 2,
+        totalHalalas: 4600,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        subtotalHalalas: 4000,
+        vatHalalas: 600,
+        totalHalalas: 4600,
+        documentId: 'REF-1',
+        createdAt: D2.startUnix + 50, // D+2
+      });
+      insertRefundItem({
+        id: 1,
+        refundId: 1,
+        orderItemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 2,
+        totalHalalas: 4600,
+      });
+
+      // Range D: sold, no refund.
+      const onlyD = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(onlyD.rows).toHaveLength(1);
+      expect(onlyD.rows[0].qtySold).toBe(2);
+      expect(onlyD.rows[0].grossHalalas).toBe(4600);
+      expect(onlyD.rows[0].refundedQty).toBe(0);
+      expect(onlyD.rows[0].netQty).toBe(2);
+      expect(onlyD.rows[0].netHalalas).toBe(4600);
+      expect(onlyD.rows[0].vatHalalas).toBe(600);
+
+      // Range D+2: only the refund (item stays visible at negative net).
+      const onlyD2 = service.getItemWiseSales({ from: '2026-08-22', to: '2026-08-22' });
+      expect(onlyD2.rows).toHaveLength(1);
+      expect(onlyD2.rows[0].qtySold).toBe(0);
+      expect(onlyD2.rows[0].refundedQty).toBe(2);
+      expect(onlyD2.rows[0].refundedHalalas).toBe(4600);
+      expect(onlyD2.rows[0].netQty).toBe(-2);
+      expect(onlyD2.rows[0].netHalalas).toBe(-4600);
+      expect(onlyD2.rows[0].vatHalalas).toBe(-600);
+
+      // Range covering both: fully refunded item remains visible at net 0.
+      const both = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-22' });
+      expect(both.rows).toHaveLength(1);
+      expect(both.rows[0]).toMatchObject({
+        qtySold: 2,
+        grossHalalas: 4600,
+        refundedQty: 2,
+        refundedHalalas: 4600,
+        netQty: 0,
+        netHalalas: 0,
+        vatHalalas: 0,
+      });
+    });
+
+    it('filters by type on the parent order, excluding takeaway refunds too', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'dine_in',
+        totalHalalas: 2300,
+        documentId: 'INV-A',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 2000,
+        documentId: 'INV-B',
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 20,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2000,
+        qty: 1,
+        totalHalalas: 2000,
+      });
+      insertOrder({
+        id: 3,
+        status: 'refunded',
+        type: 'takeaway',
+        totalHalalas: 3000,
+        documentId: 'INV-C',
+      });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        amountHalalas: 3000,
+        createdAt: D.startUnix + 30,
+      });
+      insertOrderItem({
+        id: 3,
+        orderId: 3,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 3000,
+        qty: 1,
+        totalHalalas: 3000,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 3,
+        methodId: 'cash',
+        subtotalHalalas: 3000,
+        vatHalalas: 0,
+        totalHalalas: 3000,
+        documentId: 'REF-C',
+        createdAt: D.startUnix + 40,
+      });
+      insertRefundItem({
+        id: 1,
+        refundId: 1,
+        orderItemId: 3,
+        itemName: 'Zinger',
+        unitPriceHalalas: 3000,
+        qty: 1,
+        totalHalalas: 3000,
+      });
+
+      const result = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        type: 'dine_in',
+      });
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0].qtySold).toBe(1);
+      expect(result.rows[0].grossHalalas).toBe(2300);
+      expect(result.rows[0].refundedQty).toBe(0);
+    });
+
+    it('filters by partner: none for walk-ins, slug for exact partner', () => {
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 2300,
+        documentId: 'INV-P1',
+        deliveryPartnerId: 'hungerstation',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'hungerstation',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        type: 'takeaway',
+        totalHalalas: 4600,
+        documentId: 'INV-P2',
+        deliveryPartnerId: null,
+      });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 4600,
+        createdAt: D.startUnix + 20,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 2,
+        totalHalalas: 4600,
+      });
+
+      const walkIns = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'none',
+      });
+      expect(walkIns.rows).toHaveLength(1);
+      expect(walkIns.rows[0].qtySold).toBe(2);
+
+      const hungerstation = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'hungerstation',
+      });
+      expect(hungerstation.rows).toHaveLength(1);
+      expect(hungerstation.rows[0].qtySold).toBe(1);
+
+      const unknown = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        partner: 'keeta',
+      });
+      expect(unknown.rows).toHaveLength(0);
+      expect(unknown.footer.netQty).toBe(0);
+    });
+
+    it('filters by category: none for Uncategorized, numeric id for a category', () => {
+      insertCategory(2, 'Drinks', 1);
+      insertItem(3, 2, 'Cola', 500);
+      insertOrder({ id: 1, status: 'paid', totalHalalas: 2300, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertOrder({ id: 2, status: 'paid', totalHalalas: 500, documentId: 'INV-2' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 500,
+        createdAt: D.startUnix + 20,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 3,
+        itemName: 'Cola',
+        unitPriceHalalas: 500,
+        qty: 1,
+        totalHalalas: 500,
+      });
+      insertOrder({ id: 3, status: 'paid', totalHalalas: 1000, documentId: 'INV-3' });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 30,
+      });
+      insertOrderItem({
+        id: 3,
+        orderId: 3,
+        itemId: null,
+        itemName: 'Discontinued Salad',
+        unitPriceHalalas: 1000,
+        qty: 1,
+        totalHalalas: 1000,
+      });
+
+      const uncategorized = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        category: 'none',
+      });
+      expect(uncategorized.rows).toHaveLength(1);
+      expect(uncategorized.rows[0].itemName).toBe('Discontinued Salad');
+      expect(uncategorized.rows[0].categoryId).toBeNull();
+
+      const burgers = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        category: '1',
+      });
+      expect(burgers.rows).toHaveLength(1);
+      expect(burgers.rows[0].itemId).toBe(1);
+
+      const drinks = service.getItemWiseSales({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        category: '2',
+      });
+      expect(drinks.rows).toHaveLength(1);
+      expect(drinks.rows[0].itemId).toBe(3);
+    });
+
+    it('ignores open/voided orders and kitchen-removed lines (gone from order_items)', () => {
+      insertOrder({ id: 1, status: 'open', totalHalalas: 1000, documentId: 'INV-OPEN' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 10,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 1000,
+        qty: 1,
+        totalHalalas: 1000,
+      });
+      insertOrder({ id: 2, status: 'voided', totalHalalas: 2000, documentId: 'INV-VOID' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 20,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2000,
+        qty: 1,
+        totalHalalas: 2000,
+      });
+      insertOrder({ id: 3, status: 'paid', totalHalalas: 3000, documentId: 'INV-PAID' });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        amountHalalas: 3000,
+        createdAt: D.startUnix + 30,
+      });
+      insertOrderItem({
+        id: 3,
+        orderId: 3,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 3000,
+        qty: 1,
+        totalHalalas: 3000,
+      });
+      // Kitchen-removed line: only an event remains, no order_items row.
+      sqlite.exec(
+        `INSERT INTO order_events (id, order_id, event_idx, user_id, type, payload, prev_hash, hash, created_at)
+         VALUES (1, 3, 0, 1, 'item_removed', '{"orderItemId": 99, "itemId": 1, "qty": 2, "oldQty": 2}', '', '', ${now})`,
+      );
+
+      const result = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0].qtySold).toBe(1);
+      expect(result.rows[0].grossHalalas).toBe(3000);
+    });
+
+    it('computes the footer as the sum of the rows', () => {
+      insertCategory(2, 'Drinks', 1);
+      insertItem(3, 2, 'Cola', 500);
+      insertOrder({ id: 1, status: 'paid', totalHalalas: 2300, documentId: 'INV-1' });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 100,
+      });
+      insertOrderItem({
+        id: 1,
+        orderId: 1,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertOrder({ id: 2, status: 'paid', totalHalalas: 1000, documentId: 'INV-2' });
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 200,
+      });
+      insertOrderItem({
+        id: 2,
+        orderId: 2,
+        itemId: 3,
+        itemName: 'Cola',
+        unitPriceHalalas: 500,
+        qty: 2,
+        totalHalalas: 1000,
+      });
+      insertOrder({ id: 3, status: 'refunded', totalHalalas: 2300, documentId: 'INV-3' });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        amountHalalas: 2300,
+        createdAt: D.startUnix + 300,
+      });
+      insertOrderItem({
+        id: 3,
+        orderId: 3,
+        itemId: 1,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 3,
+        methodId: 'cash',
+        subtotalHalalas: 2000,
+        vatHalalas: 300,
+        totalHalalas: 2300,
+        documentId: 'REF-1',
+        createdAt: D.startUnix + 400,
+      });
+      insertRefundItem({
+        id: 1,
+        refundId: 1,
+        orderItemId: 3,
+        itemName: 'Zinger',
+        unitPriceHalalas: 2300,
+        qty: 1,
+        totalHalalas: 2300,
+      });
+
+      const result = service.getItemWiseSales({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(2);
+      const expected = result.rows.reduce(
+        (acc, r) => ({
+          qtySold: acc.qtySold + r.qtySold,
+          grossHalalas: acc.grossHalalas + r.grossHalalas,
+          refundedQty: acc.refundedQty + r.refundedQty,
+          refundedHalalas: acc.refundedHalalas + r.refundedHalalas,
+          netQty: acc.netQty + r.netQty,
+          netHalalas: acc.netHalalas + r.netHalalas,
+          vatHalalas: acc.vatHalalas + r.vatHalalas,
+        }),
+        {
+          qtySold: 0,
+          grossHalalas: 0,
+          refundedQty: 0,
+          refundedHalalas: 0,
+          netQty: 0,
+          netHalalas: 0,
+          vatHalalas: 0,
+        },
+      );
+      expect(result.footer).toEqual(expected);
+      // Spot-check the actual numbers (not just row-sums). The refunded
+      // order's own line still counts as sold (payment posted in range).
+      expect(result.footer).toMatchObject({
+        qtySold: 4,
+        grossHalalas: 5600,
+        refundedQty: 1,
+        refundedHalalas: 2300,
+        netQty: 3,
+        netHalalas: 3300,
+      });
     });
   });
 });

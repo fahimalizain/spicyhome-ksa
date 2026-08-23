@@ -3083,6 +3083,79 @@
         ]
       }
     },
+    "/reports/item-wise": {
+      "get": {
+        "operationId": "ReportsController_getItemWiseSales",
+        "summary": "Item-wise sales (product mix) over a date range",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by parent order type: dine_in | takeaway. Omit → all types.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partner",
+            "required": false,
+            "in": "query",
+            "description": "Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Filter by category id (numeric); 'none' for Uncategorized rows only. Omit → all categories.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One row per catalog item with sold, refunded and net quantities and amounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemWiseSalesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/reports/z/{dayId}/print": {
       "post": {
         "operationId": "ReportsController_printZReport",
@@ -6701,6 +6774,156 @@
           },
           "footer": {
             "$ref": "#/components/schemas/SalesRegisterFooterDto"
+          }
+        },
+        "required": [
+          "rows",
+          "footer"
+        ]
+      },
+      "ItemWiseSalesRowDto": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true,
+            "description": "Catalog item id; null when the catalog item was deleted and lines group by snapshot name"
+          },
+          "itemName": {
+            "type": "string",
+            "example": "Zinger",
+            "description": "Current catalog items.name when the item still exists, else the order/refund line snapshot name"
+          },
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "categoryName": {
+            "type": "string",
+            "example": "Burgers",
+            "description": "'Uncategorized' when categoryId is null or the category is gone"
+          },
+          "qtySold": {
+            "type": "integer",
+            "format": "int32",
+            "example": 3,
+            "description": "Sum of invoice line qty in range"
+          },
+          "grossHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 6900,
+            "description": "Sum of invoice line total_halalas (VAT-inclusive) in range"
+          },
+          "refundedQty": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1,
+            "description": "Sum of refund line qty in range"
+          },
+          "refundedHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 2300,
+            "description": "Sum of refund line total_halalas in range"
+          },
+          "netQty": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2,
+            "description": "qtySold − refundedQty"
+          },
+          "netHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 4600,
+            "description": "grossHalalas − refundedHalalas"
+          },
+          "vatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 600,
+            "description": "Net VAT: sold line VAT minus refund line VAT (decomposed per line)"
+          }
+        },
+        "required": [
+          "itemId",
+          "itemName",
+          "categoryId",
+          "categoryName",
+          "qtySold",
+          "grossHalalas",
+          "refundedQty",
+          "refundedHalalas",
+          "netQty",
+          "netHalalas",
+          "vatHalalas"
+        ]
+      },
+      "ItemWiseSalesFooterDto": {
+        "type": "object",
+        "properties": {
+          "qtySold": {
+            "type": "integer",
+            "format": "int32",
+            "example": 12
+          },
+          "grossHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 27600
+          },
+          "refundedQty": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2
+          },
+          "refundedHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 4600
+          },
+          "netQty": {
+            "type": "integer",
+            "format": "int32",
+            "example": 10
+          },
+          "netHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 23000
+          },
+          "vatHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 3450
+          }
+        },
+        "required": [
+          "qtySold",
+          "grossHalalas",
+          "refundedQty",
+          "refundedHalalas",
+          "netQty",
+          "netHalalas",
+          "vatHalalas"
+        ]
+      },
+      "ItemWiseSalesResponseDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemWiseSalesRowDto"
+            }
+          },
+          "footer": {
+            "$ref": "#/components/schemas/ItemWiseSalesFooterDto"
           }
         },
         "required": [

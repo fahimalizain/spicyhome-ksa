@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { SalesRegisterResponseDto } from './dto/sales-register-response.dto';
+import { ItemWiseSalesResponseDto } from './dto/item-wise-sales-response.dto';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 
 @ApiTags('reports')
@@ -91,6 +92,53 @@ export class ReportsController {
     @Query('kind') kind?: string,
   ) {
     return this.reportsService.getSalesRegister({ from, to, type, partner, kind });
+  }
+
+  @Get('item-wise')
+  @ApiOperation({
+    summary: 'Item-wise sales (product mix) over a date range',
+  })
+  @ApiOkResponse({
+    description: 'One row per catalog item with sold, refunded and net quantities and amounts',
+    type: ItemWiseSalesResponseDto,
+  })
+  @ApiQuery({
+    name: 'from',
+    required: true,
+    description:
+      'Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window.',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: true,
+    description:
+      'Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window.',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    description: 'Filter by parent order type: dine_in | takeaway. Omit → all types.',
+  })
+  @ApiQuery({
+    name: 'partner',
+    required: false,
+    description:
+      "Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.",
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description:
+      "Filter by category id (numeric); 'none' for Uncategorized rows only. Omit → all categories.",
+  })
+  getItemWiseSales(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('type') type?: string,
+    @Query('partner') partner?: string,
+    @Query('category') category?: string,
+  ) {
+    return this.reportsService.getItemWiseSales({ from, to, type, partner, category });
   }
 
   @Post('z/:dayId/print')
