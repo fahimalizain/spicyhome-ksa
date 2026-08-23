@@ -6,6 +6,9 @@ import { OrdersPage } from './pages/OrdersPage';
 import { TablesViewPage } from './pages/TablesViewPage';
 import { DayPage } from './pages/DayPage';
 import { AdminPage } from './pages/AdminPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { SalesRegisterPage } from './pages/SalesRegisterPage';
+import { ItemWiseSalesPage } from './pages/ItemWiseSalesPage';
 import { ItemsPage } from './pages/admin/ItemsPage';
 import { CategoriesPage } from './pages/admin/CategoriesPage';
 import { SubcategoriesPage } from './pages/admin/SubcategoriesPage';
@@ -36,6 +39,9 @@ export function App() {
                 <Route path="/day" element={<DayPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/tables" element={<TablesViewPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/reports/sales-register" element={<SalesRegisterPage />} />
+                <Route path="/reports/item-wise" element={<ItemWiseSalesPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/items" element={<ItemsPage />} />
                 <Route path="/admin/categories" element={<CategoriesPage />} />

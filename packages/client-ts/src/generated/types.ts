@@ -1109,6 +1109,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/sales-register': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Sales register (day-book of invoices and refunds) over a date range */
+    get: operations['ReportsController_getSalesRegister'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/item-wise': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Item-wise sales (product mix) over a date range */
+    get: operations['ReportsController_getItemWiseSales'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/z/{dayId}/print': {
     parameters: {
       query?: never;
@@ -2964,6 +2998,244 @@ export interface components {
        * @description Live paid order count for open day
        */
       liveOrderCount?: number;
+    };
+    SalesRegisterTenderDto: {
+      /** @example cash */
+      methodId: string;
+      /** @example Cash */
+      methodTitle: string;
+      /**
+       * Format: int64
+       * @example 2300
+       */
+      amountHalalas: number;
+    };
+    SalesRegisterRowDto: {
+      /**
+       * @description Document kind: sale (invoice) or refund (credit note)
+       * @example sale
+       */
+      kind: string;
+      /**
+       * Format: int64
+       * @description Posting time (Unix seconds): earliest payment for sales, refund creation for refunds
+       * @example 1787220000
+       */
+      postedAt: number;
+      /**
+       * @description Service-day label (Asia/Riyadh) of postedAt — the business date the document posts to
+       * @example 2026-08-20
+       */
+      businessDate: string;
+      /** @example INV26-0001 */
+      documentId: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      orderId: number;
+      /**
+       * Format: int64
+       * @description Refund id; null on sale rows
+       * @example 5
+       */
+      refundId: number | null;
+      /**
+       * Format: int64
+       * @description Parent order number (same on refund rows)
+       * @example 1
+       */
+      orderNo: number;
+      /** @example dine_in */
+      type: string;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      tableId: number | null;
+      /** @example T1 */
+      tableName: string | null;
+      /** @example hungerstation */
+      deliveryPartnerId: string | null;
+      /** @example HungerStation */
+      deliveryPartnerTitle: string | null;
+      /** @example HS-883129 */
+      deliveryExternalRef: string | null;
+      /**
+       * Format: int64
+       * @description Sale: order subtotal; refund: negative
+       * @example 2000
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @description Sale: order VAT; refund: negative
+       * @example 300
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @description Sale: order total; refund: negative
+       * @example 2300
+       */
+      totalHalalas: number;
+      /** @description Sale: all order payments; refund: single entry with the refund method */
+      tenders: components['schemas']['SalesRegisterTenderDto'][];
+      /**
+       * Format: int64
+       * @example 1
+       */
+      cashierUserId: number | null;
+      /**
+       * @description users.name, or "Unknown" when the user is gone
+       * @example Admin
+       */
+      cashierName: string;
+      /**
+       * @description Sale: order notes; refund: "Refund of <parent document id>"
+       * @example Call on arrival
+       */
+      notes: string | null;
+    };
+    SalesRegisterFooterDto: {
+      /**
+       * Format: int64
+       * @example 12
+       */
+      saleCount: number;
+      /**
+       * Format: int64
+       * @example 2
+       */
+      refundCount: number;
+      /**
+       * Format: int64
+       * @description Signed sum of row subtotals
+       * @example 27600
+       */
+      subtotalHalalas: number;
+      /**
+       * Format: int64
+       * @description Signed sum of row VAT
+       * @example 4140
+       */
+      vatHalalas: number;
+      /**
+       * Format: int64
+       * @description Signed sum of row totals
+       * @example 31740
+       */
+      totalHalalas: number;
+    };
+    SalesRegisterResponseDto: {
+      rows: components['schemas']['SalesRegisterRowDto'][];
+      footer: components['schemas']['SalesRegisterFooterDto'];
+    };
+    ItemWiseSalesRowDto: {
+      /**
+       * Format: int64
+       * @description Catalog item id; null when the catalog item was deleted and lines group by snapshot name
+       * @example 1
+       */
+      itemId: number | null;
+      /**
+       * @description Current catalog items.name when the item still exists, else the order/refund line snapshot name
+       * @example Zinger
+       */
+      itemName: string;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      categoryId: number | null;
+      /**
+       * @description 'Uncategorized' when categoryId is null or the category is gone
+       * @example Burgers
+       */
+      categoryName: string;
+      /**
+       * Format: int32
+       * @description Sum of invoice line qty in range
+       * @example 3
+       */
+      qtySold: number;
+      /**
+       * Format: int64
+       * @description Sum of invoice line total_halalas (VAT-inclusive) in range
+       * @example 6900
+       */
+      grossHalalas: number;
+      /**
+       * Format: int32
+       * @description Sum of refund line qty in range
+       * @example 1
+       */
+      refundedQty: number;
+      /**
+       * Format: int64
+       * @description Sum of refund line total_halalas in range
+       * @example 2300
+       */
+      refundedHalalas: number;
+      /**
+       * Format: int32
+       * @description qtySold − refundedQty
+       * @example 2
+       */
+      netQty: number;
+      /**
+       * Format: int64
+       * @description grossHalalas − refundedHalalas
+       * @example 4600
+       */
+      netHalalas: number;
+      /**
+       * Format: int64
+       * @description Net VAT: sold line VAT minus refund line VAT (decomposed per line)
+       * @example 600
+       */
+      vatHalalas: number;
+    };
+    ItemWiseSalesFooterDto: {
+      /**
+       * Format: int32
+       * @example 12
+       */
+      qtySold: number;
+      /**
+       * Format: int64
+       * @example 27600
+       */
+      grossHalalas: number;
+      /**
+       * Format: int32
+       * @example 2
+       */
+      refundedQty: number;
+      /**
+       * Format: int64
+       * @example 4600
+       */
+      refundedHalalas: number;
+      /**
+       * Format: int32
+       * @example 10
+       */
+      netQty: number;
+      /**
+       * Format: int64
+       * @example 23000
+       */
+      netHalalas: number;
+      /**
+       * Format: int64
+       * @example 3450
+       */
+      vatHalalas: number;
+    };
+    ItemWiseSalesResponseDto: {
+      rows: components['schemas']['ItemWiseSalesRowDto'][];
+      footer: components['schemas']['ItemWiseSalesFooterDto'];
     };
     PaymentMethodResponse: {
       /** @example cash */
@@ -4939,6 +5211,68 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  ReportsController_getSalesRegister: {
+    parameters: {
+      query: {
+        /** @description Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window. */
+        from: string;
+        /** @description Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window. */
+        to: string;
+        /** @description Filter by parent order type: dine_in | takeaway. Omit → all types. */
+        type?: string;
+        /** @description Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners. */
+        partner?: string;
+        /** @description Filter by document kind: sale | refund. Omit → both. */
+        kind?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sales register rows sorted by posting time, with signed footer totals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SalesRegisterResponseDto'];
+        };
+      };
+    };
+  };
+  ReportsController_getItemWiseSales: {
+    parameters: {
+      query: {
+        /** @description Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window. */
+        from: string;
+        /** @description Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window. */
+        to: string;
+        /** @description Filter by parent order type: dine_in | takeaway. Omit → all types. */
+        type?: string;
+        /** @description Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners. */
+        partner?: string;
+        /** @description Filter by category id (numeric); 'none' for Uncategorized rows only. Omit → all categories. */
+        category?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One row per catalog item with sold, refunded and net quantities and amounts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ItemWiseSalesResponseDto'];
+        };
       };
     };
   };

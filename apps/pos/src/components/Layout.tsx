@@ -58,6 +58,9 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
         <Link to="/day" className="text-sm text-gray-300 hover:text-white touch-target">
           Day
         </Link>
+        <Link to="/reports" className="text-sm text-gray-300 hover:text-white touch-target">
+          Reports
+        </Link>
       </div>
       <UserMenu me={me} onLogout={onLogout} />
     </nav>

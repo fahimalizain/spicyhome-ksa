@@ -62,6 +62,14 @@ export type PrinterStatusResponse = Schemas['PrinterStatusResponse'];
 export type WindowsPrinterQueuesResponse = Schemas['WindowsPrinterQueuesResponse'];
 export type DeliveryPartnerResponse = Schemas['DeliveryPartnerResponse'];
 
+export type SalesRegisterResponse = Schemas['SalesRegisterResponseDto'];
+export type SalesRegisterRow = Schemas['SalesRegisterRowDto'];
+export type SalesRegisterFooter = Schemas['SalesRegisterFooterDto'];
+export type SalesRegisterTender = Schemas['SalesRegisterTenderDto'];
+export type ItemWiseSalesResponse = Schemas['ItemWiseSalesResponseDto'];
+export type ItemWiseSalesRow = Schemas['ItemWiseSalesRowDto'];
+export type ItemWiseSalesFooter = Schemas['ItemWiseSalesFooterDto'];
+
 export type ZatcaConfigDto = Schemas['ZatcaConfigDto'];
 
 export interface ComplianceResultEntry {
@@ -574,6 +582,39 @@ export class SpicyHomeClient {
     printZ: (dayId: number) => request<any>(this.config, 'POST', `/reports/z/${dayId}/print`),
 
     printX: () => request<any>(this.config, 'POST', '/reports/x/print'),
+
+    /**
+     * Sales register (day-book of invoices and refunds) over a posting-time
+     * service-day window. Omitted filters are not sent → no filter on that
+     * dimension; pass `partner: 'none'` for walk-in orders.
+     */
+    salesRegister: (params: {
+      from: string;
+      to: string;
+      type?: string;
+      partner?: string;
+      kind?: string;
+    }) =>
+      request<SalesRegisterResponse>(
+        this.config,
+        'GET',
+        '/reports/sales-register',
+        undefined,
+        params,
+      ),
+
+    /**
+     * Item-wise sales (product mix) over a posting-time service-day window.
+     * Pass `category: 'none'` to see Uncategorized rows only.
+     */
+    itemWise: (params: {
+      from: string;
+      to: string;
+      type?: string;
+      partner?: string;
+      category?: string;
+    }) =>
+      request<ItemWiseSalesResponse>(this.config, 'GET', '/reports/item-wise', undefined, params),
   };
 
   zatca = {

@@ -140,6 +140,16 @@ describe('SpicyHomeClient', () => {
     expect(typeof client.deliveryPartners.update).toBe('function');
   });
 
+  it('exposes report methods', () => {
+    const client = new SpicyHomeClient({
+      baseUrl: 'http://localhost:3000',
+      getToken: () => null,
+    });
+
+    expect(typeof client.reports.salesRegister).toBe('function');
+    expect(typeof client.reports.itemWise).toBe('function');
+  });
+
   it('includes auth token in headers when token is set', async () => {
     const client = new SpicyHomeClient({
       baseUrl: 'http://localhost:3000',
@@ -308,6 +318,73 @@ describe('SpicyHomeClient orders.list filters', () => {
 
     expect(listUrl(fetchMock.mock.calls[0])).toBe('/auth/active-users');
     expect(users).toEqual([{ id: 1, username: 'admin', name: 'Administrator' }]);
+  });
+});
+
+describe('SpicyHomeClient reports filters', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function okFetch(body: unknown): jest.Mock {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify(body),
+    });
+    globalThis.fetch = fetchMock as any;
+    return fetchMock;
+  }
+
+  function listUrl(call: unknown[]): string {
+    return (call[0] as string).replace('http://localhost:3000', '');
+  }
+
+  it('salesRegister sends from/to and all set filters', async () => {
+    const fetchMock = okFetch({ rows: [], footer: {} });
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.reports.salesRegister({
+      from: '2026-08-20',
+      to: '2026-08-20',
+      type: 'takeaway',
+      partner: 'none',
+      kind: 'refund',
+    });
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe(
+      '/reports/sales-register?from=2026-08-20&to=2026-08-20&type=takeaway&partner=none&kind=refund',
+    );
+  });
+
+  it('salesRegister omits unset filters (no undefined in the query string)', async () => {
+    const fetchMock = okFetch({ rows: [], footer: {} });
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.reports.salesRegister({ from: '2026-08-20', to: '2026-08-21' });
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe(
+      '/reports/sales-register?from=2026-08-20&to=2026-08-21',
+    );
+  });
+
+  it('itemWise sends from/to and category=none', async () => {
+    const fetchMock = okFetch({ rows: [], footer: {} });
+    const client = new SpicyHomeClient({ baseUrl: 'http://localhost:3000', getToken: () => null });
+
+    await client.reports.itemWise({
+      from: '2026-08-20',
+      to: '2026-08-20',
+      type: 'dine_in',
+      category: 'none',
+    });
+
+    expect(listUrl(fetchMock.mock.calls[0])).toBe(
+      '/reports/item-wise?from=2026-08-20&to=2026-08-20&type=dine_in&category=none',
+    );
   });
 });
 
