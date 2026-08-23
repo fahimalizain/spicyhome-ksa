@@ -1079,7 +1079,7 @@ describe('Print Integration', () => {
       const str = receiptPrints[0].data.toString('ascii');
       expect(str).toContain('OPEN ORDER RECEIPT');
       expect(str).not.toContain('SIMPLIFIED TAX INVOICE');
-      expect(str).toContain('Order #:');
+      expect(str).not.toContain('Order #:');
       expect(str).not.toContain('Invoice #');
       expect(str).not.toContain('VAT: 300123456789'); // no VAT registration
       expect(str).toContain('Zinger Burger');

@@ -126,7 +126,6 @@ export function buildSimplifiedInvoiceBuffer(
     documentKind: 'simplified_invoice',
     // Prefer the ZATCA IRN; fall back to the internal reference as last resort.
     documentId: order.documentId?.length ? order.documentId : `Order-${order.orderNo}`,
-    orderNo: order.orderNo,
     createdAt: order.createdAt,
     sellerName,
     vatNumber,
@@ -189,7 +188,6 @@ export function buildOpenOrderReceiptBuffer(
     documentKind: 'open_order',
     // Not printed for open_order — kept in the type for ZATCA documents.
     documentId: order.documentId?.length ? order.documentId : `Order-${order.orderNo}`,
-    orderNo: order.orderNo,
     createdAt: order.createdAt,
     sellerName: restaurantName,
     vatNumber: '',
@@ -304,7 +302,6 @@ export function buildCreditNoteBuffer(
     documentId: refund.documentId?.length ? refund.documentId : `Refund-${refund.id}`,
     originalDocumentId: order.documentId?.length ? order.documentId : undefined,
     reason: refund.reason ?? undefined,
-    orderNo: order.orderNo,
     createdAt: refund.createdAt,
     sellerName,
     vatNumber,

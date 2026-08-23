@@ -219,7 +219,7 @@ describe('print-documents', () => {
       expect(s).toContain('Test'); // seller_name
       expect(s).toContain('1234 Main St'); // seller_building + seller_street
       expect(s).toContain('Riyadh'); // seller_city
-      expect(s).toContain('Kingdom of Saudi Arabia'); // full country EN line
+      expect(s).toContain('Kingdom of Saudi'); // country EN (same line as AR)
       // Postal must not appear as its own address token (VAT may contain "12345")
       expect(s.split('\n').some((l) => l.includes('Riyadh') && l.includes('12345'))).toBe(false);
       // Arabic country name bytes present (UTF-8 charset default)
@@ -271,9 +271,11 @@ describe('print-documents', () => {
       expect(buf.length).toBeGreaterThan(0);
       const s = buf.toString('ascii');
       expect(s).toContain('OPEN ORDER RECEIPT');
-      expect(s).toContain('Order #:');
+      expect(s).not.toContain('Order #:');
       expect(s).toContain('SpicyHome'); // settings.restaurant_name
       expect(s).toContain('NOT A TAX INVOICE');
+      expect(s).toContain('Home Delivery');
+      expect(s).toContain('0112357926 | 0533243439');
       // No ZATCA framing, no QR, no drawer kick
       expect(s).not.toContain('SIMPLIFIED TAX INVOICE');
       expect(s).not.toContain('Invoice #');

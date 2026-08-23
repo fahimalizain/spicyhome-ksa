@@ -6,7 +6,6 @@ describe('ReceiptBuilder', () => {
 
   const baseOpts: ReceiptOptions = {
     documentId: 'INV26-0042',
-    orderNo: 42,
     createdAt: 1700000000, // 2023-11-14T22:13:20Z = 2023-11-15T01:13:20+03
     sellerName: 'SpicyHome Restaurant',
     vatNumber: '300123456789',
@@ -113,10 +112,10 @@ describe('ReceiptBuilder', () => {
     expect(str(buf)).toContain('Invoice #: INV26-0042');
   });
 
-  it('does not render a separate Order ref line on ZATCA invoices', () => {
-    // documentId is printed as Invoice #; orderNo is not a secondary ref line.
+  it('does not render Order # or Order ref on ZATCA invoices', () => {
     const buf = builder.build(baseOpts);
     expect(str(buf)).toContain('Invoice #: INV26-0042');
+    expect(str(buf)).not.toContain('Order #:');
     expect(str(buf)).not.toContain('Order ref:');
   });
 
@@ -133,7 +132,7 @@ describe('ReceiptBuilder', () => {
     expect(s).toContain('1234 King Fahd Rd');
     // City and country are separate lines — no postal, no ISO SA
     expect(s).toContain('Riyadh');
-    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).toContain('Kingdom of Saudi');
     expect(s).not.toContain('12211');
     // No bare ISO country token on its own (full name is used instead)
     expect(s.split('\n').some((l) => l.trim() === 'SA')).toBe(false);
@@ -242,7 +241,7 @@ describe('ReceiptBuilder', () => {
     expect(s).not.toContain('King Fahd Rd');
     expect(s).not.toContain('Riyadh 12211');
     // Street line skipped entirely; city line prints the full country names alone
-    expect(s).toContain('Kingdom of Saudi Arabia');
+    expect(s).toContain('Kingdom of Saudi');
   });
 
   it('renders date in YYYY-MM-DD format (Asia/Riyadh)', () => {
@@ -494,7 +493,7 @@ describe('ReceiptBuilder', () => {
     it('renders the bilingual seller block (same as the invoice)', () => {
       const s = str(builder.build(cnOpts));
       expect(s).toContain('1234 King Fahd Rd');
-      expect(s).toContain('Kingdom of Saudi Arabia');
+      expect(s).toContain('Kingdom of Saudi');
       expect(s).toContain('VAT: 300123456789');
     });
   });
@@ -540,9 +539,9 @@ describe('ReceiptBuilder', () => {
       expect(findSequence(buf, encodePc864(arTitle))).toBe(true);
     });
 
-    it('prints Order # from orderNo (internal reference, not documentId)', () => {
+    it('does not print Order # or Invoice #', () => {
       const s = str(builder.build(openOpts));
-      expect(s).toContain('Order #: 42');
+      expect(s).not.toContain('Order #:');
       expect(s).not.toContain('Invoice #');
       expect(s).not.toContain('Order ref:');
     });
@@ -630,6 +629,13 @@ describe('ReceiptBuilder', () => {
           ),
         ),
       ).toBe(true);
+    });
+
+    it('renders Home Delivery contact at the same place as tax receipts', () => {
+      const s = str(builder.build(openOpts));
+      expect(s).toContain('Home Delivery');
+      expect(s).toContain('0112357926 | 0533243439');
+      expect(s.indexOf('Home Delivery')).toBeLessThan(s.indexOf('NOT A TAX INVOICE'));
     });
 
     it('renders the STI collect footer (EN + AR) and replaces the default footer', () => {

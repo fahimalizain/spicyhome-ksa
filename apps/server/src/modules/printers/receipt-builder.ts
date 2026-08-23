@@ -23,7 +23,7 @@ export interface ReceiptOptions {
    * Document kind. Defaults to 'simplified_invoice'.
    * - 'simplified_invoice' / 'credit_note': ZATCA documents (QR, VAT #, address).
    * - 'open_order': non-ZATCA open order slip — no QR, no VAT #, no address,
-   *   no "Invoice #" line, no drawer kick.
+   *   no "Invoice #" / "Order #" line, no drawer kick.
    */
   documentKind?: 'simplified_invoice' | 'credit_note' | 'open_order';
   /**
@@ -31,8 +31,6 @@ export interface ReceiptOptions {
    * ZATCA documents. Ignored for 'open_order' (never printed).
    */
   documentId: string;
-  /** Optional internal order reference — printed as a secondary "Order ref" line. Required for 'open_order' (printed as "Order #"). */
-  orderNo?: number;
   /** Unix epoch seconds — issue datetime, displayed in Asia/Riyadh. */
   createdAt: number;
   // Seller
@@ -211,10 +209,8 @@ export class ReceiptBuilder {
       const cityAr = (opts.sellerCityAr ?? '').trim();
       this.printSellerLine(eb, cityEn, cityAr, arabic);
 
-      // 4. Country — full names. Too long for one EN|AR row on 42–45 col
-      //    paper, so EN is a full left line and AR is right-aligned alone.
-      eb.text(SELLER_COUNTRY_EN.slice(0, this.width));
-      this.printSellerLine(eb, '', SELLER_COUNTRY_AR, arabic);
+      // 4. Country — full names, EN left / AR right (AR kept whole).
+      this.printSellerLine(eb, SELLER_COUNTRY_EN, SELLER_COUNTRY_AR, arabic);
 
       if (opts.vatNumber) {
         eb.text(`VAT: ${opts.vatNumber}`);
@@ -224,10 +220,7 @@ export class ReceiptBuilder {
 
     // Document / order info
     eb.align(Align.Left);
-    if (isOpenOrder) {
-      // Internal order number — NOT the ZATCA IRN / documentId.
-      eb.text(`Order #: ${opts.orderNo ?? ''}`);
-    } else {
+    if (!isOpenOrder) {
       eb.text(`Invoice #: ${opts.documentId}`);
     }
     const dt = this.formatDateTime(opts.createdAt);
@@ -299,6 +292,12 @@ export class ReceiptBuilder {
 
     // Footer
     eb.align(Align.Center);
+
+    // Store contact (all receipt kinds)
+    eb.text('Home Delivery');
+    eb.text('0112357926 | 0533243439');
+    eb.blankLine();
+
     if (isOpenOrder) {
       // Non-ZATCA framing: NOT a tax invoice, and the guest must collect the
       // Simplified Tax Invoice at the end of the visit. Replaces the default
@@ -312,12 +311,6 @@ export class ReceiptBuilder {
       eb.text('at the end of your visit.');
       this.writeArabicCentered(eb, AR_COLLECT_STI, arabic);
     } else {
-      eb.align(Align.Center);
-
-      // Store contact (all receipt kinds)
-      eb.text('Home Delivery');
-      eb.text('0112357926 | 0533243439');
-      eb.blankLine();
       eb.text('********');
       eb.text(opts.footer ?? 'Thank you! Visit again.');
       eb.text('********');
