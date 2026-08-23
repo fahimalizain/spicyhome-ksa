@@ -116,7 +116,7 @@ describe('ItemWiseSalesPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(mockItemWise).toHaveBeenCalled();
+      expect(screen.getByLabelText('Category')).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'none' } });

@@ -143,7 +143,7 @@ describe('SalesRegisterPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(mockSalesRegister).toHaveBeenCalled();
+      expect(screen.getByLabelText('Kind')).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText('Kind'), { target: { value: 'refund' } });
@@ -166,7 +166,7 @@ describe('SalesRegisterPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(mockSalesRegister).toHaveBeenCalled();
+      expect(screen.getByLabelText('Type')).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'takeaway' } });
@@ -179,6 +179,10 @@ describe('SalesRegisterPage', () => {
         partner: undefined,
         kind: undefined,
       });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Partner')).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText('Partner'), { target: { value: 'none' } });
