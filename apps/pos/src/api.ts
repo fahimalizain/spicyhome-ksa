@@ -6,7 +6,7 @@ const TOKEN_KEY = 'spicyhome_token';
 const ME_KEY = 'spicyhome_me';
 
 function getBaseUrl(): string {
-  return import.meta.env.DEV ? `${window.location.origin}/api` : window.location.origin;
+  return `${window.location.origin}/api`;
 }
 
 function addRequestBreadcrumb(info: RequestCompleteInfo): void {
