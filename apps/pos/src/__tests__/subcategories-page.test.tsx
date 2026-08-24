@@ -65,18 +65,28 @@ describe('SubcategoriesPage', () => {
     expect(chickenRow.textContent).toContain('Main Course');
   });
 
-  it('sends categoryId, name, sortOrder, isActive on create', async () => {
-    const { container } = renderPage();
+  it('does not show the dialog until New Subcategory or Edit is clicked', async () => {
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Subcategories')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
-    const nameInput = form.querySelector('input') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'Desserts' } });
+    expect(screen.getByText('New Subcategory')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'New Subcategory' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Edit Subcategory' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+  });
 
-    const selects = form.querySelectorAll('select');
-    fireEvent.change(selects[0], { target: { value: '2' } });
+  it('sends categoryId, name, sortOrder, isActive on create', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Subcategories')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Subcategory'));
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Desserts' } });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: '2' } });
 
     fireEvent.click(screen.getByText('Create'));
 
@@ -96,18 +106,15 @@ describe('SubcategoriesPage', () => {
       expect(screen.getByText('Chicken')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByText('Edit')[1]); // Chicken (category 2)
+    fireEvent.click(screen.getByText('Chicken')); // row click opens edit
     await waitFor(() => {
-      expect(screen.getByText('Edit Subcategory')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Edit Subcategory' })).toBeInTheDocument();
     });
 
-    const form = document.querySelector('form')!;
-    const nameInput = form.querySelector('input') as HTMLInputElement;
-    expect(nameInput.value).toBe('Chicken');
-    const selects = form.querySelectorAll('select');
-    expect(selects[0].value).toBe('2');
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Chicken');
+    expect(screen.getByLabelText('Category')).toHaveValue('2');
 
-    fireEvent.change(nameInput, { target: { value: 'Fried Chicken' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Fried Chicken' } });
     fireEvent.click(screen.getByText('Update'));
 
     await waitFor(() => {
@@ -120,11 +127,13 @@ describe('SubcategoriesPage', () => {
     });
   });
 
-  it('shows inactive subcategories with a marker', async () => {
+  it('does not render an (inactive) marker even when a subcategory is inactive', async () => {
     mockListSubcategories.mockResolvedValue([{ ...subVeg, isActive: false }]);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('(inactive)')).toBeInTheDocument();
+      expect(screen.getByText('Veg')).toBeInTheDocument();
     });
+
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
   });
 });
