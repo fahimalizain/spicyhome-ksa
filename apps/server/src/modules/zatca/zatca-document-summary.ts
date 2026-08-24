@@ -1,3 +1,17 @@
+/**
+ * Operator-facing rollup of zatca_invoices + zatca_credit_notes.
+ *
+ * Two pipelines share one `status` column (see docs/zatca/overview.md):
+ *   simplified (B2C reporting): signed → reported | failed
+ *   standard   (B2B clearance): pending → cleared | rejected | error
+ *
+ * Staff do not need that taxonomy. They need: is the tax document done,
+ * waiting, retryable, or burned-and-must-reissue. So we collapse into
+ * four buckets and count the *current* attempt per order / refund — not
+ * every historical row. Counting every row would mark a recovered
+ * clearance rejection as permanently unhealthy.
+ */
+
 export type ZatcaDocumentHealth = 'ok' | 'attention';
 
 export interface ZatcaDocumentCounts {
@@ -16,6 +30,7 @@ export interface ZatcaDocumentsSummary {
 
 export interface ZatcaAttemptRow {
   id: number;
+  /** orders.id for invoices, order_refunds.id for credit notes */
   ownerId: number;
   status: string;
 }
@@ -35,10 +50,30 @@ export function bucketStatus(status: string): ZatcaDocumentBucket {
     case 'failed':
     case 'error':
     default:
+      // Unknown is treated as failed so a new/typo status surfaces as
+      // attention instead of silently dropping out of the totals.
       return 'failed';
   }
 }
 
+/**
+ * One row per owner — the document staff can act on today.
+ *
+ * Matches `getActiveInvoiceForOrder`: prefer a `cleared` row, otherwise
+ * the highest id (latest attempt).
+ *
+ * Why prefer cleared over a later non-cleared row?
+ *   A rejected standard attempt keeps its ICV/UUID forever (hash chain).
+ *   Reissue inserts a *new* row. The partial unique index allows only one
+ *   `cleared` per order/refund, but a later `rejected`/`error` row is not
+ *   forbidden. The issued tax document is the cleared one; a later burn
+ *   must not hide that success or inflate "needs attention".
+ *
+ * Why latest id when nothing is cleared?
+ *   That is the in-flight or last-failed attempt (`pending` / `error` /
+ *   `rejected` / `signed` / `failed`). Older rejected siblings are burned
+ *   history and must not be counted.
+ */
 export function pickCurrentAttempt<T extends ZatcaAttemptRow>(rows: T[]): T[] {
   const byOwner = new Map<number, T>();
   for (const row of rows) {
@@ -85,6 +120,7 @@ export function sumCounts(a: ZatcaDocumentCounts, b: ZatcaDocumentCounts): Zatca
   };
 }
 
+/** Queued alone is ok — the reporter polls `signed`/`failed` every few minutes. */
 export function healthOf(counts: ZatcaDocumentCounts): ZatcaDocumentHealth {
   return counts.failed + counts.rejected > 0 ? 'attention' : 'ok';
 }
