@@ -18,10 +18,10 @@ export type DialogProps = {
  *
  * The parent renders <Dialog /> only while open — there is no `open` prop.
  * Structure mirrors the existing POS modals (OrderVoidModal / AddPaymentModal):
- * a `div` overlay (not native <dialog>, which is unsupported on Chrome 109),
- * with the card root carrying `data-osk-scope` and an <OskDock /> between the
- * body and the footer so the on-screen keyboard docks inside the dialog
- * instead of covering Save/Cancel.
+ * a `div` overlay (native <dialog> is supported on Chrome 109 but none of the
+ * existing modals use it), with the card root carrying `data-osk-scope` and an
+ * <OskDock /> between the body and the footer so the on-screen keyboard docks
+ * inside the dialog instead of covering Save/Cancel.
  *
  * Close paths: Escape on window, or a click on the overlay. The card
  * stopPropagation()s clicks so it never closes from inside. There is no
@@ -56,7 +56,7 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className={`bg-gray-900 rounded-xl w-[480px] max-w-[90vw] max-h-[90vh] flex flex-col ${className ?? ''}`}
+        className={`bg-gray-900 rounded-xl max-w-[90vw] max-h-[90vh] flex flex-col ${className ?? 'w-[480px]'}`}
       >
         <h2 id={titleId} className="text-lg font-bold text-white shrink-0 px-4 pt-4">
           {title}
@@ -72,7 +72,7 @@ export function Dialog({
             the Save/Cancel row. Zero footprint otherwise. */}
         <OskDock size={oskSize} />
 
-        <div data-testid="dialog-footer" className="shrink-0 px-4 pb-4">
+        <div data-testid="dialog-footer" className="shrink-0 px-4 pt-3 pb-4">
           {footer}
         </div>
       </div>

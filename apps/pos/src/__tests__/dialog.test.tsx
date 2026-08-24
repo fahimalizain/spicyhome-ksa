@@ -88,14 +88,23 @@ describe('Dialog', () => {
     expect(screen.getByTestId('osk-dock')).toHaveAttribute('data-osk-size', 'sm');
   });
 
-  it('applies className on the card, not the overlay', () => {
+  it('applies className on the card, not the overlay, replacing the default width', () => {
     renderDialog({ className: 'w-[640px]' });
 
-    expect(screen.getByRole('dialog')).toHaveClass('w-[640px]');
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('w-[640px]');
+    // The default width must not linger — only one width class, ever.
+    expect(dialog).not.toHaveClass('w-[480px]');
 
     const overlay = document.querySelector('.fixed.inset-0');
     expect(overlay).not.toBeNull();
     expect(overlay).not.toHaveClass('w-[640px]');
+  });
+
+  it('defaults the card width to w-[480px] when no className is passed', () => {
+    renderDialog();
+
+    expect(screen.getByRole('dialog')).toHaveClass('w-[480px]');
   });
 
   it('keeps the footer a sibling of the scroll body, not a descendant of it', () => {
