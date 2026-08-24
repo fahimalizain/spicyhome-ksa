@@ -18,6 +18,7 @@ import { ZatcaReportingService } from './zatca-reporting.service';
 import { FakeZatcaHttpClient, ZatcaHttpService } from './zatca-http.service';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
 import { zatcaKey } from '@spicyhome/shared';
+import { configureHttpApp } from '../../configure-http-app';
 
 let seq = 0;
 function nextSeq(): number {
@@ -94,7 +95,7 @@ describe('ZatcaReportingService', () => {
       .useValue(fakeHttp)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     reportingService = app.get(ZatcaReportingService);

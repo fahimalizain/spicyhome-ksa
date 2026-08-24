@@ -1,6 +1,5 @@
 import { BadRequestException, Module, ValidationPipe } from '@nestjs/common';
 import { APP_PIPE, APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import { ServeStaticModule } from '@nestjs/serve-static';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from './modules/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -21,8 +20,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { SentryUserInterceptor } from './common/interceptors/sentry-user.interceptor';
 
-const spaDist = process.env.SPA_DIST;
-const imports: any[] = [
+const imports = [
   EventEmitterModule.forRoot(),
   DatabaseModule,
   AuthModule,
@@ -39,29 +37,6 @@ const imports: any[] = [
   DeliveryPartnersModule,
   HealthModule,
 ];
-
-if (spaDist) {
-  imports.push(
-    ServeStaticModule.forRoot({
-      rootPath: spaDist,
-      exclude: [
-        '/api/(.*)',
-        '/auth/(.*)',
-        '/menu/(.*)',
-        '/orders/(.*)',
-        '/tables/(.*)',
-        '/printers/(.*)',
-        '/settings/(.*)',
-        '/zatca/(.*)',
-        '/day/(.*)',
-        '/reports/(.*)',
-        '/health',
-        '/payment-methods/(.*)',
-        '/delivery-partners/(.*)',
-      ],
-    }),
-  );
-}
 
 @Module({
   imports,

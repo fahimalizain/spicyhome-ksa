@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from './app.module';
 import { DRIZZLE } from './modules/database/database.module';
+import { configureHttpApp } from './configure-http-app';
 
 describe('Health endpoint', () => {
   let app: INestApplication;
@@ -30,7 +31,7 @@ describe('Health endpoint', () => {
       .useValue(db)
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = configureHttpApp(moduleFixture.createNestApplication());
     app.useWebSocketAdapter(new WsAdapter(app));
     await app.listen(0);
     await app.init();
@@ -78,7 +79,7 @@ describe('Sentry exception filter', () => {
       .useValue(db)
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = configureHttpApp(moduleFixture.createNestApplication());
     app.useWebSocketAdapter(new WsAdapter(app));
     await app.listen(0);
     await app.init();
@@ -93,7 +94,7 @@ describe('Sentry exception filter', () => {
 
   it('401 Unauthorized preserves correct status code', async () => {
     const res = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'nonexistent', pin: '0000', clientType: 'pos' })
       .expect(401);
     expect(res.body.statusCode).toBe(401);
@@ -101,18 +102,18 @@ describe('Sentry exception filter', () => {
 
   it('404 Not Found preserves correct status code', async () => {
     await request(app.getHttpServer())
-      .get('/auth/users/99999')
+      .get('/api/auth/users/99999')
       .set('Authorization', 'Bearer invalid-token')
       .expect(401); // Returns 401 because auth guard runs first
   });
 
   it('400 Bad Request preserves correct status code', async () => {
-    const res = await request(app.getHttpServer()).post('/auth/login').send({}).expect(400);
+    const res = await request(app.getHttpServer()).post('/api/auth/login').send({}).expect(400);
     expect(res.body.statusCode).toBe(400);
   });
 
   it('Missing token returns 401', async () => {
-    const res = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const res = await request(app.getHttpServer()).get('/api/auth/me').expect(401);
     expect(res.body.statusCode).toBe(401);
   });
 });
