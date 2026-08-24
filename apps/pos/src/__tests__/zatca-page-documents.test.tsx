@@ -7,6 +7,7 @@ const mockGetConfig = vi.fn();
 const mockGetStatus = vi.fn();
 const mockListInvoices = vi.fn();
 const mockListCreditNotes = vi.fn();
+const mockGetDocumentsSummary = vi.fn();
 const mockGetInvoice = vi.fn();
 const mockGetCreditNote = vi.fn();
 const mockRetryReporting = vi.fn();
@@ -18,6 +19,7 @@ vi.mock('../api', () => ({
       getStatus: (...args: any[]) => mockGetStatus(...args),
       listInvoices: (...args: any[]) => mockListInvoices(...args),
       listCreditNotes: (...args: any[]) => mockListCreditNotes(...args),
+      getDocumentsSummary: (...args: any[]) => mockGetDocumentsSummary(...args),
       getInvoice: (...args: any[]) => mockGetInvoice(...args),
       getCreditNote: (...args: any[]) => mockGetCreditNote(...args),
       retryReporting: (...args: any[]) => mockRetryReporting(...args),
@@ -65,6 +67,12 @@ const sampleConfig = {
   country: 'SA',
   orgUnit: 'test',
   apiBaseUrl: 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
+};
+
+const emptySummary = {
+  invoices: { submitted: 0, queued: 0, failed: 0, rejected: 0, total: 0 },
+  creditNotes: { submitted: 0, queued: 0, failed: 0, rejected: 0, total: 0 },
+  overall: { submitted: 0, queued: 0, failed: 0, rejected: 0, total: 0, health: 'ok' as const },
 };
 
 const sampleOnboarding = {
@@ -130,6 +138,12 @@ describe('ZatcaPage — documents list', () => {
     mockGetStatus.mockResolvedValue(sampleOnboarding);
     mockListInvoices.mockResolvedValue([sampleInvoice]);
     mockListCreditNotes.mockResolvedValue([sampleCreditNote]);
+    mockGetDocumentsSummary.mockResolvedValue({
+      ...emptySummary,
+      invoices: { submitted: 0, queued: 1, failed: 0, rejected: 0, total: 1 },
+      creditNotes: { submitted: 0, queued: 1, failed: 0, rejected: 0, total: 1 },
+      overall: { submitted: 0, queued: 2, failed: 0, rejected: 0, total: 2, health: 'ok' },
+    });
     mockRetryReporting.mockResolvedValue({ processed: 0, succeeded: 0, failed: 0 });
   });
 
@@ -263,6 +277,43 @@ describe('ZatcaPage — documents list', () => {
     await waitFor(() => {
       // Should be called with invoiceId=undefined, creditNoteId=10
       expect(mockRetryReporting).toHaveBeenCalledWith(undefined, 10);
+    });
+  });
+
+  it('renders the documents status card from the summary endpoint', async () => {
+    mockGetDocumentsSummary.mockResolvedValue({
+      invoices: { submitted: 10, queued: 1, failed: 1, rejected: 0, total: 12 },
+      creditNotes: { submitted: 2, queued: 1, failed: 0, rejected: 0, total: 3 },
+      overall: { submitted: 12, queued: 2, failed: 1, rejected: 0, total: 15, health: 'attention' },
+    });
+
+    renderZatcaPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Documents Status')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    expect(screen.getByText('Queued')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('10 submitted · 1 queued · 1 failed · 0 rejected')).toBeInTheDocument();
+    expect(screen.getByText('2 submitted · 1 queued · 0 failed · 0 rejected')).toBeInTheDocument();
+  });
+
+  it('shows All submitted when every current document succeeded', async () => {
+    mockGetDocumentsSummary.mockResolvedValue({
+      invoices: { submitted: 4, queued: 0, failed: 0, rejected: 0, total: 4 },
+      creditNotes: { submitted: 1, queued: 0, failed: 0, rejected: 0, total: 1 },
+      overall: { submitted: 5, queued: 0, failed: 0, rejected: 0, total: 5, health: 'ok' },
+    });
+
+    renderZatcaPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('All submitted')).toBeInTheDocument();
     });
   });
 

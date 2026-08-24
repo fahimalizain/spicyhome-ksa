@@ -835,6 +835,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/zatca/documents/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund) */
+    get: operations['ZatcaController_getDocumentsSummary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/zatca/invoices': {
     parameters: {
       query?: never;
@@ -2743,6 +2760,81 @@ export interface components {
     ZatcaInvoiceReissueDto: {
       /** @description Updated ZATCA buyer details for the reissued invoice */
       zatcaBuyerDetails?: Record<string, never>;
+    };
+    ZatcaDocumentCountsDto: {
+      /**
+       * Format: int32
+       * @description Current documents with status reported (simplified) or cleared (standard)
+       * @example 12
+       */
+      submitted: number;
+      /**
+       * Format: int32
+       * @description Current documents with status signed (awaiting report) or pending (in clearance)
+       * @example 2
+       */
+      queued: number;
+      /**
+       * Format: int32
+       * @description Current documents with status failed (reporting) or error (retryable clearance)
+       * @example 1
+       */
+      failed: number;
+      /**
+       * Format: int32
+       * @description Current documents with status rejected (must reissue with a new ICV)
+       * @example 0
+       */
+      rejected: number;
+      /**
+       * Format: int32
+       * @description Current documents (latest attempt per order / refund; prefers cleared)
+       * @example 15
+       */
+      total: number;
+    };
+    ZatcaDocumentsOverallDto: {
+      /**
+       * Format: int32
+       * @description Current documents with status reported (simplified) or cleared (standard)
+       * @example 12
+       */
+      submitted: number;
+      /**
+       * Format: int32
+       * @description Current documents with status signed (awaiting report) or pending (in clearance)
+       * @example 2
+       */
+      queued: number;
+      /**
+       * Format: int32
+       * @description Current documents with status failed (reporting) or error (retryable clearance)
+       * @example 1
+       */
+      failed: number;
+      /**
+       * Format: int32
+       * @description Current documents with status rejected (must reissue with a new ICV)
+       * @example 0
+       */
+      rejected: number;
+      /**
+       * Format: int32
+       * @description Current documents (latest attempt per order / refund; prefers cleared)
+       * @example 15
+       */
+      total: number;
+      /**
+       * @description ok when failed + rejected is 0; queued alone stays ok
+       * @example ok
+       * @enum {string}
+       */
+      health: 'ok' | 'attention';
+    };
+    ZatcaDocumentsSummaryDto: {
+      invoices: components['schemas']['ZatcaDocumentCountsDto'];
+      creditNotes: components['schemas']['ZatcaDocumentCountsDto'];
+      overall: components['schemas']['ZatcaDocumentsOverallDto'];
     };
     ZatcaConfigDto: {
       /**
@@ -4809,6 +4901,26 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  ZatcaController_getDocumentsSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Document status summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ZatcaDocumentsSummaryDto'];
+        };
       };
     };
   };

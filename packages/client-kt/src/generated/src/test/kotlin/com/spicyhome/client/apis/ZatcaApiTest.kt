@@ -20,6 +20,7 @@ import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.apis.ZatcaApi
 import com.spicyhome.client.models.ZatcaConfigDto
+import com.spicyhome.client.models.ZatcaDocumentsSummaryDto
 
 class ZatcaApiTest : ShouldSpec() {
     init {
@@ -44,6 +45,13 @@ class ZatcaApiTest : ShouldSpec() {
             // uncomment below to test zatcaControllerGetCreditNote
             //val id : kotlin.String = id_example // kotlin.String | 
             //apiInstance.zatcaControllerGetCreditNote(id)
+        }
+
+        // to test zatcaControllerGetDocumentsSummary
+        should("test zatcaControllerGetDocumentsSummary") {
+            // uncomment below to test zatcaControllerGetDocumentsSummary
+            //val result : ZatcaDocumentsSummaryDto = apiInstance.zatcaControllerGetDocumentsSummary()
+            //result shouldBe ("TODO")
         }
 
         // to test zatcaControllerGetInvoice

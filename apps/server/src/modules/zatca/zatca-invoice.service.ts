@@ -66,6 +66,7 @@ import {
 } from '@spicyhome/shared';
 import { encodeZatcaTLV, TLVInput } from './tlv';
 import type { BuyerInfo } from './zatca-xml-builder.service';
+import { buildDocumentsSummary, type ZatcaDocumentsSummary } from './zatca-document-summary';
 
 export interface CreateInvoiceResult {
   id: number;
@@ -715,6 +716,31 @@ export class ZatcaInvoiceService {
    */
   getCreditNoteById(id: number): any | undefined {
     return this.db.select().from(zatcaCreditNotes).where(eq(zatcaCreditNotes.id, id)).get();
+  }
+
+  /**
+   * Status counts for the current invoice per order and current credit note
+   * per refund. Prefers a `cleared` row; otherwise the latest attempt id.
+   * Burned rejected attempts are ignored once a later current row exists.
+   */
+  getDocumentsSummary(): ZatcaDocumentsSummary {
+    const invoiceRows = this.db
+      .select({
+        id: zatcaInvoices.id,
+        ownerId: zatcaInvoices.orderId,
+        status: zatcaInvoices.status,
+      })
+      .from(zatcaInvoices)
+      .all();
+    const creditNoteRows = this.db
+      .select({
+        id: zatcaCreditNotes.id,
+        ownerId: zatcaCreditNotes.refundId,
+        status: zatcaCreditNotes.status,
+      })
+      .from(zatcaCreditNotes)
+      .all();
+    return buildDocumentsSummary(invoiceRows, creditNoteRows);
   }
 
   /**

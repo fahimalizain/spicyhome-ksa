@@ -5,6 +5,7 @@ import type {
   ZatcaOnboardingState,
   ZatcaInvoice,
   ZatcaCreditNote,
+  ZatcaDocumentsSummary,
 } from '@spicyhome/client-ts';
 import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
 import { useZatcaSandboxDefaults } from '../../hooks/useZatcaSandboxDefaults';
@@ -76,6 +77,9 @@ export function ZatcaPage() {
   const [creditNotes, setCreditNotes] = useState<ZatcaCreditNote[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState('');
+  const [documentsSummary, setDocumentsSummary] = useState<ZatcaDocumentsSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState('');
 
   type SelectedDoc =
     { kind: 'invoice'; data: ZatcaInvoice } | { kind: 'credit_note'; data: ZatcaCreditNote } | null;
@@ -101,6 +105,7 @@ export function ZatcaPage() {
     loadConfig();
     loadOnboarding();
     loadDocuments();
+    loadDocumentsSummary();
   }, []);
 
   // ── Config ──────────────────────────────────────────────────────────────────
@@ -305,6 +310,18 @@ export function ZatcaPage() {
     }
   }
 
+  async function loadDocumentsSummary() {
+    setSummaryLoading(true);
+    setSummaryError('');
+    try {
+      setDocumentsSummary(await client.zatca.getDocumentsSummary());
+    } catch (e: any) {
+      setSummaryError(e.message || 'Failed to load document summary');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
   async function viewDocumentDetail(kind: 'invoice' | 'credit_note', id: number) {
     setDocDetailLoading(true);
     setSelectedDoc(null);
@@ -337,6 +354,7 @@ export function ZatcaPage() {
         await client.zatca.retryReporting(kind === 'invoice' && id !== undefined ? id : undefined);
       }
       await loadDocuments();
+      await loadDocumentsSummary();
     } catch (e: any) {
       setDocumentsError(e.message || 'Failed to retry reporting');
     } finally {
@@ -376,6 +394,20 @@ export function ZatcaPage() {
     return (halalas / 100).toFixed(2) + ' SAR';
   }
 
+  function summaryHealthLabel(summary: ZatcaDocumentsSummary): string {
+    if (summary.overall.total === 0) return 'No documents';
+    if (summary.overall.health === 'attention') return 'Needs attention';
+    if (summary.overall.queued > 0) return 'Queued';
+    return 'All submitted';
+  }
+
+  function summaryHealthClass(summary: ZatcaDocumentsSummary): string {
+    if (summary.overall.total === 0) return 'bg-gray-600 text-gray-300';
+    if (summary.overall.health === 'attention') return 'bg-red-700 text-red-100';
+    if (summary.overall.queued > 0) return 'bg-yellow-700 text-yellow-100';
+    return 'bg-green-700 text-green-100';
+  }
+
   // Build merged document list sorted by ICV descending
   const docRows: {
     kind: 'invoice' | 'credit_note';
@@ -408,6 +440,75 @@ export function ZatcaPage() {
   return (
     <div className="h-full overflow-y-auto p-4 space-y-6">
       <h1 className="text-xl font-bold text-white mb-2">ZATCA Configuration</h1>
+
+      {/* ── Documents Status ── */}
+      <section className="bg-gray-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-300">Documents Status</h2>
+          {documentsSummary && (
+            <span
+              className={
+                'px-2 py-0.5 rounded text-xs font-semibold ' + summaryHealthClass(documentsSummary)
+              }
+            >
+              {summaryHealthLabel(documentsSummary)}
+            </span>
+          )}
+        </div>
+        {summaryError && (
+          <div className="text-red-400 text-xs bg-red-900/30 border border-red-700 rounded px-3 py-2">
+            {summaryError}
+          </div>
+        )}
+        {summaryLoading ? (
+          <div className="text-gray-400 text-sm">Loading...</div>
+        ) : documentsSummary ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-4 gap-2">
+              {(
+                [
+                  [
+                    'Submitted',
+                    documentsSummary.overall.submitted,
+                    'bg-green-900/40 text-green-200',
+                  ],
+                  ['Queued', documentsSummary.overall.queued, 'bg-yellow-900/40 text-yellow-200'],
+                  ['Failed', documentsSummary.overall.failed, 'bg-red-900/40 text-red-200'],
+                  [
+                    'Rejected',
+                    documentsSummary.overall.rejected,
+                    'bg-orange-900/40 text-orange-200',
+                  ],
+                ] as const
+              ).map(([label, count, color]) => (
+                <div key={label} className={'rounded-lg px-3 py-2 ' + color}>
+                  <div className="text-lg font-semibold leading-tight">{count}</div>
+                  <div className="text-xs opacity-80">{label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs text-gray-400">
+              <div>
+                <span className="text-gray-500">Invoices: </span>
+                <span className="text-gray-300">
+                  {documentsSummary.invoices.submitted} submitted ·{' '}
+                  {documentsSummary.invoices.queued} queued · {documentsSummary.invoices.failed}{' '}
+                  failed · {documentsSummary.invoices.rejected} rejected
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Credit notes: </span>
+                <span className="text-gray-300">
+                  {documentsSummary.creditNotes.submitted} submitted ·{' '}
+                  {documentsSummary.creditNotes.queued} queued ·{' '}
+                  {documentsSummary.creditNotes.failed} failed ·{' '}
+                  {documentsSummary.creditNotes.rejected} rejected
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       {/* ── Seller Config ── */}
       <section className="bg-gray-800 rounded-xl p-4 space-y-3">
