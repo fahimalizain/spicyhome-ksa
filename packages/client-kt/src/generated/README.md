@@ -112,7 +112,9 @@ All URIs are relative to *http://localhost*
 | *PrintersApi* | [**printersControllerListWindowsQueues**](docs/PrintersApi.md#printerscontrollerlistwindowsqueues) | **GET** printers/windows-queues | List available Windows printer queue names |
 | *PrintersApi* | [**printersControllerTestPrint**](docs/PrintersApi.md#printerscontrollertestprint) | **POST** printers/{id}/test | Print a test ticket |
 | *PrintersApi* | [**printersControllerUpdate**](docs/PrintersApi.md#printerscontrollerupdate) | **PUT** printers/{id} | Update a printer |
+| *ReportsApi* | [**reportsControllerGetItemWiseSales**](docs/ReportsApi.md#reportscontrollergetitemwisesales) | **GET** reports/item-wise | Item-wise sales (product mix) over a date range |
 | *ReportsApi* | [**reportsControllerGetSales**](docs/ReportsApi.md#reportscontrollergetsales) | **GET** reports/sales | Daily sales totals over a date range |
+| *ReportsApi* | [**reportsControllerGetSalesRegister**](docs/ReportsApi.md#reportscontrollergetsalesregister) | **GET** reports/sales-register | Sales register (day-book of invoices and refunds) over a date range |
 | *ReportsApi* | [**reportsControllerGetVat**](docs/ReportsApi.md#reportscontrollergetvat) | **GET** reports/vat | VAT summary over a date range (for VAT return) |
 | *ReportsApi* | [**reportsControllerGetXReport**](docs/ReportsApi.md#reportscontrollergetxreport) | **GET** reports/x | Live X-report for the current open day |
 | *ReportsApi* | [**reportsControllerGetZReport**](docs/ReportsApi.md#reportscontrollergetzreport) | **GET** reports/z/{dayId} | Z-report for a closed day |
@@ -127,6 +129,7 @@ All URIs are relative to *http://localhost*
 | *ZatcaApi* | [**zatcaControllerGenerateCSR**](docs/ZatcaApi.md#zatcacontrollergeneratecsr) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
 | *ZatcaApi* | [**zatcaControllerGetConfig**](docs/ZatcaApi.md#zatcacontrollergetconfig) | **GET** zatca/config | Get ZATCA seller configuration |
 | *ZatcaApi* | [**zatcaControllerGetCreditNote**](docs/ZatcaApi.md#zatcacontrollergetcreditnote) | **GET** zatca/credit-notes/{id} | Get credit note detail including XML |
+| *ZatcaApi* | [**zatcaControllerGetDocumentsSummary**](docs/ZatcaApi.md#zatcacontrollergetdocumentssummary) | **GET** zatca/documents/summary | Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund) |
 | *ZatcaApi* | [**zatcaControllerGetInvoice**](docs/ZatcaApi.md#zatcacontrollergetinvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | *ZatcaApi* | [**zatcaControllerGetStatus**](docs/ZatcaApi.md#zatcacontrollergetstatus) | **GET** zatca/status | Get ZATCA onboarding and status |
 | *ZatcaApi* | [**zatcaControllerListCreditNotes**](docs/ZatcaApi.md#zatcacontrollerlistcreditnotes) | **GET** zatca/credit-notes | List ZATCA credit notes |
@@ -162,6 +165,9 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.DayOpeningResponse](docs/DayOpeningResponse.md)
  - [com.spicyhome.client.models.DeliveryPartnerResponse](docs/DeliveryPartnerResponse.md)
  - [com.spicyhome.client.models.ItemResponse](docs/ItemResponse.md)
+ - [com.spicyhome.client.models.ItemWiseSalesFooterDto](docs/ItemWiseSalesFooterDto.md)
+ - [com.spicyhome.client.models.ItemWiseSalesResponseDto](docs/ItemWiseSalesResponseDto.md)
+ - [com.spicyhome.client.models.ItemWiseSalesRowDto](docs/ItemWiseSalesRowDto.md)
  - [com.spicyhome.client.models.LoginDto](docs/LoginDto.md)
  - [com.spicyhome.client.models.LoginResponse](docs/LoginResponse.md)
  - [com.spicyhome.client.models.MeResponse](docs/MeResponse.md)
@@ -183,6 +189,10 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.RefundResponse](docs/RefundResponse.md)
  - [com.spicyhome.client.models.ReprintOrderDto](docs/ReprintOrderDto.md)
  - [com.spicyhome.client.models.RoleResponse](docs/RoleResponse.md)
+ - [com.spicyhome.client.models.SalesRegisterFooterDto](docs/SalesRegisterFooterDto.md)
+ - [com.spicyhome.client.models.SalesRegisterResponseDto](docs/SalesRegisterResponseDto.md)
+ - [com.spicyhome.client.models.SalesRegisterRowDto](docs/SalesRegisterRowDto.md)
+ - [com.spicyhome.client.models.SalesRegisterTenderDto](docs/SalesRegisterTenderDto.md)
  - [com.spicyhome.client.models.SetSettingDto](docs/SetSettingDto.md)
  - [com.spicyhome.client.models.SettingResponse](docs/SettingResponse.md)
  - [com.spicyhome.client.models.StatusResponse](docs/StatusResponse.md)
@@ -213,6 +223,9 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.ZatcaBuyerDetailsDto](docs/ZatcaBuyerDetailsDto.md)
  - [com.spicyhome.client.models.ZatcaClearanceDetailDto](docs/ZatcaClearanceDetailDto.md)
  - [com.spicyhome.client.models.ZatcaConfigDto](docs/ZatcaConfigDto.md)
+ - [com.spicyhome.client.models.ZatcaDocumentCountsDto](docs/ZatcaDocumentCountsDto.md)
+ - [com.spicyhome.client.models.ZatcaDocumentsOverallDto](docs/ZatcaDocumentsOverallDto.md)
+ - [com.spicyhome.client.models.ZatcaDocumentsSummaryDto](docs/ZatcaDocumentsSummaryDto.md)
  - [com.spicyhome.client.models.ZatcaInvoiceAttemptDto](docs/ZatcaInvoiceAttemptDto.md)
  - [com.spicyhome.client.models.ZatcaInvoiceReissueDto](docs/ZatcaInvoiceReissueDto.md)
  - [com.spicyhome.client.models.ZatcaInvoiceStatusResponse](docs/ZatcaInvoiceStatusResponse.md)

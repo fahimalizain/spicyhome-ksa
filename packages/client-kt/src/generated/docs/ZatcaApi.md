@@ -7,6 +7,7 @@ All URIs are relative to *http://localhost*
 | [**zatcaControllerGenerateCSR**](ZatcaApi.md#zatcaControllerGenerateCSR) | **POST** zatca/onboard/csr | Generate keypair and CSR for ZATCA onboarding |
 | [**zatcaControllerGetConfig**](ZatcaApi.md#zatcaControllerGetConfig) | **GET** zatca/config | Get ZATCA seller configuration |
 | [**zatcaControllerGetCreditNote**](ZatcaApi.md#zatcaControllerGetCreditNote) | **GET** zatca/credit-notes/{id} | Get credit note detail including XML |
+| [**zatcaControllerGetDocumentsSummary**](ZatcaApi.md#zatcaControllerGetDocumentsSummary) | **GET** zatca/documents/summary | Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund) |
 | [**zatcaControllerGetInvoice**](ZatcaApi.md#zatcaControllerGetInvoice) | **GET** zatca/invoices/{id} | Get invoice detail including XML |
 | [**zatcaControllerGetStatus**](ZatcaApi.md#zatcaControllerGetStatus) | **GET** zatca/status | Get ZATCA onboarding and status |
 | [**zatcaControllerListCreditNotes**](ZatcaApi.md#zatcaControllerListCreditNotes) | **GET** zatca/credit-notes | List ZATCA credit notes |
@@ -125,6 +126,41 @@ Configure bearer:
 
  - **Content-Type**: Not defined
  - **Accept**: Not defined
+
+
+Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund)
+
+### Example
+```kotlin
+// Import classes:
+//import com.spicyhome.client.*
+//import com.spicyhome.client.infrastructure.*
+//import com.spicyhome.client.models.*
+
+val apiClient = ApiClient()
+apiClient.setBearerToken("TOKEN")
+val webService = apiClient.createWebservice(ZatcaApi::class.java)
+
+val result : ZatcaDocumentsSummaryDto = webService.zatcaControllerGetDocumentsSummary()
+```
+
+### Parameters
+This endpoint does not need any parameter.
+
+### Return type
+
+[**ZatcaDocumentsSummaryDto**](ZatcaDocumentsSummaryDto.md)
+
+### Authorization
+
+
+Configure bearer:
+    ApiClient().setBearerToken("TOKEN")
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
 
 
 Get invoice detail including XML

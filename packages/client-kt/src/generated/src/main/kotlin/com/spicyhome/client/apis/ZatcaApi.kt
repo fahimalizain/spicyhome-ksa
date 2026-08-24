@@ -7,6 +7,7 @@ import okhttp3.RequestBody
 import com.squareup.moshi.Json
 
 import com.spicyhome.client.models.ZatcaConfigDto
+import com.spicyhome.client.models.ZatcaDocumentsSummaryDto
 
 interface ZatcaApi {
     /**
@@ -45,6 +46,18 @@ interface ZatcaApi {
      */
     @GET("zatca/credit-notes/{id}")
     fun zatcaControllerGetCreditNote(@Path("id") id: kotlin.String): Call<Unit>
+
+    /**
+     * GET zatca/documents/summary
+     * Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund)
+     * 
+     * Responses:
+     *  - 200: Document status summary
+     *
+     * @return [Call]<[ZatcaDocumentsSummaryDto]>
+     */
+    @GET("zatca/documents/summary")
+    fun zatcaControllerGetDocumentsSummary(): Call<ZatcaDocumentsSummaryDto>
 
     /**
      * GET zatca/invoices/{id}

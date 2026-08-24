@@ -139,6 +139,20 @@ export interface ZatcaReportingResult {
   failed: number;
 }
 
+export interface ZatcaDocumentCounts {
+  submitted: number;
+  queued: number;
+  failed: number;
+  rejected: number;
+  total: number;
+}
+
+export interface ZatcaDocumentsSummary {
+  invoices: ZatcaDocumentCounts;
+  creditNotes: ZatcaDocumentCounts;
+  overall: ZatcaDocumentCounts & { health: 'ok' | 'attention' };
+}
+
 export interface ZatcaInvoiceAttempt {
   id: number;
   attemptNo: number;
@@ -650,6 +664,9 @@ export class SpicyHomeClient {
         '/zatca/onboard/compliance-check',
         { invoiceId, documentType },
       ),
+
+    getDocumentsSummary: () =>
+      request<ZatcaDocumentsSummary>(this.config, 'GET', '/zatca/documents/summary'),
 
     listInvoices: (limit?: number, offset?: number) =>
       request<ZatcaInvoice[]>(this.config, 'GET', '/zatca/invoices', undefined, {

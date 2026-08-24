@@ -17,6 +17,7 @@ import { ZatcaReportingService } from './zatca-reporting.service';
 import { PrintersService } from '../printers/printers.service';
 import { RequiresPermission } from '../../common/decorators/requires-permission.decorator';
 import { ZatcaConfigDto } from './dto/zatca-config.dto';
+import { ZatcaDocumentsSummaryDto } from './dto/zatca-documents-summary.dto';
 import type { ZATCAEnvironment, ZATCAComplianceDocumentType } from '@spicyhome/shared';
 import { ZATCA_ALL_COMPLIANCE_DOC_TYPES } from '@spicyhome/shared';
 
@@ -91,6 +92,18 @@ export class ZatcaController {
   @ApiOperation({ summary: 'Get ZATCA onboarding and status' })
   async getStatus() {
     return this.onboardingService.getState();
+  }
+
+  // ── Documents summary ───────────────────────────────────────────────────────
+
+  @Get('documents/summary')
+  @ApiOperation({
+    summary:
+      'Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund)',
+  })
+  @ApiOkResponse({ description: 'Document status summary', type: ZatcaDocumentsSummaryDto })
+  getDocumentsSummary(): ZatcaDocumentsSummaryDto {
+    return this.invoiceService.getDocumentsSummary();
   }
 
   // ── Invoices ────────────────────────────────────────────────────────────────

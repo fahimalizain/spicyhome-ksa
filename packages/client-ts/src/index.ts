@@ -65,6 +65,8 @@ export type {
   ZatcaInvoice,
   ZatcaCreditNote,
   ZatcaReportingResult,
+  ZatcaDocumentCounts,
+  ZatcaDocumentsSummary,
   ZatcaInvoiceAttempt,
   ZatcaInvoiceStatusResponse,
 } from './client';

@@ -16,6 +16,19 @@ vi.mock('../api', () => ({
       getStatus: (...args: any[]) => mockGetStatus(...args),
       listInvoices: (...args: any[]) => mockListInvoices(...args),
       listCreditNotes: (...args: any[]) => mockListCreditNotes(...args),
+      getDocumentsSummary: () =>
+        Promise.resolve({
+          invoices: { submitted: 0, queued: 0, failed: 0, rejected: 0, total: 0 },
+          creditNotes: { submitted: 0, queued: 0, failed: 0, rejected: 0, total: 0 },
+          overall: {
+            submitted: 0,
+            queued: 0,
+            failed: 0,
+            rejected: 0,
+            total: 0,
+            health: 'ok',
+          },
+        }),
       updateConfig: (...args: any[]) => mockUpdateConfig(...args),
     },
   },

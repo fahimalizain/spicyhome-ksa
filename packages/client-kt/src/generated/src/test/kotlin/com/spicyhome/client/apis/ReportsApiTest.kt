@@ -19,11 +19,25 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.ShouldSpec
 
 import com.spicyhome.client.apis.ReportsApi
+import com.spicyhome.client.models.ItemWiseSalesResponseDto
+import com.spicyhome.client.models.SalesRegisterResponseDto
 
 class ReportsApiTest : ShouldSpec() {
     init {
         // uncomment below to create an instance of ReportsApi
         //val apiInstance = ReportsApi()
+
+        // to test reportsControllerGetItemWiseSales
+        should("test reportsControllerGetItemWiseSales") {
+            // uncomment below to test reportsControllerGetItemWiseSales
+            //val from : kotlin.String = from_example // kotlin.String | Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window.
+            //val to : kotlin.String = to_example // kotlin.String | Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window.
+            //val type : kotlin.String = type_example // kotlin.String | Filter by parent order type: dine_in | takeaway. Omit → all types.
+            //val partner : kotlin.String = partner_example // kotlin.String | Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.
+            //val category : kotlin.String = category_example // kotlin.String | Filter by category id (numeric); 'none' for Uncategorized rows only. Omit → all categories.
+            //val result : ItemWiseSalesResponseDto = apiInstance.reportsControllerGetItemWiseSales(from, to, type, partner, category)
+            //result shouldBe ("TODO")
+        }
 
         // to test reportsControllerGetSales
         should("test reportsControllerGetSales") {
@@ -31,6 +45,18 @@ class ReportsApiTest : ShouldSpec() {
             //val from : kotlin.String = from_example // kotlin.String | 
             //val to : kotlin.String = to_example // kotlin.String | 
             //apiInstance.reportsControllerGetSales(from, to)
+        }
+
+        // to test reportsControllerGetSalesRegister
+        should("test reportsControllerGetSalesRegister") {
+            // uncomment below to test reportsControllerGetSalesRegister
+            //val from : kotlin.String = from_example // kotlin.String | Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive start of the window.
+            //val to : kotlin.String = to_example // kotlin.String | Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window.
+            //val type : kotlin.String = type_example // kotlin.String | Filter by parent order type: dine_in | takeaway. Omit → all types.
+            //val partner : kotlin.String = partner_example // kotlin.String | Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.
+            //val kind : kotlin.String = kind_example // kotlin.String | Filter by document kind: sale | refund. Omit → both.
+            //val result : SalesRegisterResponseDto = apiInstance.reportsControllerGetSalesRegister(from, to, type, partner, kind)
+            //result shouldBe ("TODO")
         }
 
         // to test reportsControllerGetVat

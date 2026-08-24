@@ -2414,6 +2414,33 @@
         ]
       }
     },
+    "/zatca/documents/summary": {
+      "get": {
+        "operationId": "ZatcaController_getDocumentsSummary",
+        "summary": "Status counts for current ZATCA invoices and credit notes (latest attempt per order/refund)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Document status summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZatcaDocumentsSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "zatca"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/zatca/invoices": {
       "get": {
         "operationId": "ZatcaController_listInvoices",
@@ -6130,6 +6157,119 @@
             "description": "Updated ZATCA buyer details for the reissued invoice"
           }
         }
+      },
+      "ZatcaDocumentCountsDto": {
+        "type": "object",
+        "properties": {
+          "submitted": {
+            "type": "integer",
+            "format": "int32",
+            "example": 12,
+            "description": "Current documents with status reported (simplified) or cleared (standard)"
+          },
+          "queued": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2,
+            "description": "Current documents with status signed (awaiting report) or pending (in clearance)"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1,
+            "description": "Current documents with status failed (reporting) or error (retryable clearance)"
+          },
+          "rejected": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0,
+            "description": "Current documents with status rejected (must reissue with a new ICV)"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "example": 15,
+            "description": "Current documents (latest attempt per order / refund; prefers cleared)"
+          }
+        },
+        "required": [
+          "submitted",
+          "queued",
+          "failed",
+          "rejected",
+          "total"
+        ]
+      },
+      "ZatcaDocumentsOverallDto": {
+        "type": "object",
+        "properties": {
+          "submitted": {
+            "type": "integer",
+            "format": "int32",
+            "example": 12,
+            "description": "Current documents with status reported (simplified) or cleared (standard)"
+          },
+          "queued": {
+            "type": "integer",
+            "format": "int32",
+            "example": 2,
+            "description": "Current documents with status signed (awaiting report) or pending (in clearance)"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1,
+            "description": "Current documents with status failed (reporting) or error (retryable clearance)"
+          },
+          "rejected": {
+            "type": "integer",
+            "format": "int32",
+            "example": 0,
+            "description": "Current documents with status rejected (must reissue with a new ICV)"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "example": 15,
+            "description": "Current documents (latest attempt per order / refund; prefers cleared)"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "attention"
+            ],
+            "example": "ok",
+            "description": "ok when failed + rejected is 0; queued alone stays ok"
+          }
+        },
+        "required": [
+          "submitted",
+          "queued",
+          "failed",
+          "rejected",
+          "total",
+          "health"
+        ]
+      },
+      "ZatcaDocumentsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "invoices": {
+            "$ref": "#/components/schemas/ZatcaDocumentCountsDto"
+          },
+          "creditNotes": {
+            "$ref": "#/components/schemas/ZatcaDocumentCountsDto"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/ZatcaDocumentsOverallDto"
+          }
+        },
+        "required": [
+          "invoices",
+          "creditNotes",
+          "overall"
+        ]
       },
       "ZatcaConfigDto": {
         "type": "object",
