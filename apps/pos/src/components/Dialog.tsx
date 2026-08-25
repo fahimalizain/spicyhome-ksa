@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { OskDock } from './on-screen-keyboard/OskDock';
 
@@ -23,7 +23,11 @@ export type DialogProps = {
  * <OskDock /> between the body and the footer so the on-screen keyboard docks
  * inside the dialog instead of covering Save/Cancel.
  *
- * Close paths: Escape on window, or a click on the overlay. The card
+ * Close paths: Escape on window, or a click on the overlay — but only when
+ * the pointer gesture both started AND ended on the overlay. When the docked
+ * on-screen keyboard collapses, the card moves under the cursor, so a press
+ * that began on Save/Cancel can "click" the overlay as the common ancestor of
+ * down-target and up-target; that must not count as a backdrop tap. The card
  * stopPropagation()s clicks so it never closes from inside. There is no
  * header X button; the caller owns the footer slot (Save/Cancel live there).
  */
@@ -37,6 +41,13 @@ export function Dialog({
 }: DialogProps) {
   const titleId = useId();
 
+  // True when the pointer gesture began on the dimmed overlay. The docked OSK
+  // collapse can move the card out from under a press that started on
+  // Save/Cancel, making the click land on the overlay as the common ancestor
+  // of down-target and up-target — remembering where the press began tells
+  // that phantom click apart from a real backdrop tap.
+  const pointerDownOnOverlayRef = useRef(false);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -48,7 +59,19 @@ export function Dialog({
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        // Only a press that started on the overlay itself counts — a press
+        // on the card or footer (e.g. Save) never becomes a backdrop close.
+        pointerDownOnOverlayRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        // Ignore clicks that started inside the card: after the OSK collapse
+        // the click fires on the overlay, and closing here would throw away
+        // the form the user was about to save.
+        if (e.target === e.currentTarget && pointerDownOnOverlayRef.current) {
+          onClose();
+        }
+      }}
     >
       <div
         data-osk-scope

@@ -38,8 +38,26 @@ describe('Dialog', () => {
     const backdrop = document.querySelector('.fixed.inset-0');
     expect(backdrop).not.toBeNull();
 
+    // A real backdrop tap: the pointer goes down on the overlay, then the
+    // click lands there too.
+    fireEvent.pointerDown(backdrop as HTMLElement);
     fireEvent.click(backdrop as HTMLElement);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('OSK collapse click-through: press on footer Save, click on overlay — no close', () => {
+    const { onClose } = renderDialog();
+
+    const backdrop = document.querySelector('.fixed.inset-0');
+    expect(backdrop).not.toBeNull();
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+
+    // Docked OSK collapse moves the card, so a press that started on Save
+    // delivers its click on the overlay (the common ancestor of down and up
+    // targets). That phantom backdrop click must not close the dialog.
+    fireEvent.pointerDown(saveButton);
+    fireEvent.click(backdrop as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('click inside the card (heading or body) does not call onClose', () => {
