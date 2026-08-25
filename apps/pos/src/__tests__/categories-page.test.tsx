@@ -273,4 +273,64 @@ describe('CategoriesPage — kitchen printer routing', () => {
 
     expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
   });
+
+  it('renders a row enable checkbox for each category with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+      expect(screen.getByText('Pizza')).toBeInTheDocument();
+    });
+
+    const burgersCheckbox = screen.getByRole('checkbox', { name: 'Disable Burgers' });
+    expect(burgersCheckbox).toBeChecked();
+
+    const pizzaCheckbox = screen.getByRole('checkbox', { name: 'Disable Pizza' });
+    expect(pizzaCheckbox).toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Burgers' }));
+
+    await waitFor(() => {
+      expect(mockUpdateCategory).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Category' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockListCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the Enable label when the category is inactive', async () => {
+    mockListCategories.mockResolvedValue([{ ...categoryBurgers, isActive: false }]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    const burgersCheckbox = screen.getByRole('checkbox', { name: 'Enable Burgers' });
+    expect(burgersCheckbox).not.toBeChecked();
+    // Still no (inactive) badge.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateCategory.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Burgers' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Category' })).not.toBeInTheDocument();
+  });
 });

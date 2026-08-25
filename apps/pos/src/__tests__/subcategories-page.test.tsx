@@ -136,4 +136,63 @@ describe('SubcategoriesPage', () => {
 
     expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
   });
+
+  it('renders a row enable checkbox for each subcategory with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Veg')).toBeInTheDocument();
+      expect(screen.getByText('Chicken')).toBeInTheDocument();
+    });
+
+    const vegCheckbox = screen.getByRole('checkbox', { name: 'Disable Veg' });
+    expect(vegCheckbox).toBeChecked();
+
+    const chickenCheckbox = screen.getByRole('checkbox', { name: 'Disable Chicken' });
+    expect(chickenCheckbox).toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Veg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Veg' }));
+
+    await waitFor(() => {
+      expect(mockUpdateSubcategory).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Subcategory' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockListSubcategories).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the Enable label when the subcategory is inactive', async () => {
+    mockListSubcategories.mockResolvedValue([{ ...subVeg, isActive: false }, subChicken]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Veg')).toBeInTheDocument();
+    });
+
+    const vegCheckbox = screen.getByRole('checkbox', { name: 'Enable Veg' });
+    expect(vegCheckbox).not.toBeChecked();
+    // Still no (inactive) marker.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateSubcategory.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Veg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Veg' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Subcategory' })).not.toBeInTheDocument();
+  });
 });

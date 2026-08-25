@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import type {
   CategoryResponse,
   SubcategoryResponse,
@@ -45,6 +46,16 @@ export function SubcategoriesPage() {
       setError('Failed to load');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleActive(sub: SubcategoryResponse) {
+    setError('');
+    try {
+      await client.menu.updateSubcategory(sub.id, { isActive: !sub.isActive });
+      await loadData();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update');
     }
   }
 
@@ -124,9 +135,16 @@ export function SubcategoriesPage() {
             onClick={() => openEdit(sub)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <div className="flex-1 min-w-0">
-              <span className="text-sm text-white">{sub.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{parentName(sub)}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <AdminRowEnabledCheckbox
+                checked={sub.isActive}
+                ariaLabel={sub.isActive ? `Disable ${sub.name}` : `Enable ${sub.name}`}
+                onToggle={() => toggleActive(sub)}
+              />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-white">{sub.name}</span>
+                <span className="text-xs text-gray-500 ml-2">{parentName(sub)}</span>
+              </div>
             </div>
             <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
               Edit
