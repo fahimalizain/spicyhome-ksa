@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import type { ItemResponse, CategoryResponse, SubcategoryResponse } from '@spicyhome/client-ts';
+import type {
+  ItemResponse,
+  CategoryResponse,
+  SubcategoryResponse,
+  CreateItemDto,
+  UpdateItemDto,
+} from '@spicyhome/client-ts';
 
 export function ItemsPage() {
   const [items, setItems] = useState<ItemResponse[]>([]);
@@ -14,6 +20,7 @@ export function ItemsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: '',
+    nameAr: '',
     categoryId: 0,
     subcategoryId: 0,
     priceHalalas: 0,
@@ -57,6 +64,7 @@ export function ItemsPage() {
     const firstCategoryId = categories[0]?.id || 0;
     setForm({
       name: '',
+      nameAr: '',
       categoryId: firstCategoryId,
       subcategoryId: subcategoryOptions(firstCategoryId)[0]?.id || 0,
       priceHalalas: 0,
@@ -75,6 +83,7 @@ export function ItemsPage() {
   function openEdit(item: ItemResponse) {
     setForm({
       name: item.name,
+      nameAr: item.nameAr ?? '',
       categoryId: item.categoryId,
       subcategoryId: item.subcategoryId,
       priceHalalas: item.priceHalalas,
@@ -106,15 +115,18 @@ export function ItemsPage() {
       const payload = {
         subcategoryId: form.subcategoryId,
         name: form.name,
+        nameAr: form.nameAr.trim() || null,
         priceHalalas: form.priceHalalas,
         vatRateBp: form.vatRateBp,
         sortOrder: form.sortOrder,
         isActive: form.isActive,
       };
       if (editId) {
-        await client.menu.updateItem(editId, payload);
+        // DTOs type nameAr as optional string without null; sending null is what
+        // clears an existing Arabic name, so cast the payload.
+        await client.menu.updateItem(editId, payload as UpdateItemDto);
       } else {
-        await client.menu.createItem(payload);
+        await client.menu.createItem(payload as CreateItemDto);
       }
       closeDialog();
       await loadData();
@@ -205,6 +217,18 @@ export function ItemsPage() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1" htmlFor="item-name-ar">
+                Arabic name
+              </label>
+              <input
+                id="item-name-ar"
+                dir="rtl"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                value={form.nameAr}
+                onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

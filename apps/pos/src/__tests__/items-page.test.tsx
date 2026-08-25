@@ -145,6 +145,7 @@ describe('ItemsPage', () => {
     expect(screen.getByLabelText('Category')).toHaveValue('1');
     expect(screen.getByLabelText('Subcategory')).toHaveValue('12');
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Arabic name') as HTMLInputElement).value).toBe('');
     expect(screen.getByLabelText('Active')).toBeChecked();
   });
 
@@ -163,6 +164,7 @@ describe('ItemsPage', () => {
       expect(mockCreateItem).toHaveBeenCalledWith({
         subcategoryId: 12,
         name: 'Double Zinger',
+        nameAr: null,
         priceHalalas: 2999,
         vatRateBp: 1500,
         sortOrder: 0,
@@ -202,6 +204,7 @@ describe('ItemsPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Edit Item' })).toBeInTheDocument();
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Zinger Burger');
+    expect((screen.getByLabelText('Arabic name') as HTMLInputElement).value).toBe('');
     expect(screen.getByLabelText('Category')).toHaveValue('1');
     expect(screen.getByLabelText('Subcategory')).toHaveValue('12');
     expect((screen.getByLabelText('Price (SAR)') as HTMLInputElement).value).toBe('23');
@@ -240,6 +243,75 @@ describe('ItemsPage', () => {
       expect(mockUpdateItem).toHaveBeenCalledWith(1, {
         subcategoryId: 12,
         name: 'Zinger Deluxe',
+        nameAr: null,
+        priceHalalas: 2300,
+        vatRateBp: 1500,
+        sortOrder: 0,
+        isActive: true,
+      });
+    });
+  });
+
+  it('edit populates a non-null Arabic name', async () => {
+    mockListItems.mockResolvedValue([{ ...itemZinger, nameAr: 'زنجر برجر' }, itemPepperoni]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Zinger Burger'));
+
+    expect(screen.getByRole('heading', { name: 'Edit Item' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Arabic name') as HTMLInputElement).value).toBe('زنجر برجر');
+  });
+
+  it('creates with the trimmed Arabic name', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Item'));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Double Zinger' } });
+    fireEvent.change(screen.getByLabelText('Price (SAR)'), { target: { value: '29.99' } });
+    fireEvent.change(screen.getByLabelText('Arabic name'), {
+      target: { value: '  زنجر برجر  ' },
+    });
+    fireEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreateItem).toHaveBeenCalledWith({
+        subcategoryId: 12,
+        name: 'Double Zinger',
+        nameAr: 'زنجر برجر',
+        priceHalalas: 2999,
+        vatRateBp: 1500,
+        sortOrder: 0,
+        isActive: true,
+      });
+    });
+  });
+
+  it('update with a cleared Arabic name sends null', async () => {
+    mockListItems.mockResolvedValue([{ ...itemZinger, nameAr: 'زنجر برجر' }, itemPepperoni]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Edit Item' })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Arabic name'), { target: { value: '' } });
+    fireEvent.click(screen.getByText('Update'));
+
+    await waitFor(() => {
+      expect(mockUpdateItem).toHaveBeenCalledWith(1, {
+        subcategoryId: 12,
+        name: 'Zinger Burger',
+        nameAr: null,
         priceHalalas: 2300,
         vatRateBp: 1500,
         sortOrder: 0,
