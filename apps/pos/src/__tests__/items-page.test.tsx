@@ -552,4 +552,49 @@ describe('ItemsPage', () => {
     expect((searchInput as HTMLInputElement).value).toBe('zinger');
     expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
   });
+
+  it('renders a row enable checkbox for each item with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const zingerCheckbox = screen.getByRole('checkbox', { name: 'Disable Zinger Burger' });
+    expect(zingerCheckbox).toBeChecked();
+
+    const pepperoniCheckbox = screen.getByRole('checkbox', { name: 'Enable Pepperoni' });
+    expect(pepperoniCheckbox).not.toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Zinger Burger' }));
+
+    await waitFor(() => {
+      expect(mockUpdateItem).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Item' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockListItems).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateItem.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Zinger Burger' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Item' })).not.toBeInTheDocument();
+  });
 });

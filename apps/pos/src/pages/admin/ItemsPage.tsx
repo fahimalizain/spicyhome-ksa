@@ -4,6 +4,7 @@ import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
 import { filterMenuItems } from '../../lib/filterMenuItems';
 import { CategoryTreeFilter } from './CategoryTreeFilter';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import type {
   ItemResponse,
   CategoryResponse,
@@ -56,6 +57,16 @@ export function ItemsPage() {
       setError('Failed to load items');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleActive(item: ItemResponse) {
+    setError('');
+    try {
+      await client.menu.updateItem(item.id, { isActive: !item.isActive });
+      await loadData();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update');
     }
   }
 
@@ -220,12 +231,19 @@ export function ItemsPage() {
               onClick={() => openEdit(item)}
               className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
             >
-              <div>
-                <span className="text-sm text-white">{item.name}</span>
-                <span className="text-xs text-gray-500 ml-2">{subcategoryLabel(item)}</span>
-                <span className="text-xs text-gray-500 ml-2">
-                  {halalasToSar(item.priceHalalas)} SAR
-                </span>
+              <div className="flex items-center gap-3 min-w-0">
+                <AdminRowEnabledCheckbox
+                  checked={item.isActive}
+                  ariaLabel={item.isActive ? `Disable ${item.name}` : `Enable ${item.name}`}
+                  onToggle={() => toggleActive(item)}
+                />
+                <div>
+                  <span className="text-sm text-white">{item.name}</span>
+                  <span className="text-xs text-gray-500 ml-2">{subcategoryLabel(item)}</span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {halalasToSar(item.priceHalalas)} SAR
+                  </span>
+                </div>
               </div>
               <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
                 Edit
