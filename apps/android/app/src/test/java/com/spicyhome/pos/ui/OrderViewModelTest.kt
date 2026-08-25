@@ -56,6 +56,8 @@ class OrderViewModelTest {
 
     private val eventsFlow = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 64)
 
+    private val reconnectedFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+
     private val serverUrlFlow = MutableStateFlow("http://localhost:3000")
     private val authTokenFlow = MutableStateFlow("fake-jwt-token")
     private val usernameFlow = MutableStateFlow<String?>("admin")
@@ -77,6 +79,7 @@ class OrderViewModelTest {
         every { preferencesManager.authToken } returns authTokenFlow
         every { preferencesManager.username } returns usernameFlow
         every { realtimeClient.events } returns eventsFlow
+        every { realtimeClient.reconnected } returns reconnectedFlow
 
         every { apiClientProvider.createMenuApi(any(), any()) } returns menuApi
         every { apiClientProvider.createOrdersApi(any(), any()) } returns ordersApi
@@ -1404,6 +1407,64 @@ class OrderViewModelTest {
         val state = vm.uiState.value
         assertThat(state.currentOrderId).isNull()
         assertThat(state.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+    }
+
+    @Test
+    fun `item updated hides a now-inactive item from the picker`() = runTest(testDispatcher) {
+        val item = createItem(1, "Burger", 1500, 1500)
+        stubMenuItems(listOf(item))
+
+        val vm = createViewModel()
+        assertThat(vm.uiState.value.items).containsExactly(item)
+
+        // POS admin toggled isActive off → the next loadMenu sees it inactive
+        stubMenuItems(listOf(createItem(1, "Burger", 1500, 1500, isActive = false)))
+        eventsFlow.emit(RealtimeEvent("item.updated", """{"itemId":1}""", 1700000001L))
+
+        val state = vm.uiState.value
+        assertThat(state.items).isEmpty()
+        assertThat(state.filteredItems).isEmpty()
+    }
+
+    @Test
+    fun `item updated reloads menu even when currentOrderId is null`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        assertThat(vm.uiState.value.currentOrderId).isNull()
+        assertThat(vm.uiState.value.screenState).isEqualTo(OrderScreenState.SELECTING_TYPE)
+
+        eventsFlow.emit(RealtimeEvent("item.updated", """{"itemId":1}""", 1700000001L))
+
+        // init loadMenu + WS-triggered loadMenu
+        verify(atLeast = 2) { menuApi.menuControllerListItems(any(), any()) }
+    }
+
+    @Test
+    fun `item created reloads menu`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        eventsFlow.emit(RealtimeEvent("item.created", """{"itemId":1}""", 1700000001L))
+
+        verify(atLeast = 2) { menuApi.menuControllerListItems(any(), any()) }
+    }
+
+    @Test
+    fun `order item added does not reload menu`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        // No current order → the order.* path no-ops; the prefix guard must
+        // keep order.item.* from being treated as a catalog item.* event.
+        eventsFlow.emit(RealtimeEvent("order.item.added", """{"orderId":1}""", 1700000001L))
+
+        verify(exactly = 1) { menuApi.menuControllerListItems(any(), any()) }
+    }
+
+    @Test
+    fun `reconnect reloads menu`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+
+        reconnectedFlow.emit(Unit)
+
+        verify(atLeast = 2) { menuApi.menuControllerListItems(any(), any()) }
     }
 
     // --- checkDayOpen (DAY_NOT_OPEN refresh) tests ---

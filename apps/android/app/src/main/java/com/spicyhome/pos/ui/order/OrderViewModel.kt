@@ -243,9 +243,18 @@ class OrderViewModel(
             applyInitialTableContext()
             loadPermissions()
         }
-        // WS subscription for multi-terminal safety
+        // WS subscription for multi-terminal safety + live catalog updates
         viewModelScope.launch {
             realtimeClient.events.collect { event ->
+                // Catalog changes reload the menu regardless of order state:
+                // the picker must reflect POS admin isActive toggles even
+                // when no order exists (SELECTING_TYPE). `order.item.*`
+                // starts with "order.", so it never matches this prefix.
+                if (event.type.startsWith("item.")) {
+                    if (menuRepo == null) return@collect
+                    loadMenu()
+                    return@collect
+                }
                 val currentId = _uiState.value.currentOrderId ?: return@collect
                 if (event.type.startsWith("order.")) {
                     val order = refetchOrder() ?: return@collect
@@ -268,6 +277,14 @@ class OrderViewModel(
                         hydrateFromOrder(order)
                     }
                 }
+            }
+        }
+        // WS drop: reload the menu on reconnect so item events missed while
+        // disconnected do not leave a stale catalog. Refetching the order on
+        // reconnect is intentionally out of scope here.
+        viewModelScope.launch {
+            realtimeClient.reconnected.collect {
+                if (menuRepo != null) loadMenu()
             }
         }
     }
