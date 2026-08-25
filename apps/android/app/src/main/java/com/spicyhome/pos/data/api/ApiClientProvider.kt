@@ -22,7 +22,11 @@ class ApiClientProvider(
     private var currentBaseUrl: String? = null
 
     fun getClient(baseUrl: String, bearerToken: String? = null): ApiClient {
-        if (currentClient != null && currentBaseUrl == baseUrl && bearerToken == null) {
+        // REST lives under /api on the server; the operator only ever enters the
+        // bare origin. Cache on the resolved URL so both raw and pre-suffixed
+        // inputs share the same client.
+        val resolvedBaseUrl = restBaseUrl(baseUrl)
+        if (currentClient != null && currentBaseUrl == resolvedBaseUrl && bearerToken == null) {
             return currentClient!!
         }
 
@@ -43,20 +47,20 @@ class ApiClientProvider(
 
         val builder = if (bearerToken != null && bearerToken.isNotBlank()) {
             ApiClient(
-                baseUrl = baseUrl,
+                baseUrl = resolvedBaseUrl,
                 okHttpClientBuilder = okHttpBuilder,
                 authName = "bearer",
                 bearerToken = bearerToken,
             )
         } else {
             ApiClient(
-                baseUrl = baseUrl,
+                baseUrl = resolvedBaseUrl,
                 okHttpClientBuilder = okHttpBuilder,
             )
         }
 
         currentClient = builder
-        currentBaseUrl = baseUrl
+        currentBaseUrl = resolvedBaseUrl
         return builder
     }
 

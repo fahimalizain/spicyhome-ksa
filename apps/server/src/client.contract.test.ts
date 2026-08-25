@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from './app.module';
 import { DRIZZLE } from './modules/database/database.module';
+import { configureHttpApp } from './configure-http-app';
 import * as http from 'http';
 
 let app: INestApplication;
@@ -42,14 +43,14 @@ beforeAll(async () => {
     .useValue(db)
     .compile();
 
-  app = moduleFixture.createNestApplication();
+  app = configureHttpApp(moduleFixture.createNestApplication());
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.init();
 
   await app.listen(port);
 
-  baseUrl = `http://127.0.0.1:${port}`;
+  baseUrl = `http://127.0.0.1:${port}/api`;
 
   client = new SpicyHomeClient({
     baseUrl,

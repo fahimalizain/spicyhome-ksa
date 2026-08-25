@@ -110,8 +110,11 @@ export default defineConfig(({ mode }) => {
           proxy: {
             '/api': {
               target: `http://localhost:${serverPort}`,
+              // no rewrite — Nest now owns /api
+            },
+            '/ws': {
+              target: `http://localhost:${serverPort}`,
               ws: true,
-              rewrite: (p) => p.replace(/^\/api/, ''),
             },
           },
         }

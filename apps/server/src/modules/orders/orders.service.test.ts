@@ -9,6 +9,7 @@ import * as schema from '@spicyhome/db';
 import { getServiceDayString, getServiceDayBoundsUnix } from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
+import { configureHttpApp } from '../../configure-http-app';
 import { FakePrinterTransport } from '../printers/printer-transport';
 import { PrintersService } from '../printers/printers.service';
 import { OrdersService } from './orders.service';
@@ -33,7 +34,7 @@ beforeAll(async () => {
     .useValue(db)
     .compile();
 
-  app = moduleFixture.createNestApplication();
+  app = configureHttpApp(moduleFixture.createNestApplication());
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.init();
@@ -106,13 +107,13 @@ beforeAll(async () => {
 
   // Login
   const loginRes = await request(app.getHttpServer())
-    .post('/auth/login')
+    .post('/api/auth/login')
     .send({ username: 'admin', pin: '771133', clientType: 'pos' });
   jwtToken = loginRes.body.accessToken;
 
   // Open business day (required for order creation)
   await request(app.getHttpServer())
-    .post('/day/open')
+    .post('/api/day/open')
     .set('Authorization', `Bearer ${jwtToken}`)
     .send({ openingCashHalalas: 50000 });
 });
@@ -158,7 +159,7 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
     for (const id of createdIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -191,7 +192,7 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
     closeOpenDay();
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(409);
@@ -206,7 +207,7 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
     setOpenDayBusinessDate(getServiceDayString(post0500Ms));
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -220,7 +221,7 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
     setOpenDayBusinessDate(previousServiceDay);
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(409);
@@ -238,7 +239,7 @@ describe('createOrder — business-day gate uses the service day (ADR 0008)', ()
     setOpenDayBusinessDate(getServiceDayString(pre0500Ms));
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -253,7 +254,7 @@ describe('Order Refunds', () => {
   }> {
     // Create order
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -261,13 +262,13 @@ describe('Order Refunds', () => {
 
     // Get order to know its updatedAt
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     // Add items via bulk sync
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -283,19 +284,19 @@ describe('Order Refunds', () => {
 
     // Get order to capture item IDs
     const fetched = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     // Finalize: append cash payment, then submit (ADR 0006)
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: fetched.body.totalHalalas })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -319,7 +320,7 @@ describe('Order Refunds', () => {
 
       // Refund 1 of 2 Zinger Burgers
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           items: [{ orderItemId: zingerItem.id, qty: 1 }],
@@ -334,7 +335,7 @@ describe('Order Refunds', () => {
 
       // Verify order is still paid
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(orderRes.body.status).toBe('paid');
@@ -348,7 +349,7 @@ describe('Order Refunds', () => {
 
       // Verify events were written
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const types = eventsRes.body.map((e: any) => e.type);
@@ -359,7 +360,7 @@ describe('Order Refunds', () => {
 
       // Verify chain integrity
       const verifyRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events/verify`)
+        .get(`/api/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);
@@ -377,7 +378,7 @@ describe('Order Refunds', () => {
       transport.sent = [];
 
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: refundItems, methodId: 'cash' })
         .expect(201);
@@ -387,14 +388,14 @@ describe('Order Refunds', () => {
 
       // Verify order is now refunded
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(orderRes.body.status).toBe('refunded');
 
       // Verify events
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const types = eventsRes.body.map((e: any) => e.type);
@@ -403,7 +404,7 @@ describe('Order Refunds', () => {
 
       // Verify chain integrity
       const verifyRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events/verify`)
+        .get(`/api/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);
@@ -415,14 +416,14 @@ describe('Order Refunds', () => {
 
       // Refund 1 first (partial)
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
 
       // Try to refund 2 more — should fail (only 1 remaining)
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 2 }], methodId: 'cash' })
         .expect(400);
@@ -431,7 +432,7 @@ describe('Order Refunds', () => {
     it('refunding from non-paid order throws', async () => {
       // Create an order but don't pay it
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -439,12 +440,12 @@ describe('Order Refunds', () => {
 
       // Get order to know updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -454,13 +455,13 @@ describe('Order Refunds', () => {
 
       // Get the item ID
       const fetched = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Try to refund an open order
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }], methodId: 'cash' })
         .expect(400);
@@ -469,7 +470,7 @@ describe('Order Refunds', () => {
     it('refunding from voided order throws', async () => {
       // Create an order and void it
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -477,12 +478,12 @@ describe('Order Refunds', () => {
 
       // Get order to know updatedAt
       const getRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes2.body.updatedAt,
@@ -491,19 +492,19 @@ describe('Order Refunds', () => {
         .expect(200);
 
       const fetched = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' })
         .expect(201);
 
       // Try to refund a voided order
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: fetched.body.items[0].id, qty: 1 }], methodId: 'cash' })
         .expect(400);
@@ -514,7 +515,7 @@ describe('Order Refunds', () => {
       const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'bitcoin' })
         .expect(400);
@@ -531,7 +532,7 @@ describe('Order Refunds', () => {
         .run();
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'mada' })
         .expect(400);
@@ -548,7 +549,7 @@ describe('Order Refunds', () => {
       const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }] })
         .expect(400);
@@ -563,7 +564,7 @@ describe('Order Refunds', () => {
 
       // Issue a partial refund
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           items: [{ orderItemId: zingerItem.id, qty: 1 }],
@@ -574,7 +575,7 @@ describe('Order Refunds', () => {
 
       // Get refunds
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/refunds`)
+        .get(`/api/orders/${orderId}/refunds`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -608,7 +609,7 @@ describe('Order Refunds', () => {
       const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
@@ -618,7 +619,7 @@ describe('Order Refunds', () => {
 
       // Verify events
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -643,7 +644,7 @@ describe('Order Refunds', () => {
       const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'card' })
         .expect(201);
@@ -662,7 +663,7 @@ describe('Order Refunds', () => {
 
       // Verify events
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -686,7 +687,7 @@ describe('Order Refunds', () => {
 
       // Issue a partial refund
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
@@ -699,7 +700,7 @@ describe('Order Refunds', () => {
 
       // Reprint the refund receipt
       const reprintRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refunds/${refundId}/print`)
+        .post(`/api/orders/${orderId}/refunds/${refundId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(201);
 
@@ -715,7 +716,7 @@ describe('Order Refunds', () => {
 
       // Events: the reprint's enqueued + succeeded events carry refundId
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -741,7 +742,7 @@ describe('Order Refunds', () => {
 
       // Chain integrity preserved
       const verifyRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events/verify`)
+        .get(`/api/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);
@@ -751,14 +752,14 @@ describe('Order Refunds', () => {
       const { orderId } = await createPaidOrder();
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refunds/999999/print`)
+        .post(`/api/orders/${orderId}/refunds/999999/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(404);
     });
 
     it('returns 404 for unknown order', async () => {
       await request(app.getHttpServer())
-        .post('/orders/999999/refunds/1/print')
+        .post('/api/orders/999999/refunds/1/print')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(404);
     });
@@ -769,14 +770,14 @@ describe('Order Refunds', () => {
       const zingerItem = items.find((i: any) => i.itemName === 'Zinger Burger')!;
 
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderIdA}/refund`)
+        .post(`/api/orders/${orderIdA}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
 
       // Try to reprint refund A's receipt through order B
       await request(app.getHttpServer())
-        .post(`/orders/${orderIdB}/refunds/${refundRes.body.refundId}/print`)
+        .post(`/api/orders/${orderIdB}/refunds/${refundRes.body.refundId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(400);
     });
@@ -787,7 +788,7 @@ describe('Order Refunds', () => {
       const { orderId } = await createPaidOrder();
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -809,7 +810,7 @@ describe('Order Refunds', () => {
       const { orderId } = await createPaidOrder();
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events/verify`)
+        .get(`/api/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -827,13 +828,13 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
   ) {
     for (const p of payments) {
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send(p)
         .expect(201);
     }
     return request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(submitDto)
       .expect(201);
@@ -845,7 +846,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     items: Array<{ id: number; itemName: string }>;
   }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -853,13 +854,13 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Fetch to get updatedAt for syncItems
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     // Add Zinger Burger (2300 halalas) via bulk sync
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -870,7 +871,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const fetched = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -884,7 +885,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
   async function voidOrder(orderId: number) {
     try {
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' });
     } catch {
@@ -895,7 +896,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
   it('rejects submit without any payments (outstanding ≠ 0, 400)', async () => {
     const { orderId } = await createOpenOrderWithItems();
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -908,12 +909,12 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Underpay: 100 halalas short
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas - 100 })
       .expect(201);
     const underRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -922,12 +923,12 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Balance it, then overpay: still rejected — outstanding must be EXACTLY 0
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 200 })
       .expect(201);
     const overRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -935,12 +936,12 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Fix the overpay with a negative correction, then submit succeeds
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: -100 })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -952,18 +953,18 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     // total 4600: cash 4650 + card −50 → overall sum = total, but the card
     // method nets negative → submit must reject (ADR 0006 precondition 6)
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas + 50 })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'card', amountHalalas: -50 })
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -971,7 +972,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Order stays open
     const stillOpen = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(stillOpen.body.status).toBe('open');
@@ -981,14 +982,14 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
   it('rejects submit with 0 items (400)', async () => {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -1001,7 +1002,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     await payViaPaymentsAndSubmit(orderId, [{ methodId: 'cash', amountHalalas: totalHalalas }]);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -1013,7 +1014,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Capture updatedAt BEFORE the payment append (append bumps updated_at)
     const before = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -1021,19 +1022,19 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     await new Promise((r) => setTimeout(r, 1500));
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas })
       .expect(201);
 
     const after = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     // Stale baseUpdatedAt → 409 with the standard conflict shape
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: before.body.updatedAt })
       .expect(409);
@@ -1044,13 +1045,13 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     // Order stays open; with the fresh updatedAt the submit succeeds
     const stillOpen = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(stillOpen.body.status).toBe('open');
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: after.body.updatedAt })
       .expect(201);
@@ -1083,7 +1084,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     // Verify kickDrawer is true (receipt_print_enqueued event)
     await new Promise((r) => setTimeout(r, 200));
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
@@ -1129,7 +1130,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     // kickDrawer must be false
     await new Promise((r) => setTimeout(r, 200));
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const enqueuedEvent = eventsRes.body.find((e: any) => e.type === 'receipt_print_enqueued');
@@ -1199,7 +1200,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       await payViaPaymentsAndSubmit(orderId, [{ methodId: 'card', amountHalalas: totalHalalas }]);
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1226,7 +1227,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       ]);
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1246,7 +1247,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       const { orderId } = await createOpenOrderWithItems();
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1268,7 +1269,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
         qty: i.itemName === 'Zinger Burger' ? 2 : 1,
       }));
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: refundItems, methodId: 'cash' })
         .expect(201);
@@ -1276,7 +1277,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       await new Promise((r) => setTimeout(r, 200));
 
       const res = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1294,19 +1295,19 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
     }> {
       // Create order with items (Zinger × 2)
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1317,19 +1318,19 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       await new Promise((r) => setTimeout(r, 100));
 
       const fetched = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Append the cash payment, then submit with the given body
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: fetched.body.totalHalalas })
         .expect(201);
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send(submitOverrides || {});
 
@@ -1342,7 +1343,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.body.status).toBe('paid');
 
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1371,7 +1372,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.body.status).toBe('paid');
 
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1404,7 +1405,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1480,7 +1481,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1499,7 +1500,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1529,7 +1530,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1548,7 +1549,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
       // Check events: receipt_print_enqueued should NOT be present for standard
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1573,7 +1574,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const statusRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/zatca-invoice`)
+        .get(`/api/orders/${orderId}/zatca-invoice`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1588,7 +1589,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
       // No invoice yet created (no clearance module in this test), so reissue should fail
       const reissueRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/zatca-invoice/reissue`)
+        .post(`/api/orders/${orderId}/zatca-invoice/reissue`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ zatcaBuyerDetails: FULL_BUYER });
 
@@ -1603,7 +1604,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       });
 
       const retryRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/zatca-invoice/retry-clearance`)
+        .post(`/api/orders/${orderId}/zatca-invoice/retry-clearance`)
         .set('Authorization', `Bearer ${jwtToken}`);
 
       // Expect 400 because no prior invoice exists
@@ -1616,7 +1617,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       expect(res.status).toBe(201);
 
       const statusRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/zatca-invoice`)
+        .get(`/api/orders/${orderId}/zatca-invoice`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1634,7 +1635,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       // 2. Refund via HTTP
       // Get order items to know what to refund
       const orderRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1644,7 +1645,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       transport.sent = [];
 
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ items: [{ orderItemId: zingerItem.id, qty: 1 }], methodId: 'cash' })
         .expect(201);
@@ -1657,7 +1658,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
       // 4. Immediately after refund: NO new receipt_print_enqueued for the refund
       const eventsBefore = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1682,7 +1683,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
       // 6. After clearance: receipt print events should appear
       const eventsAfter = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1706,7 +1707,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
 
     async function fetchEventTypes(orderId: number): Promise<string[]> {
       const eventsRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events`)
+        .get(`/api/orders/${orderId}/events`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       return eventsRes.body.map((e: any) => e.type);
@@ -1814,19 +1815,19 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     totalHalalas: number;
   }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -1835,7 +1836,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       .expect(200);
 
     const fetched = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -1855,7 +1856,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas })
       .expect(201);
@@ -1880,7 +1881,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
 
     // Events: payment_added present, paid absent
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const types = eventsRes.body.map((e: any) => e.type);
@@ -1905,13 +1906,13 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100 })
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: -20 })
       .expect(201);
@@ -1927,7 +1928,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     expect(neg.changeHalalas).toBeNull();
 
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const addedEvents = eventsRes.body.filter((e: any) => e.type === 'payment_added');
@@ -1942,7 +1943,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 0 })
       .expect(400);
@@ -1955,7 +1956,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: -50 })
       .expect(400);
@@ -1963,7 +1964,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     // Nothing persisted
     expect(paymentSum(orderId)).toBe(0);
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(eventsRes.body.some((e: any) => e.type === 'payment_added')).toBe(false);
@@ -1971,14 +1972,14 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
 
   it('rejects payment on an empty order (no items) (400)', async () => {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100 })
       .expect(400);
@@ -1991,18 +1992,18 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
 
     // Finalize via payments + submit (status becomes paid)
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100 })
       .expect(400);
@@ -2012,7 +2013,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'bitcoin', amountHalalas: 100 })
       .expect(400);
@@ -2027,7 +2028,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       .run();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'mada', amountHalalas: 100 })
       .expect(400);
@@ -2042,7 +2043,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'card', amountHalalas: 100, tenderedHalalas: 100 })
       .expect(400);
@@ -2052,7 +2053,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: -20, tenderedHalalas: 20 })
       .expect(400);
@@ -2062,7 +2063,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100, tenderedHalalas: 99 })
       .expect(400);
@@ -2072,14 +2073,14 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId } = await createOpenOrderWithItems();
 
     const res1 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 1000 })
       .expect(201);
     expect(res1.body.payments).toHaveLength(1);
 
     const res2 = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 1000 })
       .expect(201);
@@ -2095,7 +2096,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas + 400 })
       .expect(201);
@@ -2109,7 +2110,7 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const { orderId } = await createOpenOrderWithItems();
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' })
         .expect(201);
@@ -2121,18 +2122,18 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const { orderId } = await createOpenOrderWithItems();
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 100 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: -100 })
         .expect(201);
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' })
         .expect(201);
@@ -2144,13 +2145,13 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
       const { orderId } = await createOpenOrderWithItems();
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 100 })
         .expect(201);
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' })
         .expect(400);
@@ -2160,12 +2161,12 @@ describe('Add payment (append) — POST /orders/:id/payments (ADR 0006)', () => 
 
       // Order still open — balance it so it can be voided
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: -100 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/void`)
+        .post(`/api/orders/${orderId}/void`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ reason: 'test cleanup' })
         .expect(201);
@@ -2181,7 +2182,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     for (const id of voidReasonOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -2193,7 +2194,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
 
   async function createOpenOrder(): Promise<number> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -2204,11 +2205,11 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
   async function createOpenOrderWithItem(): Promise<number> {
     const orderId = await createOpenOrder();
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -2230,7 +2231,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: '  Customer left  ' })
       .expect(201);
@@ -2238,7 +2239,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     expect(res.body).toEqual({ success: true, status: 'voided' });
 
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events`)
+      .get(`/api/orders/${orderId}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -2255,7 +2256,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
 
@@ -2266,7 +2267,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
@@ -2278,7 +2279,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: '' })
       .expect(400);
@@ -2290,7 +2291,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: '   ' })
       .expect(400);
@@ -2302,7 +2303,7 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     const orderId = await createOpenOrder();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'x'.repeat(501) })
       .expect(400);
@@ -2315,18 +2316,18 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
 
     // Net zero with payments: +100 then −100, then void with reason
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100 })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: -100 })
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/void`)
+      .post(`/api/orders/${orderId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'Balanced and voided' })
       .expect(201);
@@ -2336,13 +2337,13 @@ describe('void order — POST /orders/:id/void (required reason)', () => {
     // Non-zero net with reason → still 400 from the ADR 0006 guard
     const secondId = await createOpenOrderWithItem();
     await request(app.getHttpServer())
-      .post(`/orders/${secondId}/payments`)
+      .post(`/api/orders/${secondId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 100 })
       .expect(201);
 
     const rejected = await request(app.getHttpServer())
-      .post(`/orders/${secondId}/void`)
+      .post(`/api/orders/${secondId}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'Should be blocked by net-zero guard' })
       .expect(400);
@@ -2373,7 +2374,7 @@ describe('One open order per table', () => {
     for (const id of openOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -2384,7 +2385,7 @@ describe('One open order per table', () => {
 
   async function createOpenDineIn(tableId: number): Promise<{ id: number; orderNo: number }> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId })
       .expect(201);
@@ -2394,7 +2395,7 @@ describe('One open order per table', () => {
 
   async function createOpenTakeaway(): Promise<{ id: number; orderNo: number }> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -2405,7 +2406,7 @@ describe('One open order per table', () => {
     const first = await createOpenDineIn(2);
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: 2 })
       .expect(409);
@@ -2420,14 +2421,14 @@ describe('One open order per table', () => {
 
     // Void the first order (no items to pay)
     await request(app.getHttpServer())
-      .post(`/orders/${first.id}/void`)
+      .post(`/api/orders/${first.id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'test cleanup' })
       .expect(201);
 
     // Now creating a new dine-in on same table should succeed
     const second = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: 2 })
       .expect(201);
@@ -2439,14 +2440,14 @@ describe('One open order per table', () => {
 
     // Void the first order
     await request(app.getHttpServer())
-      .post(`/orders/${first.id}/void`)
+      .post(`/api/orders/${first.id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'test cleanup' })
       .expect(201);
 
     // Now creating a new dine-in on same table should succeed
     const second = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: 2 })
       .expect(201);
@@ -2469,7 +2470,7 @@ describe('One open order per table', () => {
     const first = await createOpenDineIn(2);
 
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: 2 })
       .expect(409);
@@ -2506,7 +2507,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
     for (const id of metaOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -2517,7 +2518,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -2527,7 +2528,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
 
   async function getOrder(id: number): Promise<any> {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${id}`)
+      .get(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     return res.body;
@@ -2537,7 +2538,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
   // and `await` (resolves to the response).
   function patchOrder(id: number, body: Record<string, unknown>) {
     return request(app.getHttpServer())
-      .patch(`/orders/${id}`)
+      .patch(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body);
   }
@@ -2641,7 +2642,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
 
     // Table released — a new dine-in on the same table succeeds
     const fresh = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: TABLE_A })
       .expect(201);
@@ -2651,7 +2652,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
   it('voided order → 400', async () => {
     const { id } = await createOrder({ type: 'takeaway' });
     await request(app.getHttpServer())
-      .post(`/orders/${id}/void`)
+      .post(`/api/orders/${id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'test cleanup' })
       .expect(201);
@@ -2670,18 +2671,18 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
 
     // Add an item so the order has a total to pay, then finalize via submit
     const syncRes = await request(app.getHttpServer())
-      .put(`/orders/${id}/items/sync`)
+      .put(`/api/orders/${id}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: before.updatedAt, items: [{ itemId: 1, qty: 1 }] })
       .expect(200);
 
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: syncRes.body.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -2703,7 +2704,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
 
     // Bump updated_at via item sync
     await request(app.getHttpServer())
-      .put(`/orders/${id}/items/sync`)
+      .put(`/api/orders/${id}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: before.updatedAt, items: [{ itemId: 1, qty: 1 }] })
       .expect(200);
@@ -2964,7 +2965,7 @@ describe('updateOrderMeta (PATCH /orders/:id)', () => {
   it('notes-only PATCH on a voided order → 400', async () => {
     const { id } = await createOrder({ type: 'takeaway' });
     await request(app.getHttpServer())
-      .post(`/orders/${id}/void`)
+      .post(`/api/orders/${id}/void`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ reason: 'test cleanup' })
       .expect(201);
@@ -3010,7 +3011,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
     for (const id of partnerOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -3021,7 +3022,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -3031,7 +3032,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
 
   async function getOrder(id: number): Promise<any> {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${id}`)
+      .get(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     return res.body;
@@ -3041,14 +3042,14 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
   // and `await` (resolves to the response).
   function patchPartner(id: number, body: Record<string, unknown>) {
     return request(app.getHttpServer())
-      .patch(`/orders/${id}/partner`)
+      .patch(`/api/orders/${id}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body);
   }
 
   async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
       .expect(200);
@@ -3391,12 +3392,12 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
     const synced = await addItem(id, before.updatedAt, 1, 1);
 
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: synced.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -3421,7 +3422,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
     }).expect(200);
 
     const listRes = await request(app.getHttpServer())
-      .get('/orders?status=open')
+      .get('/api/orders?status=open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const mine = listRes.body.find((o: any) => o.id === id);
@@ -3446,7 +3447,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
     }).expect(200);
 
     const res = await request(app.getHttpServer())
-      .patch(`/orders/${id}`)
+      .patch(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: set.body.updatedAt, type: 'dine_in', tableId: 1 })
       .expect(200);
@@ -3498,7 +3499,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
 
     const overridden = await getOrder(id);
     const res = await request(app.getHttpServer())
-      .patch(`/orders/${id}`)
+      .patch(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: overridden.updatedAt, type: 'dine_in', tableId: 1 })
       .expect(200);
@@ -3522,7 +3523,7 @@ describe('Delivery partner — PATCH /orders/:id/partner (ADR 0007)', () => {
 
     const overridden = await getOrder(id);
     const res = await request(app.getHttpServer())
-      .patch(`/orders/${id}`)
+      .patch(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: overridden.updatedAt, type: 'takeaway' })
       .expect(200);
@@ -3557,7 +3558,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
     for (const id of stdOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -3568,7 +3569,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -3578,7 +3579,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
   async function getOrder(id: number): Promise<any> {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${id}`)
+      .get(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     return res.body;
@@ -3586,7 +3587,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
   async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
       .expect(200);
@@ -3597,7 +3598,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
   // and `await` (resolves to the response).
   function patchStandardInvoice(id: number, body: Record<string, unknown>) {
     return request(app.getHttpServer())
-      .patch(`/orders/${id}/standard-invoice`)
+      .patch(`/api/orders/${id}/standard-invoice`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body);
   }
@@ -3743,12 +3744,12 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
     // Pay + submit so the order is no longer open
     const paid = await getOrder(id);
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: paid.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: paid.updatedAt })
       .expect(201);
@@ -3802,13 +3803,13 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
     // Balance + submit with ONLY baseUpdatedAt — the body omits the flag
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: set.body.totalHalalas })
       .expect(201);
     const beforeSubmit = await getOrder(id);
     const submitRes = await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: beforeSubmit.updatedAt })
       .expect(201);
@@ -3822,7 +3823,7 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
     // Paid event carries the buyer summary from the PERSISTED buyer
     const eventsRes = await request(app.getHttpServer())
-      .get(`/orders/${id}/events`)
+      .get(`/api/orders/${id}/events`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const paidEvent = eventsRes.body.find((e: any) => e.type === 'paid');
@@ -3852,13 +3853,13 @@ describe('Standard invoice — PATCH /orders/:id/standard-invoice', () => {
 
     // Balance + submit with only baseUpdatedAt → simplified (order flag is 0)
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: cleared.body.totalHalalas })
       .expect(201);
     const beforeSubmit = await getOrder(id);
     const submitRes = await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: beforeSubmit.updatedAt })
       .expect(201);
@@ -3879,7 +3880,7 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
     for (const id of createdIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -3891,7 +3892,7 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -3909,7 +3910,7 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
     expect(third.id).toBeGreaterThan(second.id);
 
     const res = await request(app.getHttpServer())
-      .get('/orders')
+      .get('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -3930,7 +3931,7 @@ describe('listOrders — GET /orders returns newest first (DESC by orders.id)', 
     const b = await createOrder({ type: 'takeaway' });
 
     const res = await request(app.getHttpServer())
-      .get('/orders?status=open')
+      .get('/api/orders?status=open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const openIds: number[] = res.body.map((o: any) => o.id);
@@ -3947,7 +3948,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     for (const id of createdIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -3959,7 +3960,7 @@ describe('listOrders — date / user / multi-status filters', () => {
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -3994,7 +3995,7 @@ describe('listOrders — date / user / multi-status filters', () => {
       .run(bounds.endUnix + 12 * 3600, nextDayNoon.id);
 
     const res = await request(app.getHttpServer())
-      .get(`/orders?date=${today}`)
+      .get(`/api/orders?date=${today}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -4019,7 +4020,7 @@ describe('listOrders — date / user / multi-status filters', () => {
       .run(bounds.startUnix + 14 * 3600, second.id);
 
     const res = await request(app.getHttpServer())
-      .get(`/orders?date=${today}`)
+      .get(`/api/orders?date=${today}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -4030,11 +4031,11 @@ describe('listOrders — date / user / multi-status filters', () => {
 
   it('rejects invalid date format with 400', async () => {
     await request(app.getHttpServer())
-      .get('/orders?date=2026-13-99')
+      .get('/api/orders?date=2026-13-99')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
     await request(app.getHttpServer())
-      .get('/orders?date=not-a-date')
+      .get('/api/orders?date=not-a-date')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
   });
@@ -4045,7 +4046,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     sqlite.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(paidOrder.id);
 
     const multi = await request(app.getHttpServer())
-      .get('/orders?status=open,paid')
+      .get('/api/orders?status=open,paid')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const multiIds: number[] = multi.body.map((o: any) => o.id);
@@ -4053,7 +4054,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     expect(multiIds).toContain(paidOrder.id);
 
     const single = await request(app.getHttpServer())
-      .get('/orders?status=open')
+      .get('/api/orders?status=open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const singleIds: number[] = single.body.map((o: any) => o.id);
@@ -4063,11 +4064,11 @@ describe('listOrders — date / user / multi-status filters', () => {
 
   it('status rejects unknown tokens with 400 (single and mixed)', async () => {
     await request(app.getHttpServer())
-      .get('/orders?status=bogus')
+      .get('/api/orders?status=bogus')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
     await request(app.getHttpServer())
-      .get('/orders?status=open,bogus')
+      .get('/api/orders?status=open,bogus')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
   });
@@ -4088,7 +4089,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, otherOrder.id);
 
     const res = await request(app.getHttpServer())
-      .get(`/orders?userId=${adminId}`)
+      .get(`/api/orders?userId=${adminId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -4097,7 +4098,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     expect(ids).not.toContain(otherOrder.id);
 
     const cashierRes = await request(app.getHttpServer())
-      .get(`/orders?userId=${otherUserId}`)
+      .get(`/api/orders?userId=${otherUserId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const cashierIds: number[] = cashierRes.body.map((o: any) => o.id);
@@ -4107,7 +4108,7 @@ describe('listOrders — date / user / multi-status filters', () => {
 
   it('userId rejects non-integer values with 400', async () => {
     await request(app.getHttpServer())
-      .get('/orders?userId=abc')
+      .get('/api/orders?userId=abc')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
   });
@@ -4150,7 +4151,7 @@ describe('listOrders — date / user / multi-status filters', () => {
     sqlite.prepare('UPDATE orders SET created_by = ? WHERE id = ?').run(otherUserId, c.id);
 
     const res = await request(app.getHttpServer())
-      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .get(`/api/orders?date=${today}&status=open&userId=${adminId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -4166,7 +4167,7 @@ describe('listOrders — date / user / multi-status filters', () => {
       .prepare('UPDATE orders SET created_at = ? WHERE id = ?')
       .run(bounds.startUnix + 12 * 3600, a2.id);
     const res2 = await request(app.getHttpServer())
-      .get(`/orders?date=${today}&status=open&userId=${adminId}`)
+      .get(`/api/orders?date=${today}&status=open&userId=${adminId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids2: number[] = res2.body.map((o: any) => o.id);
@@ -4176,7 +4177,7 @@ describe('listOrders — date / user / multi-status filters', () => {
 
   it('omitting all filters still returns the full list newest-first (no regression)', async () => {
     const res = await request(app.getHttpServer())
-      .get('/orders')
+      .get('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const ids: number[] = res.body.map((o: any) => o.id);
@@ -4193,7 +4194,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
     for (const id of createdIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -4205,7 +4206,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
 
   async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -4213,7 +4214,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
     createdIds.push(orderId);
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -4222,7 +4223,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
 
   async function syncItems(orderId: number, updatedAt: number, items: any[]) {
     return request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: updatedAt, items })
       .expect(200);
@@ -4230,7 +4231,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
 
   async function sendToKitchen(orderId: number) {
     return request(app.getHttpServer())
-      .post(`/orders/${orderId}/send-to-kitchen`)
+      .post(`/api/orders/${orderId}/send-to-kitchen`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
   }
@@ -4238,7 +4239,7 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
   /** Fetch the single summary row for `orderId` from GET /orders. */
   async function summaryFor(orderId: number): Promise<any> {
     const res = await request(app.getHttpServer())
-      .get('/orders')
+      .get('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const row = res.body.find((o: any) => o.id === orderId);
@@ -4324,12 +4325,12 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
 
     // Pay + submit so the row is no longer open — fields must still exist.
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 2300 * 8 })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -4370,7 +4371,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     for (const id of orderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -4382,7 +4383,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
   // Open takeaway order with 2× Zinger Burger (total 4600 halalas).
   async function createOpenOrderWithItems(): Promise<{ orderId: number; totalHalalas: number }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -4390,18 +4391,18 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     orderIds.push(orderId);
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
       .expect(200);
 
     const fetched = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -4411,11 +4412,11 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
   // Link the order to HungerStation via PATCH /orders/:id/partner.
   async function setPartner(orderId: number): Promise<void> {
     const before = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     await request(app.getHttpServer())
-      .patch(`/orders/${orderId}/partner`)
+      .patch(`/api/orders/${orderId}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: before.body.updatedAt, deliveryPartnerId: 'hungerstation' })
       .expect(200);
@@ -4426,7 +4427,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     await setPartner(orderId);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'hungerstation', amountHalalas: totalHalalas })
       .expect(201);
@@ -4447,7 +4448,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     await setPartner(orderId);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas })
       .expect(400);
@@ -4462,7 +4463,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     await setPartner(orderId);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'card', amountHalalas: totalHalalas })
       .expect(400);
@@ -4476,7 +4477,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     await setPartner(orderId);
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'keeta', amountHalalas: totalHalalas })
       .expect(400);
@@ -4490,7 +4491,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'hungerstation', amountHalalas: totalHalalas })
       .expect(400);
@@ -4503,7 +4504,7 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     const { orderId, totalHalalas } = await createOpenOrderWithItems();
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: totalHalalas })
       .expect(201);
@@ -4517,13 +4518,13 @@ describe('Delivery partner payment restriction — POST /orders/:id/payments (AD
     await setPartner(orderId);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'hungerstation', amountHalalas: totalHalalas })
       .expect(201);
 
     const submitRes = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -4561,7 +4562,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     for (const id of orderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -4573,7 +4574,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
   // Open takeaway order with 2× Zinger Burger (total 4600 halalas).
   async function createOpenOrderWithItems(): Promise<{ orderId: number; totalHalalas: number }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -4581,18 +4582,18 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     orderIds.push(orderId);
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
       .expect(200);
 
     const fetched = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -4602,11 +4603,11 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
   // Link the order to HungerStation via PATCH /orders/:id/partner.
   async function setPartner(orderId: number): Promise<void> {
     const before = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     await request(app.getHttpServer())
-      .patch(`/orders/${orderId}/partner`)
+      .patch(`/api/orders/${orderId}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: before.body.updatedAt, deliveryPartnerId: 'hungerstation' })
       .expect(200);
@@ -4619,13 +4620,13 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     methodId: string,
   ): Promise<void> {
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId, amountHalalas: totalHalalas })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -4636,7 +4637,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
 
   async function firstOrderItemId(orderId: number): Promise<number> {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     return res.body.items[0].id;
@@ -4647,7 +4648,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     await payAndSubmit(orderId, totalHalalas, 'cash');
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/refund`)
+      .post(`/api/orders/${orderId}/refund`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
@@ -4665,7 +4666,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     await payAndSubmit(orderId, totalHalalas, 'hungerstation');
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/refund`)
+      .post(`/api/orders/${orderId}/refund`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }], methodId: 'cash' })
       .expect(400);
@@ -4681,7 +4682,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     await payAndSubmit(orderId, totalHalalas, 'hungerstation');
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/refund`)
+      .post(`/api/orders/${orderId}/refund`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
@@ -4700,7 +4701,7 @@ describe('Delivery partner refund restriction — POST /orders/:id/refund (ADR 0
     await payAndSubmit(orderId, totalHalalas, 'hungerstation');
 
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/refund`)
+      .post(`/api/orders/${orderId}/refund`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         items: [{ orderItemId: await firstOrderItemId(orderId), qty: 1 }],
@@ -4735,7 +4736,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
     for (const id of priceOrderIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -4746,7 +4747,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
 
   async function createOrder(body: Record<string, unknown>): Promise<any> {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body)
       .expect(201);
@@ -4756,7 +4757,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
 
   async function getOrder(id: number): Promise<any> {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${id}`)
+      .get(`/api/orders/${id}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     return res.body;
@@ -4764,7 +4765,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
 
   async function addItem(orderId: number, updatedAt: number, itemId = 1, qty = 1): Promise<any> {
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: updatedAt, items: [{ itemId, qty }] })
       .expect(200);
@@ -4773,7 +4774,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
 
   function patchUnitPrice(orderId: number, orderItemId: number, body: Record<string, unknown>) {
     return request(app.getHttpServer())
-      .patch(`/orders/${orderId}/items/${orderItemId}/unit-price`)
+      .patch(`/api/orders/${orderId}/items/${orderItemId}/unit-price`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(body);
   }
@@ -4789,7 +4790,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
     const before = await getOrder(id);
     const synced = await addItem(id, before.updatedAt, 1, 2); // qty 2 → line total 4600
     const set = await request(app.getHttpServer())
-      .patch(`/orders/${id}/partner`)
+      .patch(`/api/orders/${id}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: synced.updatedAt,
@@ -4940,19 +4941,19 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
     const before = await getOrder(id);
     const synced = await addItem(id, before.updatedAt, 1, 1);
     const set = await request(app.getHttpServer())
-      .patch(`/orders/${id}/partner`)
+      .patch(`/api/orders/${id}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: synced.updatedAt, deliveryPartnerId: 'hungerstation' })
       .expect(200);
 
     // Partner order pays only on the partner's own method (ADR 0007)
     await request(app.getHttpServer())
-      .post(`/orders/${id}/payments`)
+      .post(`/api/orders/${id}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'hungerstation', amountHalalas: set.body.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${id}/submit`)
+      .post(`/api/orders/${id}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -4970,7 +4971,7 @@ describe('Unit price override — PATCH /orders/:id/items/:orderItemId/unit-pric
     const before = await getOrder(id);
     const synced = await addItem(id, before.updatedAt, 1, 1);
     const set = await request(app.getHttpServer())
-      .patch(`/orders/${id}/partner`)
+      .patch(`/api/orders/${id}/partner`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: synced.updatedAt, deliveryPartnerId: 'hungerstation' })
       .expect(200);
@@ -5048,14 +5049,14 @@ describe('syncItems (bulk cart sync)', () => {
 
   async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -5067,7 +5068,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const syncRes = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5113,7 +5114,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // First sync: add 2 burgers
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5129,7 +5130,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Second sync: increase to 5 — must NOT print anything
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5167,7 +5168,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5183,7 +5184,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Decrease qty to 1
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5207,7 +5208,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5223,7 +5224,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Notes-only update (same qty)
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5251,7 +5252,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Add items first
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5265,7 +5266,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Empty sync
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5292,7 +5293,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // First sync — succeeds because baseUpdatedAt matches the order's current updatedAt
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5303,7 +5304,7 @@ describe('syncItems (bulk cart sync)', () => {
     // Second sync with the SAME stale baseUpdatedAt — must fail
     // because the first sync already updated the order's updatedAt
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt, // stale! Order was modified by first sync
@@ -5320,7 +5321,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Add items
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5330,12 +5331,12 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Finalize via payments + submit
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: res.body.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -5344,7 +5345,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Try sync on paid order
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: newUpdatedAt,
@@ -5358,7 +5359,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5372,7 +5373,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5386,7 +5387,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5403,7 +5404,7 @@ describe('syncItems (bulk cart sync)', () => {
     transport.sent = [];
 
     const syncRes = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5442,7 +5443,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // First sync: add item A (Zinger qty 2) and item B (Pepsi qty 1)
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5459,7 +5460,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Second sync: Zinger unchanged (qty 2, no notes), Pepsi qty increased (1→2)
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5497,7 +5498,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // First sync: add Zinger qty 2
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5510,7 +5511,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Second sync: exact same snapshot
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5531,7 +5532,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5547,7 +5548,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Same qty, different notes
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5583,7 +5584,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // First sync with notes
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5597,7 +5598,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Clear notes to empty string
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5618,7 +5619,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5631,7 +5632,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Same notes, same qty — should be fully no-op
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5654,14 +5655,14 @@ describe('syncItems (bulk cart sync)', () => {
     updatedAt: number;
   }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${token}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
@@ -5671,7 +5672,7 @@ describe('syncItems (bulk cart sync)', () => {
   it('android sync that decreases qty below server qty returns 400 and leaves order unchanged', async () => {
     // waiter is seeded with android_login=1 (tablet floor user)
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -5680,7 +5681,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // POS adds 3 zingers
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5692,7 +5693,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Android tries to decrease to 1 — must be rejected entirely
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5704,7 +5705,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Order unchanged
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(getRes.body.items).toHaveLength(1);
@@ -5713,7 +5714,7 @@ describe('syncItems (bulk cart sync)', () => {
 
   it('android sync that omits a server line (remove) returns 400 and leaves order unchanged', async () => {
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -5721,7 +5722,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5732,7 +5733,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Android sends an empty cart — the existing line is missing → remove
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5743,7 +5744,7 @@ describe('syncItems (bulk cart sync)', () => {
     expect(res.body.message).toBe('Kitchen items can only be reduced at the cashier.');
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(getRes.body.items).toHaveLength(1);
@@ -5752,7 +5753,7 @@ describe('syncItems (bulk cart sync)', () => {
 
   it('android sync that increases qty, adds new lines, or edits notes returns 200', async () => {
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -5760,7 +5761,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5772,7 +5773,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Android: increase qty 1→2, add a new Pepsi line, and change notes
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5793,7 +5794,7 @@ describe('syncItems (bulk cart sync)', () => {
 
   it('android sync with qty equal to server qty (no-op or notes-only) returns 200', async () => {
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -5801,7 +5802,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5813,7 +5814,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Same qty, notes change — allowed (qty equals the floor)
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5827,7 +5828,7 @@ describe('syncItems (bulk cart sync)', () => {
 
   it('mixed android payload with one illegal decrease rejects the entire sync (no partial apply)', async () => {
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -5835,7 +5836,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrderWithToken(androidToken);
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5847,7 +5848,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Decrease (illegal) + add a new line (valid) — the whole sync must fail
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5860,7 +5861,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // Nothing applied: still 1 line, qty 3, no Pepsi
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(getRes.body.items).toHaveLength(1);
@@ -5871,7 +5872,7 @@ describe('syncItems (bulk cart sync)', () => {
     const { orderId, updatedAt } = await createOpenOrder();
 
     const res1 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt,
@@ -5886,7 +5887,7 @@ describe('syncItems (bulk cart sync)', () => {
 
     // POS decreases zinger 3→1 and removes pepsi entirely
     const res2 = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: updatedAt2,
@@ -5904,14 +5905,14 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
   async function createOpenOrder(): Promise<{ orderId: number; updatedAt: number }> {
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
@@ -5920,7 +5921,7 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
   async function syncItems(orderId: number, updatedAt: number, items: any[]) {
     return request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: updatedAt, items })
       .expect(200);
@@ -5928,7 +5929,7 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
   async function sendToKitchen(orderId: number) {
     return request(app.getHttpServer())
-      .post(`/orders/${orderId}/send-to-kitchen`)
+      .post(`/api/orders/${orderId}/send-to-kitchen`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
   }
@@ -6047,25 +6048,25 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
 
     // Finalize via payments + submit (1 Zinger = 2300 halalas)
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: 2300 })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/send-to-kitchen`)
+      .post(`/api/orders/${orderId}/send-to-kitchen`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(400);
   });
 
   it('send-to-kitchen on a missing order returns 404', async () => {
     await request(app.getHttpServer())
-      .post('/orders/999999/send-to-kitchen')
+      .post('/api/orders/999999/send-to-kitchen')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(404);
   });
@@ -6075,7 +6076,7 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     // call syncItems). ADR 0006 introduces no new permission — send-to-kitchen
     // reuses update_order; the Android app just has no UI button for it.
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
@@ -6084,34 +6085,34 @@ describe('sendToKitchen (explicit kitchen print, ADR 0006)', () => {
     await syncItems(orderId, updatedAt, [{ itemId: zingerItemId, qty: 1 }]);
 
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/send-to-kitchen`)
+      .post(`/api/orders/${orderId}/send-to-kitchen`)
       .set('Authorization', `Bearer ${androidToken}`)
       .expect(200);
   });
 
   it('android syncItems still works and never kitchen-prints (regression)', async () => {
     const androidLogin = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     const androidToken = androidLogin.body.accessToken;
 
     const orderRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${androidToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     const orderId = orderRes.body.id;
 
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${androidToken}`)
       .expect(200);
 
     transport.sent = [];
 
     const res = await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${androidToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -6171,7 +6172,7 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     for (const id of createdIds) {
       try {
         await request(app.getHttpServer())
-          .post(`/orders/${id}/void`)
+          .post(`/api/orders/${id}/void`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ reason: 'test cleanup' });
       } catch {
@@ -6213,14 +6214,14 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     setOpenDayBusinessDate(getServiceDayString(post0500Ms));
 
     const first = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
     createdIds.push(first.body.id);
 
     const second = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -6241,7 +6242,7 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     jest.spyOn(Date, 'now').mockReturnValue(justBefore0500Ms);
     setOpenDayBusinessDate(pre0500ServiceDay);
     const first = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -6254,7 +6255,7 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     jest.spyOn(Date, 'now').mockReturnValue(justAfter0500Ms);
     setOpenDayBusinessDate(post0500ServiceDay);
     const second = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -6270,7 +6271,7 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     setOpenDayBusinessDate(serviceDay);
 
     const first = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -6279,7 +6280,7 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     // Slightly later (12:00), still the same service day.
     jest.spyOn(Date, 'now').mockReturnValue(post0500Ms);
     const second = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);

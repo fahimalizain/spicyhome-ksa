@@ -15,6 +15,7 @@ import { zatcaKey } from '@spicyhome/shared';
 import * as forge from 'node-forge';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../../modules/database/database.module';
+import { configureHttpApp } from '../../configure-http-app';
 import { FakePrinterTransport } from '../../modules/printers/printer-transport';
 import { PrintersService } from '../../modules/printers/printers.service';
 import { FakeZatcaHttpClient, ZatcaHttpService } from '../../modules/zatca/zatca-http.service';
@@ -47,7 +48,7 @@ describe('ZATCA Integration', () => {
       .useValue(fakeHttp)
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = configureHttpApp(moduleFixture.createNestApplication());
     app.useWebSocketAdapter(new WsAdapter(app));
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
     await app.listen(0);
@@ -105,13 +106,13 @@ describe('ZATCA Integration', () => {
     `);
 
     const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'admin', pin: '771133', clientType: 'pos' });
     jwtToken = loginRes.body.accessToken;
 
     // Open business day (required for order creation)
     await request(app.getHttpServer())
-      .post('/day/open')
+      .post('/api/day/open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ openingCashHalalas: 50000 });
   });
@@ -126,7 +127,7 @@ describe('ZATCA Integration', () => {
   describe('Onboarding', () => {
     it('generates CSR with correct PEM format', async () => {
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/csr')
+        .post('/api/zatca/onboard/csr')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(201);
 
@@ -149,7 +150,7 @@ describe('ZATCA Integration', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance')
+        .post('/api/zatca/onboard/compliance')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ otp: '123456' })
         .expect(201);
@@ -170,7 +171,7 @@ describe('ZATCA Integration', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/production')
+        .post('/api/zatca/onboard/production')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(201);
 
@@ -178,7 +179,7 @@ describe('ZATCA Integration', () => {
 
       // Verify state
       const stateRes = await request(app.getHttpServer())
-        .get('/zatca/status')
+        .get('/api/zatca/status')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -199,7 +200,7 @@ describe('ZATCA Integration', () => {
     it('creates a signed invoice on order pay', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'dine_in', tableId: 1 })
         .expect(201);
@@ -207,12 +208,12 @@ describe('ZATCA Integration', () => {
 
       // Get order to know updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -221,13 +222,13 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 4600 })
         .expect(201);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -303,7 +304,7 @@ describe('ZATCA Integration', () => {
 
       const invoiceId = invoices[0].id;
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ invoiceId })
         .expect(201);
@@ -335,7 +336,7 @@ describe('ZATCA Integration', () => {
 
       const invoiceId = invoices[0].id;
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ invoiceId })
         .expect(201);
@@ -367,7 +368,7 @@ describe('ZATCA Integration', () => {
 
       const invoiceId = invoices[0].id;
       const res = await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ invoiceId })
         .expect(201);
@@ -379,7 +380,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects with 400 when neither invoiceId nor documentType is provided', async () => {
       await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(400);
@@ -387,7 +388,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects with 400 when documentType is unknown', async () => {
       await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ documentType: 'unknown_doc_type' })
         .expect(400);
@@ -395,7 +396,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects unauthenticated requests with 401', async () => {
       await request(app.getHttpServer())
-        .post('/zatca/onboard/compliance-check')
+        .post('/api/zatca/onboard/compliance-check')
         .send({ invoiceId: 1 })
         .expect(401);
     });
@@ -409,7 +410,7 @@ describe('ZATCA Integration', () => {
         });
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'invoice' })
           .expect(201);
@@ -439,7 +440,7 @@ describe('ZATCA Integration', () => {
         );
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'credit_note' })
           .expect(201);
@@ -466,7 +467,7 @@ describe('ZATCA Integration', () => {
         );
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'debit_note' })
           .expect(201);
@@ -496,7 +497,7 @@ describe('ZATCA Integration', () => {
         expect(generated.signedXml).not.toContain('name="0200000"');
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'standard_invoice' })
           .expect(201);
@@ -531,7 +532,7 @@ describe('ZATCA Integration', () => {
         expect(generated.signedXml).not.toContain('name="0200000"');
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'standard_credit_note' })
           .expect(201);
@@ -558,7 +559,7 @@ describe('ZATCA Integration', () => {
         expect(generated.signedXml).not.toContain('name="0200000"');
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'standard_debit_note' })
           .expect(201);
@@ -574,18 +575,18 @@ describe('ZATCA Integration', () => {
 
         // Run both checks
         await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'invoice' });
 
         await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'standard_invoice' });
 
         // Verify status shows both results
         const statusRes = await request(app.getHttpServer())
-          .get('/zatca/status')
+          .get('/api/zatca/status')
           .set('Authorization', `Bearer ${jwtToken}`)
           .expect(200);
 
@@ -605,7 +606,7 @@ describe('ZATCA Integration', () => {
         });
 
         const res = await request(app.getHttpServer())
-          .post('/zatca/onboard/compliance-check')
+          .post('/api/zatca/onboard/compliance-check')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ documentType: 'invoice' })
           .expect(201);
@@ -622,7 +623,7 @@ describe('ZATCA Integration', () => {
       // Create two more orders
       for (let i = 0; i < 2; i++) {
         const orderRes = await request(app.getHttpServer())
-          .post('/orders')
+          .post('/api/orders')
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ type: 'takeaway' })
           .expect(201);
@@ -630,12 +631,12 @@ describe('ZATCA Integration', () => {
 
         // Get order to know updatedAt
         const getItemRes = await request(app.getHttpServer())
-          .get(`/orders/${orderId}`)
+          .get(`/api/orders/${orderId}`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .expect(200);
 
         await request(app.getHttpServer())
-          .put(`/orders/${orderId}/items/sync`)
+          .put(`/api/orders/${orderId}/items/sync`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({
             baseUpdatedAt: getItemRes.body.updatedAt,
@@ -644,13 +645,13 @@ describe('ZATCA Integration', () => {
           .expect(200);
 
         await request(app.getHttpServer())
-          .post(`/orders/${orderId}/payments`)
+          .post(`/api/orders/${orderId}/payments`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({ methodId: 'cash', amountHalalas: 2300 })
           .expect(201);
 
         await request(app.getHttpServer())
-          .post(`/orders/${orderId}/submit`)
+          .post(`/api/orders/${orderId}/submit`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .send({})
           .expect(201);
@@ -710,19 +711,19 @@ describe('ZATCA Integration', () => {
       transport.sent = [];
 
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -731,13 +732,13 @@ describe('ZATCA Integration', () => {
         .expect(200);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 2300 })
         .expect(201);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -766,19 +767,19 @@ describe('ZATCA Integration', () => {
     it('simplified refund prints the credit note QR TLV on the first refund receipt while the credit note is still signed', async () => {
       // Build a paid simplified order first (creates the original invoice)
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       const syncRes = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -788,13 +789,13 @@ describe('ZATCA Integration', () => {
       const orderItemId = syncRes.body.items[0].id;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 4600 })
         .expect(201);
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -812,7 +813,7 @@ describe('ZATCA Integration', () => {
 
       // Partial refund (1 of 2 qty) — keeps the order paid
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           items: [{ orderItemId, qty: 1 }],
@@ -851,7 +852,7 @@ describe('ZATCA Integration', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/zatca/reporting/retry')
+        .post('/api/zatca/reporting/retry')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -898,7 +899,7 @@ describe('ZATCA Integration', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/zatca/reporting/retry')
+        .post('/api/zatca/reporting/retry')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -915,7 +916,7 @@ describe('ZATCA Integration', () => {
 
     it('GET /zatca/invoices returns invoice list', async () => {
       const res = await request(app.getHttpServer())
-        .get('/zatca/invoices')
+        .get('/api/zatca/invoices')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -924,13 +925,13 @@ describe('ZATCA Integration', () => {
 
     it('GET /zatca/invoices/:id returns invoice detail with XML', async () => {
       const listRes = await request(app.getHttpServer())
-        .get('/zatca/invoices')
+        .get('/api/zatca/invoices')
         .set('Authorization', `Bearer ${jwtToken}`);
 
       if (listRes.body.length > 0) {
         const id = listRes.body[0].id;
         const res = await request(app.getHttpServer())
-          .get(`/zatca/invoices/${id}`)
+          .get(`/api/zatca/invoices/${id}`)
           .set('Authorization', `Bearer ${jwtToken}`)
           .expect(200);
 
@@ -941,7 +942,7 @@ describe('ZATCA Integration', () => {
 
     it('GET /zatca/credit-notes returns array', async () => {
       const res = await request(app.getHttpServer())
-        .get('/zatca/credit-notes')
+        .get('/api/zatca/credit-notes')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -979,7 +980,7 @@ describe('ZATCA Integration', () => {
       const creditNoteId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
 
       const res = await request(app.getHttpServer())
-        .get(`/zatca/credit-notes/${creditNoteId}`)
+        .get(`/api/zatca/credit-notes/${creditNoteId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -991,7 +992,7 @@ describe('ZATCA Integration', () => {
 
     it('GET /zatca/credit-notes/:id returns 404 for missing id', async () => {
       await request(app.getHttpServer())
-        .get('/zatca/credit-notes/99999')
+        .get('/api/zatca/credit-notes/99999')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(404);
     });
@@ -1047,7 +1048,7 @@ describe('ZATCA Integration', () => {
 
       // Retry only credit note 1
       const res = await request(app.getHttpServer())
-        .post('/zatca/reporting/retry')
+        .post('/api/zatca/reporting/retry')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ creditNoteId: cnId1 })
         .expect(201);
@@ -1082,7 +1083,7 @@ describe('ZATCA Integration', () => {
       // seller_name_ar, vat_number, etc.) so these are NOT empty in this
       // integration test. We test that unset fields pick up sensible defaults.
       const res = await request(app.getHttpServer())
-        .get('/zatca/config')
+        .get('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1117,7 +1118,7 @@ describe('ZATCA Integration', () => {
       ps.setSetting('zatca_simulation_spicyhome-pos_production_secret', 'prod_secret');
 
       const res = await request(app.getHttpServer())
-        .get('/zatca/config')
+        .get('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1165,7 +1166,7 @@ describe('ZATCA Integration', () => {
       };
 
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send(payload)
         .expect(200);
@@ -1188,7 +1189,7 @@ describe('ZATCA Integration', () => {
 
       // Verify round-trip via GET
       const getRes = await request(app.getHttpServer())
-        .get('/zatca/config')
+        .get('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1206,7 +1207,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects invalid VAT number format', async () => {
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
@@ -1231,7 +1232,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects VAT number not starting with 3', async () => {
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
@@ -1256,7 +1257,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects invalid CR number (not 10 digits)', async () => {
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
@@ -1281,7 +1282,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects invalid postal code (not 5 digits)', async () => {
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
@@ -1306,7 +1307,7 @@ describe('ZATCA Integration', () => {
 
     it('rejects missing required fields with 400', async () => {
       const res = await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           sellerName: 'Test',
@@ -1320,9 +1321,9 @@ describe('ZATCA Integration', () => {
     });
 
     it('rejects unauthenticated requests with 401', async () => {
-      await request(app.getHttpServer()).get('/zatca/config').expect(401);
+      await request(app.getHttpServer()).get('/api/zatca/config').expect(401);
 
-      await request(app.getHttpServer()).put('/zatca/config').send({}).expect(401);
+      await request(app.getHttpServer()).put('/api/zatca/config').send({}).expect(401);
     });
 
     it('rejects users without manage_settings with 403', async () => {
@@ -1339,19 +1340,19 @@ describe('ZATCA Integration', () => {
       `);
 
       const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({ username: 'staff', pin: '1234', clientType: 'pos' })
         .expect(201);
       const staffToken = loginRes.body.accessToken;
       expect(staffToken).toBeDefined();
 
       await request(app.getHttpServer())
-        .get('/zatca/config')
+        .get('/api/zatca/config')
         .set('Authorization', `Bearer ${staffToken}`)
         .expect(403);
 
       await request(app.getHttpServer())
-        .put('/zatca/config')
+        .put('/api/zatca/config')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({})
         .expect(403);

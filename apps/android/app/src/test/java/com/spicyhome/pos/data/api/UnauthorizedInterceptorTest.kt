@@ -58,6 +58,19 @@ class UnauthorizedInterceptorTest {
     }
 
     @Test
+    fun `401 on api-prefixed auth login path does NOT trigger callback`() {
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.start()
+
+        val client = createClient { wasCalled.set(true) }
+        val request = okhttp3.Request.Builder().url(server.url("/api/auth/login")).build()
+        val response = client.newCall(request).execute()
+
+        assertThat(response.code).isEqualTo(401)
+        assertThat(wasCalled.get()).isFalse()
+    }
+
+    @Test
     fun `200 does NOT trigger callback`() {
         server.enqueue(MockResponse().setResponseCode(200))
         server.start()
