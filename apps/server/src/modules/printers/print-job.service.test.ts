@@ -15,6 +15,7 @@ import { PrintersService } from './printers.service';
 import { PrintJobService } from './print-job.service';
 import { FakePrinterTransport } from './printer-transport';
 import { DRIZZLE } from '../database/database.module';
+import { configureHttpApp } from '../../configure-http-app';
 import { encodeArabicText, encodePc864, encodeUtf8, shapeArabic } from './arabic-encode';
 
 describe('PrintJobService', () => {
@@ -92,7 +93,7 @@ describe('PrintJobService', () => {
       .useValue(db)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     printJobService = app.get(PrintJobService);

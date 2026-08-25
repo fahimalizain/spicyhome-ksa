@@ -15,6 +15,7 @@ import { PrintersModule } from '../printers/printers.module';
 import { PrintersService } from '../printers/printers.service';
 import { DRIZZLE } from '../database/database.module';
 import { ZatcaInvoiceService } from './zatca-invoice.service';
+import { configureHttpApp } from '../../configure-http-app';
 import { generateKeyPair } from './zatca-crypto.service';
 import { zatcaKey } from '@spicyhome/shared';
 import * as forge from 'node-forge';
@@ -121,7 +122,7 @@ describe('ZatcaInvoiceService — credit notes', () => {
       .useValue(db)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     service = app.get(ZatcaInvoiceService);

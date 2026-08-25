@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from './app.module';
 import { DRIZZLE } from './modules/database/database.module';
+import { configureHttpApp } from './configure-http-app';
 let app: INestApplication;
 let sqlite: any;
 let db: any;
@@ -26,7 +27,7 @@ beforeAll(async () => {
     .useValue(db)
     .compile();
 
-  app = moduleFixture.createNestApplication();
+  app = configureHttpApp(moduleFixture.createNestApplication());
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   // Listen explicitly ONCE so supertest reuses a stable port instead of
@@ -58,7 +59,7 @@ beforeAll(async () => {
   `);
 
   const loginRes = await request(app.getHttpServer())
-    .post('/auth/login')
+    .post('/api/auth/login')
     .send({ username: 'admin', pin: '771133', clientType: 'pos' });
   jwtToken = loginRes.body.accessToken;
 });
@@ -71,7 +72,7 @@ afterAll(async () => {
 describe('Auth (e2e)', () => {
   it('POST /auth/login works', async () => {
     const res = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'admin', pin: '771133', clientType: 'pos' })
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
@@ -79,14 +80,14 @@ describe('Auth (e2e)', () => {
 
   it('POST /auth/login wrong PIN returns 401', async () => {
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'admin', pin: '0000', clientType: 'pos' })
       .expect(401);
   });
 
   it('POST /auth/login missing clientType returns 400', async () => {
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'admin', pin: '771133' })
       .expect(400);
   });
@@ -94,7 +95,7 @@ describe('Auth (e2e)', () => {
   it('POST /auth/login android clientType with android_login=0 user returns 401', async () => {
     // admin is seeded with android_login=0 (POS/back-office only)
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'admin', pin: '771133', clientType: 'android' })
       .expect(401);
   });
@@ -102,7 +103,7 @@ describe('Auth (e2e)', () => {
   it('POST /auth/login android clientType with android_login=1 user works', async () => {
     // waiter is seeded with android_login=1 (tablet floor user)
     const res = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'waiter', pin: '2', clientType: 'android' })
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
@@ -110,7 +111,7 @@ describe('Auth (e2e)', () => {
 
   it('GET /auth/roles with admin token returns roles', async () => {
     const res = await request(app.getHttpServer())
-      .get('/auth/roles')
+      .get('/api/auth/roles')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -119,7 +120,7 @@ describe('Auth (e2e)', () => {
 
   it('GET /auth/me returns current user with role permissions', async () => {
     const res = await request(app.getHttpServer())
-      .get('/auth/me')
+      .get('/api/auth/me')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.id).toBeDefined();
@@ -131,7 +132,7 @@ describe('Auth (e2e)', () => {
   });
 
   it('GET /auth/usernames without auth returns active usernames', async () => {
-    const res = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    const res = await request(app.getHttpServer()).get('/api/auth/usernames').expect(200);
     expect(res.body.usernames).toBeDefined();
     expect(Array.isArray(res.body.usernames)).toBe(true);
     expect(res.body.usernames).toContain('admin');
@@ -156,14 +157,14 @@ describe('Auth (e2e)', () => {
       VALUES ('inactive_user', '$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'Inactive', 2, 0, ${now}, ${now});
     `);
 
-    const res = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    const res = await request(app.getHttpServer()).get('/api/auth/usernames').expect(200);
     expect(res.body.usernames).toContain('admin');
     expect(res.body.usernames).not.toContain('inactive_user');
   });
 
   it('GET /auth/usernames?platform=android returns active users with android_login=1', async () => {
     const res = await request(app.getHttpServer())
-      .get('/auth/usernames?platform=android')
+      .get('/api/auth/usernames?platform=android')
       .expect(200);
     expect(res.body.usernames).toBeDefined();
     expect(Array.isArray(res.body.usernames)).toBe(true);
@@ -184,17 +185,19 @@ describe('Auth (e2e)', () => {
       VALUES ('android_hidden', '$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'Android Hidden', 2, 1, 0, ${now}, ${now});
     `);
 
-    const all = await request(app.getHttpServer()).get('/auth/usernames').expect(200);
+    const all = await request(app.getHttpServer()).get('/api/auth/usernames').expect(200);
     expect(all.body.usernames).toContain('android_hidden');
 
     const android = await request(app.getHttpServer())
-      .get('/auth/usernames?platform=android')
+      .get('/api/auth/usernames?platform=android')
       .expect(200);
     expect(android.body.usernames).not.toContain('android_hidden');
   });
 
   it('GET /auth/usernames?platform=unknown treats unknown platform as no filter', async () => {
-    const res = await request(app.getHttpServer()).get('/auth/usernames?platform=ios').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/auth/usernames?platform=ios')
+      .expect(200);
     expect(res.body.usernames).toContain('admin');
     expect(res.body.usernames).toContain('android_hidden');
   });
@@ -202,18 +205,18 @@ describe('Auth (e2e)', () => {
 
 describe('Auth active-users (e2e)', () => {
   it('401 without a token', async () => {
-    await request(app.getHttpServer()).get('/auth/active-users').expect(401);
+    await request(app.getHttpServer()).get('/api/auth/active-users').expect(401);
   });
 
   it('200 with a staff token (no manage_users) and returns only active users with the right shape', async () => {
     // cashier has the seeded staff role (manage_users = 0).
     const login = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post('/api/auth/login')
       .send({ username: 'cashier', pin: '1', clientType: 'pos' })
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .get('/auth/active-users')
+      .get('/api/auth/active-users')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .expect(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -234,7 +237,7 @@ describe('Auth active-users (e2e)', () => {
 
   it('200 with an admin token as well', async () => {
     const res = await request(app.getHttpServer())
-      .get('/auth/active-users')
+      .get('/api/auth/active-users')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -242,7 +245,7 @@ describe('Auth active-users (e2e)', () => {
 
   it('invalid token → 401', async () => {
     await request(app.getHttpServer())
-      .get('/auth/active-users')
+      .get('/api/auth/active-users')
       .set('Authorization', 'Bearer not-a-jwt')
       .expect(401);
   });
@@ -251,7 +254,7 @@ describe('Auth active-users (e2e)', () => {
 describe('Business Day (e2e)', () => {
   it('POST /day/open opens a business day', async () => {
     const res = await request(app.getHttpServer())
-      .post('/day/open')
+      .post('/api/day/open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ openingCashHalalas: 50000 })
       .expect(201);
@@ -261,7 +264,7 @@ describe('Business Day (e2e)', () => {
 
   it('POST /orders fails with no day open (double-open before close)', async () => {
     await request(app.getHttpServer())
-      .post('/day/open')
+      .post('/api/day/open')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ openingCashHalalas: 10000 })
       .expect(409);
@@ -269,7 +272,7 @@ describe('Business Day (e2e)', () => {
 
   it('GET /day/current returns open day with live totals', async () => {
     const res = await request(app.getHttpServer())
-      .get('/day/current')
+      .get('/api/day/current')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.open).toBe(true);
@@ -284,7 +287,7 @@ describe('Orders (e2e)', () => {
 
   it('POST /orders creates an order', async () => {
     const res = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in', tableId: 1 })
       .expect(201);
@@ -294,7 +297,7 @@ describe('Orders (e2e)', () => {
 
   it('POST /orders fails for dine_in without tableId', async () => {
     await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'dine_in' })
       .expect(400);
@@ -303,12 +306,12 @@ describe('Orders (e2e)', () => {
   it('POST /orders/:id/items adds item', async () => {
     // Get order to know its updatedAt
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .put(`/orders/${orderId}/items/sync`)
+      .put(`/api/orders/${orderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ baseUpdatedAt: getRes.body.updatedAt, items: [{ itemId: 1, qty: 2 }] })
       .expect(200);
@@ -316,7 +319,7 @@ describe('Orders (e2e)', () => {
 
   it('GET /orders/:id returns order with items', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.items.length).toBe(1);
@@ -325,7 +328,7 @@ describe('Orders (e2e)', () => {
 
   it('GET /orders/:id/events/verify returns valid', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/orders/${orderId}/events/verify`)
+      .get(`/api/orders/${orderId}/events/verify`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.valid).toBe(true);
@@ -334,15 +337,15 @@ describe('Orders (e2e)', () => {
   it('POST /orders/:id/submit transitions to paid (from open)', async () => {
     // Get the order to know its total
     const orderRes = await request(app.getHttpServer())
-      .get(`/orders/${orderId}`)
+      .get(`/api/orders/${orderId}`)
       .set('Authorization', `Bearer ${jwtToken}`);
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/payments`)
+      .post(`/api/orders/${orderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas })
       .expect(201);
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/submit`)
+      .post(`/api/orders/${orderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
@@ -351,7 +354,7 @@ describe('Orders (e2e)', () => {
 
   it('GET /reports/x returns live X-report with paymentTotals', async () => {
     const res = await request(app.getHttpServer())
-      .get('/reports/x')
+      .get('/api/reports/x')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect('error' in res.body).toBe(false);
@@ -363,7 +366,7 @@ describe('Orders (e2e)', () => {
   it('POST /day/close fails when open orders exist', async () => {
     // Create an open order that blocks close
     const createRes = await request(app.getHttpServer())
-      .post('/orders')
+      .post('/api/orders')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ type: 'takeaway' })
       .expect(201);
@@ -371,12 +374,12 @@ describe('Orders (e2e)', () => {
 
     // Add an item so we can pay later — use bulk sync
     const getRes = await request(app.getHttpServer())
-      .get(`/orders/${secondOrderId}`)
+      .get(`/api/orders/${secondOrderId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .put(`/orders/${secondOrderId}/items/sync`)
+      .put(`/api/orders/${secondOrderId}/items/sync`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({
         baseUpdatedAt: getRes.body.updatedAt,
@@ -386,7 +389,7 @@ describe('Orders (e2e)', () => {
 
     // Leave it open — should block close
     await request(app.getHttpServer())
-      .post('/day/close')
+      .post('/api/day/close')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ closingCashHalalas: 50000 })
       .expect(409);
@@ -395,21 +398,21 @@ describe('Orders (e2e)', () => {
   it('pay the blocking order then close succeeds', async () => {
     // Get total for the second order
     const orderRes = await request(app.getHttpServer())
-      .get(`/orders/${secondOrderId}`)
+      .get(`/api/orders/${secondOrderId}`)
       .set('Authorization', `Bearer ${jwtToken}`);
     await request(app.getHttpServer())
-      .post(`/orders/${secondOrderId}/payments`)
+      .post(`/api/orders/${secondOrderId}/payments`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ methodId: 'cash', amountHalalas: orderRes.body.totalHalalas })
       .expect(201);
     await request(app.getHttpServer())
-      .post(`/orders/${secondOrderId}/submit`)
+      .post(`/api/orders/${secondOrderId}/submit`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .post('/day/close')
+      .post('/api/day/close')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({ closingCashHalalas: 55000 })
       .expect(201);
@@ -419,7 +422,7 @@ describe('Orders (e2e)', () => {
 
   it('GET /day/current returns { open: false } after day close', async () => {
     const res = await request(app.getHttpServer())
-      .get('/day/current')
+      .get('/api/day/current')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.open).toBe(false);
@@ -428,13 +431,13 @@ describe('Orders (e2e)', () => {
 
   it('GET /reports/z/:dayId returns Z-report', async () => {
     const days = await request(app.getHttpServer())
-      .get('/day?page=1&limit=1')
+      .get('/api/day?page=1&limit=1')
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     const dayId = days.body.data[0].id;
 
     const res = await request(app.getHttpServer())
-      .get(`/reports/z/${dayId}`)
+      .get(`/api/reports/z/${dayId}`)
       .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
     expect(res.body.status).toBe('closed');

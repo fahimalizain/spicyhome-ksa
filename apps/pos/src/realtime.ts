@@ -10,6 +10,19 @@ const INITIAL_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
 const BACKOFF_FACTOR = 2;
 
+export interface RealtimeWsUrlOptions {
+  protocol: string;
+  host: string;
+  token?: string | null;
+}
+
+/** Build the WebSocket URL: always ws(s)://<host>/ws, token appended as query. */
+export function buildRealtimeWsUrl({ protocol, host, token }: RealtimeWsUrlOptions): string {
+  const wsProto = protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = `${wsProto}//${host}/ws`;
+  return token ? `${path}?token=${token}` : path;
+}
+
 export class RealtimeClient {
   private ws: WebSocket | null = null;
   private listeners = new Map<string, Set<Listener>>();
@@ -129,11 +142,8 @@ export class RealtimeClient {
   }
 
   private buildUrl(): string {
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const prefix = !this.baseUrl && import.meta.env.DEV ? '/api' : '';
     const host = this.baseUrl || window.location.host;
-    const path = `${wsProto}//${host}${prefix}/ws`;
-    return this.token ? `${path}?token=${this.token}` : path;
+    return buildRealtimeWsUrl({ protocol: window.location.protocol, host, token: this.token });
   }
 
   private scheduleReconnect(): void {

@@ -12,9 +12,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Request, Response, NextFunction } from 'express';
 import * as Sentry from '@sentry/nestjs';
 import { AppModule } from './app.module';
+import { configureHttpApp } from './configure-http-app';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = configureHttpApp(await NestFactory.create(AppModule));
   app.useWebSocketAdapter(new WsAdapter(app));
   app.enableCors();
 

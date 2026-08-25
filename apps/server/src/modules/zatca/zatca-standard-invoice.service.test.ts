@@ -22,6 +22,7 @@ import { DocumentIdService } from '../orders/document-id.allocator';
 import { FakeZatcaHttpClient, ZatcaHttpService } from './zatca-http.service';
 import { generateKeyPair } from './zatca-crypto.service';
 import { zatcaKey } from '@spicyhome/shared';
+import { configureHttpApp } from '../../configure-http-app';
 import * as forge from 'node-forge';
 
 // ── Test certificate helper ──────────────────────────────────────────────────
@@ -137,7 +138,7 @@ describe('ZatcaStandardInvoiceService', () => {
       .useValue(fakeHttp)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     standardService = app.get(ZatcaStandardInvoiceService);

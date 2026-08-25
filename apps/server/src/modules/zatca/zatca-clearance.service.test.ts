@@ -24,6 +24,7 @@ import {
 } from './zatca-clearance-classify';
 import { FakeZatcaHttpClient, ZatcaHttpService } from './zatca-http.service';
 import { zatcaKey } from '@spicyhome/shared';
+import { configureHttpApp } from '../../configure-http-app';
 
 describe('ZatcaClearanceService', () => {
   let sqlite: Database.Database;
@@ -84,7 +85,7 @@ describe('ZatcaClearanceService', () => {
       .useValue(fakeHttp)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     clearanceService = app.get(ZatcaClearanceService);

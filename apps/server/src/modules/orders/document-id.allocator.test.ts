@@ -20,6 +20,7 @@ import { PrintersService } from '../printers/printers.service';
 import { DocumentIdService } from './document-id.allocator';
 import { zatcaKey } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
+import { configureHttpApp } from '../../configure-http-app';
 
 describe('DocumentIdService', () => {
   let sqlite: Database.Database;
@@ -45,7 +46,7 @@ describe('DocumentIdService', () => {
       .useValue(db)
       .compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = configureHttpApp(moduleFixture.createNestApplication());
     await app.init();
 
     service = app.get(DocumentIdService);

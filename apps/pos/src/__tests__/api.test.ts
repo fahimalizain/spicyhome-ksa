@@ -51,6 +51,15 @@ describe('api module', () => {
     api = await import('../api');
   });
 
+  it('constructs SpicyHomeClient with a baseUrl ending in /api', async () => {
+    const { SpicyHomeClient } = await import('@spicyhome/client-ts');
+    const mock = vi.mocked(SpicyHomeClient);
+    expect(mock).toHaveBeenCalled();
+    const opts = mock.mock.calls[mock.mock.calls.length - 1]?.[0];
+    expect(opts?.baseUrl).toBe(`${window.location.origin}/api`);
+    expect(opts?.baseUrl.endsWith('/api')).toBe(true);
+  });
+
   it('setToken stores in localStorage', () => {
     api.setToken('test-jwt');
     expect(mockLocalStorage.getItem('spicyhome_token')).toBe('test-jwt');

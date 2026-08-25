@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@spicyhome/db';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../../modules/database/database.module';
+import { configureHttpApp } from '../../configure-http-app';
 import { FakePrinterTransport } from '../../modules/printers/printer-transport';
 import { PrintersService } from '../../modules/printers/printers.service';
 
@@ -36,7 +37,7 @@ beforeAll(async () => {
     .useValue(db)
     .compile();
 
-  app = moduleFixture.createNestApplication();
+  app = configureHttpApp(moduleFixture.createNestApplication());
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.listen(0);
@@ -135,7 +136,7 @@ beforeAll(async () => {
 
   // Login
   const loginRes = await request(app.getHttpServer())
-    .post('/auth/login')
+    .post('/api/auth/login')
     .send({ username: 'admin', pin: '771133', clientType: 'pos' })
     .expect(201);
   jwtToken = loginRes.body.accessToken;
@@ -143,7 +144,7 @@ beforeAll(async () => {
 
   // Open business day (required for order creation)
   await request(app.getHttpServer())
-    .post('/day/open')
+    .post('/api/day/open')
     .set('Authorization', `Bearer ${jwtToken}`)
     .send({ openingCashHalalas: 50000 });
 });
@@ -158,14 +159,14 @@ describe('Print Integration', () => {
   // "one open order per table" guard from blocking subsequent tests.
   afterEach(async () => {
     const listRes = await request(app.getHttpServer())
-      .get('/orders?status=open')
+      .get('/api/orders?status=open')
       .set('Authorization', `Bearer ${jwtToken}`);
     const openOrders = Array.isArray(listRes.body) ? listRes.body : [];
     for (const order of openOrders) {
       if (order.tableId != null) {
         try {
           await request(app.getHttpServer())
-            .post(`/orders/${order.id}/void`)
+            .post(`/api/orders/${order.id}/void`)
             .set('Authorization', `Bearer ${jwtToken}`)
             .send({ reason: 'test cleanup' });
         } catch {
@@ -178,7 +179,7 @@ describe('Print Integration', () => {
     it('sends the same full ticket to every active kitchen printer on send-to-kitchen', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'dine_in', tableId: 1 })
         .expect(201);
@@ -186,14 +187,14 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const baseUpdatedAt = getRes.body.updatedAt;
 
       // Sync both items in one bulk call — sync NEVER kitchen-prints (ADR 0006)
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt,
@@ -209,7 +210,7 @@ describe('Print Integration', () => {
 
       // Explicit differential kitchen print
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -246,7 +247,7 @@ describe('Print Integration', () => {
       // Exactly ONE kitchen_print_enqueued per send: items cover both lines,
       // printers[] lists both fan-out targets
       const orderRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const enqueued = orderRes2.body.events.filter(
@@ -269,7 +270,7 @@ describe('Print Integration', () => {
       transport.nextError = new Error('Connection refused');
 
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -277,7 +278,7 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -285,7 +286,7 @@ describe('Print Integration', () => {
 
       // Sync item should still succeed — kitchen printing is decoupled from sync
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -305,19 +306,19 @@ describe('Print Integration', () => {
 
     it('send-to-kitchen succeeds (200) even when the kitchen printer is unreachable', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -330,7 +331,7 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -339,7 +340,7 @@ describe('Print Integration', () => {
       // the other kitchen printer succeeds)
       await new Promise((r) => setTimeout(r, 200));
       const orderRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const types = orderRes2.body.events.map((e: any) => e.type);
@@ -356,7 +357,7 @@ describe('Print Integration', () => {
   describe('explicit send-to-kitchen deltas (ADR 0006)', () => {
     it('prints delta when item qty is increased via sync then sent', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'dine_in', tableId: 1 })
         .expect(201);
@@ -364,13 +365,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes1 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync with qty 2 (no kitchen print)
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes1.body.updatedAt,
@@ -383,14 +384,14 @@ describe('Print Integration', () => {
 
       // Send 2 to the kitchen
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
 
       // Get updated order to know new updatedAt
       const getRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const itemId = getRes2.body.items[0].id;
@@ -398,7 +399,7 @@ describe('Print Integration', () => {
 
       // Sync qty to 5 (delta = 3: 5 − 2 already printed) — sync itself prints nothing
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: baseUpdatedAt2,
@@ -410,7 +411,7 @@ describe('Print Integration', () => {
 
       // Explicit send prints ONLY the delta (3)
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -436,20 +437,20 @@ describe('Print Integration', () => {
   describe('syncItems never kitchen-prints (edge cases)', () => {
     it('notes-only sync → 0 kitchen print jobs', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync item
       const sync1 = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -465,7 +466,7 @@ describe('Print Integration', () => {
 
       // Notes-only update
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: updatedAt2,
@@ -482,20 +483,20 @@ describe('Print Integration', () => {
 
     it('qty decrease sync → 0 kitchen print jobs', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync with qty 5
       const sync1 = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -511,7 +512,7 @@ describe('Print Integration', () => {
 
       // Decrease qty to 2
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: updatedAt2,
@@ -528,20 +529,20 @@ describe('Print Integration', () => {
 
     it('empty cart sync → 0 kitchen print jobs', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Add items first
       const sync1 = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -556,7 +557,7 @@ describe('Print Integration', () => {
 
       // Empty cart sync
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: updatedAt2,
@@ -576,7 +577,7 @@ describe('Print Integration', () => {
     it('prints receipt with drawer kick on submit (from open)', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'dine_in', tableId: 1 })
         .expect(201);
@@ -584,13 +585,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -604,15 +605,15 @@ describe('Print Integration', () => {
 
       // Finalize order (open → paid) via payments + submit
       const fetchedOrder = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: fetchedOrder.body.totalHalalas })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -641,7 +642,7 @@ describe('Print Integration', () => {
     it('printReceipt:false skips the receipt transport call but still kicks the drawer for cash', async () => {
       // Create order
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'dine_in', tableId: 1 })
         .expect(201);
@@ -649,13 +650,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -669,15 +670,15 @@ describe('Print Integration', () => {
 
       // Finalize order (open → paid) with printReceipt:false — cash payment
       const fetchedOrder = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: fetchedOrder.body.totalHalalas })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ printReceipt: false })
         .expect(201);
@@ -696,7 +697,7 @@ describe('Print Integration', () => {
 
       // Ledger: no receipt_print_enqueued, but the drawer kick was enqueued
       const orderRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const types = orderRes2.body.events.map((e: any) => e.type);
@@ -710,7 +711,7 @@ describe('Print Integration', () => {
     it('prints partner title + external ref on kitchen ticket and receipt', async () => {
       // Create takeaway order
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -718,11 +719,11 @@ describe('Print Integration', () => {
 
       // Sync items (sync response carries the fresh updatedAt)
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const syncRes = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -732,7 +733,7 @@ describe('Print Integration', () => {
 
       // Set the delivery partner + external ref
       const patched = await request(app.getHttpServer())
-        .patch(`/orders/${orderId}/partner`)
+        .patch(`/api/orders/${orderId}/partner`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: syncRes.body.updatedAt,
@@ -747,7 +748,7 @@ describe('Print Integration', () => {
       // Kitchen: send-to-kitchen prints partner + ref
       transport.sent = [];
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
@@ -762,12 +763,12 @@ describe('Print Integration', () => {
       // Receipt: pay through the partner's own method + submit (2 × 2300)
       transport.sent = [];
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'hungerstation', amountHalalas: 4600 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -783,18 +784,18 @@ describe('Print Integration', () => {
 
     it('kitchen ticket omits partner lines for a walk-in takeaway', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -804,7 +805,7 @@ describe('Print Integration', () => {
 
       transport.sent = [];
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
@@ -820,20 +821,20 @@ describe('Print Integration', () => {
   describe('order notes on prints', () => {
     it('kitchen ticket prints order notes when set at create time', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway', notes: 'call on arrival' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(getRes.body.notes).toBe('call on arrival');
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -843,7 +844,7 @@ describe('Print Integration', () => {
 
       transport.sent = [];
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
@@ -858,18 +859,18 @@ describe('Print Integration', () => {
 
     it('notes-only meta PATCH does not enqueue kitchen prints; notes appear on next send-to-kitchen', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -880,11 +881,11 @@ describe('Print Integration', () => {
       // Clear the transport log, then PATCH notes only (same type/table)
       transport.sent = [];
       const refreshed = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const patched = await request(app.getHttpServer())
-        .patch(`/orders/${orderId}`)
+        .patch(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: refreshed.body.updatedAt,
@@ -900,7 +901,7 @@ describe('Print Integration', () => {
 
       // The notes ride along on the next explicit send-to-kitchen
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
@@ -912,18 +913,18 @@ describe('Print Integration', () => {
 
     it('kitchen ticket omits NOTES line when order has no notes', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -933,7 +934,7 @@ describe('Print Integration', () => {
 
       transport.sent = [];
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       await new Promise((r) => setTimeout(r, 300));
@@ -947,7 +948,7 @@ describe('Print Integration', () => {
   describe('reprint endpoint', () => {
     it('POST /orders/:id/print reprints a receipt', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -955,13 +956,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes2.body.updatedAt,
@@ -971,12 +972,12 @@ describe('Print Integration', () => {
 
       // Finalize the order (open → paid) via payments + submit — 1 Zinger = 2300 halalas
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 2300 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -986,7 +987,7 @@ describe('Print Integration', () => {
 
       // Reprint receipt
       const reprintRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'receipt' })
         .expect(201);
@@ -1003,7 +1004,7 @@ describe('Print Integration', () => {
 
     it('POST /orders/:id/print rejects kitchen target with 400', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -1011,13 +1012,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes3 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes3.body.updatedAt,
@@ -1028,7 +1029,7 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'kitchen' })
         .expect(400);
@@ -1040,20 +1041,20 @@ describe('Print Integration', () => {
 
     it('POST /orders/:id/print with target open_receipt prints a non-ZATCA open order slip', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items (order stays open)
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1064,7 +1065,7 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'open_receipt' })
         .expect(201);
@@ -1091,7 +1092,7 @@ describe('Print Integration', () => {
 
       // Events carry kind 'open_order' so the timeline can distinguish it
       const orderRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       const enqueued = orderRes2.body.events.find((e: any) => e.type === 'receipt_print_enqueued');
@@ -1102,20 +1103,20 @@ describe('Print Integration', () => {
 
     it('open order receipt shows PAID and AMOUNT DUE reduced by a partial payment', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // 2 Zinger = 4600 halalas (46.00)
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1125,7 +1126,7 @@ describe('Print Integration', () => {
 
       // Partial payment before food (ADR 0006): 1000 halalas of 4600
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 1000 })
         .expect(201);
@@ -1133,7 +1134,7 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'open_receipt' })
         .expect(201);
@@ -1158,19 +1159,19 @@ describe('Print Integration', () => {
 
     it('POST /orders/:id/print with target open_receipt rejects paid orders with 400', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1180,12 +1181,12 @@ describe('Print Integration', () => {
 
       // Finalize (open → paid): 1 Zinger = 2300 halalas
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 2300 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -1193,7 +1194,7 @@ describe('Print Integration', () => {
       transport.sent = [];
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'open_receipt' })
         .expect(400);
@@ -1205,14 +1206,14 @@ describe('Print Integration', () => {
 
     it('POST /orders/:id/print with target open_receipt rejects empty carts with 400', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const res = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'open_receipt' })
         .expect(400);
@@ -1222,14 +1223,14 @@ describe('Print Integration', () => {
 
     it('POST /orders/:id/print still rejects unknown targets with 400', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/print`)
+        .post(`/api/orders/${orderId}/print`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ target: 'open_invoice' })
         .expect(400);
@@ -1239,7 +1240,7 @@ describe('Print Integration', () => {
   describe('audit log entries for printing', () => {
     it('writes item_added, kitchen_print_enqueued/succeeded, paid, receipt_print_enqueued/succeeded events', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
@@ -1247,13 +1248,13 @@ describe('Print Integration', () => {
 
       // Get order to get updatedAt
       const getRes4 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       // Sync items via bulk sync — no kitchen print here (ADR 0006)
       await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes4.body.updatedAt,
@@ -1263,7 +1264,7 @@ describe('Print Integration', () => {
 
       // Explicit send-to-kitchen — the only kitchen-print path
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/send-to-kitchen`)
+        .post(`/api/orders/${orderId}/send-to-kitchen`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1272,12 +1273,12 @@ describe('Print Integration', () => {
 
       // Finalize via payments + submit → receipt print (1 Zinger = 2300 halalas)
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 2300 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
@@ -1287,7 +1288,7 @@ describe('Print Integration', () => {
 
       // Check events
       const orderRes2 = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
@@ -1311,7 +1312,7 @@ describe('Print Integration', () => {
 
       // Verify chain is still valid
       const verifyRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}/events/verify`)
+        .get(`/api/orders/${orderId}/events/verify`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(verifyRes.body.valid).toBe(true);
@@ -1321,19 +1322,19 @@ describe('Print Integration', () => {
   describe('Arabic name snapshotting', () => {
     it('addItem snapshots item_name_ar from the menu item onto order_items', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       const syncRes = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1356,19 +1357,19 @@ describe('Print Integration', () => {
 
     it('refund snapshots item_name_ar onto order_refund_items', async () => {
       const orderRes = await request(app.getHttpServer())
-        .post('/orders')
+        .post('/api/orders')
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ type: 'takeaway' })
         .expect(201);
       const orderId = orderRes.body.id;
 
       const getRes = await request(app.getHttpServer())
-        .get(`/orders/${orderId}`)
+        .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
 
       const syncRes = await request(app.getHttpServer())
-        .put(`/orders/${orderId}/items/sync`)
+        .put(`/api/orders/${orderId}/items/sync`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           baseUpdatedAt: getRes.body.updatedAt,
@@ -1379,19 +1380,19 @@ describe('Print Integration', () => {
 
       // Finalize via payments + submit (1 Zinger = 2300 halalas) so it can be refunded
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/payments`)
+        .post(`/api/orders/${orderId}/payments`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({ methodId: 'cash', amountHalalas: 2300 })
         .expect(201);
       await request(app.getHttpServer())
-        .post(`/orders/${orderId}/submit`)
+        .post(`/api/orders/${orderId}/submit`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({})
         .expect(201);
 
       // Refund the item
       const refundRes = await request(app.getHttpServer())
-        .post(`/orders/${orderId}/refund`)
+        .post(`/api/orders/${orderId}/refund`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .send({
           methodId: 'cash',
@@ -1413,14 +1414,14 @@ describe('Print Integration', () => {
       transport.reachable.set('192.168.1.50:9100', false);
 
       const res = await request(app.getHttpServer())
-        .get(`/printers/${receiptPrinterId}/status`)
+        .get(`/api/printers/${receiptPrinterId}/status`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(res.body.reachable).toBe(false);
 
       transport.reachable.set('192.168.1.50:9100', true);
       const res2 = await request(app.getHttpServer())
-        .get(`/printers/${receiptPrinterId}/status`)
+        .get(`/api/printers/${receiptPrinterId}/status`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(200);
       expect(res2.body.reachable).toBe(true);
@@ -1429,7 +1430,7 @@ describe('Print Integration', () => {
     it('POST /printers/:id/test prints diagnostic test ticket', async () => {
       transport.sent = [];
       const res = await request(app.getHttpServer())
-        .post(`/printers/${receiptPrinterId}/test`)
+        .post(`/api/printers/${receiptPrinterId}/test`)
         .set('Authorization', `Bearer ${jwtToken}`)
         .expect(201);
 

@@ -6,6 +6,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import WebSocket from 'ws';
 import { RealtimeModule } from './realtime.module';
 import { RealtimeGateway } from './realtime.gateway';
+import { configureHttpApp } from '../../configure-http-app';
 
 let app: INestApplication;
 let gateway: RealtimeGateway;
@@ -34,7 +35,7 @@ beforeAll(async () => {
     ],
   }).compile();
 
-  app = moduleFixture.createNestApplication();
+  app = configureHttpApp(moduleFixture.createNestApplication());
   app.useWebSocketAdapter(new WsAdapter(app));
 
   gateway = moduleFixture.get(RealtimeGateway);
