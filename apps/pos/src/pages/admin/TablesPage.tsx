@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import type { TableResponse } from '@spicyhome/client-ts';
 
 export function TablesPage() {
@@ -26,6 +27,16 @@ export function TablesPage() {
       setError('Failed to load');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleActive(t: TableResponse) {
+    setError('');
+    try {
+      await client.tables.update(t.id, { isActive: !t.isActive });
+      await loadData();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update');
     }
   }
 
@@ -95,7 +106,14 @@ export function TablesPage() {
             onClick={() => openEdit(t)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <span className="text-sm text-white">{t.name}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <AdminRowEnabledCheckbox
+                checked={t.isActive}
+                ariaLabel={t.isActive ? `Disable ${t.name}` : `Enable ${t.name}`}
+                onToggle={() => toggleActive(t)}
+              />
+              <span className="text-sm text-white">{t.name}</span>
+            </div>
             <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
               Edit
             </span>

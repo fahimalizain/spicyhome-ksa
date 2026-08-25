@@ -156,4 +156,52 @@ describe('TablesPage', () => {
 
     expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
   });
+
+  it('renders a row enable checkbox for each table with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('T1')).toBeInTheDocument();
+      expect(screen.getByText('T2')).toBeInTheDocument();
+    });
+
+    const t1Checkbox = screen.getByRole('checkbox', { name: 'Disable T1' });
+    expect(t1Checkbox).toBeChecked();
+
+    const t2Checkbox = screen.getByRole('checkbox', { name: 'Enable T2' });
+    expect(t2Checkbox).not.toBeChecked();
+    // Still no (inactive) badge.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('T1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable T1' }));
+
+    await waitFor(() => {
+      expect(mockUpdateTable).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Table' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockListTables).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateTable.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('T1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable T1' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Table' })).not.toBeInTheDocument();
+  });
 });

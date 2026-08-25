@@ -537,4 +537,67 @@ describe('PrintersPage — config', () => {
     expect(dialog).toHaveClass('w-[640px]');
     expect(dialog).not.toHaveClass('w-[480px]');
   });
+
+  // ── Row enable/disable checkboxes ─────────────────────────────────────────
+
+  it('renders a row enable checkbox for each printer with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+      expect(screen.getByText('Receipt')).toBeInTheDocument();
+    });
+
+    const kitchenCheckbox = screen.getByRole('checkbox', { name: 'Disable Kitchen' });
+    expect(kitchenCheckbox).toBeChecked();
+
+    const receiptCheckbox = screen.getByRole('checkbox', { name: 'Disable Receipt' });
+    expect(receiptCheckbox).toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    mockList.mockResolvedValue([printerKitchen]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockList).toHaveBeenCalledTimes(2);
+    // The Test button is untouched by the toggle.
+    expect(screen.getByText('Test')).toBeInTheDocument();
+  });
+
+  it('shows the Enable label when the printer is inactive', async () => {
+    mockList.mockResolvedValue([{ ...printerKitchen, isActive: false }]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    const kitchenCheckbox = screen.getByRole('checkbox', { name: 'Enable Kitchen' });
+    expect(kitchenCheckbox).not.toBeChecked();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdate.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+  });
 });

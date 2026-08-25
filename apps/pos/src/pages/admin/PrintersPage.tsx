@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import type { CreatePrinterDto, UpdatePrinterDto, PrinterResponse } from '@spicyhome/client-ts';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterConfig, ArabicEncoding } from '@spicyhome/shared';
@@ -91,6 +92,16 @@ export function PrintersPage() {
       setError('Failed to load');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleActive(p: PrinterResponse) {
+    setError('');
+    try {
+      await client.printers.update(p.id, { isActive: !p.isActive });
+      await loadData();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update');
     }
   }
 
@@ -205,38 +216,45 @@ export function PrintersPage() {
             onClick={() => openEdit(p)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <div className="flex-1 min-w-0">
-              <span className="text-sm text-white">{p.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{addressLabel(p)}</span>
-              <span
-                className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}
-              >
-                {p.role}
-              </span>
-              {p.connectionType === 'windows' && (
-                <span className="ml-1 px-1 py-0.5 rounded text-xs bg-cyan-800 text-cyan-100">
-                  USB
-                </span>
-              )}
-              <span
-                className={`ml-1 px-1 py-0.5 rounded text-xs ${p.config?.arabic?.encoding === 'none' ? 'bg-gray-700 text-gray-300' : 'bg-purple-800 text-purple-100'}`}
-              >
-                {configSummary(p.config || DEFAULT_PRINTER_CONFIG)}
-              </span>
-              {testStatus[p.id] && (
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <AdminRowEnabledCheckbox
+                checked={p.isActive}
+                ariaLabel={p.isActive ? `Disable ${p.name}` : `Enable ${p.name}`}
+                onToggle={() => toggleActive(p)}
+              />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-white">{p.name}</span>
+                <span className="text-xs text-gray-500 ml-2">{addressLabel(p)}</span>
                 <span
-                  className={
-                    'ml-2 text-xs ' +
-                    (testStatus[p.id] === 'Sent!'
-                      ? 'text-green-400'
-                      : testStatus[p.id] === 'Printing...'
-                        ? 'text-gray-400'
-                        : 'text-red-400')
-                  }
+                  className={`ml-2 px-1 py-0.5 rounded text-xs ${p.role === 'kitchen' ? 'bg-yellow-700 text-yellow-100' : 'bg-blue-700 text-blue-100'}`}
                 >
-                  {testStatus[p.id]}
+                  {p.role}
                 </span>
-              )}
+                {p.connectionType === 'windows' && (
+                  <span className="ml-1 px-1 py-0.5 rounded text-xs bg-cyan-800 text-cyan-100">
+                    USB
+                  </span>
+                )}
+                <span
+                  className={`ml-1 px-1 py-0.5 rounded text-xs ${p.config?.arabic?.encoding === 'none' ? 'bg-gray-700 text-gray-300' : 'bg-purple-800 text-purple-100'}`}
+                >
+                  {configSummary(p.config || DEFAULT_PRINTER_CONFIG)}
+                </span>
+                {testStatus[p.id] && (
+                  <span
+                    className={
+                      'ml-2 text-xs ' +
+                      (testStatus[p.id] === 'Sent!'
+                        ? 'text-green-400'
+                        : testStatus[p.id] === 'Printing...'
+                          ? 'text-gray-400'
+                          : 'text-red-400')
+                    }
+                  >
+                    {testStatus[p.id]}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
