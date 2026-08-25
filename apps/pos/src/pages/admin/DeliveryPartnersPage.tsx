@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 
 interface DeliveryPartner {
   id: string;
@@ -162,30 +163,21 @@ export function DeliveryPartnersPage() {
             onClick={() => openEdit(p)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-white font-medium">{p.title}</span>
-              <code className="text-xs text-gray-500">{p.id}</code>
-              <span className="text-xs text-gray-600">Order: {p.sortOrder}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Row toggle: clicking it must not open the edit dialog. */}
-              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <label className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={p.enabled}
-                    onChange={() => toggleEnabled(p)}
-                    className="rounded"
-                  />
-                  <span className={`text-xs ${p.enabled ? 'text-green-400' : 'text-gray-500'}`}>
-                    {p.enabled ? 'Active' : 'Disabled'}
-                  </span>
-                </label>
+            <div className="flex items-center gap-3 min-w-0">
+              <AdminRowEnabledCheckbox
+                checked={p.enabled}
+                ariaLabel={p.enabled ? `Disable ${p.title}` : `Enable ${p.title}`}
+                onToggle={() => toggleEnabled(p)}
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-white font-medium">{p.title}</span>
+                <code className="text-xs text-gray-500">{p.id}</code>
+                <span className="text-xs text-gray-600">Order: {p.sortOrder}</span>
               </div>
-              <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
-                Edit
-              </span>
             </div>
+            <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
+              Edit
+            </span>
           </div>
         ))}
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import { ZATCA_PAYMENT_MEANS_CODE_LABELS, ZATCA_PAYMENT_MEANS_CODES } from '@spicyhome/shared';
 
 interface PaymentMethod {
@@ -162,53 +163,51 @@ export function PaymentMethodsPage() {
             onClick={() => openEdit(m)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-white font-medium">{m.title}</span>
-              <code className="text-xs text-gray-500">{m.id}</code>
-              <span
-                className="text-xs bg-gray-700 text-brand-300 px-1.5 py-0.5 rounded"
+            <div className="flex items-center gap-3 min-w-0">
+              <AdminRowEnabledCheckbox
+                checked={m.enabled}
+                disabled={m.id === 'cash' || m.isDeliveryPartner}
+                ariaLabel={m.enabled ? `Disable ${m.title}` : `Enable ${m.title}`}
                 title={
-                  ZATCA_PAYMENT_MEANS_CODE_LABELS[
-                    m.zatcaPaymentMeansCode as keyof typeof ZATCA_PAYMENT_MEANS_CODE_LABELS
-                  ] || m.zatcaPaymentMeansCode
+                  m.id === 'cash'
+                    ? 'Cash is locked'
+                    : m.isDeliveryPartner
+                      ? 'Managed via Delivery Partners — title and enabled state are edited there'
+                      : undefined
                 }
-              >
-                {m.zatcaPaymentMeansCode}
-              </span>
-              {m.id === 'cash' && (
-                <span className="text-xs text-amber-500" title="Cash is locked">
-                  🔒
-                </span>
-              )}
-              {m.isDeliveryPartner && (
+                onToggle={() => toggleEnabled(m)}
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-white font-medium">{m.title}</span>
+                <code className="text-xs text-gray-500">{m.id}</code>
                 <span
-                  className="text-xs bg-gray-700 text-amber-400 px-1.5 py-0.5 rounded"
-                  title="Managed via Delivery Partners — title and enabled state are edited there"
+                  className="text-xs bg-gray-700 text-brand-300 px-1.5 py-0.5 rounded"
+                  title={
+                    ZATCA_PAYMENT_MEANS_CODE_LABELS[
+                      m.zatcaPaymentMeansCode as keyof typeof ZATCA_PAYMENT_MEANS_CODE_LABELS
+                    ] || m.zatcaPaymentMeansCode
+                  }
                 >
-                  Delivery partner
+                  {m.zatcaPaymentMeansCode}
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Row toggle: clicking it must not open the edit dialog. */}
-              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <label className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={m.enabled}
-                    onChange={() => toggleEnabled(m)}
-                    disabled={m.id === 'cash' || m.isDeliveryPartner}
-                    className="rounded"
-                  />
-                  <span className={`text-xs ${m.enabled ? 'text-green-400' : 'text-gray-500'}`}>
-                    {m.enabled ? 'Active' : 'Disabled'}
+                {m.id === 'cash' && (
+                  <span className="text-xs text-amber-500" title="Cash is locked">
+                    🔒
                   </span>
-                </label>
+                )}
+                {m.isDeliveryPartner && (
+                  <span
+                    className="text-xs bg-gray-700 text-amber-400 px-1.5 py-0.5 rounded"
+                    title="Managed via Delivery Partners — title and enabled state are edited there"
+                  >
+                    Delivery partner
+                  </span>
+                )}
               </div>
-              <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
-                Edit
-              </span>
             </div>
+            <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
+              Edit
+            </span>
           </div>
         ))}
       </div>

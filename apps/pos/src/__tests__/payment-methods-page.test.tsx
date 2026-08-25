@@ -86,6 +86,14 @@ describe('PaymentMethodsPage', () => {
     expect(screen.getByText('🔒')).toBeInTheDocument();
     expect(screen.getByText('Delivery partner')).toBeInTheDocument();
 
+    // Row enable/disable checkboxes sit at the row start, next to the title;
+    // the "Active"/"Disabled" status labels are gone (dialog still closed).
+    expect(screen.getByRole('checkbox', { name: 'Disable Cash' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Disable Card' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Disable HungerStation' })).toBeInTheDocument();
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+
     // Dialog hidden until New or Edit is clicked.
     expect(screen.queryByRole('heading', { name: 'New Payment Method' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Edit Payment Method' })).not.toBeInTheDocument();
@@ -232,12 +240,10 @@ describe('PaymentMethodsPage', () => {
       expect(screen.getByText('Card')).toBeInTheDocument();
     });
 
-    const rowCheckboxes = screen.getAllByRole('checkbox');
-    expect(rowCheckboxes).toHaveLength(3);
-    expect(rowCheckboxes[0]).toBeDisabled(); // cash is locked
-    expect(rowCheckboxes[2]).toBeDisabled(); // partner-owned
+    expect(screen.getByRole('checkbox', { name: 'Disable Cash' })).toBeDisabled(); // cash is locked
+    expect(screen.getByRole('checkbox', { name: 'Disable HungerStation' })).toBeDisabled(); // partner-owned
 
-    fireEvent.click(rowCheckboxes[1]); // card row toggle
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Card' })); // card row toggle
 
     await waitFor(() => {
       expect(mockUpdatePaymentMethod).toHaveBeenCalledWith('card', { enabled: false });

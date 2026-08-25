@@ -60,6 +60,13 @@ describe('DeliveryPartnersPage', () => {
     expect(screen.getByText('Order: 0')).toBeInTheDocument();
     expect(screen.getByText('Order: 1')).toBeInTheDocument();
 
+    // Row enable/disable checkboxes sit at the row start, next to the title;
+    // the "Active"/"Disabled" status labels are gone (dialog still closed).
+    expect(screen.getByRole('checkbox', { name: 'Disable Jahez' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable HungerStation' })).toBeInTheDocument();
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+
     expect(screen.queryByRole('heading', { name: 'New Delivery Partner' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'Edit Delivery Partner' }),
@@ -151,10 +158,10 @@ describe('DeliveryPartnersPage', () => {
       expect(screen.getByText('Jahez')).toBeInTheDocument();
     });
 
-    const rowCheckboxes = screen.getAllByRole('checkbox');
-    expect(rowCheckboxes).toHaveLength(2);
+    // HungerStation fixture is disabled — its checkbox reads "Enable …" and is unchecked.
+    expect(screen.getByRole('checkbox', { name: 'Enable HungerStation' })).not.toBeChecked();
 
-    fireEvent.click(rowCheckboxes[0]); // jahez row toggle
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Jahez' })); // jahez row toggle
 
     await waitFor(() => {
       expect(mockUpdateDeliveryPartner).toHaveBeenCalledWith('jahez', { enabled: false });
@@ -177,7 +184,7 @@ describe('DeliveryPartnersPage', () => {
       expect(screen.getByText('Jahez')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Jahez' }));
 
     // errorMessage() surfaces the server's JSON message, not the HTTP envelope,
     // on the page banner (toggle failures are operational, not dialog).
