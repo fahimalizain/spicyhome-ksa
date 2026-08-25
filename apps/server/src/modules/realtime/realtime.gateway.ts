@@ -145,6 +145,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.broadcast({ type: WS_EVENTS.TABLE_UPDATED, payload, at: Math.floor(Date.now() / 1000) });
   }
 
+  @OnEvent(WS_EVENTS.ITEM_CREATED)
+  handleItemCreated(payload: Record<string, unknown>): void {
+    this.broadcast({ type: WS_EVENTS.ITEM_CREATED, payload, at: Math.floor(Date.now() / 1000) });
+  }
+
+  @OnEvent(WS_EVENTS.ITEM_UPDATED)
+  handleItemUpdated(payload: Record<string, unknown>): void {
+    this.broadcast({ type: WS_EVENTS.ITEM_UPDATED, payload, at: Math.floor(Date.now() / 1000) });
+  }
+
   getConnectedCount(): number {
     return this.clients.size;
   }
