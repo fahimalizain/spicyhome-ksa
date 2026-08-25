@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { filterMenuItems } from '../../lib/filterMenuItems';
+import { CategoryTreeFilter } from './CategoryTreeFilter';
 import type {
   ItemResponse,
   CategoryResponse,
@@ -30,6 +32,10 @@ export function ItemsPage() {
   });
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [itemSearch, setItemSearch] = useState('');
+  const [filterCategoryId, setFilterCategoryId] = useState<number | null>(null);
+  const [filterSubcategoryId, setFilterSubcategoryId] = useState<number | null>(null);
+  const [treeOpen, setTreeOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -142,12 +148,57 @@ export function ItemsPage() {
     return subcategories.find((s) => s.id === item.subcategoryId)?.name ?? `#${item.subcategoryId}`;
   }
 
+  const filteredItems = filterMenuItems(items, {
+    categoryId: filterCategoryId,
+    subcategoryId: filterSubcategoryId,
+    query: itemSearch,
+  });
+
   if (loading) return <div className="p-4 text-gray-400">Loading...</div>;
 
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-white">Items</h1>
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-xl font-bold text-white shrink-0">Items</h1>
+          <div className="relative shrink-0 w-40 sm:w-48 md:w-56">
+            <input
+              type="search"
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              onKeyDown={(e) => {
+                // Tree-open Escape closes the tree only (CategoryTreeFilter handles it);
+                // search is only cleared when the tree is closed.
+                if (e.key === 'Escape' && !treeOpen) setItemSearch('');
+              }}
+              placeholder="Search…"
+              aria-label="Search items"
+              className="w-full pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+            />
+            {itemSearch && (
+              <button
+                type="button"
+                onClick={() => setItemSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-lg leading-none px-1"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <CategoryTreeFilter
+            categories={categories}
+            subcategories={subcategories}
+            categoryId={filterCategoryId}
+            subcategoryId={filterSubcategoryId}
+            open={treeOpen}
+            onOpenChange={setTreeOpen}
+            onSelect={(categoryId, subcategoryId) => {
+              setFilterCategoryId(categoryId);
+              setFilterSubcategoryId(subcategoryId);
+            }}
+          />
+        </div>
         <button
           type="button"
           onClick={openCreate}
@@ -159,26 +210,30 @@ export function ItemsPage() {
 
       {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
 
-      <div className="space-y-1">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => openEdit(item)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
-          >
-            <div>
-              <span className="text-sm text-white">{item.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{subcategoryLabel(item)}</span>
-              <span className="text-xs text-gray-500 ml-2">
-                {halalasToSar(item.priceHalalas)} SAR
+      {filteredItems.length === 0 ? (
+        <div className="text-sm text-gray-500 py-8 text-center">No items match</div>
+      ) : (
+        <div className="space-y-1">
+          {filteredItems.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => openEdit(item)}
+              className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            >
+              <div>
+                <span className="text-sm text-white">{item.name}</span>
+                <span className="text-xs text-gray-500 ml-2">{subcategoryLabel(item)}</span>
+                <span className="text-xs text-gray-500 ml-2">
+                  {halalasToSar(item.priceHalalas)} SAR
+                </span>
+              </div>
+              <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
+                Edit
               </span>
             </div>
-            <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
-              Edit
-            </span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {dialogOpen && (
         <Dialog

@@ -86,6 +86,12 @@ function renderPage() {
   );
 }
 
+/** Opens the category tree picker and returns its menu panel. */
+function openPicker() {
+  fireEvent.click(screen.getByLabelText('Filter by category'));
+  return screen.getByRole('menu');
+}
+
 describe('ItemsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -386,5 +392,164 @@ describe('ItemsPage', () => {
     });
     expect(mockCreateItem).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'New Item' })).toBeInTheDocument();
+  });
+
+  it('filters items by an English search query and the clear button restores them', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Search items'), { target: { value: 'zinger' } });
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Clear search'));
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.getByText('Pepperoni')).toBeInTheDocument();
+  });
+
+  it('filters items by an Arabic search query', async () => {
+    mockListItems.mockResolvedValue([{ ...itemZinger, nameAr: 'زنجر برجر' }, itemPepperoni]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Search items'), { target: { value: 'زنجر' } });
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+  });
+
+  it('treats a whitespace-only search query as no filter', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Search items'), { target: { value: '   ' } });
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.getByText('Pepperoni')).toBeInTheDocument();
+  });
+
+  it('filters by a category picked from the tree', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const menu = openPicker();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Burgers' }));
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Burgers');
+  });
+
+  it('filters by a subcategory and still shows inactive items', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const menu = openPicker();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Veggie' }));
+
+    // Pepperoni is inactive but the admin keeps inactive items visible.
+    expect(screen.getByText('Pepperoni')).toBeInTheDocument();
+    expect(screen.queryByText('Zinger Burger')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Pizza / Veggie');
+  });
+
+  it('All restores the full list after a category filter', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const menu = openPicker();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Burgers' }));
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+
+    const menuAgain = openPicker();
+    fireEvent.click(within(menuAgain).getByRole('menuitem', { name: 'All' }));
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.getByText('Pepperoni')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('All');
+  });
+
+  it('combines a category filter with search and shows the empty state', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const menu = openPicker();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Burgers' }));
+
+    fireEvent.change(screen.getByLabelText('Search items'), { target: { value: 'xyzzy' } });
+
+    expect(screen.getByText('No items match')).toBeInTheDocument();
+    expect(screen.queryByText('Zinger Burger')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search items'), { target: { value: '' } });
+
+    expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+  });
+
+  it('shows the empty state for a subcategory with no items', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const menu = openPicker();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Beef' }));
+
+    expect(screen.getByText('No items match')).toBeInTheDocument();
+    expect(screen.queryByText('Zinger Burger')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Burgers / Beef');
+  });
+
+  it('does not render the category tree until the picker is opened', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByText('Beef')).not.toBeInTheDocument();
+
+    const menu = openPicker();
+    expect(within(menu).getByRole('menuitem', { name: 'Beef' })).toBeInTheDocument();
+  });
+
+  it('Escape closes the tree without clearing the search query', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByLabelText('Search items');
+    fireEvent.change(searchInput, { target: { value: 'zinger' } });
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
+
+    openPicker();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    fireEvent.keyDown(searchInput, { key: 'Escape' });
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    // Tree-open Escape only closes the tree; the query survives.
+    expect((searchInput as HTMLInputElement).value).toBe('zinger');
+    expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
   });
 });
