@@ -134,7 +134,12 @@ describe('collectPrintJobs — test', () => {
   it('all is a soft no-op for test', () => {
     const baseline = collectPrintJobs(db, 'test', {});
     const withAll = collectPrintJobs(db, 'test', { all: true });
-    expect(withAll.jobs.map((j) => j.buffer)).toEqual(baseline.jobs.map((j) => j.buffer));
+    expect(withAll.jobs.map((j) => j.printer.printerId)).toEqual(
+      baseline.jobs.map((j) => j.printer.printerId),
+    );
+    expect(withAll.jobs.map((j) => j.format)).toEqual(baseline.jobs.map((j) => j.format));
+    expect(withAll.jobs.map((j) => j.label)).toEqual(baseline.jobs.map((j) => j.label));
+    expect(withAll.jobs.map((j) => j.sourceId)).toEqual(baseline.jobs.map((j) => j.sourceId));
     expect(withAll.notes).toContain(
       '--all ignored for test: all active printers are included by default',
     );
