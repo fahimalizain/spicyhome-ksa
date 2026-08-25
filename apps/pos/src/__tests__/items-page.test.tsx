@@ -579,8 +579,14 @@ describe('ItemsPage', () => {
     });
     // The wrapper stopPropagation keeps the row click (open edit) from firing.
     expect(screen.queryByRole('heading', { name: 'Edit Item' })).not.toBeInTheDocument();
-    // Success reloads the list.
-    expect(mockListItems).toHaveBeenCalledTimes(2);
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockListItems).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Zinger Burger' })).not.toBeChecked();
+    });
+    // Other rows are untouched.
+    expect(screen.getByRole('checkbox', { name: 'Enable Pepperoni' })).not.toBeChecked();
   });
 
   it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
@@ -596,5 +602,39 @@ describe('ItemsPage', () => {
       expect(screen.getByText('isActive is locked')).toBeInTheDocument();
     });
     expect(screen.queryByRole('heading', { name: 'Edit Item' })).not.toBeInTheDocument();
+    // No flip on error: Zinger stays active (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Zinger Burger' })).toBeChecked();
+    // Still no reload.
+    expect(mockListItems).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdateItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Zinger Burger' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Zinger Burger').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Zinger Burger').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Other row is not busy.
+    expect(screen.getByText('Pepperoni').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Zinger Burger' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Zinger Burger').closest('[aria-busy="true"]')).toBeNull();
   });
 });

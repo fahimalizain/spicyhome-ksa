@@ -4,7 +4,7 @@ import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
 import { filterMenuItems } from '../../lib/filterMenuItems';
 import { CategoryTreeFilter } from './CategoryTreeFilter';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type {
   ItemResponse,
   CategoryResponse,
@@ -37,6 +37,7 @@ export function ItemsPage() {
   const [filterCategoryId, setFilterCategoryId] = useState<number | null>(null);
   const [filterSubcategoryId, setFilterSubcategoryId] = useState<number | null>(null);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -61,12 +62,16 @@ export function ItemsPage() {
   }
 
   async function toggleActive(item: ItemResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(item.id);
     try {
       await client.menu.updateItem(item.id, { isActive: !item.isActive });
-      await loadData();
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, isActive: !i.isActive } : i)));
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -229,11 +234,13 @@ export function ItemsPage() {
             <div
               key={item.id}
               onClick={() => openEdit(item)}
-              className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+              aria-busy={togglingId === item.id}
+              className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === item.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <AdminRowEnabledCheckbox
                   checked={item.isActive}
+                  disabled={togglingId === item.id}
                   ariaLabel={item.isActive ? `Disable ${item.name}` : `Enable ${item.name}`}
                   onToggle={() => toggleActive(item)}
                 />

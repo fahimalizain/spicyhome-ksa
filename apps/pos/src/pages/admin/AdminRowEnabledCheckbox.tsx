@@ -1,3 +1,6 @@
+/** Extra classes on an admin list row while its enable toggle is in flight. */
+export const ADMIN_ROW_BUSY_CLASS = 'opacity-50 pointer-events-none';
+
 export type AdminRowEnabledCheckboxProps = {
   checked: boolean;
   disabled?: boolean;
