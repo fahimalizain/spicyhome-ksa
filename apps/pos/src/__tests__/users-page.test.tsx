@@ -262,4 +262,68 @@ describe('UsersPage', () => {
     expect(screen.queryByRole('heading', { name: 'New User' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
   });
+
+  it('renders a row enable checkbox for each user with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Ahmed')).toBeInTheDocument();
+      expect(screen.getByText('Sara')).toBeInTheDocument();
+    });
+
+    const ahmedCheckbox = screen.getByRole('checkbox', { name: 'Disable Ahmed' });
+    expect(ahmedCheckbox).toBeChecked();
+
+    const saraCheckbox = screen.getByRole('checkbox', { name: 'Disable Sara' });
+    expect(saraCheckbox).toBeChecked();
+
+    // Still no (inactive) badge; (no Android) hint remains for Ahmed.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+    expect(screen.getByText('(no Android)')).toBeInTheDocument();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Ahmed')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Ahmed' }));
+
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit User' })).not.toBeInTheDocument();
+    // Success reloads the list.
+    expect(mockListUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the Enable label when the user is inactive', async () => {
+    mockListUsers.mockResolvedValue([{ ...userAhmed, isActive: false }, userSara]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Ahmed')).toBeInTheDocument();
+    });
+
+    const ahmedCheckbox = screen.getByRole('checkbox', { name: 'Enable Ahmed' });
+    expect(ahmedCheckbox).not.toBeChecked();
+    // Still no (inactive) badge.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateUser.mockRejectedValueOnce(new Error('Cannot disable user'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Ahmed')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Ahmed' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot disable user')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit User' })).not.toBeInTheDocument();
+  });
 });

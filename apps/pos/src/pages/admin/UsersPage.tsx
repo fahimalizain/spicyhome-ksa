@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
+import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
 import type { UserResponse, RoleResponse, UpdateUserDto } from '@spicyhome/client-ts';
 
 export function UsersPage() {
@@ -62,6 +63,16 @@ export function UsersPage() {
     setDialogOpen(true);
   }
 
+  async function toggleActive(u: UserResponse) {
+    setError('');
+    try {
+      await client.auth.updateUser(u.id, { isActive: !u.isActive });
+      await loadData();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update');
+    }
+  }
+
   /** Cancel, backdrop, and Escape all land here. Always resets the form. */
   function closeDialog() {
     setDialogOpen(false);
@@ -118,12 +129,19 @@ export function UsersPage() {
             onClick={() => openEdit(u)}
             className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
           >
-            <div>
-              <span className="text-sm text-white">{u.name}</span>
-              <span className="text-xs text-gray-500 ml-2">@{u.username}</span>
-              {u.androidLogin === false && (
-                <span className="text-xs text-gray-500 ml-2">(no Android)</span>
-              )}
+            <div className="flex items-center gap-3 min-w-0">
+              <AdminRowEnabledCheckbox
+                checked={u.isActive}
+                ariaLabel={u.isActive ? `Disable ${u.name}` : `Enable ${u.name}`}
+                onToggle={() => toggleActive(u)}
+              />
+              <div>
+                <span className="text-sm text-white">{u.name}</span>
+                <span className="text-xs text-gray-500 ml-2">@{u.username}</span>
+                {u.androidLogin === false && (
+                  <span className="text-xs text-gray-500 ml-2">(no Android)</span>
+                )}
+              </div>
             </div>
             <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none">
               Edit
