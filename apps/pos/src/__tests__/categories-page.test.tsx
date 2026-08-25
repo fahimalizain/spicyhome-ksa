@@ -103,20 +103,42 @@ describe('CategoriesPage — kitchen printer routing', () => {
     mockUpdateCategory.mockResolvedValue({ ...categoryPizza, id: 2 });
   });
 
-  it('renders categories after load', async () => {
+  it('renders categories after load with the printer label in each row', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Burgers')).toBeInTheDocument();
       expect(screen.getByText('Pizza')).toBeInTheDocument();
     });
+
+    const pizzaRow = screen.getByText('Pizza').parentElement!;
+    expect(within(pizzaRow).getByText('Kitchen 1')).toBeInTheDocument();
+
+    const burgersRow = screen.getByText('Burgers').parentElement!;
+    expect(within(burgersRow).getByText('Default kitchen printer')).toBeInTheDocument();
   });
 
-  it('lists only kitchen-role printers plus the Default option', async () => {
+  it('does not show the dialog until New Category or Edit is clicked', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Categories')).toBeInTheDocument();
     });
 
+    expect(screen.getByText('New Category')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'New Category' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Edit Category' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Active')).not.toBeInTheDocument();
+  });
+
+  it('opens New Category listing only kitchen-role printers plus the Default option', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Categories')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Category'));
+
+    expect(screen.getByRole('heading', { name: 'New Category' })).toBeInTheDocument();
     const select = screen.getByTestId('kitchen-printer-select');
     expect(within(select).getByText('Default kitchen printer')).toBeInTheDocument();
     expect(within(select).getByText('Kitchen 1')).toBeInTheDocument();
@@ -125,14 +147,13 @@ describe('CategoriesPage — kitchen printer routing', () => {
   });
 
   it('sends printerId on create when a kitchen printer is selected', async () => {
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Categories')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
-    const nameInput = form.querySelector('input') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'Desserts' } });
+    fireEvent.click(screen.getByText('New Category'));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Desserts' } });
 
     const select = screen.getByTestId('kitchen-printer-select');
     fireEvent.change(select, { target: { value: '2' } });
@@ -141,20 +162,19 @@ describe('CategoriesPage — kitchen printer routing', () => {
 
     await waitFor(() => {
       expect(mockCreateCategory).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Desserts', printerId: 2 }),
+        expect.objectContaining({ name: 'Desserts', printerId: 2, sortOrder: 0 }),
       );
     });
   });
 
   it('omits printerId on create when Default is selected', async () => {
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Categories')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
-    const nameInput = form.querySelector('input') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'Desserts' } });
+    fireEvent.click(screen.getByText('New Category'));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Desserts' } });
 
     fireEvent.click(screen.getByText('Create'));
 
@@ -165,31 +185,18 @@ describe('CategoriesPage — kitchen printer routing', () => {
     });
   });
 
-  it('edit populates the dropdown from the category printerId', async () => {
+  it('edit populates the dropdown from the category printerId and Update with Default sends null', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Pizza')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByText('Edit')[1]); // Pizza (printerId 1)
+    fireEvent.click(screen.getByText('Pizza')); // row click opens edit
 
     await waitFor(() => {
       expect(screen.getByTestId('kitchen-printer-select')).toHaveValue('1');
     });
-    expect(screen.getByText('Edit Category')).toBeInTheDocument();
-  });
-
-  it('clears printerId on update when Default is selected', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByText('Pizza')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getAllByText('Edit')[1]); // Pizza (printerId 1)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('kitchen-printer-select')).toHaveValue('1');
-    });
+    expect(screen.getByRole('heading', { name: 'Edit Category' })).toBeInTheDocument();
 
     const select = screen.getByTestId('kitchen-printer-select');
     fireEvent.change(select, { target: { value: '' } });
@@ -217,24 +224,11 @@ describe('CategoriesPage — kitchen printer routing', () => {
       expect(screen.getByText('Pizza')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.click(screen.getByText('Pizza'));
 
     await waitFor(() => {
       expect(screen.getByTestId('kitchen-printer-select')).toHaveValue('4');
     });
-  });
-
-  it('shows the assigned printer name in the category list', async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByText('Pizza')).toBeInTheDocument();
-    });
-
-    const pizzaRow = screen.getByText('Pizza').parentElement!;
-    expect(within(pizzaRow).getByText('Kitchen 1')).toBeInTheDocument();
-
-    const burgersRow = screen.getByText('Burgers').parentElement!;
-    expect(within(burgersRow).getByText('Default kitchen printer')).toBeInTheDocument();
   });
 
   it('still renders categories when the printers list fails', async () => {
@@ -245,8 +239,136 @@ describe('CategoriesPage — kitchen printer routing', () => {
       expect(screen.getByText('Burgers')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByText('New Category'));
+
     const select = screen.getByTestId('kitchen-printer-select');
     expect(within(select).getByText('Default kitchen printer')).toBeInTheDocument();
     expect(within(select).queryByText('Kitchen 1')).not.toBeInTheDocument();
+  });
+
+  it('shows Active checked by default on create and sends isActive: true', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Categories')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Category'));
+
+    expect(screen.getByLabelText('Active')).toBeChecked();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Desserts' } });
+    fireEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreateCategory).toHaveBeenCalledWith(expect.objectContaining({ isActive: true }));
+    });
+  });
+
+  it('does not render an (inactive) badge even for inactive categories', async () => {
+    mockListCategories.mockResolvedValue([{ ...categoryBurgers, isActive: false }]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('renders a row enable checkbox for each category with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+      expect(screen.getByText('Pizza')).toBeInTheDocument();
+    });
+
+    const burgersCheckbox = screen.getByRole('checkbox', { name: 'Disable Burgers' });
+    expect(burgersCheckbox).toBeChecked();
+
+    const pizzaCheckbox = screen.getByRole('checkbox', { name: 'Disable Pizza' });
+    expect(pizzaCheckbox).toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Burgers' }));
+
+    await waitFor(() => {
+      expect(mockUpdateCategory).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Category' })).not.toBeInTheDocument();
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockListCategories).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Burgers' })).not.toBeChecked();
+    });
+  });
+
+  it('shows the Enable label when the category is inactive', async () => {
+    mockListCategories.mockResolvedValue([{ ...categoryBurgers, isActive: false }]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    const burgersCheckbox = screen.getByRole('checkbox', { name: 'Enable Burgers' });
+    expect(burgersCheckbox).not.toBeChecked();
+    // Still no (inactive) badge.
+    expect(screen.queryByText('(inactive)')).not.toBeInTheDocument();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdateCategory.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Burgers' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Category' })).not.toBeInTheDocument();
+    // No flip on error: Burgers stays active (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Burgers' })).toBeChecked();
+    // Still no reload.
+    expect(mockListCategories).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdateCategory.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Burgers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Burgers' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Burgers').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Burgers').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Other row is not busy.
+    expect(screen.getByText('Pizza').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Burgers' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Burgers').closest('[aria-busy="true"]')).toBeNull();
   });
 });

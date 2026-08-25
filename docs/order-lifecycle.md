@@ -576,6 +576,8 @@ floorPriceHalalas }`) event is written, and `order.updated` is emitted.
 | `order.voided`        | Order voided                                                |
 | `order.refund.issued` | Refund issued (both partial and full refunds)               |
 | `order.refunded`      | Order fully refunded (status transition to `refunded` only) |
+| `item.created`        | Catalog item created by an admin                            |
+| `item.updated`        | Catalog item updated, incl. admin `isActive` toggle         |
 
 ## Schema Changes Summary
 

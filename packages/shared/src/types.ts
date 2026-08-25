@@ -229,5 +229,7 @@ export const WS_EVENTS = {
   ORDER_ITEM_REMOVED: 'order.item.removed',
   TABLE_CREATED: 'table.created',
   TABLE_UPDATED: 'table.updated',
+  ITEM_CREATED: 'item.created',
+  ITEM_UPDATED: 'item.updated',
 } as const;
 export type WsEventType = (typeof WS_EVENTS)[keyof typeof WS_EVENTS];

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import {
   OnScreenKeyboardProvider,
   useOnScreenKeyboard,
@@ -77,6 +77,10 @@ function Harness() {
       <input data-testid="readonly-field" type="text" readOnly />
       <input data-testid="opted-out-field" type="text" data-osk="false" />
       <input data-testid="maxlength-field" type="text" maxLength={3} />
+      {/* Non-eligible blur target: a button that does not toggle the OSK. */}
+      <button type="button" data-testid="outside-action">
+        outside-action
+      </button>
     </OnScreenKeyboardProvider>
   );
 }
@@ -120,6 +124,16 @@ function pressKeyByClass(buttonClass: string) {
   const button = document.querySelector(`.${buttonClass}`);
   if (!button) throw new Error(`no .${buttonClass} button found`);
   fireEvent.click(button);
+}
+
+/**
+ * Yield to the macrotask queue so a deferred hide (setTimeout(0)) can fire
+ * inside act. Real timers only — this file does not use fake timers.
+ */
+async function flushMacrotasks() {
+  await act(async () => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  });
 }
 
 beforeEach(() => {
@@ -452,5 +466,66 @@ describe('OnScreenKeyboardProvider', () => {
     pressKeyByClass('hg-button-lock');
     pressKey('d');
     expect(screen.getByTestId('controlled-field')).toHaveValue('ABCd');
+  });
+
+  it('a pointer blur keeps the keyboard mounted until after the pointer gesture', async () => {
+    renderHarness();
+    enable();
+    focusField('plain-field');
+    const field = screen.getByTestId('plain-field');
+    const outside = screen.getByTestId('outside-action');
+
+    // Tap on the outside button: focusout (relatedTarget = button) arrives
+    // first, but the keyboard must not unmount yet.
+    fireEvent.focusOut(field, { relatedTarget: outside });
+    expect(keyboard()).toBeInTheDocument();
+
+    // pointerdown MUST fire synchronously — an await here would let the
+    // fallback setTimeout(0) hide the keyboard before the pointerdown.
+    fireEvent.pointerDown(outside);
+    expect(keyboard()).toBeInTheDocument();
+
+    fireEvent.pointerUp(outside);
+    // Still mounted through pointerup: the hide is deferred to a macrotask
+    // so the compatibility click still lands on the stable layout.
+    expect(keyboard()).toBeInTheDocument();
+
+    await flushMacrotasks();
+    expect(keyboard()).not.toBeInTheDocument();
+  });
+
+  it('a non-pointer blur hides the keyboard on the next macrotask', async () => {
+    renderHarness();
+    enable();
+    focusField('plain-field');
+    const field = screen.getByTestId('plain-field');
+
+    // Tab / programmatic blur: relatedTarget is null, no pointer follows.
+    fireEvent.focusOut(field, { relatedTarget: null });
+    // Still mounted synchronously...
+    expect(keyboard()).toBeInTheDocument();
+
+    // ...and hidden once the fallback macrotask runs.
+    await flushMacrotasks();
+    expect(keyboard()).not.toBeInTheDocument();
+  });
+
+  it('focusing another eligible field cancels the pending hide', async () => {
+    renderHarness();
+    enable();
+    focusField('plain-field');
+    const field = screen.getByTestId('plain-field');
+    const outside = screen.getByTestId('outside-action');
+
+    // Blur toward the outside button schedules a deferred hide...
+    fireEvent.focusOut(field, { relatedTarget: outside });
+    // ...but switching to another eligible field must cancel it.
+    focusField('controlled-field');
+
+    await flushMacrotasks();
+    expect(keyboard()).toBeInTheDocument();
+
+    pressKey('x');
+    expect(screen.getByTestId('controlled-field')).toHaveValue('x');
   });
 });

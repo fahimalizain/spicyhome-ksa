@@ -1,6 +1,8 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import { itemCategories, itemSubcategories, items } from '@spicyhome/db';
+import { WS_EVENTS } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { mapBools } from '../../common/bool-mapper.helper';
@@ -9,7 +11,10 @@ import type * as schema from '@spicyhome/db';
 
 @Injectable()
 export class MenuService {
-  constructor(@Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>) {}
+  constructor(
+    @Inject(DRIZZLE) private db: BetterSQLite3Database<typeof schema>,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   listCategories(): any[] {
     return this.db
@@ -190,7 +195,9 @@ export class MenuService {
       .insert(items)
       .values(row as any)
       .run();
-    return mapBools({ id: Number(result.lastInsertRowid), ...row }, ['isActive']);
+    const id = Number(result.lastInsertRowid);
+    this.emitItemEvent(WS_EVENTS.ITEM_CREATED, id, userId);
+    return mapBools({ id, ...row }, ['isActive']);
   }
 
   updateItem(id: number, dto: any, userId: number): any {
@@ -214,6 +221,15 @@ export class MenuService {
     if (dto.isActive !== undefined) updates.isActive = dto.isActive ? 1 : 0;
 
     this.db.update(items).set(updates).where(eq(items.id, id)).run();
+    this.emitItemEvent(WS_EVENTS.ITEM_UPDATED, id, userId);
     return mapBools(this.db.select().from(items).where(eq(items.id, id)).get()!, ['isActive']);
+  }
+
+  private emitItemEvent(event: string, itemId: number, userId: number): void {
+    try {
+      this.eventEmitter.emit(event, { itemId, userId });
+    } catch {
+      // Swallow — events never fail the operation
+    }
   }
 }

@@ -112,7 +112,14 @@ export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) 
     [registerDock, unregisterDock],
   );
 
+  // Points at the effect-owned cancel so the Close button can drop a
+  // deferred focusout hide before hiding immediately.
+  const cancelPendingHideRef = useRef<() => void>(() => {});
+
   const hide = useCallback(() => {
+    // Close hides immediately — cancel any deferred hide first so a stale
+    // timer cannot unmount the keyboard after it is already gone.
+    cancelPendingHideRef.current();
     const el = activeTargetRef.current;
     if (el) el.blur();
     setActiveTarget(null);
@@ -122,9 +129,64 @@ export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     if (!enabled) return;
 
+    // Timer id of the deferred hide, or null when nothing is scheduled.
+    let hideTimer: number | null = null;
+
+    // Cancel any deferred hide: clear the timer and drop the window
+    // pointer listeners for the in-flight gesture.
+    function cancelPendingHide() {
+      if (hideTimer !== null) {
+        window.clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerCancel, true);
+    }
+    cancelPendingHideRef.current = cancelPendingHide;
+
+    // Hide on the next macrotask. The pointer listeners are removed here
+    // too, so whichever phase fires first (fallback timer or pointerup)
+    // cleans up fully.
+    function scheduleHide() {
+      hideTimer = window.setTimeout(() => {
+        hideTimer = null;
+        window.removeEventListener('pointerdown', onPointerDown, true);
+        window.removeEventListener('pointerup', onPointerUp, true);
+        window.removeEventListener('pointercancel', onPointerCancel, true);
+        setActiveTarget(null);
+      }, 0);
+    }
+
+    // A pointer gesture followed the blur — wait for it to finish. Hiding
+    // on pointerdown would unmount the docked keyboard mid-tap, shrinking
+    // the dialog so the rest of the tap (pointerup/click) hits the
+    // backdrop instead of Update/Create.
+    function onPointerDown() {
+      cancelPendingHide();
+      window.addEventListener('pointerup', onPointerUp, true);
+      window.addEventListener('pointercancel', onPointerCancel, true);
+    }
+
+    // Touch compatibility clicks are dispatched synchronously after
+    // touchend/pointerup, and React 18 may flush discrete updates on
+    // pointerup before click. Deferring to a macrotask keeps the keyboard
+    // mounted until after click.
+    function onPointerUp() {
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerCancel, true);
+      scheduleHide();
+    }
+    function onPointerCancel() {
+      onPointerUp();
+    }
+
     function onFocusIn(e: FocusEvent) {
       const target = e.target;
       if (!isEligibleOskTarget(target)) return;
+      // A deferred hide must not win over the new field — cancel it before
+      // re-activating so the keyboard stays up across the switch.
+      cancelPendingHide();
       setActiveTarget(target);
       // Inside a dock host the field already sits above the inline keyboard,
       // so no scroll is needed. The floating keyboard keeps the field
@@ -144,7 +206,17 @@ export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) 
       if (rt instanceof Node && containerRef.current?.contains(rt)) return;
       // Moving straight to another eligible field — focusin takes over.
       if (rt && isEligibleOskTarget(rt)) return;
-      setActiveTarget(null);
+      // Do not unmount here: the docked keyboard is in-flow, so hiding now
+      // would shrink the dialog and the rest of this tap (pointerup/click)
+      // would hit the backdrop instead of Update/Create.
+      cancelPendingHide();
+      // Chrome fires focusout before pointerdown for the same press, so we
+      // cannot know yet whether this blur is a tap or a Tab. Listen for a
+      // following pointerdown and wait for the gesture to finish.
+      window.addEventListener('pointerdown', onPointerDown, true);
+      // No pointer follows (Tab, programmatic blur) — hide on the next
+      // macrotask so the keyboard does not stay up forever.
+      scheduleHide();
     }
 
     document.addEventListener('focusin', onFocusIn, true);
@@ -152,6 +224,8 @@ export function OnScreenKeyboardProvider({ children }: { children: ReactNode }) 
     return () => {
       document.removeEventListener('focusin', onFocusIn, true);
       document.removeEventListener('focusout', onFocusOut, true);
+      cancelPendingHide();
+      cancelPendingHideRef.current = () => {};
     };
   }, [enabled]);
 

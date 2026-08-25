@@ -226,6 +226,34 @@ describe('RealtimeGateway', () => {
       ws.close();
     });
 
+    it('receives item.created event', async () => {
+      const token = createToken(12, 'itemcreateuser');
+      const ws = await connect(token);
+      await new Promise((r) => setTimeout(r, 50));
+
+      eventEmitter.emit('item.created', { itemId: 5, userId: 12 });
+
+      const msg = await waitForMessage(ws);
+      expect(msg.type).toBe('item.created');
+      expect(msg.payload.itemId).toBe(5);
+
+      ws.close();
+    });
+
+    it('receives item.updated event', async () => {
+      const token = createToken(13, 'itemupdateuser');
+      const ws = await connect(token);
+      await new Promise((r) => setTimeout(r, 50));
+
+      eventEmitter.emit('item.updated', { itemId: 6, userId: 13 });
+
+      const msg = await waitForMessage(ws);
+      expect(msg.type).toBe('item.updated');
+      expect(msg.payload.itemId).toBe(6);
+
+      ws.close();
+    });
+
     it('broadcasts to multiple clients', async () => {
       const token1 = createToken(9, 'multi1');
       const token2 = createToken(10, 'multi2');

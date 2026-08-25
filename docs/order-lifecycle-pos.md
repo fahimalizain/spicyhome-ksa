@@ -647,7 +647,7 @@ function getRemainingQty(
 | ------------------ | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | **OrdersPage**     | `order.sent` (line 33) | `order.refund.issued`, `order.refunded`, `order.updated` | `order.created`, `order.paid`, `order.voided`, `order.item.*`                                      |
 | **TablesViewPage** | `order.sent` (line 48) | `order.refund.issued`, `order.refunded`                  | `order.created`, `order.paid`, `order.voided`, `order.item.*`                                      |
-| **OrderPage**      | none (not subscribed)  | none currently needed                                    | `order.paid`, `order.voided` could be added to auto-update if another terminal pays the same order |
+| **OrderPage**      | none (not subscribed)  | `item.created`, `item.updated` (reload menu)             | `order.paid`, `order.voided` could be added to auto-update if another terminal pays the same order |
 
 ### WS Event → Action
 
@@ -662,6 +662,8 @@ function getRemainingQty(
 | `order.item.added`    | `loadOrders()` | `loadData()`   | —                                      |
 | `order.item.updated`  | `loadOrders()` | `loadData()`   | —                                      |
 | `order.item.removed`  | `loadOrders()` | `loadData()`   | —                                      |
+| `item.created`        | —              | —              | `loadMenu()`                           |
+| `item.updated`        | —              | —              | `loadMenu()`                           |
 
 > `order.updated` on OrdersPage triggers a full list refresh — covers totals changes from item mutations on open orders. No dedicated OrderPage WS sub needed because OrderPage re-fetches on every server operation.
 

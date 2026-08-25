@@ -109,23 +109,6 @@ function renderPage() {
   );
 }
 
-/** Find a form input by its preceding label text using DOM traversal. */
-function getByLabel(form: HTMLElement, labelText: string): HTMLElement {
-  const labels = form.querySelectorAll('label');
-  for (const label of labels) {
-    if (label.textContent?.trim() === labelText) {
-      // For labels followed by a div wrapper (flex layout), go into the wrapper
-      const sibling = label.nextElementSibling as HTMLElement;
-      if (sibling && sibling.tagName === 'DIV') {
-        const input = sibling.querySelector('input');
-        if (input) return input;
-      }
-      if (sibling) return sibling as HTMLElement;
-    }
-  }
-  throw new Error(`Could not find input with label "${labelText}"`);
-}
-
 describe('PrintersPage — config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,11 +139,40 @@ describe('PrintersPage — config', () => {
     });
   });
 
+  it('does not show the dialog until New Printer or Edit is clicked', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'New Printer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('encoding-select')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('connection-type-select')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Active')).not.toBeInTheDocument();
+  });
+
+  it('opens New Printer with Active checked by default', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Printer'));
+
+    expect(screen.getByRole('heading', { name: 'New Printer' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    expect(screen.getByLabelText('Active')).toBeChecked();
+  });
+
   it('changes code page to 22 when encoding changed to pc864', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByText('New Printer'));
 
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'pc864' } });
@@ -176,6 +188,8 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByText('New Printer'));
+
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'w1256' } });
 
@@ -190,6 +204,8 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByText('New Printer'));
+
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'utf8' } });
 
@@ -200,27 +216,21 @@ describe('PrintersPage — config', () => {
   });
 
   it('sends config on create', async () => {
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
+    fireEvent.click(screen.getByText('New Printer'));
 
-    const nameInput = getByLabel(form, 'Name') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'New Printer' } });
-
-    const ipInput = getByLabel(form, 'IP Address') as HTMLInputElement;
-    fireEvent.change(ipInput, { target: { value: '10.0.0.1' } });
-
-    const portInput = getByLabel(form, 'Port') as HTMLInputElement;
-    fireEvent.change(portInput, { target: { value: '9100' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'New Printer' } });
+    fireEvent.change(screen.getByLabelText('IP Address'), { target: { value: '10.0.0.1' } });
+    fireEvent.change(screen.getByLabelText('Port'), { target: { value: '9100' } });
 
     const encodingSelect = screen.getByTestId('encoding-select');
     fireEvent.change(encodingSelect, { target: { value: 'pc864' } });
 
-    const rtlCheckbox = form.querySelector('input[type="checkbox"]') as HTMLInputElement;
-    fireEvent.click(rtlCheckbox);
+    fireEvent.click(screen.getByLabelText('Reverse glyph order (visual RTL)'));
 
     fireEvent.click(screen.getByText('Create'));
 
@@ -247,17 +257,15 @@ describe('PrintersPage — config', () => {
   });
 
   it('render mode select switches to raster and is sent on create', async () => {
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
-    const nameInput = getByLabel(form, 'Name') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'Raster Printer' } });
+    fireEvent.click(screen.getByText('New Printer'));
 
-    const ipInput = getByLabel(form, 'IP Address') as HTMLInputElement;
-    fireEvent.change(ipInput, { target: { value: '10.0.0.9' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Raster Printer' } });
+    fireEvent.change(screen.getByLabelText('IP Address'), { target: { value: '10.0.0.9' } });
 
     const renderModeSelect = screen.getByTestId('render-mode-select');
     expect(renderModeSelect).toHaveValue('charset');
@@ -375,6 +383,8 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByText('New Printer'));
+
     const encodingSelect = screen.getByTestId('encoding-select');
 
     expect(within(encodingSelect).getByText('none — ASCII only')).toBeInTheDocument();
@@ -395,6 +405,8 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByText('New Printer'));
+
     // Default is TCP — IP and Port labels should be visible
     expect(screen.getByText('IP Address')).toBeInTheDocument();
     expect(screen.getByText('Port')).toBeInTheDocument();
@@ -405,6 +417,8 @@ describe('PrintersPage — config', () => {
     await waitFor(() => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByText('New Printer'));
 
     const connSelect = screen.getByTestId('connection-type-select');
     fireEvent.change(connSelect, { target: { value: 'windows' } });
@@ -420,10 +434,12 @@ describe('PrintersPage — config', () => {
   });
 
   it('save payload includes connectionType when creating windows printer', async () => {
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => {
       expect(screen.getByText('Printers')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByText('New Printer'));
 
     // Switch to windows
     const connSelect = screen.getByTestId('connection-type-select');
@@ -433,13 +449,10 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('Windows Printer Name')).toBeInTheDocument();
     });
 
-    const form = container.querySelector('form')!;
-    const nameField = getByLabel(form, 'Name') as HTMLInputElement;
-    fireEvent.change(nameField, { target: { value: 'USB Kitchen' } });
-
-    // Find the Windows Printer Name input
-    const winNameInput = getByLabel(form, 'Windows Printer Name') as HTMLInputElement;
-    fireEvent.change(winNameInput, { target: { value: 'XP-80C' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'USB Kitchen' } });
+    fireEvent.change(screen.getByLabelText('Windows Printer Name'), {
+      target: { value: 'XP-80C' },
+    });
 
     fireEvent.click(screen.getByText('Create'));
 
@@ -489,5 +502,140 @@ describe('PrintersPage — config', () => {
       expect(screen.getByTestId('connection-type-select')).toHaveValue('windows');
       expect(screen.getByDisplayValue('XP-80C')).toBeInTheDocument();
     });
+  });
+
+  // ── Dialog behavior tests ──────────────────────────────────────────────────
+
+  it('clicking Test does not open the dialog', async () => {
+    mockList.mockResolvedValue([printerKitchen]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Test'));
+
+    await waitFor(() => {
+      expect(mockTest).toHaveBeenCalledWith(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Sent!')).toBeInTheDocument();
+    });
+    // Test stopPropagation: the row click must NOT open the edit dialog.
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+  });
+
+  it('dialog card uses the wide w-[640px] layout', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Printers')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('New Printer'));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('w-[640px]');
+    expect(dialog).not.toHaveClass('w-[480px]');
+  });
+
+  // ── Row enable/disable checkboxes ─────────────────────────────────────────
+
+  it('renders a row enable checkbox for each printer with an Enable/Disable aria-label', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+      expect(screen.getByText('Receipt')).toBeInTheDocument();
+    });
+
+    const kitchenCheckbox = screen.getByRole('checkbox', { name: 'Disable Kitchen' });
+    expect(kitchenCheckbox).toBeChecked();
+
+    const receiptCheckbox = screen.getByRole('checkbox', { name: 'Disable Receipt' });
+    expect(receiptCheckbox).toBeChecked();
+  });
+
+  it('toggling the row checkbox updates isActive without opening the Edit dialog', async () => {
+    mockList.mockResolvedValue([printerKitchen]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith(1, { isActive: false });
+    });
+    // The wrapper stopPropagation keeps the row click (open edit) from firing.
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockList).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Kitchen' })).not.toBeChecked();
+    });
+    // The Test button is untouched by the toggle.
+    expect(screen.getByText('Test')).toBeInTheDocument();
+  });
+
+  it('shows the Enable label when the printer is inactive', async () => {
+    mockList.mockResolvedValue([{ ...printerKitchen, isActive: false }]);
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    const kitchenCheckbox = screen.getByRole('checkbox', { name: 'Enable Kitchen' });
+    expect(kitchenCheckbox).not.toBeChecked();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdate.mockRejectedValueOnce(new Error('isActive is locked'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('isActive is locked')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+    // No flip on error: Kitchen stays active (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Kitchen' })).toBeChecked();
+    // Still no reload.
+    expect(mockList).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdate.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Kitchen').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Kitchen').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Other row is not busy.
+    expect(screen.getByText('Receipt').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Kitchen' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Kitchen').closest('[aria-busy="true"]')).toBeNull();
   });
 });
