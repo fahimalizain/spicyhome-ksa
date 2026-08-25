@@ -88,7 +88,7 @@ function renderPage() {
 
 /** Opens the category tree picker and returns its menu panel. */
 function openPicker() {
-  fireEvent.click(screen.getByLabelText('Filter by category'));
+  fireEvent.click(screen.getByLabelText(/Filter by category/));
   return screen.getByRole('menu');
 }
 
@@ -448,7 +448,7 @@ describe('ItemsPage', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
     expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Burgers');
+    expect(screen.getByLabelText(/Filter by category/)).toHaveTextContent('Burgers');
   });
 
   it('filters by a subcategory and still shows inactive items', async () => {
@@ -463,7 +463,7 @@ describe('ItemsPage', () => {
     // Pepperoni is inactive but the admin keeps inactive items visible.
     expect(screen.getByText('Pepperoni')).toBeInTheDocument();
     expect(screen.queryByText('Zinger Burger')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Pizza / Veggie');
+    expect(screen.getByLabelText(/Filter by category/)).toHaveTextContent('Pizza / Veggie');
   });
 
   it('All restores the full list after a category filter', async () => {
@@ -481,7 +481,7 @@ describe('ItemsPage', () => {
 
     expect(screen.getByText('Zinger Burger')).toBeInTheDocument();
     expect(screen.getByText('Pepperoni')).toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('All');
+    expect(screen.getByLabelText(/Filter by category/)).toHaveTextContent('All');
   });
 
   it('combines a category filter with search and shows the empty state', async () => {
@@ -516,7 +516,7 @@ describe('ItemsPage', () => {
     expect(screen.getByText('No items match')).toBeInTheDocument();
     expect(screen.queryByText('Zinger Burger')).not.toBeInTheDocument();
     expect(screen.queryByText('Pepperoni')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by category')).toHaveTextContent('Burgers / Beef');
+    expect(screen.getByLabelText(/Filter by category/)).toHaveTextContent('Burgers / Beef');
   });
 
   it('does not render the category tree until the picker is opened', async () => {

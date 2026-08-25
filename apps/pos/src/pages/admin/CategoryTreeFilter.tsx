@@ -4,7 +4,10 @@ import type { CategoryResponse, SubcategoryResponse } from '@spicyhome/client-ts
 interface CategoryTreeFilterProps {
   categories: CategoryResponse[];
   subcategories: SubcategoryResponse[];
-  /** Selected category id (null when nothing or only a subcategory is picked). */
+  /**
+   * Selected category id — the selected category, or the parent of the
+   * selected subcategory; null only when the filter is All.
+   */
   categoryId: number | null;
   /** Selected subcategory id; takes precedence over `categoryId`. */
   subcategoryId: number | null;
@@ -70,7 +73,7 @@ export function CategoryTreeFilter({
   }
 
   const rowClasses =
-    'touch-target !justify-start w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white';
+    'touch-target !justify-start w-full px-4 py-2 text-sm hover:bg-gray-700 hover:text-white';
 
   return (
     <div ref={rootRef} className="relative shrink-0 min-w-0">
@@ -79,7 +82,7 @@ export function CategoryTreeFilter({
         onClick={() => onOpenChange(!open)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Filter by category"
+        aria-label={`Filter by category: ${label}`}
         className="touch-target !justify-between gap-1 max-w-40 sm:max-w-48 md:max-w-56 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white"
       >
         <span className="truncate min-w-0">{label}</span>
@@ -100,7 +103,7 @@ export function CategoryTreeFilter({
               onSelect(null, null);
               onOpenChange(false);
             }}
-            className={`${rowClasses} ${categoryId === null && subcategoryId === null ? 'text-brand-500' : ''}`}
+            className={`${rowClasses} ${categoryId === null && subcategoryId === null ? 'text-brand-500' : 'text-gray-300'}`}
           >
             All
           </button>
@@ -113,7 +116,7 @@ export function CategoryTreeFilter({
                   onSelect(cat.id, null);
                   onOpenChange(false);
                 }}
-                className={`${rowClasses} ${categoryId === cat.id && subcategoryId === null ? 'text-brand-500' : ''}`}
+                className={`${rowClasses} ${categoryId === cat.id && subcategoryId === null ? 'text-brand-500' : 'text-gray-300'}`}
               >
                 {cat.name}
               </button>
@@ -126,7 +129,7 @@ export function CategoryTreeFilter({
                     onSelect(cat.id, sub.id);
                     onOpenChange(false);
                   }}
-                  className={`${rowClasses} pl-8 ${subcategoryId === sub.id ? 'text-brand-500' : ''}`}
+                  className={`${rowClasses} pl-8 ${subcategoryId === sub.id ? 'text-brand-500' : 'text-gray-300'}`}
                 >
                   {sub.name}
                 </button>
