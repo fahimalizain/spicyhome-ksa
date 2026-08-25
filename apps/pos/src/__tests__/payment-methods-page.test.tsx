@@ -251,6 +251,64 @@ describe('PaymentMethodsPage', () => {
     // stopPropagation on the toggle container: the dialog must not open.
     expect(screen.queryByRole('heading', { name: 'Edit Payment Method' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'New Payment Method' })).not.toBeInTheDocument();
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockListPaymentMethods).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Card' })).not.toBeChecked();
+    });
+    // Cash and partner rows are untouched and still locked.
+    expect(screen.getByRole('checkbox', { name: 'Disable Cash' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Disable HungerStation' })).toBeDisabled();
+  });
+
+  it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
+    mockUpdatePaymentMethod.mockRejectedValueOnce(new Error('Cannot disable payment method'));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Card')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Card' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot disable payment method')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Edit Payment Method' })).not.toBeInTheDocument();
+    // No flip on error: Card stays enabled (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Card' })).toBeChecked();
+    // Still no reload.
+    expect(mockListPaymentMethods).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdatePaymentMethod.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Card')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Card' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Card').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Card').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Cash is NOT inside a busy row (locked, not toggling).
+    expect(screen.getByText('Cash').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Card' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Card').closest('[aria-busy="true"]')).toBeNull();
   });
 
   it('shows a failed save error inside the dialog and stays open', async () => {

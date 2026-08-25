@@ -171,6 +171,14 @@ describe('DeliveryPartnersPage', () => {
       screen.queryByRole('heading', { name: 'Edit Delivery Partner' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'New Delivery Partner' })).not.toBeInTheDocument();
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockListDeliveryPartners).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Jahez' })).not.toBeChecked();
+    });
+    // Other rows are untouched.
+    expect(screen.getByRole('checkbox', { name: 'Enable HungerStation' })).not.toBeChecked();
   });
 
   it('a rejected row toggle shows the parsed server message on the page, dialog stays closed', async () => {
@@ -193,10 +201,44 @@ describe('DeliveryPartnersPage', () => {
         screen.getByText('Cannot disable delivery partner while orders are open'),
       ).toBeInTheDocument();
     });
+    // No flip on error: Jahez stays enabled (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Jahez' })).toBeChecked();
+    // Still no reload.
+    expect(mockListDeliveryPartners).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'Edit Delivery Partner' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'New Delivery Partner' })).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdateDeliveryPartner.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Jahez')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Jahez' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Jahez').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Jahez').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // HungerStation is not busy.
+    expect(screen.getByText('HungerStation').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Jahez' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Jahez').closest('[aria-busy="true"]')).toBeNull();
   });
 
   it('shows a failed save error inside the dialog and stays open', async () => {

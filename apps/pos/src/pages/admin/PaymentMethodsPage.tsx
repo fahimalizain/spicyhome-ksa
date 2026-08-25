@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import { ZATCA_PAYMENT_MEANS_CODE_LABELS, ZATCA_PAYMENT_MEANS_CODES } from '@spicyhome/shared';
 
 interface PaymentMethod {
@@ -28,6 +28,7 @@ export function PaymentMethodsPage() {
   });
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -121,14 +122,19 @@ export function PaymentMethodsPage() {
   }
 
   async function toggleEnabled(m: PaymentMethod) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(m.id);
     try {
       await client.paymentMethods.update(m.id, {
         enabled: !m.enabled,
       });
-      await loadData();
+      // Flip locally only — a full reload would flash the whole page.
+      setMethods((prev) => prev.map((x) => (x.id === m.id ? { ...x, enabled: !x.enabled } : x)));
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -161,12 +167,13 @@ export function PaymentMethodsPage() {
           <div
             key={m.id}
             onClick={() => openEdit(m)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === m.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === m.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={m.enabled}
-                disabled={m.id === 'cash' || m.isDeliveryPartner}
+                disabled={m.id === 'cash' || m.isDeliveryPartner || togglingId === m.id}
                 ariaLabel={m.enabled ? `Disable ${m.title}` : `Enable ${m.title}`}
                 title={
                   m.id === 'cash'

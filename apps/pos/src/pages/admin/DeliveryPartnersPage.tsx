@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 
 interface DeliveryPartner {
   id: string;
@@ -42,6 +42,7 @@ export function DeliveryPartnersPage() {
   });
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -122,16 +123,21 @@ export function DeliveryPartnersPage() {
   }
 
   async function toggleEnabled(p: DeliveryPartner) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(p.id);
     try {
       await client.deliveryPartners.update(p.id, {
         enabled: !p.enabled,
       });
-      await loadData();
+      // Flip locally only — a full reload would flash the whole page.
+      setPartners((prev) => prev.map((x) => (x.id === p.id ? { ...x, enabled: !x.enabled } : x)));
     } catch (e: unknown) {
       // e.g. 409 from the open-order disable guard (ADR 0007) — show the
       // server's message verbatim so staff understand why the toggle failed.
       setError(errorMessage(e, 'Failed to update'));
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -161,11 +167,13 @@ export function DeliveryPartnersPage() {
           <div
             key={p.id}
             onClick={() => openEdit(p)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === p.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === p.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={p.enabled}
+                disabled={togglingId === p.id}
                 ariaLabel={p.enabled ? `Disable ${p.title}` : `Enable ${p.title}`}
                 onToggle={() => toggleEnabled(p)}
               />

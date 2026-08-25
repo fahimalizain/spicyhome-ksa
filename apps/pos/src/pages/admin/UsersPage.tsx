@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type { UserResponse, RoleResponse, UpdateUserDto } from '@spicyhome/client-ts';
 
 export function UsersPage() {
@@ -20,6 +20,7 @@ export function UsersPage() {
   });
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -64,12 +65,17 @@ export function UsersPage() {
   }
 
   async function toggleActive(u: UserResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(u.id);
     try {
       await client.auth.updateUser(u.id, { isActive: !u.isActive });
-      await loadData();
+      // Flip locally only — a full reload would flash the whole page.
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, isActive: !x.isActive } : x)));
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -127,11 +133,13 @@ export function UsersPage() {
           <div
             key={u.id}
             onClick={() => openEdit(u)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === u.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === u.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={u.isActive}
+                disabled={togglingId === u.id}
                 ariaLabel={u.isActive ? `Disable ${u.name}` : `Enable ${u.name}`}
                 onToggle={() => toggleActive(u)}
               />
