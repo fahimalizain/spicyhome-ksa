@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type { CategoryResponse, PrinterResponse, UpdateCategoryDto } from '@spicyhome/client-ts';
 
 interface CategoryForm {
@@ -23,6 +23,7 @@ export function CategoriesPage() {
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -48,12 +49,18 @@ export function CategoriesPage() {
   }
 
   async function toggleActive(cat: CategoryResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(cat.id);
     try {
       await client.menu.updateCategory(cat.id, { isActive: !cat.isActive });
-      await loadData();
+      setCategories((prev) =>
+        prev.map((c) => (c.id === cat.id ? { ...c, isActive: !c.isActive } : c)),
+      );
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -161,11 +168,13 @@ export function CategoriesPage() {
             <div
               key={cat.id}
               onClick={() => openEdit(cat)}
-              className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+              aria-busy={togglingId === cat.id}
+              className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === cat.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <AdminRowEnabledCheckbox
                   checked={cat.isActive}
+                  disabled={togglingId === cat.id}
                   ariaLabel={cat.isActive ? `Disable ${cat.name}` : `Enable ${cat.name}`}
                   onToggle={() => toggleActive(cat)}
                 />

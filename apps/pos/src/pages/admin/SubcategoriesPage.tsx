@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type {
   CategoryResponse,
   SubcategoryResponse,
@@ -27,6 +27,7 @@ export function SubcategoriesPage() {
   const [form, setForm] = useState<SubcategoryForm>(emptyForm);
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -50,12 +51,18 @@ export function SubcategoriesPage() {
   }
 
   async function toggleActive(sub: SubcategoryResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(sub.id);
     try {
       await client.menu.updateSubcategory(sub.id, { isActive: !sub.isActive });
-      await loadData();
+      setSubcategories((prev) =>
+        prev.map((s) => (s.id === sub.id ? { ...s, isActive: !s.isActive } : s)),
+      );
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -133,11 +140,13 @@ export function SubcategoriesPage() {
           <div
             key={sub.id}
             onClick={() => openEdit(sub)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === sub.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === sub.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={sub.isActive}
+                disabled={togglingId === sub.id}
                 ariaLabel={sub.isActive ? `Disable ${sub.name}` : `Enable ${sub.name}`}
                 onToggle={() => toggleActive(sub)}
               />

@@ -568,8 +568,12 @@ describe('PrintersPage — config', () => {
     });
     // The wrapper stopPropagation keeps the row click (open edit) from firing.
     expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
-    // Success reloads the list.
-    expect(mockList).toHaveBeenCalledTimes(2);
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockList).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Kitchen' })).not.toBeChecked();
+    });
     // The Test button is untouched by the toggle.
     expect(screen.getByText('Test')).toBeInTheDocument();
   });
@@ -599,5 +603,39 @@ describe('PrintersPage — config', () => {
       expect(screen.getByText('isActive is locked')).toBeInTheDocument();
     });
     expect(screen.queryByRole('heading', { name: 'Edit Printer' })).not.toBeInTheDocument();
+    // No flip on error: Kitchen stays active (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable Kitchen' })).toBeChecked();
+    // Still no reload.
+    expect(mockList).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdate.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable Kitchen' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('Kitchen').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('Kitchen').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Other row is not busy.
+    expect(screen.getByText('Receipt').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable Kitchen' })).not.toBeChecked();
+    });
+    expect(screen.getByText('Kitchen').closest('[aria-busy="true"]')).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type { TableResponse } from '@spicyhome/client-ts';
 
 export function TablesPage() {
@@ -13,6 +13,7 @@ export function TablesPage() {
   const [form, setForm] = useState({ name: '', sortOrder: 0, isActive: true });
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -31,12 +32,16 @@ export function TablesPage() {
   }
 
   async function toggleActive(t: TableResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(t.id);
     try {
       await client.tables.update(t.id, { isActive: !t.isActive });
-      await loadData();
+      setTables((prev) => prev.map((x) => (x.id === t.id ? { ...x, isActive: !x.isActive } : x)));
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -104,11 +109,13 @@ export function TablesPage() {
           <div
             key={t.id}
             onClick={() => openEdit(t)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === t.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === t.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={t.isActive}
+                disabled={togglingId === t.id}
                 ariaLabel={t.isActive ? `Disable ${t.name}` : `Enable ${t.name}`}
                 onToggle={() => toggleActive(t)}
               />

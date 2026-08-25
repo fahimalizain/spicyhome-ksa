@@ -186,8 +186,12 @@ describe('TablesPage', () => {
     });
     // The wrapper stopPropagation keeps the row click (open edit) from firing.
     expect(screen.queryByRole('heading', { name: 'Edit Table' })).not.toBeInTheDocument();
-    // Success reloads the list.
-    expect(mockListTables).toHaveBeenCalledTimes(2);
+    // No full-page reload: the list is fetched once (initial load only).
+    expect(mockListTables).toHaveBeenCalledTimes(1);
+    // The row flips locally on success.
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable T1' })).not.toBeChecked();
+    });
   });
 
   it('shows the toggle error in the page error banner and keeps the dialog closed', async () => {
@@ -203,5 +207,39 @@ describe('TablesPage', () => {
       expect(screen.getByText('isActive is locked')).toBeInTheDocument();
     });
     expect(screen.queryByRole('heading', { name: 'Edit Table' })).not.toBeInTheDocument();
+    // No flip on error: T1 stays active (checked) with its Disable label.
+    expect(screen.getByRole('checkbox', { name: 'Disable T1' })).toBeChecked();
+    // Still no reload.
+    expect(mockListTables).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+  });
+
+  it('grays out only the in-flight row while the toggle is pending', async () => {
+    let resolveUpdate!: (value: unknown) => void;
+    mockUpdateTable.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('T1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Disable T1' }));
+
+    // No full-page loading flash; only the row is marked busy.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.getByText('T1').closest('[aria-busy="true"]')).not.toBeNull();
+    const busyRow = screen.getByText('T1').closest('[aria-busy="true"]')!;
+    expect(busyRow.className).toContain('opacity-50');
+    // Other row is not busy.
+    expect(screen.getByText('T2').closest('[aria-busy="true"]')).toBeNull();
+
+    resolveUpdate({});
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Enable T1' })).not.toBeChecked();
+    });
+    expect(screen.getByText('T1').closest('[aria-busy="true"]')).toBeNull();
   });
 });

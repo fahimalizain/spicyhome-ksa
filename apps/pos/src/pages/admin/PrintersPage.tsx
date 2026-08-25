@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { client } from '../../api';
 import { Dialog } from '../../components/Dialog';
-import { AdminRowEnabledCheckbox } from './AdminRowEnabledCheckbox';
+import { AdminRowEnabledCheckbox, ADMIN_ROW_BUSY_CLASS } from './AdminRowEnabledCheckbox';
 import type { CreatePrinterDto, UpdatePrinterDto, PrinterResponse } from '@spicyhome/client-ts';
 import { DEFAULT_PRINTER_CONFIG } from '@spicyhome/shared';
 import type { PrinterConfig, ArabicEncoding } from '@spicyhome/shared';
@@ -78,6 +78,7 @@ export function PrintersPage() {
   const [loadingQueues, setLoadingQueues] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -96,12 +97,16 @@ export function PrintersPage() {
   }
 
   async function toggleActive(p: PrinterResponse) {
+    if (togglingId !== null) return;
     setError('');
+    setTogglingId(p.id);
     try {
       await client.printers.update(p.id, { isActive: !p.isActive });
-      await loadData();
+      setPrinters((prev) => prev.map((x) => (x.id === p.id ? { ...x, isActive: !x.isActive } : x)));
     } catch (e: any) {
       setError(e.message || 'Failed to update');
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -214,11 +219,13 @@ export function PrintersPage() {
           <div
             key={p.id}
             onClick={() => openEdit(p)}
-            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50"
+            aria-busy={togglingId === p.id}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === p.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <AdminRowEnabledCheckbox
                 checked={p.isActive}
+                disabled={togglingId === p.id}
                 ariaLabel={p.isActive ? `Disable ${p.name}` : `Enable ${p.name}`}
                 onToggle={() => toggleActive(p)}
               />
