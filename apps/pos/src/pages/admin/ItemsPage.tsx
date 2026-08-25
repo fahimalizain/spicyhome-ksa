@@ -173,7 +173,7 @@ export function ItemsPage() {
               }}
               placeholder="Search…"
               aria-label="Search items"
-              className="w-full h-[48px] pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+              className="w-full min-h-touch pl-3 pr-8 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
             />
             {itemSearch && (
               <button
