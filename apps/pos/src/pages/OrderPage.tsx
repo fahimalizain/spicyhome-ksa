@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { halalasToSar } from '@spicyhome/shared';
 import { client } from '../api';
+import { realtime } from '../realtime';
 import { useCart } from '../hooks/useCart';
 import { usePermissions } from '../hooks/usePermissions';
 import { RefundPanel } from '../components/RefundPanel';
@@ -300,6 +301,30 @@ export function OrderPage() {
     loadOpenOrders();
   }, []);
 
+  // Reload the menu when items are created/updated elsewhere (e.g. an admin
+  // toggling isActive) and on WS reconnect, so the picker stays fresh without
+  // leaving the page. loadMenu is safe to re-run: it only uses client + setters.
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    unsubs.push(
+      realtime.subscribe('item.created', () => {
+        void loadMenu();
+      }),
+    );
+    unsubs.push(
+      realtime.subscribe('item.updated', () => {
+        void loadMenu();
+      }),
+    );
+    realtime.onReconnect(() => {
+      void loadMenu();
+    });
+    return () => {
+      for (const unsub of unsubs) unsub();
+      realtime.offReconnect();
+    };
+  }, []);
+
   // Active users for the header "Created by" line — best-effort like the
   // Orders page filter dropdown: failures leave the line hidden.
   useEffect(() => {
@@ -424,12 +449,13 @@ export function OrderPage() {
       setCatalogItems(allItems);
       // Default browse selection: first active category by sortOrder with
       // its "All" subcategory chip (shows every item in that category).
+      // Do NOT reset an already-selected subcategory here: a later WS-driven
+      // reload must keep the user's current subcategory chip.
       setSelectedCategory((prev) => {
         if (prev != null) return prev;
         const first = [...activeCats].sort((a, b) => a.sortOrder - b.sortOrder)[0];
         return first ? first.id : null;
       });
-      setSelectedSubcategory(null);
     } catch {
       setError('Failed to load menu');
     }
