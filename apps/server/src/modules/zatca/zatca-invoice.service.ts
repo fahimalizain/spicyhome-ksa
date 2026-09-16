@@ -274,6 +274,7 @@ export class ZatcaInvoiceService {
           seller,
           items: invItems,
           discountHalalas: order.discountHalalas || 0,
+          allowanceReason: order.promotionName ?? undefined,
           prevInvoiceHash,
           paymentMeans: buildInvoicePaymentMeans(
             paymentRows.map((p) => ({
@@ -318,15 +319,21 @@ export class ZatcaInvoiceService {
         // same values that went into <cbc:IssueDate> and <cbc:IssueTime>.
         // Any mismatch causes "invoiceTimeStamp_QRCODE_INVALID" warning.
         // Note: no timezone offset suffix — ZATCA expects naive +03:00 time.
+        // Tags 4/5: payable + post-Allowance VAT when promoted (ADR 0009);
+        // unpromoted keeps line-sum order.vatHalalas (mixed-rate safe).
         const timestampIso = `${issueDate}T${issueTime}`;
+        const payable = order.totalHalalas - (order.discountHalalas || 0);
+        const qrVat = order.discountHalalas
+          ? decomposeVat(payable, 1500).vatHalalas
+          : order.vatHalalas;
         // Tag 9: raw ECDSA signature bytes from the ZATCA-issued X.509 cert
         const certSigB64 = extractCertSignature(certForXml);
         const tlvInput: TLVInput = {
           sellerName,
           vatNumber,
           timestamp: timestampIso,
-          totalHalalas: order.totalHalalas,
-          vatHalalas: order.vatHalalas,
+          totalHalalas: payable,
+          vatHalalas: qrVat,
           invoiceHashBase64: invoiceHashB64,
           signatureBase64: signatureB64,
           // Tag 8: PublicKey.getEncoded() = SubjectPublicKeyInfo DER bytes
@@ -414,24 +421,25 @@ export class ZatcaInvoiceService {
       throw new Error(`Refund ${refundId} not found`);
     }
 
-    // 3. Load refund items
+    // 3. Load order (Promotion name for Allowance reason)
+    const order = this.db.select().from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) {
+      throw new Error(`Order ${orderId} not found`);
+    }
+
+    // 4. Load refund items
     const refundItems = this.db
       .select()
       .from(orderRefundItems)
       .where(eq(orderRefundItems.refundId, refundId))
       .all();
 
-    // 4. Compute refund totals from refund items
-    let vatHalalas = 0;
-    let totalHalalas = 0;
-    for (const ri of refundItems) {
-      const lineTotal = ri.unitPriceHalalas * ri.qty;
-      totalHalalas += lineTotal;
-      const decomposed = decomposeVat(lineTotal, ri.vatRateBp);
-      vatHalalas += decomposed.vatHalalas;
-    }
+    // 5. QR + stored credit-note totals: use refund header (payable /
+    // post-Allowance VAT when promoted — slice 6). Do not recompute from lines.
+    const totalHalalas = refund.totalHalalas;
+    const vatHalalas = refund.vatHalalas;
 
-    // 5. Load seller config
+    // 6. Load seller config
     const sellerName = this.printersService.getSetting('seller_name_ar', '');
     const vatNumber = this.printersService.getSetting('vat_number', '300000000000');
     const crNumber = this.printersService.getSetting('cr_number', '');
@@ -452,7 +460,7 @@ export class ZatcaInvoiceService {
       country: sellerCountry,
     };
 
-    // 6. Load keys and certificate
+    // 7. Load keys and certificate
     const env = this.getEnv();
     const orgUnit = this.getOrgUnit();
     const privateKeyHex = this.getPrivateKey(env, orgUnit);
@@ -462,7 +470,7 @@ export class ZatcaInvoiceService {
 
     const certBase64 = this.getCertificate(env, orgUnit);
 
-    // 7. Build invoice items from refund items
+    // 8. Build invoice items from refund items
     const invItems: InvoiceItemInput[] = refundItems.map((ri) => ({
       name: ri.itemName,
       unitPriceHalalas: ri.unitPriceHalalas,
@@ -470,7 +478,7 @@ export class ZatcaInvoiceService {
       qty: ri.qty,
     }));
 
-    // 8. Timestamps
+    // 9. Timestamps
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date(now * 1000);
     const issueDate = nowDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Riyadh' });
@@ -479,16 +487,16 @@ export class ZatcaInvoiceService {
       hour12: false,
     });
 
-    // 9. documentId must exist BEFORE the write transaction — a missing ID is
+    // 10. documentId must exist BEFORE the write transaction — a missing ID is
     // a fail-fast that must never consume an ICV.
     if (!refund.documentId) {
       throw new Error(`Refund ${refundId} is missing document_id`);
     }
 
-    // 10. Generate UUID (an orphaned UUID on rollback is harmless)
+    // 11. Generate UUID (an orphaned UUID on rollback is harmless)
     const invUuid = require('crypto').randomUUID();
 
-    // 11. Single atomic transaction: allocate ICV + build + sign + insert.
+    // 12. Single atomic transaction: allocate ICV + build + sign + insert.
     // The `last_icv` settings bump and the zatca_credit_notes row commit
     // together — a failure anywhere in this block can never leave an ICV
     // gap with no matching row.
@@ -505,6 +513,8 @@ export class ZatcaInvoiceService {
         issueTime,
         seller,
         items: invItems,
+        discountHalalas: refund.discountHalalas || 0,
+        allowanceReason: order.promotionName ?? undefined,
         prevInvoiceHash,
         billingReferenceId: originalInvoice.uuid,
         // Single block from the refund tender: KSA-10 reason + method snapshot
@@ -519,7 +529,7 @@ export class ZatcaInvoiceService {
 
       const unsignedXml = buildUnsignedInvoiceXML(xmlInput);
 
-      // 12. Compute invoice hash and sign
+      // 13. Compute invoice hash and sign
       const invoiceHashB64 = computeInvoiceHash(unsignedXml);
       const invoiceHashHex = computeInvoiceHashHex(unsignedXml);
       const signatureB64 = signHashBase64(invoiceHashHex, privateKeyHex);
@@ -531,7 +541,7 @@ export class ZatcaInvoiceService {
         certForXml,
       );
 
-      // 13. QR TLV
+      // 14. QR TLV — tags 4/5 from refund header (payable / post-VAT)
       const timestampIso = `${issueDate}T${issueTime}`;
       const certSigB64 = extractCertSignature(certForXml);
       const tlvInput: TLVInput = {
@@ -547,12 +557,12 @@ export class ZatcaInvoiceService {
       };
       const qrTlvBase64 = encodeZatcaTLV(tlvInput);
 
-      // 14. Inject QR into signed XML
+      // 15. Inject QR into signed XML
       const finalSignedXml = injectQrIntoXml(signedXml, qrTlvBase64);
 
       const finalInvoiceHash = invoiceHashB64;
 
-      // 15. Insert credit note — same transaction as the ICV allocation
+      // 16. Insert credit note — same transaction as the ICV allocation
       const result = tx
         .insert(zatcaCreditNotes)
         .values({
