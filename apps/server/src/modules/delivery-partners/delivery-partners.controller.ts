@@ -30,7 +30,6 @@ export class DeliveryPartnersController {
   constructor(private readonly deliveryPartnersService: DeliveryPartnersService) {}
 
   @Get()
-  @RequiresPermission('manage_settings')
   @ApiOperation({ summary: 'List all delivery partners (including disabled)' })
   @ApiOkResponse({ description: 'List of delivery partners', type: [DeliveryPartnerResponse] })
   list() {
