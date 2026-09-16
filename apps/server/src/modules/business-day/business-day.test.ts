@@ -244,6 +244,22 @@ describe('BusinessDayService', () => {
       expect(closed.totalVatHalalas).toBe(900);
       expect(closed.orderCount).toBe(2);
     });
+
+    it('sums payable and post-Allowance VAT for promoted paid orders', async () => {
+      // Canonical 100.00 gross / 10% Discount → sales 90.00, VAT 11.74.
+      await service.openDay({ openingCashHalalas: 0 }, 1);
+      const day = service.getOpenDay()!;
+
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, discount_halalas, created_at, updated_at)
+        VALUES (1, 1, 'promo', 'dine_in', ${day.id}, 'paid', 8696, 1304, 10000, 1000, ${now}, ${now});
+      `);
+
+      const closed = await service.closeDay({ closingCashHalalas: 9000 }, 1);
+      expect(closed.totalSalesHalalas).toBe(9000);
+      expect(closed.totalVatHalalas).toBe(1174);
+      expect(closed.orderCount).toBe(1);
+    });
   });
 
   describe('getCurrentDay', () => {

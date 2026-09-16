@@ -460,6 +460,120 @@ describe('ReceiptBuilder', () => {
     expect(s).toContain('51.75');
   });
 
+  describe('Promotion / Discount totals (ADR 0009 §8)', () => {
+    /** Canonical 100.00 gross / 10% National Day / post-Allowance VAT 11.74. */
+    const promoOpts: ReceiptOptions = {
+      ...baseOpts,
+      items: [
+        {
+          qty: 1,
+          name: 'Set Meal',
+          nameAr: null,
+          unitPriceHalalas: 10000,
+          totalHalalas: 10000,
+          vatRateBp: 1500,
+        },
+      ],
+      // Line-sum excl. stays as cashier explanation (pre-discount).
+      subtotalHalalas: 8696,
+      // Callers pass post-Allowance VAT.
+      vatHalalas: 1174,
+      totalHalalas: 10000,
+      discountHalalas: 1000,
+      promotionName: 'National Day',
+      promotionNameAr: '\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0648\u0637\u0646\u064A', // اليوم الوطني
+      promotionPercentBp: 1000,
+    };
+
+    it('prints VAT 11.74, TOTAL 100.00, Promotion −10.00, PAYABLE 90.00', () => {
+      const buf = builder.build(promoOpts);
+      const s = plainText(buf);
+      const lines = s.split('\n');
+
+      // Totals VAT line is "VAT (15.0%)" — not the seller "VAT: …" header.
+      const vatLine = lines.find((l) => l.startsWith('VAT ('));
+      expect(vatLine).toBeDefined();
+      expect(vatLine).toContain('11.74');
+
+      const totalLine = lines.find((l) => l.startsWith('TOTAL (incl. VAT)'));
+      expect(totalLine).toBeDefined();
+      expect(totalLine).toContain('100.00');
+
+      const promoLine = lines.find((l) => l.includes('National Day'));
+      expect(promoLine).toBeDefined();
+      expect(promoLine).toContain('10%');
+      expect(promoLine).toContain('-10.00');
+
+      const payableLine = lines.find((l) => l.startsWith('PAYABLE'));
+      expect(payableLine).toBeDefined();
+      expect(payableLine).toContain('90.00');
+    });
+
+    it('hides Promotion and PAYABLE when discount is 0 or unset', () => {
+      const zero = plainText(builder.build({ ...promoOpts, discountHalalas: 0 }));
+      expect(zero).not.toContain('National Day');
+      expect(zero).not.toContain('PAYABLE');
+      expect(zero).not.toContain('-10.00');
+
+      const unset = plainText(
+        builder.build({
+          ...baseOpts,
+          // no discountHalalas
+        }),
+      );
+      expect(unset).not.toContain('PAYABLE');
+      expect(unset).not.toContain('National Day');
+    });
+
+    it('prints Arabic Promotion name when promotionNameAr is set', () => {
+      const buf = builder.build({
+        ...promoOpts,
+        arabic: { encoding: 'utf8', codePage: 0, visualRtl: false, renderMode: 'charset' },
+      });
+      const arName = '\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0648\u0637\u0646\u064A';
+      expect(findSequence(buf, encodeUtf8(shapeArabic(arName)))).toBe(true);
+    });
+
+    it('open-order AMOUNT DUE uses payable − paid', () => {
+      const buf = builder.build({
+        ...promoOpts,
+        documentKind: 'open_order',
+        paidHalalas: 2000,
+      });
+      const dueLine = plainText(buf)
+        .split('\n')
+        .find((l) => l.startsWith('AMOUNT DUE'));
+      expect(dueLine).toBeDefined();
+      // payable 90.00 − paid 20.00 = 70.00
+      expect(dueLine).toContain('70.00');
+    });
+
+    it('credit note: PAYABLE equals totalHalalas (already payable; no double-subtract)', () => {
+      // Refund header stores payable total 9000 + allocated discount 1000.
+      const buf = builder.build({
+        ...promoOpts,
+        documentKind: 'credit_note',
+        documentId: 'REF26-0001',
+        originalDocumentId: 'INV26-0042',
+        // Already-payable amounts from slice 6.
+        subtotalHalalas: 7826,
+        vatHalalas: 1174,
+        totalHalalas: 9000,
+        discountHalalas: 1000,
+      });
+      const lines = plainText(buf).split('\n');
+      const totalLine = lines.find((l) => l.startsWith('TOTAL (incl. VAT)'));
+      expect(totalLine).toContain('90.00');
+      const promoLine = lines.find((l) => l.includes('National Day'));
+      expect(promoLine).toContain('-10.00');
+      const payableLine = lines.find((l) => l.startsWith('PAYABLE'));
+      expect(payableLine).toBeDefined();
+      // Must stay 90.00 — do not subtract discount again (would be 80.00).
+      expect(payableLine).toContain('90.00');
+      expect(payableLine).not.toContain('80.00');
+    });
+  });
+
   it('renders "VAT" without rate when vatRateBp omitted', () => {
     const opts = { ...baseOpts, vatRateBp: undefined };
     const s = str(builder.build(opts));

@@ -28,7 +28,11 @@ import {
   zatcaCreditNotes,
   zatcaInvoices,
 } from '@spicyhome/db';
-import { safeParsePrinterConfig } from '@spicyhome/shared';
+import {
+  orderPayableHalalas,
+  orderPostAllowanceVatHalalas,
+  safeParsePrinterConfig,
+} from '@spicyhome/shared';
 import { KitchenTicketBuilder, KitchenTicketItem } from './kitchen-ticket-builder';
 import { ReceiptBuilder, ReceiptItem } from './receipt-builder';
 import { TestTicketBuilder } from './test-ticket-builder';
@@ -152,8 +156,17 @@ export function buildSimplifiedInvoiceBuffer(
     deliveryExternalRef: order.deliveryExternalRef ?? undefined,
     items: buildReceiptItemsFromOrderItems(db, oiRows),
     subtotalHalalas: order.subtotalHalalas,
-    vatHalalas: order.vatHalalas,
+    // Post-Allowance VAT on tax paper (ADR 0009 §8); total stays gross.
+    vatHalalas: orderPostAllowanceVatHalalas(
+      order.totalHalalas,
+      order.discountHalalas ?? 0,
+      order.vatHalalas,
+    ),
     totalHalalas: order.totalHalalas,
+    discountHalalas: order.discountHalalas ?? 0,
+    promotionName: order.promotionName ?? undefined,
+    promotionNameAr: order.promotionNameAr ?? undefined,
+    promotionPercentBp: order.promotionPercentBp ?? undefined,
     vatRateBp: sharedVatRateBp(oiRows.map((oi) => oi.vatRateBp)),
     arabic: safeParsePrinterConfig(printer.config).arabic,
     kickDrawer: opts?.kickDrawer ?? false,
@@ -206,8 +219,17 @@ export function buildOpenOrderReceiptBuffer(
     deliveryExternalRef: order.deliveryExternalRef ?? undefined,
     items: buildReceiptItemsFromOrderItems(db, oiRows),
     subtotalHalalas: order.subtotalHalalas,
-    vatHalalas: order.vatHalalas,
+    // Post-Allowance VAT; AMOUNT DUE uses payable (builder: total − discount).
+    vatHalalas: orderPostAllowanceVatHalalas(
+      order.totalHalalas,
+      order.discountHalalas ?? 0,
+      order.vatHalalas,
+    ),
     totalHalalas: order.totalHalalas,
+    discountHalalas: order.discountHalalas ?? 0,
+    promotionName: order.promotionName ?? undefined,
+    promotionNameAr: order.promotionNameAr ?? undefined,
+    promotionPercentBp: order.promotionPercentBp ?? undefined,
     paidHalalas,
     vatRateBp: sharedVatRateBp(oiRows.map((oi) => oi.vatRateBp)),
     arabic: safeParsePrinterConfig(printer.config).arabic,
@@ -332,9 +354,16 @@ export function buildCreditNoteBuffer(
     deliveryPartnerTitle: getDeliveryPartnerTitle(db, order),
     deliveryExternalRef: order.deliveryExternalRef ?? undefined,
     items: receiptItems,
+    // Refund header already stores payable + post-Allowance VAT (slice 6).
+    // Promotion label/percent come from the order snapshot; discount is the
+    // allocated refund Discount. Builder must not subtract discount again.
     subtotalHalalas: refund.subtotalHalalas,
     vatHalalas: refund.vatHalalas,
     totalHalalas: refund.totalHalalas,
+    discountHalalas: refund.discountHalalas ?? 0,
+    promotionName: order.promotionName ?? undefined,
+    promotionNameAr: order.promotionNameAr ?? undefined,
+    promotionPercentBp: order.promotionPercentBp ?? undefined,
     vatRateBp: sharedVatRateBp(rifRows.map((ri) => ri.vatRateBp)),
     arabic: safeParsePrinterConfig(printer.config).arabic,
     kickDrawer: opts?.kickDrawer ?? false,
@@ -514,8 +543,16 @@ function loadZReportPrintOptions(db: PrintDocumentsDb, dayId: number): ZReportOp
     status: day.status,
     openingCashHalalas: day.openingCashHalalas,
     closingCashHalalas: day.closingCashHalalas ?? 0,
-    totalSalesHalalas: paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0),
-    totalVatHalalas: paidOrders.reduce((sum, o) => sum + o.vatHalalas, 0),
+    // Payable + post-Allowance VAT (ADR 0009 §9); item-wise stays gross.
+    totalSalesHalalas: paidOrders.reduce(
+      (sum, o) => sum + orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0),
+      0,
+    ),
+    totalVatHalalas: paidOrders.reduce(
+      (sum, o) =>
+        sum + orderPostAllowanceVatHalalas(o.totalHalalas, o.discountHalalas ?? 0, o.vatHalalas),
+      0,
+    ),
     paidOrderCount: paidOrders.length,
     voidedOrderCount: voidedOrders.length,
     restaurantName: getSetting(db, 'restaurant_name', 'SpicyHome'),

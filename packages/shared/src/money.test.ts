@@ -5,6 +5,8 @@ import {
   computeVatInclusive,
   vatRoundTripError,
   applyPromotionPercent,
+  orderPayableHalalas,
+  orderPostAllowanceVatHalalas,
 } from './money';
 
 describe('sarToHalalas', () => {
@@ -402,5 +404,50 @@ describe('applyPromotionPercent', () => {
         /applyPromotionPercent: vatRateBp/,
       );
     });
+  });
+});
+
+describe('orderPayableHalalas', () => {
+  it('canonical 100.00 / 10.00 → payable 90.00', () => {
+    expect(orderPayableHalalas(10000, 1000)).toBe(9000);
+  });
+
+  it('discount 0 → payable equals total', () => {
+    expect(orderPayableHalalas(10000, 0)).toBe(10000);
+  });
+
+  it('throws when discount exceeds total', () => {
+    expect(() => orderPayableHalalas(1000, 1001)).toThrow(/orderPayableHalalas/);
+  });
+
+  it('throws on negative or non-integer inputs', () => {
+    expect(() => orderPayableHalalas(-1, 0)).toThrow(/orderPayableHalalas/);
+    expect(() => orderPayableHalalas(100, -1)).toThrow(/orderPayableHalalas/);
+    expect(() => orderPayableHalalas(1.5, 0)).toThrow(/orderPayableHalalas/);
+  });
+});
+
+describe('orderPostAllowanceVatHalalas', () => {
+  it('canonical 10000/1000/1304 → post-Allowance VAT 1174', () => {
+    // payable 9000 → decomposeVat(9000, 1500).vat = 1174
+    expect(orderPostAllowanceVatHalalas(10000, 1000, 1304)).toBe(1174);
+  });
+
+  it('discount 0 → returns line VAT unchanged (mixed-rate safe)', () => {
+    expect(orderPostAllowanceVatHalalas(10000, 0, 1304)).toBe(1304);
+    // Mixed 0%+15% line sum must not be re-decomposed when no Discount.
+    expect(orderPostAllowanceVatHalalas(11500, 0, 1500)).toBe(1500);
+  });
+
+  it('throws when discount exceeds total', () => {
+    expect(() => orderPostAllowanceVatHalalas(1000, 1001, 130)).toThrow(
+      /orderPostAllowanceVatHalalas/,
+    );
+  });
+
+  it('throws on negative or non-integer inputs', () => {
+    expect(() => orderPostAllowanceVatHalalas(-1, 0, 0)).toThrow(/orderPostAllowanceVatHalalas/);
+    expect(() => orderPostAllowanceVatHalalas(100, -1, 0)).toThrow(/orderPostAllowanceVatHalalas/);
+    expect(() => orderPostAllowanceVatHalalas(100, 0, -1)).toThrow(/orderPostAllowanceVatHalalas/);
   });
 });

@@ -182,3 +182,69 @@ export function applyPromotionPercent(
     vatHalalas: payableDecomp.vatHalalas,
   };
 }
+
+/**
+ * Guest-facing payable for an order: gross total minus inclusive Discount.
+ *
+ * Both arguments must be non-negative integers; discount must not exceed total.
+ * When discount is 0 this is a no-op (payable === total).
+ */
+export function orderPayableHalalas(totalHalalas: number, discountHalalas: number): number {
+  if (!Number.isInteger(totalHalalas) || totalHalalas < 0) {
+    throw new Error(
+      `orderPayableHalalas: totalHalalas must be a non-negative integer, got ${totalHalalas}`,
+    );
+  }
+  if (!Number.isInteger(discountHalalas) || discountHalalas < 0) {
+    throw new Error(
+      `orderPayableHalalas: discountHalalas must be a non-negative integer, got ${discountHalalas}`,
+    );
+  }
+  if (discountHalalas > totalHalalas) {
+    throw new Error(
+      `orderPayableHalalas: discountHalalas (${discountHalalas}) must not exceed totalHalalas (${totalHalalas})`,
+    );
+  }
+  return totalHalalas - discountHalalas;
+}
+
+/**
+ * Post-Allowance VAT for tax paper and reports.
+ *
+ * When discount is 0, return the stored line-sum VAT unchanged (mixed-rate safe).
+ * Otherwise re-decompose payable at 15% (restaurant-normal; ADR 0009 §10).
+ *
+ * Do not use this for credit-note headers: refunds already store post-Allowance
+ * VAT on `order_refunds.vat_halalas` (slice 6).
+ */
+export function orderPostAllowanceVatHalalas(
+  totalHalalas: number,
+  discountHalalas: number,
+  lineVatHalalas: number,
+): number {
+  if (!Number.isInteger(totalHalalas) || totalHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: totalHalalas must be a non-negative integer, got ${totalHalalas}`,
+    );
+  }
+  if (!Number.isInteger(discountHalalas) || discountHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: discountHalalas must be a non-negative integer, got ${discountHalalas}`,
+    );
+  }
+  if (!Number.isInteger(lineVatHalalas) || lineVatHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: lineVatHalalas must be a non-negative integer, got ${lineVatHalalas}`,
+    );
+  }
+  if (discountHalalas > totalHalalas) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: discountHalalas (${discountHalalas}) must not exceed totalHalalas (${totalHalalas})`,
+    );
+  }
+  if (discountHalalas === 0) {
+    return lineVatHalalas;
+  }
+  const payable = totalHalalas - discountHalalas;
+  return decomposeVat(payable, 1500).vatHalalas;
+}
