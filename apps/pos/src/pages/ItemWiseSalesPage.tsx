@@ -8,6 +8,7 @@ import type {
 } from '@spicyhome/client-ts';
 import { client } from '../api';
 import { ReportFilters } from '../components/reports/ReportFilters';
+import { ReportTable, REPORT_TF, REPORT_TH } from '../components/reports/ReportTable';
 import { SarAmount } from '../components/reports/SarAmount';
 
 export function ItemWiseSalesPage() {
@@ -106,143 +107,124 @@ export function ItemWiseSalesPage() {
   const footer: ItemWiseSalesFooter | null = report?.footer ?? null;
 
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden p-4">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <h1 className="text-xl font-bold text-white">Item-wise Sales</h1>
       </div>
 
-      <ReportFilters
-        idPrefix="item-wise"
-        from={from}
-        to={to}
-        onFromChange={setFrom}
-        onToChange={setTo}
-        type={type}
-        onTypeChange={setType}
-        partner={partner}
-        onPartnerChange={setPartner}
-        partners={partners}
-        extra={{
-          id: 'item-wise-category',
-          label: 'Category',
-          value: category,
-          onChange: setCategory,
-          options: [
-            { value: '', label: 'All' },
-            { value: 'none', label: 'Uncategorized' },
-            ...categories.map((c) => ({ value: String(c.id), label: c.name })),
-          ],
-        }}
-      />
-
-      {error && <div className="text-red-400 text-sm mb-3">{error}</div>}
-
-      <div className="relative">
-        <div className="overflow-x-auto scrollbar-thin rounded-lg border border-gray-700">
-          <table className="w-full text-sm text-gray-300 whitespace-nowrap">
-            <thead>
-              <tr className="bg-gray-800 text-left text-xs uppercase tracking-wide text-gray-400">
-                <th className="sticky top-0 bg-gray-800 px-3 py-2">Item</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2">Category</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Qty sold</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Gross</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Refunded qty</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Refunded</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Net qty</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">Net</th>
-                <th className="sticky top-0 bg-gray-800 px-3 py-2 text-right">VAT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.itemId ?? row.itemName}
-                  className="border-t border-gray-700/60 hover:bg-gray-800/60"
-                >
-                  <td className="px-3 py-2 text-white font-medium">{row.itemName}</td>
-                  <td className="px-3 py-2">{row.categoryName}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.qtySold}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={row.grossHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.refundedQty}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={row.refundedHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.netQty}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={row.netHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={row.vatHalalas} />
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
-                    No rows in this range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {footer && (
-              <tfoot>
-                <tr className="border-t border-gray-600 bg-gray-800/80 font-semibold text-white">
-                  <td className="px-3 py-2" colSpan={2}>
-                    Totals
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{footer.qtySold}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={footer.grossHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{footer.refundedQty}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={footer.refundedHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{footer.netQty}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={footer.netHalalas} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="flex justify-end">
-                      <SarAmount halalas={footer.vatHalalas} />
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-
-        {/* List-area spinner during filter-driven reloads — the header and
-            filter bar stay mounted above. */}
-        {listLoading && (
-          <div
-            className="absolute inset-0 z-10 flex items-center justify-center bg-gray-900/60 rounded-lg"
-            aria-busy="true"
-          >
-            <div className="flex items-center gap-2 text-gray-400">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-brand-500" />
-              <span>Loading...</span>
-            </div>
-          </div>
-        )}
+      <div className="shrink-0">
+        <ReportFilters
+          idPrefix="item-wise"
+          from={from}
+          to={to}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          type={type}
+          onTypeChange={setType}
+          partner={partner}
+          onPartnerChange={setPartner}
+          partners={partners}
+          extra={{
+            id: 'item-wise-category',
+            label: 'Category',
+            value: category,
+            onChange: setCategory,
+            options: [
+              { value: '', label: 'All' },
+              { value: 'none', label: 'Uncategorized' },
+              ...categories.map((c) => ({ value: String(c.id), label: c.name })),
+            ],
+          }}
+        />
       </div>
+
+      {error && <div className="text-red-400 text-sm mb-3 shrink-0">{error}</div>}
+
+      <ReportTable loading={listLoading}>
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
+            <th className={REPORT_TH}>Item</th>
+            <th className={REPORT_TH}>Category</th>
+            <th className={`${REPORT_TH} text-right`}>Qty sold</th>
+            <th className={`${REPORT_TH} text-right`}>Gross</th>
+            <th className={`${REPORT_TH} text-right`}>Refunded qty</th>
+            <th className={`${REPORT_TH} text-right`}>Refunded</th>
+            <th className={`${REPORT_TH} text-right`}>Net qty</th>
+            <th className={`${REPORT_TH} text-right`}>Net</th>
+            <th className={`${REPORT_TH} text-right`}>VAT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.itemId ?? row.itemName} className="hover:bg-gray-800/60">
+              <td className="px-3 py-2 text-white font-medium">{row.itemName}</td>
+              <td className="px-3 py-2">{row.categoryName}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{row.qtySold}</td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                <span className="flex justify-end">
+                  <SarAmount halalas={row.grossHalalas} />
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{row.refundedQty}</td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                <span className="flex justify-end">
+                  <SarAmount halalas={row.refundedHalalas} />
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.netQty}</td>
+              <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                <span className="flex justify-end">
+                  <SarAmount halalas={row.netHalalas} />
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                <span className="flex justify-end">
+                  <SarAmount halalas={row.vatHalalas} />
+                </span>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
+                No rows in this range.
+              </td>
+            </tr>
+          )}
+        </tbody>
+        {footer && (
+          <tfoot>
+            <tr className="font-semibold text-white">
+              <td className={REPORT_TF} colSpan={2}>
+                Totals
+              </td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>{footer.qtySold}</td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>
+                <span className="flex justify-end">
+                  <SarAmount halalas={footer.grossHalalas} />
+                </span>
+              </td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>{footer.refundedQty}</td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>
+                <span className="flex justify-end">
+                  <SarAmount halalas={footer.refundedHalalas} />
+                </span>
+              </td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>{footer.netQty}</td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>
+                <span className="flex justify-end">
+                  <SarAmount halalas={footer.netHalalas} />
+                </span>
+              </td>
+              <td className={`${REPORT_TF} text-right tabular-nums`}>
+                <span className="flex justify-end">
+                  <SarAmount halalas={footer.vatHalalas} />
+                </span>
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </ReportTable>
     </div>
   );
 }

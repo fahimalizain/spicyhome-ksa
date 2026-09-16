@@ -107,6 +107,10 @@ describe('ItemWiseSalesPage', () => {
     expect(screen.getAllByLabelText('SAR 6.00').length).toBeGreaterThanOrEqual(1); // VAT
     // Footer comes from the API footer, not client-side sums.
     expect(screen.getByText('Totals')).toBeInTheDocument();
+    expect(screen.getByTestId('report-table-scroll')).toContainElement(screen.getByRole('table'));
+    expect(screen.getByRole('columnheader', { name: 'Item' })).toHaveClass('sticky');
+    expect(screen.getByText('Totals')).toHaveClass('sticky', 'bottom-0');
+    expect(screen.getByTestId('report-table-spacer')).toBeInTheDocument();
   });
 
   it('sends category none when Uncategorized is picked', async () => {

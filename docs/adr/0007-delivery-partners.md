@@ -309,7 +309,7 @@ ledger tells the full story without altering ADR 0004's contract.
 
 | Method   | Path                     | Auth              | Description                                                                        |
 | -------- | ------------------------ | ----------------- | ---------------------------------------------------------------------------------- |
-| `GET`    | `/delivery-partners`     | `manage_settings` | List all (incl. disabled), `sort_order ASC, title ASC`                             |
+| `GET`    | `/delivery-partners`     | authenticated     | List all (incl. disabled), `sort_order ASC, title ASC`                             |
 | `POST`   | `/delivery-partners`     | `manage_settings` | Create `{ title }` → slug; auto-creates the linked payment method (atomic)         |
 | `PATCH`  | `/delivery-partners/:id` | `manage_settings` | Update `title` / `enabled` / `sort_order`; mirrors `title`/`enabled` to the method |
 | `DELETE` | —                        | —                 | Not offered (soft-disable only)                                                    |
