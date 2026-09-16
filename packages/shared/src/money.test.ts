@@ -4,6 +4,7 @@ import {
   decomposeVat,
   computeVatInclusive,
   vatRoundTripError,
+  applyPromotionPercent,
 } from './money';
 
 describe('sarToHalalas', () => {
@@ -213,5 +214,193 @@ describe('vatRoundTripError', () => {
   it('returns 0 for exact multiples', () => {
     // 115 * 10000 / 11500 = 100 exactly → recompose: 100 * 11500 / 10000 = 115 exactly
     expect(vatRoundTripError(115, 1500)).toBe(0);
+  });
+});
+
+describe('applyPromotionPercent', () => {
+  const VAT_15 = 1500;
+
+  describe('canonical identity (100.00 SAR / 10% / 15% VAT)', () => {
+    it('returns Discount 10.00, payable 90.00, Allowance 8.70, VAT 11.74', () => {
+      // gross 10000, percentBp 1000, vatRateBp 1500
+      // payable = round(10000 × 9000 / 10000) = 9000
+      // discount = 1000
+      // allowance = decompose(10000).excl − decompose(9000).excl = 8696 − 7826 = 870
+      // vat = decompose(9000).vat = 1174
+      const result = applyPromotionPercent(10000, 1000, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: 1000,
+        payableHalalas: 9000,
+        allowanceHalalas: 870,
+        vatHalalas: 1174,
+      });
+    });
+
+    it('defaults vatRateBp to 1500', () => {
+      expect(applyPromotionPercent(10000, 1000)).toEqual(
+        applyPromotionPercent(10000, 1000, VAT_15),
+      );
+    });
+  });
+
+  describe('payable-first rounding (not round(gross × percent))', () => {
+    it('1.15 SAR / 10% → discount 11, not story-12 amount 12', () => {
+      // payable = round(115 × 9000 / 10000) = round(103.5) = 104
+      // discount = 115 − 104 = 11
+      // NOT round(115 × 0.1) = 12
+      const result = applyPromotionPercent(115, 1000, VAT_15);
+      expect(result.payableHalalas).toBe(104);
+      expect(result.discountHalalas).toBe(11);
+      expect(result.discountHalalas).not.toBe(12);
+      // allowance = decompose(115).excl − decompose(104).excl = 100 − 90 = 10
+      // vat = decompose(104).vat = 14
+      expect(result.allowanceHalalas).toBe(10);
+      expect(result.vatHalalas).toBe(14);
+    });
+  });
+
+  describe('additional 15% VAT identities (round-half-up)', () => {
+    it('23.00 SAR / 10%', () => {
+      // payable = round(2300 × 9000 / 10000) = 2070
+      // discount = 230
+      // allowance = decompose(2300).excl − decompose(2070).excl = 2000 − 1800 = 200
+      // vat = decompose(2070).vat = 270
+      const result = applyPromotionPercent(2300, 1000, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: 230,
+        payableHalalas: 2070,
+        allowanceHalalas: 200,
+        vatHalalas: 270,
+      });
+    });
+
+    it('1.00 SAR / 10%', () => {
+      // payable = round(100 × 9000 / 10000) = 90
+      // discount = 10
+      // allowance = decompose(100).excl − decompose(90).excl = 87 − 78 = 9
+      // vat = decompose(90).vat = 12
+      const result = applyPromotionPercent(100, 1000, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: 10,
+        payableHalalas: 90,
+        allowanceHalalas: 9,
+        vatHalalas: 12,
+      });
+    });
+  });
+
+  describe('boundary percentBp', () => {
+    it('percentBp 0 → discount 0, payable = gross, allowance 0', () => {
+      const gross = 10000;
+      const result = applyPromotionPercent(gross, 0, VAT_15);
+      const decomp = decomposeVat(gross, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: 0,
+        payableHalalas: gross,
+        allowanceHalalas: 0,
+        vatHalalas: decomp.vatHalalas,
+      });
+    });
+
+    it('percentBp 10000 (100%) → payable 0, discount = gross, vat 0', () => {
+      const gross = 10000;
+      const result = applyPromotionPercent(gross, 10000, VAT_15);
+      const decomp = decomposeVat(gross, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: gross,
+        payableHalalas: 0,
+        allowanceHalalas: decomp.priceExclHalalas,
+        vatHalalas: 0,
+      });
+    });
+  });
+
+  describe('zero-rated and zero gross', () => {
+    it('vatRateBp 0 → allowance = discount, vat = 0', () => {
+      const result = applyPromotionPercent(10000, 1000, 0);
+      expect(result).toEqual({
+        discountHalalas: 1000,
+        payableHalalas: 9000,
+        allowanceHalalas: 1000,
+        vatHalalas: 0,
+      });
+    });
+
+    it('0 gross → all zeros', () => {
+      const result = applyPromotionPercent(0, 1000, VAT_15);
+      expect(result).toEqual({
+        discountHalalas: 0,
+        payableHalalas: 0,
+        allowanceHalalas: 0,
+        vatHalalas: 0,
+      });
+    });
+  });
+
+  describe('invariants', () => {
+    it('payable + discount = gross for a range of amounts', () => {
+      for (const gross of [0, 1, 99, 100, 115, 1000, 10000, 99999]) {
+        for (const percent of [0, 500, 1000, 2500, 5000, 10000]) {
+          const r = applyPromotionPercent(gross, percent, VAT_15);
+          expect(r.payableHalalas + r.discountHalalas).toBe(gross);
+          expect(r.payableHalalas).toBeGreaterThanOrEqual(0);
+          expect(r.discountHalalas).toBeGreaterThanOrEqual(0);
+        }
+      }
+    });
+
+    it('allowance equals excl(gross) − excl(payable)', () => {
+      for (const gross of [0, 115, 1000, 10000]) {
+        const r = applyPromotionPercent(gross, 1000, VAT_15);
+        const grossExcl = decomposeVat(gross, VAT_15).priceExclHalalas;
+        const payExcl = decomposeVat(r.payableHalalas, VAT_15).priceExclHalalas;
+        expect(r.allowanceHalalas).toBe(grossExcl - payExcl);
+        expect(r.vatHalalas).toBe(decomposeVat(r.payableHalalas, VAT_15).vatHalalas);
+      }
+    });
+  });
+
+  describe('validation', () => {
+    it('throws on negative gross', () => {
+      expect(() => applyPromotionPercent(-1, 1000, VAT_15)).toThrow(
+        /applyPromotionPercent: grossInclHalalas/,
+      );
+    });
+
+    it('throws on non-integer gross', () => {
+      expect(() => applyPromotionPercent(1.5, 1000, VAT_15)).toThrow(
+        /applyPromotionPercent: grossInclHalalas/,
+      );
+    });
+
+    it('throws on negative percentBp', () => {
+      expect(() => applyPromotionPercent(1000, -1, VAT_15)).toThrow(
+        /applyPromotionPercent: percentBp/,
+      );
+    });
+
+    it('throws on percentBp > 10000', () => {
+      expect(() => applyPromotionPercent(1000, 10001, VAT_15)).toThrow(
+        /applyPromotionPercent: percentBp/,
+      );
+    });
+
+    it('throws on non-integer percentBp', () => {
+      expect(() => applyPromotionPercent(1000, 10.5, VAT_15)).toThrow(
+        /applyPromotionPercent: percentBp/,
+      );
+    });
+
+    it('throws on negative vatRateBp', () => {
+      expect(() => applyPromotionPercent(1000, 1000, -1)).toThrow(
+        /applyPromotionPercent: vatRateBp/,
+      );
+    });
+
+    it('throws on non-integer vatRateBp', () => {
+      expect(() => applyPromotionPercent(1000, 1000, 15.5)).toThrow(
+        /applyPromotionPercent: vatRateBp/,
+      );
+    });
   });
 });
