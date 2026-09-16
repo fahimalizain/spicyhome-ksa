@@ -134,6 +134,10 @@ describe('SalesRegisterPage', () => {
     });
     // Footer signed subtotal / VAT / total all net to zero in this fixture.
     expect(screen.getAllByLabelText('SAR 0.00').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByTestId('report-table-scroll')).toContainElement(screen.getByRole('table'));
+    expect(screen.getByRole('columnheader', { name: 'Business Date' })).toHaveClass('sticky');
+    expect(screen.getByText('1 sales · 1 refunds')).toHaveClass('sticky', 'bottom-0');
+    expect(screen.getByTestId('report-table-spacer')).toBeInTheDocument();
   });
 
   it('recalls with kind refund when the Kind filter changes', async () => {
