@@ -56,6 +56,7 @@ describe('OpenAPI spec drift check', () => {
       .addTag('zatca', 'ZATCA e-invoicing')
       .addTag('payment-methods', 'Payment method configuration')
       .addTag('delivery-partners', 'Delivery partner catalog')
+      .addTag('promotions', 'Dated percentage campaigns')
       .build();
 
     const generated = SwaggerModule.createDocument(app, config);

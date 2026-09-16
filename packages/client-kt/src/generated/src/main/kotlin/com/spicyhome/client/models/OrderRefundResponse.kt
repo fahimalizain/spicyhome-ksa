@@ -32,6 +32,7 @@ import com.squareup.moshi.JsonClass
  * @param subtotalHalalas 
  * @param vatHalalas 
  * @param totalHalalas 
+ * @param discountHalalas Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion.
  * @param reason 
  * @param documentId Refund document ID
  * @param createdAt 
@@ -70,6 +71,10 @@ data class OrderRefundResponse (
 
     @Json(name = "totalHalalas")
     val totalHalalas: kotlin.Long,
+
+    /* Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion. */
+    @Json(name = "discountHalalas")
+    val discountHalalas: kotlin.Long,
 
     @Json(name = "reason")
     val reason: kotlin.String?,

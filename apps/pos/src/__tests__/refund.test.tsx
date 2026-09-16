@@ -57,6 +57,10 @@ const mockOrder: OrderResponse = {
   vatHalalas: 600,
   totalHalalas: 4600,
   discountHalalas: 0,
+  promotionId: null,
+  promotionName: null,
+  promotionNameAr: null,
+  promotionPercentBp: null,
   isStandardInvoice: false,
   zatcaBuyerDetails: null,
   deliveryPartnerId: null,
@@ -521,6 +525,7 @@ describe('getRemainingQty', () => {
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
+        discountHalalas: 0,
         reason: null,
         createdAt: 1700000000,
         items: [
@@ -553,6 +558,7 @@ describe('getRemainingQty', () => {
         subtotalHalalas: 4600,
         vatHalalas: 600,
         totalHalalas: 4600,
+        discountHalalas: 0,
         reason: null,
         createdAt: 1700000000,
         items: [
@@ -585,6 +591,7 @@ describe('getRemainingQty', () => {
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
+        discountHalalas: 0,
         reason: null,
         createdAt: 1700000000,
         items: [
@@ -610,6 +617,7 @@ describe('getRemainingQty', () => {
         subtotalHalalas: 2300,
         vatHalalas: 300,
         totalHalalas: 2300,
+        discountHalalas: 0,
         reason: null,
         createdAt: 1700000001,
         items: [

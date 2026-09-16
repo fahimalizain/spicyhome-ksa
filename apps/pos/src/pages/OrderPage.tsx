@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { halalasToSar } from '@spicyhome/shared';
+import { halalasToSar, orderPayableHalalas, orderPostAllowanceVatHalalas } from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
 import { useCart } from '../hooks/useCart';
@@ -165,6 +165,11 @@ export function OrderPage() {
     subtotalHalalas: 0,
     vatHalalas: 0,
     totalHalalas: 0,
+    discountHalalas: 0,
+    promotionId: null as number | null,
+    promotionName: null as string | null,
+    promotionNameAr: null as string | null,
+    promotionPercentBp: null as number | null,
   });
 
   // Right panel tabs + payment modal
@@ -234,9 +239,14 @@ export function OrderPage() {
     setPayments(order.payments || []);
     setOrderEvents(order.events || []);
     setServerTotals({
-      subtotalHalalas: order.subtotalHalalas,
-      vatHalalas: order.vatHalalas,
-      totalHalalas: order.totalHalalas,
+      subtotalHalalas: order.subtotalHalalas ?? 0,
+      vatHalalas: order.vatHalalas ?? 0,
+      totalHalalas: order.totalHalalas ?? 0,
+      discountHalalas: order.discountHalalas ?? 0,
+      promotionId: order.promotionId ?? null,
+      promotionName: order.promotionName ?? null,
+      promotionNameAr: order.promotionNameAr ?? null,
+      promotionPercentBp: order.promotionPercentBp ?? null,
     });
     setCurrentOrder({
       id: order.id,
@@ -548,7 +558,16 @@ export function OrderPage() {
     setItemSearch('');
     setPayments([]);
     setOrderEvents([]);
-    setServerTotals({ subtotalHalalas: 0, vatHalalas: 0, totalHalalas: 0 });
+    setServerTotals({
+      subtotalHalalas: 0,
+      vatHalalas: 0,
+      totalHalalas: 0,
+      discountHalalas: 0,
+      promotionId: null,
+      promotionName: null,
+      promotionNameAr: null,
+      promotionPercentBp: null,
+    });
     setActiveTab('items');
     setShowAddPaymentModal(false);
     setIsStandardInvoice(false);
@@ -819,8 +838,12 @@ export function OrderPage() {
 
   // ── Payments (ADR 0006: append-only ledger, Payments tab) ──
 
-  /** Server view: total − SUM(payments). Negative = temporary overpay. */
-  const outstandingHalalas = calcOutstandingHalalas(serverTotals.totalHalalas, payments);
+  /** Server view: payable − SUM(payments). Negative = temporary overpay. */
+  const payableHalalas = orderPayableHalalas(
+    serverTotals.totalHalalas,
+    serverTotals.discountHalalas,
+  );
+  const outstandingHalalas = calcOutstandingHalalas(payableHalalas, payments);
   /** Per-method net totals for the Payments tab summary strip. */
   const paymentsByMethod = summarizePaymentsByMethod(payments);
   /** Kitchen delta view over the current (clean) cart vs the event ledger. */
@@ -1403,9 +1426,31 @@ export function OrderPage() {
     ? cart.totals
     : {
         subtotalHalalas: serverTotals.subtotalHalalas,
-        vatHalalas: serverTotals.vatHalalas,
+        vatHalalas: orderPostAllowanceVatHalalas(
+          serverTotals.totalHalalas,
+          serverTotals.discountHalalas,
+          serverTotals.vatHalalas,
+        ),
         totalHalalas: serverTotals.totalHalalas,
       };
+
+  // Server-stamped Promotion (slice 9): display-only, never recomputed
+  // client-side. Shown only on a clean cart with a stamped Promotion.
+  const hasPromotion =
+    !cart.isDirty &&
+    currentOrder != null &&
+    serverTotals.promotionId != null &&
+    serverTotals.discountHalalas > 0;
+  const promotionLabel =
+    hasPromotion && serverTotals.promotionName != null && serverTotals.promotionPercentBp != null
+      ? `${serverTotals.promotionName} ${serverTotals.promotionPercentBp / 100}%`
+      : null;
+
+  // Cart footer total: pre-create carts show the item sum; a clean hydrated
+  // order shows the guest-facing payable (dirty carts keep the item sum with
+  // the same amber warning as the Summary tab).
+  const footerTotalHalalas =
+    currentOrder && !cart.isDirty ? payableHalalas : cart.totals.totalHalalas;
 
   if (dayOpen === null) {
     return (
@@ -1850,6 +1895,18 @@ export function OrderPage() {
                   <span>Total</span>
                   <span>{halalasToSar(summaryTotals.totalHalalas)} SAR</span>
                 </div>
+                {hasPromotion && promotionLabel != null && (
+                  <div className="flex justify-between text-green-400">
+                    <span>{promotionLabel}</span>
+                    <span>−{halalasToSar(serverTotals.discountHalalas)} SAR</span>
+                  </div>
+                )}
+                {hasPromotion && (
+                  <div className="flex justify-between text-white font-bold text-base">
+                    <span>Payable</span>
+                    <span>{halalasToSar(payableHalalas)} SAR</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-400 pt-1">
                   <span>Outstanding</span>
                   <span
@@ -1959,9 +2016,7 @@ export function OrderPage() {
               />
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>Total</span>
-                <span className="text-white font-bold">
-                  {halalasToSar(cart.totals.totalHalalas)} SAR
-                </span>
+                <span className="text-white font-bold">{halalasToSar(footerTotalHalalas)} SAR</span>
               </div>
               <div className="space-y-2">
                 {/* Pre-order: Create Order */}
@@ -2298,7 +2353,7 @@ export function OrderPage() {
       {showAddPaymentModal && currentOrder && (
         <AddPaymentModal
           orderId={currentOrder.id}
-          orderTotalHalalas={serverTotals.totalHalalas}
+          orderTotalHalalas={payableHalalas}
           outstandingHalalas={outstandingHalalas}
           deliveryPartnerId={cart.deliveryPartnerId}
           onAdded={handlePaymentAdded}
@@ -2365,7 +2420,7 @@ export function OrderPage() {
       {showClearance && currentOrder && (
         <ZatcaClearanceModal
           orderId={currentOrder.id}
-          orderTotalHalalas={serverTotals.totalHalalas}
+          orderTotalHalalas={payableHalalas}
           initialBuyer={buyer}
           onDone={() => {
             setShowClearance(false);

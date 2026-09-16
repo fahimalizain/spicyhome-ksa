@@ -111,10 +111,23 @@ export function RefundPanel({ order, onClose, onRefunded }: RefundPanelProps) {
 
   const selectedItems = useMemo(() => rows.filter((r) => r.refundQty > 0), [rows]);
 
-  const refundTotalHalalas = useMemo(
+  const refundGrossHalalas = useMemo(
     () => selectedItems.reduce((sum, r) => sum + r.unitPriceHalalas * r.refundQty, 0),
     [selectedItems],
   );
+
+  // Preview allocates the SERVER-stamped Discount (never percent math): a
+  // full-order selection previews the exact payable; a partial selection
+  // takes a pro-rata share of the Discount, rounded half-up.
+  const refundTotalHalalas = useMemo(() => {
+    const discount = order.discountHalalas ?? 0;
+    if (order.totalHalalas <= 0 || discount <= 0) return refundGrossHalalas;
+    const coversAll =
+      selectedItems.length > 0 &&
+      rows.every((r) => (refundQtys[r.orderItemId] || 0) >= r.originalQty);
+    if (coversAll) return order.totalHalalas - discount;
+    return refundGrossHalalas - Math.round((discount * refundGrossHalalas) / order.totalHalalas);
+  }, [order, rows, refundQtys, refundGrossHalalas, selectedItems.length]);
 
   const hasSelection = selectedItems.length > 0;
 

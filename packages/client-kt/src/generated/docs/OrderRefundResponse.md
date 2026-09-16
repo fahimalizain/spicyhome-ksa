@@ -13,6 +13,7 @@
 | **subtotalHalalas** | **kotlin.Long** |  |  |
 | **vatHalalas** | **kotlin.Long** |  |  |
 | **totalHalalas** | **kotlin.Long** |  |  |
+| **discountHalalas** | **kotlin.Long** | Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion. |  |
 | **reason** | **kotlin.String** |  |  |
 | **documentId** | **kotlin.String** | Refund document ID |  |
 | **createdAt** | **kotlin.Long** |  |  |

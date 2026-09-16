@@ -55,6 +55,8 @@ export const AuditAction = {
   ITEM_PRICE_RESET: 'item_price_reset',
   // ZATCA standard invoice buyer details (set/clear on an open order)
   STANDARD_INVOICE_CHANGED: 'standard_invoice_changed',
+  // Promotions (#191 / ADR 0009): stamped or cleared (create, partner set, partner clear)
+  PROMOTION_CHANGED: 'promotion_changed',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

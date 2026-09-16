@@ -92,6 +92,13 @@
       "when": 1785596525759,
       "tag": "0012_item_subcategories",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789542608800,
+      "tag": "0013_promotions",
+      "breakpoints": true
     }
   ]
 }

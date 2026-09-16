@@ -14,6 +14,7 @@ export function AdminPage() {
     { path: '/admin/zatca', label: 'ZATCA', show: me?.manageSettings },
     { path: '/admin/payment-methods', label: 'Payment Methods', show: me?.manageSettings },
     { path: '/admin/delivery-partners', label: 'Delivery Partners', show: me?.manageSettings },
+    { path: '/admin/promotions', label: 'Promotions', show: me?.manageSettings },
   ];
 
   return (

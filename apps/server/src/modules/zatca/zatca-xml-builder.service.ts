@@ -103,8 +103,18 @@ export interface InvoiceXMLInput {
   seller: SellerInfo;
   /** Line items */
   items: InvoiceItemInput[];
-  /** Invoice-level discount in halalas (optional) */
+  /**
+   * Invoice-level inclusive Discount in halalas (optional).
+   * Guest-facing cut off the VAT-inclusive gross. ZATCA XML derives a
+   * pre-tax Allowance from this — never write Discount into AllowanceCharge.
+   * See ADR 0009.
+   */
   discountHalalas?: number;
+  /**
+   * AllowanceCharge reason text (Promotion name). Falls back to `'discount'`
+   * when omitted.
+   */
+  allowanceReason?: string;
   /** Previous Invoice Hash — empty string for first invoice */
   prevInvoiceHash: string;
   /** For credit/debit notes: the ICV of the original invoice being corrected */
@@ -148,6 +158,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     seller,
     items,
     discountHalalas,
+    allowanceReason,
     prevInvoiceHash,
     billingReferenceId,
   } = input;
@@ -180,14 +191,50 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   });
 
   // Compute totals
+  // LineExtensionAmount (BT-106) = Σ line nets — never rewritten for Discount.
   const totalExcl = lines.reduce((sum, l) => sum + l.lineExcl, 0);
   const totalIncl = lines.reduce((sum, l) => sum + l.lineTotalIncl, 0);
+  // discountHalalas is the inclusive Discount (guest view). Derive pre-tax
+  // Allowance + post-Allowance VAT at emit time (ADR 0009). Do not re-apply %.
   const discount = discountHalalas ?? 0;
-  const allowanceTotal = discount;
   const payableAmount = totalIncl - discount;
 
-  // Group tax by rate
+  // vatRateBp for Allowance derivation: 1500 unless every line is 0%.
+  // Mixed 0%+15% still uses 1500 (whole Allowance on the 15% pot).
+  const allZeroRated = lines.length > 0 && lines.every((l) => l.vatRateBp === 0);
+  const allowanceVatRateBp = allZeroRated ? 0 : 1500;
+
+  let allowanceTotal: number;
+  let postVat: number;
+  let taxExclusiveAmount: number;
+
+  if (discount > 0) {
+    const grossDecomp = decomposeVat(totalIncl, allowanceVatRateBp);
+    const payableDecomp = decomposeVat(payableAmount, allowanceVatRateBp);
+    allowanceTotal = grossDecomp.priceExclHalalas - payableDecomp.priceExclHalalas;
+    postVat = payableDecomp.vatHalalas;
+    // TaxExclusive = line nets − Allowance (LineExtension stays totalExcl)
+    taxExclusiveAmount = totalExcl - allowanceTotal;
+  } else {
+    allowanceTotal = 0;
+    // Unpromoted: keep line-sum VAT (mixed-rate safe)
+    postVat = totalIncl - totalExcl;
+    taxExclusiveAmount = totalExcl;
+  }
+
+  // Group tax by rate, then adjust the standard (15%) pot for Allowance
   const taxGroups = groupTaxByRate(lines);
+  if (discount > 0 && allowanceTotal > 0) {
+    if (allowanceVatRateBp > 0) {
+      // Whole Allowance on the 15% pot; 0% pot unchanged if present
+      taxGroups.standard.taxableAmount -= allowanceTotal;
+      taxGroups.standard.vatAmount = postVat;
+    } else {
+      taxGroups.zeroRated.taxableAmount -= allowanceTotal;
+    }
+  }
+
+  const allowanceReasonText = allowanceReason?.trim() ? allowanceReason : 'discount';
 
   const parts: string[] = [];
 
@@ -393,15 +440,22 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     parts.push(`  </cac:PaymentMeans>`);
   }
 
-  // ── Invoice-level AllowanceCharge (discount) ──
+  // ── Invoice-level AllowanceCharge (pre-tax Allowance, amount-only) ──
+  // Amount = derived pre-tax Allowance, NOT the inclusive Discount.
+  // No BaseAmount / MultiplierFactorNumeric (ADR 0009 — derived amount will
+  // not always equal base × percent after integer rounding).
   if (discount > 0) {
+    const allowanceCatId = allowanceVatRateBp > 0 ? 'S' : 'Z';
+    const allowanceCatPct = (allowanceVatRateBp / 100).toFixed(2);
     parts.push(`  <cac:AllowanceCharge>`);
     parts.push(`    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>`);
-    parts.push(`    <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>`);
-    parts.push(`    <cbc:Amount currencyID="SAR">${halalasToSar(discount)}</cbc:Amount>`);
+    parts.push(
+      `    <cbc:AllowanceChargeReason>${escapeXml(allowanceReasonText)}</cbc:AllowanceChargeReason>`,
+    );
+    parts.push(`    <cbc:Amount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:Amount>`);
     parts.push(`    <cac:TaxCategory>`);
-    parts.push(`      <cbc:ID>${taxGroups.standard.rateBp > 0 ? 'S' : 'Z'}</cbc:ID>`);
-    parts.push(`      <cbc:Percent>${(taxGroups.standard.rateBp / 100).toFixed(2)}</cbc:Percent>`);
+    parts.push(`      <cbc:ID>${allowanceCatId}</cbc:ID>`);
+    parts.push(`      <cbc:Percent>${allowanceCatPct}</cbc:Percent>`);
     parts.push(`      <cac:TaxScheme>`);
     parts.push(`        <cbc:ID>VAT</cbc:ID>`);
     parts.push(`      </cac:TaxScheme>`);
@@ -428,10 +482,10 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   }
 
   // ── Tax Totals ──
-  // First TaxTotal: VAT amount only (without TaxSubtotal) — required per XSD
-  const totalVat = totalIncl - totalExcl;
+  // First TaxTotal: VAT amount only (without TaxSubtotal) — required per XSD.
+  // When promoted this is post-Allowance VAT, not pre-discount line-sum VAT.
   parts.push(`  <cac:TaxTotal>`);
-  parts.push(`    <cbc:TaxAmount currencyID="SAR">${halalasToSar(totalVat)}</cbc:TaxAmount>`);
+  parts.push(`    <cbc:TaxAmount currencyID="SAR">${halalasToSar(postVat)}</cbc:TaxAmount>`);
   parts.push(`  </cac:TaxTotal>`);
 
   // Additional TaxTotals with subtotals per rate
@@ -465,15 +519,17 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   }
 
   // ── Legal Monetary Total ──
+  // LineExtensionAmount = Σ line nets (unchanged by Discount).
+  // TaxExclusive = line nets − Allowance; TaxInclusive/Payable = payable.
   parts.push(`  <cac:LegalMonetaryTotal>`);
   parts.push(
     `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:LineExtensionAmount>`,
   );
   parts.push(
-    `    <cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:TaxExclusiveAmount>`,
+    `    <cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(taxExclusiveAmount)}</cbc:TaxExclusiveAmount>`,
   );
   parts.push(
-    `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(totalIncl)}</cbc:TaxInclusiveAmount>`,
+    `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:TaxInclusiveAmount>`,
   );
   parts.push(
     `    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`,

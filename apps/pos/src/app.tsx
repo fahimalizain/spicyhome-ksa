@@ -18,6 +18,7 @@ import { UsersPage } from './pages/admin/UsersPage';
 import { ZatcaPage } from './pages/admin/ZatcaPage';
 import { PaymentMethodsPage } from './pages/admin/PaymentMethodsPage';
 import { DeliveryPartnersPage } from './pages/admin/DeliveryPartnersPage';
+import { PromotionsPage } from './pages/admin/PromotionsPage';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { SentryErrorFallback } from './components/SentryErrorFallback';
@@ -52,6 +53,7 @@ export function App() {
                 <Route path="/admin/zatca" element={<ZatcaPage />} />
                 <Route path="/admin/payment-methods" element={<PaymentMethodsPage />} />
                 <Route path="/admin/delivery-partners" element={<DeliveryPartnersPage />} />
+                <Route path="/admin/promotions" element={<PromotionsPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

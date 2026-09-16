@@ -157,6 +157,7 @@ const sampleRefund: OrderRefundResponse = {
   subtotalHalalas: 2000,
   vatHalalas: 300,
   totalHalalas: 2300,
+  discountHalalas: 0,
   reason: 'Customer changed mind',
   createdAt: 1700001000,
   items: [

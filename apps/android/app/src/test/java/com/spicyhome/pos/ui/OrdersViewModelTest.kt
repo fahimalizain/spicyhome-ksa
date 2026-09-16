@@ -16,6 +16,7 @@ import com.spicyhome.pos.data.PreferencesManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.realtime.RealtimeClient
 import com.spicyhome.pos.util.ServiceDay
+import com.spicyhome.pos.util.payableHalalas
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -136,7 +137,16 @@ class OrdersViewModelTest {
         return ViewModelProvider(store, factory)[OrdersViewModel::class.java]
     }
 
-    private fun createSummary(id: Long, orderNo: Long): OrderSummaryResponse {
+    private fun createSummary(
+        id: Long,
+        orderNo: Long,
+        totalHalalas: Long = 2300L,
+        discountHalalas: Long = 0L,
+        promotionId: Long? = null,
+        promotionName: String? = null,
+        promotionNameAr: String? = null,
+        promotionPercentBp: Long? = null,
+    ): OrderSummaryResponse {
         return OrderSummaryResponse(
             id = id,
             orderNo = orderNo,
@@ -147,8 +157,12 @@ class OrdersViewModelTest {
             status = "open",
             subtotalHalalas = 2000L,
             vatHalalas = 300L,
-            totalHalalas = 2300L,
-            discountHalalas = 0L,
+            totalHalalas = totalHalalas,
+            discountHalalas = discountHalalas,
+            promotionId = promotionId,
+            promotionName = promotionName,
+            promotionNameAr = promotionNameAr,
+            promotionPercentBp = promotionPercentBp,
             deliveryPartnerId = null,
             deliveryPartnerTitle = null,
             deliveryExternalRef = null,
@@ -178,6 +192,10 @@ class OrdersViewModelTest {
             vatHalalas = 300L,
             totalHalalas = 2300L,
             discountHalalas = 0L,
+            promotionId = null,
+            promotionName = null,
+            promotionNameAr = null,
+            promotionPercentBp = null,
             deliveryPartnerId = null,
             deliveryPartnerTitle = null,
             deliveryExternalRef = null,
@@ -418,5 +436,22 @@ class OrdersViewModelTest {
 
         val usernames = vm.uiState.value.users.map { it.username }
         assertThat(usernames).containsExactly("admin", "cashier")
+    }
+
+    @Test
+    fun `order summary payable subtracts the stamped Discount`() {
+        val promo = createSummary(
+            42L, 1001L,
+            totalHalalas = 10000L,
+            discountHalalas = 1000L,
+            promotionId = 7L,
+            promotionName = "National Day",
+            promotionNameAr = "اليوم الوطني",
+            promotionPercentBp = 1000L,
+        )
+        assertThat(promo.payableHalalas()).isEqualTo(9000L)
+
+        val plain = createSummary(43L, 1002L)
+        assertThat(plain.payableHalalas()).isEqualTo(2300L)
     }
 }
