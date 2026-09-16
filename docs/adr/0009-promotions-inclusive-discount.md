@@ -45,13 +45,13 @@ ZATCA view). Do not call the campaign a discount.
 
 4. **Canonical money identity** (100.00 SAR incl / 10% / 15% VAT):
 
-   | View        | SAR    | Halalas |
-   | ----------- | ------ | ------- |
-   | Gross       | 100.00 | 10000   |
-   | Discount    | 10.00  | 1000    |
-   | Payable     | 90.00  | 9000    |
-   | Allowance   | 8.70   | 870     |
-   | Post-VAT    | 11.74  | 1174    |
+   | View      | SAR    | Halalas |
+   | --------- | ------ | ------- |
+   | Gross     | 100.00 | 10000   |
+   | Discount  | 10.00  | 1000    |
+   | Payable   | 90.00  | 9000    |
+   | Allowance | 8.70   | 870     |
+   | Post-VAT  | 11.74  | 1174    |
 
    Locked by unit test on `applyPromotionPercent(10000, 1000, 1500)`.
 
