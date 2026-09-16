@@ -2766,6 +2766,12 @@ export interface components {
        * @example 5000
        */
       totalHalalas: number;
+      /**
+       * Format: int64
+       * @description Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion.
+       * @example 0
+       */
+      discountHalalas: number;
       /** @example Customer changed mind */
       reason: string | null;
       /**

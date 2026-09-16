@@ -6749,3 +6749,303 @@ describe('Promotions attach', () => {
     expect(summary.totalHalalas).toBe(10000);
   });
 });
+
+describe('Promotions refunds', () => {
+  // Fixed calendar anchors — same isolation pattern as Promotions attach.
+  const PROMO_START = '2026-09-23';
+  const PROMO_END = '2026-09-25';
+  const COVERED_DAY = '2026-09-24';
+
+  // 100.00 SAR item (full bill) and 50.00 SAR item (half-items cases).
+  const PROMO_ITEM_ID = 9201;
+  const PROMO_HALF_ITEM_ID = 9202;
+  const PROMO_ITEM_PRICE = 10000;
+  const PROMO_HALF_PRICE = 5000;
+
+  const coveredNoonMs = (getServiceDayBoundsUnix(COVERED_DAY)!.startUnix + 7 * 3600) * 1000;
+
+  let promoToken: string;
+  let createdOrderIds: number[];
+  let promoId: number | null;
+  let savedGlobalJwt: string;
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  async function loginUnderMock(): Promise<string> {
+    const loginRes = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'admin', pin: '771133', clientType: 'pos' });
+    expect(loginRes.body.accessToken).toBeTruthy();
+    return loginRes.body.accessToken as string;
+  }
+
+  async function mockNowAndLogin(ms: number): Promise<void> {
+    jest.spyOn(Date, 'now').mockReturnValue(ms);
+    promoToken = await loginUnderMock();
+    setOpenDayBusinessDate(getServiceDayString(ms));
+  }
+
+  beforeAll(() => {
+    const now = Math.floor(Date.now() / 1000);
+    sqlite
+      .prepare(
+        `INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+         VALUES (?, 1, 1, 'Promo Plate Full', ?, 1500, 99, 1, ?, ?)`,
+      )
+      .run(PROMO_ITEM_ID, PROMO_ITEM_PRICE, now, now);
+    sqlite
+      .prepare(
+        `INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+         VALUES (?, 1, 1, 'Promo Plate Half', ?, 1500, 98, 1, ?, ?)`,
+      )
+      .run(PROMO_HALF_ITEM_ID, PROMO_HALF_PRICE, now, now);
+  });
+
+  beforeEach(() => {
+    createdOrderIds = [];
+    promoId = null;
+    savedGlobalJwt = jwtToken;
+    jest.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    for (const id of createdOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/api/orders/${id}/void`)
+          .set('Authorization', `Bearer ${promoToken || jwtToken}`)
+          .send({ reason: 'promo refund test cleanup' });
+      } catch {
+        // already paid/voided/refunded
+      }
+    }
+    createdOrderIds = [];
+
+    sqlite.exec(`
+      UPDATE orders SET
+        promotion_id = NULL,
+        promotion_name = NULL,
+        promotion_name_ar = NULL,
+        promotion_percent_bp = NULL
+      WHERE promotion_id IS NOT NULL;
+      DELETE FROM promotions;
+    `);
+    promoId = null;
+
+    jest.restoreAllMocks();
+
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+
+    jwtToken = savedGlobalJwt;
+    promoToken = savedGlobalJwt;
+  });
+
+  async function createPromo(percentBp = 1000): Promise<number> {
+    const res = await request(app.getHttpServer())
+      .post('/api/promotions')
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        name: 'National Day',
+        nameAr: 'اليوم الوطني',
+        percentBp,
+        startBusinessDate: PROMO_START,
+        endBusinessDate: PROMO_END,
+      })
+      .expect(201);
+    promoId = res.body.id;
+    return res.body.id;
+  }
+
+  async function createOrder(body: Record<string, unknown> = { type: 'takeaway' }): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send(body)
+      .expect(201);
+    createdOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/api/orders/${id}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  async function syncItems(
+    orderId: number,
+    updatedAt: number,
+    items: Array<{ itemId?: number; orderItemId?: number; qty: number }>,
+  ): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/api/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+    return res.body;
+  }
+
+  /** Create + sync + pay payable + submit a promoted order. */
+  async function createPaidPromotedOrder(
+    itemSpecs: Array<{ itemId: number; qty: number }>,
+  ): Promise<{ orderId: number; order: any }> {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(
+      order.id,
+      order.updatedAt,
+      itemSpecs.map((s) => ({ itemId: s.itemId, qty: s.qty })),
+    );
+
+    const payable = order.totalHalalas - (order.discountHalalas ?? 0);
+    await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/payments`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ methodId: 'cash', amountHalalas: payable })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/submit`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({})
+      .expect(201);
+
+    // Wait for receipt / ZATCA listeners so refund path is stable.
+    await new Promise((r) => setTimeout(r, 200));
+
+    order = await getOrder(order.id);
+    expect(order.status).toBe('paid');
+    return { orderId: order.id, order };
+  }
+
+  async function getRefunds(orderId: number): Promise<any[]> {
+    const res = await request(app.getHttpServer())
+      .get(`/api/orders/${orderId}/refunds`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  it('full refund of 100/10/90 returns payable 9000 and Discount 1000', async () => {
+    const { orderId, order } = await createPaidPromotedOrder([{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+    expect(order.totalHalalas).toBe(10000);
+    expect(order.discountHalalas).toBe(1000);
+
+    const line = order.items[0];
+    const refundRes = await request(app.getHttpServer())
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        items: [{ orderItemId: line.id, qty: 1 }],
+        methodId: 'cash',
+        reason: 'full promo refund',
+      })
+      .expect(201);
+
+    expect(refundRes.body.success).toBe(true);
+    expect(refundRes.body.status).toBe('refunded');
+
+    const refunds = await getRefunds(orderId);
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0].totalHalalas).toBe(9000);
+    expect(refunds[0].discountHalalas).toBe(1000);
+    // Item rows stay gross
+    expect(refunds[0].items[0].totalHalalas).toBe(10000);
+    // Post-Allowance VAT on payable 9000 @ 15%
+    const decomp = applyPromotionPercent(10000, 1000, 1500);
+    expect(refunds[0].vatHalalas).toBe(decomp.vatHalalas);
+    expect(refunds[0].subtotalHalalas).toBe(decomp.payableHalalas - decomp.vatHalalas);
+
+    const after = await getOrder(orderId);
+    expect(after.status).toBe('refunded');
+  });
+
+  it('half the items returns 4500 payable and Discount 500; order stays paid', async () => {
+    const { orderId, order } = await createPaidPromotedOrder([
+      { itemId: PROMO_HALF_ITEM_ID, qty: 2 },
+    ]);
+    expect(order.totalHalalas).toBe(10000);
+    expect(order.discountHalalas).toBe(1000);
+
+    const line = order.items[0];
+    expect(line.qty).toBe(2);
+
+    await request(app.getHttpServer())
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        items: [{ orderItemId: line.id, qty: 1 }],
+        methodId: 'cash',
+      })
+      .expect(201);
+
+    const refunds = await getRefunds(orderId);
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0].totalHalalas).toBe(4500);
+    expect(refunds[0].discountHalalas).toBe(500);
+    expect(refunds[0].items[0].totalHalalas).toBe(5000);
+    expect(refunds[0].items[0].qty).toBe(1);
+
+    const after = await getOrder(orderId);
+    expect(after.status).toBe('paid');
+  });
+
+  it('second half remainder: Discount parts sum to 1000, totals to 9000', async () => {
+    const { orderId, order } = await createPaidPromotedOrder([
+      { itemId: PROMO_HALF_ITEM_ID, qty: 2 },
+    ]);
+    const line = order.items[0];
+
+    await request(app.getHttpServer())
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        items: [{ orderItemId: line.id, qty: 1 }],
+        methodId: 'cash',
+      })
+      .expect(201);
+
+    const second = await request(app.getHttpServer())
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        items: [{ orderItemId: line.id, qty: 1 }],
+        methodId: 'cash',
+      })
+      .expect(201);
+    expect(second.body.status).toBe('refunded');
+
+    const refunds = await getRefunds(orderId);
+    expect(refunds).toHaveLength(2);
+
+    // Order by id for stable first/second
+    refunds.sort((a, b) => a.id - b.id);
+
+    expect(refunds[0].discountHalalas).toBe(500);
+    expect(refunds[0].totalHalalas).toBe(4500);
+    expect(refunds[1].discountHalalas).toBe(500);
+    expect(refunds[1].totalHalalas).toBe(4500);
+
+    const sumDiscount = refunds[0].discountHalalas + refunds[1].discountHalalas;
+    const sumTotal = refunds[0].totalHalalas + refunds[1].totalHalalas;
+    expect(sumDiscount).toBe(1000);
+    expect(sumTotal).toBe(9000);
+
+    const after = await getOrder(orderId);
+    expect(after.status).toBe('refunded');
+  });
+});

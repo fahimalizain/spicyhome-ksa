@@ -64,6 +64,14 @@ export class OrderRefundResponse {
   @ApiProperty({ ...ApiInt64, example: 5000 })
   totalHalalas!: number;
 
+  @ApiProperty({
+    ...ApiInt64,
+    example: 0,
+    description:
+      'Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion.',
+  })
+  discountHalalas!: number;
+
   @ApiProperty({ type: String, example: 'Customer changed mind', nullable: true })
   reason!: string | null;
 

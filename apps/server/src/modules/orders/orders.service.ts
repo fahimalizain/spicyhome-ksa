@@ -75,6 +75,46 @@ function normalizeExternalRef(r: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+/**
+ * Allocate the inclusive Discount share for a refund of a promoted Order.
+ * Proportional to refund gross over remaining gross; the last refund that
+ * completes every order-item qty takes the remainder so parts sum to the
+ * order Discount (ADR 0009 / #191).
+ */
+function allocateRefundDiscount(params: {
+  orderGross: number;
+  orderDiscount: number;
+  alreadyRefundedDiscount: number;
+  alreadyRefundedGross: number;
+  refundGross: number;
+  isFullyRefunded: boolean;
+}): number {
+  const {
+    orderGross,
+    orderDiscount,
+    alreadyRefundedDiscount,
+    alreadyRefundedGross,
+    refundGross,
+    isFullyRefunded,
+  } = params;
+
+  if (orderDiscount === 0) return 0;
+
+  const remainingDiscount = orderDiscount - alreadyRefundedDiscount;
+  const remainingGross = orderGross - alreadyRefundedGross;
+
+  if (isFullyRefunded) {
+    // Last remainder — full refund of a promoted bill returns payable exactly.
+    return Math.max(0, remainingDiscount);
+  }
+  if (remainingGross <= 0) return 0;
+
+  let allocated = Math.round((remainingDiscount * refundGross) / remainingGross);
+  if (allocated < 0) allocated = 0;
+  if (allocated > remainingDiscount) allocated = remainingDiscount;
+  return allocated;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -2258,6 +2298,8 @@ export class OrdersService {
       const lineSubtotals: number[] = [];
       const lineVats: number[] = [];
       const lineTotals: number[] = [];
+      // Per-item qty being refunded in this request (for full-refund check before insert).
+      const thisRefundQtyByItemId = new Map<number, number>();
 
       for (const item of dto.items) {
         const oi = itemMap.get(item.orderItemId)!;
@@ -2292,6 +2334,11 @@ export class OrdersService {
         lineVats.push(d.vatHalalas);
         lineTotals.push(lineTotal);
 
+        thisRefundQtyByItemId.set(
+          item.orderItemId,
+          (thisRefundQtyByItemId.get(item.orderItemId) ?? 0) + item.qty,
+        );
+
         refundItems.push({
           orderItemId: item.orderItemId,
           itemName: oi.itemName,
@@ -2300,9 +2347,81 @@ export class OrdersService {
         });
       }
 
-      const subtotalHalalas = lineSubtotals.reduce((a, b) => a + b, 0);
-      const vatHalalas = lineVats.reduce((a, b) => a + b, 0);
-      const totalHalalas = lineTotals.reduce((a, b) => a + b, 0);
+      // Refunded gross = Σ (unitPrice × refundQty). Item rows stay gross.
+      const refundGross = lineTotals.reduce((a, b) => a + b, 0);
+
+      // Whether this refund completes every order-item qty (before insert).
+      isFullyRefunded = true;
+      for (const oi of allOrderItems) {
+        const priorRows = tx
+          .select()
+          .from(orderRefundItems)
+          .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
+          .where(and(eq(orderRefunds.orderId, orderId), eq(orderRefundItems.orderItemId, oi.id)))
+          .all();
+        const alreadyRefundedQty = priorRows.reduce(
+          (s: number, row: any) => s + row.order_refund_items.qty,
+          0,
+        );
+        const thisQty = thisRefundQtyByItemId.get(oi.id) ?? 0;
+        if (alreadyRefundedQty + thisQty < oi.qty) {
+          isFullyRefunded = false;
+          break;
+        }
+      }
+
+      // Prior refunds: Discount already returned + gross already refunded (item rows).
+      const priorRefundRows = tx
+        .select({
+          discountHalalas: orderRefunds.discountHalalas,
+        })
+        .from(orderRefunds)
+        .where(eq(orderRefunds.orderId, orderId))
+        .all() as Array<{ discountHalalas: number }>;
+      const alreadyRefundedDiscount = priorRefundRows.reduce(
+        (s, r) => s + (r.discountHalalas ?? 0),
+        0,
+      );
+
+      const priorItemRows = tx
+        .select({
+          totalHalalas: orderRefundItems.totalHalalas,
+        })
+        .from(orderRefundItems)
+        .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
+        .where(eq(orderRefunds.orderId, orderId))
+        .all() as Array<{ totalHalalas: number }>;
+      const alreadyRefundedGross = priorItemRows.reduce((s, r) => s + r.totalHalalas, 0);
+
+      const orderGross = order.totalHalalas;
+      const orderDiscount = order.discountHalalas ?? 0;
+      const allocated = allocateRefundDiscount({
+        orderGross,
+        orderDiscount,
+        alreadyRefundedDiscount,
+        alreadyRefundedGross,
+        refundGross,
+        isFullyRefunded,
+      });
+
+      // Unpromoted (discount 0): bit-identical to pre-Promotion path — per-line
+      // decomposeVat sums and total = refundGross. Promoted: header stores
+      // payable and post-Allowance VAT on the payable amount (ADR 0009).
+      let subtotalHalalas: number;
+      let vatHalalas: number;
+      let totalHalalas: number;
+      if (orderDiscount === 0) {
+        subtotalHalalas = lineSubtotals.reduce((a, b) => a + b, 0);
+        vatHalalas = lineVats.reduce((a, b) => a + b, 0);
+        totalHalalas = refundGross;
+      } else {
+        const payableRefund = refundGross - allocated;
+        // Restaurant-normal 15% VAT on the inclusive payable (ADR 0009).
+        const payableDecomp = decomposeVat(payableRefund, 1500);
+        subtotalHalalas = payableDecomp.priceExclHalalas;
+        vatHalalas = payableDecomp.vatHalalas;
+        totalHalalas = payableRefund;
+      }
       refundTotalHalalas = totalHalalas;
 
       // Allocate document_id for the refund
@@ -2320,6 +2439,7 @@ export class OrdersService {
           subtotalHalalas,
           vatHalalas,
           totalHalalas,
+          discountHalalas: allocated,
           reason: dto.reason ?? null,
           documentId: refundDocumentId,
           ...createAuditFields(userId, now),
@@ -2327,7 +2447,7 @@ export class OrdersService {
         .run();
       refundId = Number(refundInsert.lastInsertRowid);
 
-      // Insert order_refund_items
+      // Insert order_refund_items (gross unit × qty — no per-line Discount)
       for (let i = 0; i < dto.items.length; i++) {
         const item = dto.items[i];
         const oi = itemMap.get(item.orderItemId)!;
@@ -2346,7 +2466,7 @@ export class OrdersService {
           .run();
       }
 
-      // Write refund_issued event
+      // Write refund_issued event — totalHalalas is the payable amount returned
       this.orderEvents.createEvent(
         tx,
         orderId,
@@ -2363,27 +2483,6 @@ export class OrdersService {
         },
         now,
       );
-
-      // Determine if order is fully refunded
-      // For every row in order_items, originalQty == (sum of all refund qtys)
-      isFullyRefunded = true;
-      for (const oi of allOrderItems) {
-        // Refresh the sum including the items just inserted
-        const refRows = tx
-          .select()
-          .from(orderRefundItems)
-          .innerJoin(orderRefunds, eq(orderRefundItems.refundId, orderRefunds.id))
-          .where(and(eq(orderRefunds.orderId, orderId), eq(orderRefundItems.orderItemId, oi.id)))
-          .all();
-        const totalRefundedQty = refRows.reduce(
-          (s: number, row: any) => s + row.order_refund_items.qty,
-          0,
-        );
-        if (totalRefundedQty < oi.qty) {
-          isFullyRefunded = false;
-          break;
-        }
-      }
 
       if (isFullyRefunded) {
         tx.update(orders)
@@ -2474,6 +2573,7 @@ export class OrdersService {
         subtotalHalalas: refund.subtotalHalalas,
         vatHalalas: refund.vatHalalas,
         totalHalalas: refund.totalHalalas,
+        discountHalalas: refund.discountHalalas ?? 0,
         reason: refund.reason,
         documentId: refund.documentId,
         createdAt: refund.createdAt,

@@ -6079,6 +6079,12 @@
             "format": "int64",
             "example": 5000
           },
+          "discountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 0,
+            "description": "Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion."
+          },
           "reason": {
             "type": "string",
             "example": "Customer changed mind",
@@ -6111,6 +6117,7 @@
           "subtotalHalalas",
           "vatHalalas",
           "totalHalalas",
+          "discountHalalas",
           "reason",
           "documentId",
           "createdAt",
