@@ -39,6 +39,42 @@ export class OrderResponse {
   @ApiProperty({ ...ApiInt64, example: 0 })
   discountHalalas!: number;
 
+  // ── Promotion snapshot (ADR 0009) ──────────────────────────────────────────
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 1,
+    nullable: true,
+    description:
+      'Stamped Promotion id when an enabled campaign covered the order create service day. Null when none.',
+  })
+  promotionId!: number | null;
+
+  @ApiProperty({
+    type: String,
+    example: 'National Day',
+    nullable: true,
+    description: 'Promotion name snapshot at attach time (does not live-refresh).',
+  })
+  promotionName!: string | null;
+
+  @ApiProperty({
+    type: String,
+    example: 'اليوم الوطني',
+    nullable: true,
+    description: 'Promotion Arabic name snapshot at attach time.',
+  })
+  promotionNameAr!: string | null;
+
+  @ApiProperty({
+    ...ApiInt64,
+    example: 1000,
+    nullable: true,
+    description:
+      'Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders.',
+  })
+  promotionPercentBp!: number | null;
+
   // ── Delivery partner (ADR 0007) ────────────────────────────────────────────
 
   @ApiProperty({

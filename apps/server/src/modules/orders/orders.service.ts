@@ -25,6 +25,7 @@ import {
 } from '@spicyhome/db';
 import {
   decomposeVat,
+  applyPromotionPercent,
   parseZatcaBuyerDetails,
   formatZatcaBuyerDetailsErrors,
   AuditAction,
@@ -41,6 +42,7 @@ import { PrintJobService } from '../printers/print-job.service';
 import { DocumentIdService } from './document-id.allocator';
 import { ZatcaBuyerDetailsDto } from './dto/zatca-buyer-details.dto';
 import { ZatcaStandardInvoiceService } from '../zatca/zatca-standard-invoice.service';
+import { PromotionsService } from '../promotions/promotions.service';
 import type { PrinterRecord } from '../printers/printers.service';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type * as schema from '@spicyhome/db';
@@ -84,6 +86,7 @@ export class OrdersService {
     private orderEvents: OrderEventsService,
     private documentIdService: DocumentIdService,
     private zatcaStandardService: ZatcaStandardInvoiceService,
+    private promotionsService: PromotionsService,
   ) {}
 
   async createOrder(
@@ -177,6 +180,38 @@ export class OrdersService {
         },
         now,
       );
+
+      // ADR 0009: stamp Promotion on open walk-in create (empty cart → discount 0).
+      // Partner is never set at create, so eligibility is always open + no partner.
+      const promoPatch = this.attachOrRecomputePromotion(
+        tx,
+        {
+          id: orderId,
+          status: 'open',
+          deliveryPartnerId: null,
+          promotionId: null,
+          promotionName: null,
+          promotionNameAr: null,
+          promotionPercentBp: null,
+          createdAt: now,
+        },
+        /* totalHalalas */ 0,
+        userId,
+        now,
+      );
+      if (promoPatch.promotionId != null) {
+        tx.update(orders)
+          .set({
+            promotionId: promoPatch.promotionId,
+            promotionName: promoPatch.promotionName,
+            promotionNameAr: promoPatch.promotionNameAr,
+            promotionPercentBp: promoPatch.promotionPercentBp,
+            discountHalalas: promoPatch.discountHalalas,
+            ...updateAuditFields(userId, now),
+          })
+          .where(eq(orders.id, orderId))
+          .run();
+      }
 
       return { id: orderId, uuid: orderUuid, orderNo, documentId };
     });
@@ -477,6 +512,9 @@ export class OrdersService {
           .run();
 
         // Reset every line price to the live catalog + recompute totals.
+        // resetLinePricesToCatalog only recomputes when a unit price actually
+        // changed — always recompute here so ADR 0009 can restamp a Promotion
+        // after the partner null (prices often already at catalog).
         const resetItemCount = this.resetLinePricesToCatalog(
           tx,
           orderId,
@@ -484,6 +522,9 @@ export class OrdersService {
           'partner_cleared',
           now,
         );
+        if (resetItemCount === 0) {
+          this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
+        }
 
         this.orderEvents.createEvent(
           tx,
@@ -541,12 +582,20 @@ export class OrdersService {
 
         // Set/change NEVER touches line prices (ADR 0007). The ref is
         // updated only when the body actually carries it.
+        // ADR 0009: partner tickets never carry a Promotion — clear snapshot
+        // + Discount here (set does not call recompute).
+        const hadPromotion = order.promotionId != null;
         tx.update(orders)
           .set({
             deliveryPartnerId: toPartnerId,
             ...(dto.deliveryExternalRef !== undefined
               ? { deliveryExternalRef: toExternalRef }
               : {}),
+            promotionId: null,
+            promotionName: null,
+            promotionNameAr: null,
+            promotionPercentBp: null,
+            discountHalalas: 0,
             ...updateAuditFields(userId, now),
           })
           .where(eq(orders.id, orderId))
@@ -568,6 +617,26 @@ export class OrdersService {
           },
           now,
         );
+
+        // PROMOTION_CHANGED only when a snapshot was actually cleared.
+        if (hadPromotion) {
+          this.orderEvents.createEvent(
+            tx,
+            orderId,
+            userId,
+            AuditAction.PROMOTION_CHANGED,
+            {
+              fromPromotionId: order.promotionId ?? null,
+              toPromotionId: null,
+              fromName: order.promotionName ?? null,
+              toName: null,
+              fromPercentBp: order.promotionPercentBp ?? null,
+              toPercentBp: null,
+              discountHalalas: 0,
+            },
+            now,
+          );
+        }
 
         return snapshot();
       }
@@ -1276,20 +1345,10 @@ export class OrdersService {
         }
       }
 
-      // Recompute totals and bump order audit fields — only if something changed
+      // Recompute totals + Promotion Discount and bump order audit fields —
+      // only if something changed (ADR 0009 attach hook lives here).
       if (anyMutation) {
-        const allItems = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-        const totals = recomputeOrderTotals(allItems);
-
-        tx.update(orders)
-          .set({
-            subtotalHalalas: totals.subtotalHalalas,
-            vatHalalas: totals.vatHalalas,
-            totalHalalas: totals.totalHalalas,
-            ...updateAuditFields(userId, now),
-          })
-          .where(eq(orders.id, orderId))
-          .run();
+        this.recomputeAndUpdateOrderTotals(tx, orderId, now, userId);
       }
 
       // Return the updated order
@@ -1591,12 +1650,14 @@ export class OrdersService {
         .orderBy(orderPayments.id)
         .all();
 
-      // ADR 0006 precondition: outstanding must be exactly 0
+      // ADR 0006 / 0009: outstanding must be exactly 0 against payable
+      // (total − discount), not the pre-discount item sum.
       const sumAmounts = paymentRows.reduce((sum: number, r: any) => sum + r.amountHalalas, 0);
-      if (sumAmounts !== order.totalHalalas) {
-        const outstanding = order.totalHalalas - sumAmounts;
+      const payable = order.totalHalalas - (order.discountHalalas ?? 0);
+      if (sumAmounts !== payable) {
+        const outstanding = payable - sumAmounts;
         throw new BadRequestException(
-          `Payment sum (${sumAmounts}) does not equal order total (${order.totalHalalas}). Outstanding ${outstanding} halalas.`,
+          `Payment sum (${sumAmounts}) does not equal payable (${payable}). Outstanding ${outstanding} halalas.`,
         );
       }
 
@@ -2707,15 +2768,140 @@ export class OrdersService {
     const allItems = tx.select().from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     const totals = recomputeOrderTotals(allItems);
 
+    const order = tx.select().from(orders).where(eq(orders.id, orderId)).get();
+    const promoPatch = this.attachOrRecomputePromotion(tx, order, totals.totalHalalas, userId, now);
+
     tx.update(orders)
       .set({
         subtotalHalalas: totals.subtotalHalalas,
         vatHalalas: totals.vatHalalas,
         totalHalalas: totals.totalHalalas,
+        discountHalalas: promoPatch.discountHalalas,
+        promotionId: promoPatch.promotionId,
+        promotionName: promoPatch.promotionName,
+        promotionNameAr: promoPatch.promotionNameAr,
+        promotionPercentBp: promoPatch.promotionPercentBp,
         ...updateAuditFields(userId, now),
       })
       .where(eq(orders.id, orderId))
       .run();
+  }
+
+  /**
+   * ADR 0009 attach / amount / clear for Promotions on an Order.
+   *
+   * Eligible to (re)stamp when open + no partner + no promotion_id yet.
+   * When promotion_id is already set and still eligible: recompute Discount
+   * amount only from the stamped percent (never live-refresh snapshot).
+   * Partner present: Discount 0 and clear any leftover snapshot (+ event).
+   *
+   * Writes PROMOTION_CHANGED on newly stamped or cleared snapshot.
+   * Callers must persist the returned fields on the order row.
+   */
+  private attachOrRecomputePromotion(
+    tx: any,
+    order: {
+      id: number;
+      status: string;
+      deliveryPartnerId: string | null;
+      promotionId: number | null;
+      promotionName: string | null;
+      promotionNameAr: string | null;
+      promotionPercentBp: number | null;
+      createdAt: number;
+    },
+    totalHalalas: number,
+    userId: number,
+    now: number,
+  ): {
+    discountHalalas: number;
+    promotionId: number | null;
+    promotionName: string | null;
+    promotionNameAr: string | null;
+    promotionPercentBp: number | null;
+  } {
+    const empty = {
+      discountHalalas: 0,
+      promotionId: null as number | null,
+      promotionName: null as string | null,
+      promotionNameAr: null as string | null,
+      promotionPercentBp: null as number | null,
+    };
+
+    const writePromotionChanged = (to: {
+      promotionId: number | null;
+      promotionName: string | null;
+      promotionPercentBp: number | null;
+      discountHalalas: number;
+    }) => {
+      this.orderEvents.createEvent(
+        tx,
+        order.id,
+        userId,
+        AuditAction.PROMOTION_CHANGED,
+        {
+          fromPromotionId: order.promotionId ?? null,
+          toPromotionId: to.promotionId,
+          fromName: order.promotionName ?? null,
+          toName: to.promotionName,
+          fromPercentBp: order.promotionPercentBp ?? null,
+          toPercentBp: to.promotionPercentBp,
+          discountHalalas: to.discountHalalas,
+        },
+        now,
+      );
+    };
+
+    // Partner tickets never carry a Promotion (ADR 0009 §11).
+    if (order.deliveryPartnerId != null) {
+      if (order.promotionId != null) {
+        writePromotionChanged({
+          promotionId: null,
+          promotionName: null,
+          promotionPercentBp: null,
+          discountHalalas: 0,
+        });
+      }
+      return empty;
+    }
+
+    // Open + no partner + no snapshot → look up by create service day and stamp.
+    if (order.status === 'open' && order.promotionId == null) {
+      const serviceDay = getServiceDayString(order.createdAt * 1000);
+      const promo = this.promotionsService.findEnabledForBusinessDate(serviceDay);
+      if (!promo) {
+        return empty;
+      }
+      const { discountHalalas } = applyPromotionPercent(totalHalalas, promo.percentBp);
+      const stamped = {
+        discountHalalas,
+        promotionId: promo.id as number,
+        promotionName: promo.name as string,
+        promotionNameAr: promo.nameAr as string,
+        promotionPercentBp: promo.percentBp as number,
+      };
+      writePromotionChanged({
+        promotionId: stamped.promotionId,
+        promotionName: stamped.promotionName,
+        promotionPercentBp: stamped.promotionPercentBp,
+        discountHalalas: stamped.discountHalalas,
+      });
+      return stamped;
+    }
+
+    // Snapshot already present + no partner → amount from stamped percent only.
+    if (order.promotionId != null && order.promotionPercentBp != null) {
+      const { discountHalalas } = applyPromotionPercent(totalHalalas, order.promotionPercentBp);
+      return {
+        discountHalalas,
+        promotionId: order.promotionId,
+        promotionName: order.promotionName,
+        promotionNameAr: order.promotionNameAr,
+        promotionPercentBp: order.promotionPercentBp,
+      };
+    }
+
+    return empty;
   }
 
   /**

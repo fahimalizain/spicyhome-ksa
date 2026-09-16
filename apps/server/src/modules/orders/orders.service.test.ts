@@ -6,7 +6,11 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import * as schema from '@spicyhome/db';
-import { getServiceDayString, getServiceDayBoundsUnix } from '@spicyhome/shared';
+import {
+  getServiceDayString,
+  getServiceDayBoundsUnix,
+  applyPromotionPercent,
+} from '@spicyhome/shared';
 import { AppModule } from '../../app.module';
 import { DRIZZLE } from '../database/database.module';
 import { configureHttpApp } from '../../configure-http-app';
@@ -900,7 +904,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
-    expect(res.body.message).toContain('does not equal order total');
+    expect(res.body.message).toContain('does not equal payable');
     await voidOrder(orderId);
   });
 
@@ -918,7 +922,7 @@ describe('Submit order — POST /orders/:id/submit (ADR 0006)', () => {
       .set('Authorization', `Bearer ${jwtToken}`)
       .send({})
       .expect(400);
-    expect(underRes.body.message).toContain('does not equal order total');
+    expect(underRes.body.message).toContain('does not equal payable');
     expect(underRes.body.message).toContain('Outstanding 100 halalas');
 
     // Balance it, then overpay: still rejected — outstanding must be EXACTLY 0
@@ -4317,9 +4321,14 @@ describe('listOrders — kitchen printed qty enrichment (ADR 0006)', () => {
     const sync1 = await syncItems(orderId, updatedAt, [{ itemId: 1, qty: 5 }]);
     const orderItemId = sync1.body.items[0].id;
 
-    // Send 5, then bump to 8 and send the 3 delta → 8 printed total
+    // Send 5, then bump to 8 and send the 3 delta → 8 printed total.
+    // send-to-kitchen bumps updatedAt — re-fetch before the next sync.
     await sendToKitchen(orderId);
-    const sync2 = await syncItems(orderId, sync1.body.updatedAt, [{ orderItemId, qty: 8 }]);
+    const afterSend = await request(app.getHttpServer())
+      .get(`/api/orders/${orderId}`)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+    const sync2 = await syncItems(orderId, afterSend.body.updatedAt, [{ orderItemId, qty: 8 }]);
     await sendToKitchen(orderId);
     expect(sync2.body.items[0].qty).toBe(8);
 
@@ -6287,5 +6296,456 @@ describe('createOrder — daily_order_seq resets on the service-day label (ADR 0
     createdIds.push(second.body.id);
 
     expect(second.body.orderNo).toBe(first.body.orderNo + 1);
+  });
+});
+
+describe('Promotions attach', () => {
+  // Fixed calendar anchors for National Day–style coverage (ADR 0009 / #191).
+  // Mocked Date.now must be past the shared jwtToken exp, so each case re-logs
+  // in under the mocked clock and restores the global token in afterEach.
+  const PROMO_START = '2026-09-23';
+  const PROMO_END = '2026-09-25';
+  const COVERED_DAY = '2026-09-24';
+  const UNCOVERED_DAY = '2026-09-22';
+  const STORY11_SERVICE_DAY = '2026-09-25';
+
+  // 100.00 SAR incl item for clean 10% math (discount 1000, payable 9000).
+  const PROMO_ITEM_ID = 9101;
+  const PROMO_ITEM_PRICE = 10000;
+
+  const coveredNoonMs = (getServiceDayBoundsUnix(COVERED_DAY)!.startUnix + 7 * 3600) * 1000; // 12:00 Riyadh
+  const uncoveredNoonMs = (getServiceDayBoundsUnix(UNCOVERED_DAY)!.startUnix + 7 * 3600) * 1000;
+  // 2026-09-26 01:00 Asia/Riyadh → service day 2026-09-25 (promo still covers).
+  const story11Ms = (getServiceDayBoundsUnix(STORY11_SERVICE_DAY)!.endUnix - 4 * 3600) * 1000;
+
+  let promoToken: string;
+  let createdOrderIds: number[];
+  let promoId: number | null;
+  let savedGlobalJwt: string;
+
+  function setOpenDayBusinessDate(date: string): void {
+    sqlite.prepare("UPDATE day_openings SET business_date = ? WHERE status = 'open'").run(date);
+  }
+
+  async function loginUnderMock(): Promise<string> {
+    const loginRes = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'admin', pin: '771133', clientType: 'pos' });
+    expect(loginRes.body.accessToken).toBeTruthy();
+    return loginRes.body.accessToken as string;
+  }
+
+  async function mockNowAndLogin(ms: number): Promise<void> {
+    jest.spyOn(Date, 'now').mockReturnValue(ms);
+    promoToken = await loginUnderMock();
+    setOpenDayBusinessDate(getServiceDayString(ms));
+  }
+
+  beforeAll(() => {
+    const now = Math.floor(Date.now() / 1000);
+    // Dedicated 100.00 SAR item so totals hit the ADR identity cleanly.
+    sqlite
+      .prepare(
+        `INSERT INTO items (id, category_id, subcategory_id, name, price_halalas, vat_rate_bp, sort_order, is_active, created_at, updated_at)
+         VALUES (?, 1, 1, 'Promo Plate', ?, 1500, 99, 1, ?, ?)`,
+      )
+      .run(PROMO_ITEM_ID, PROMO_ITEM_PRICE, now, now);
+
+    // HungerStation may already exist from the partner describe — insert if missing.
+    const existing = sqlite
+      .prepare(`SELECT id FROM delivery_partners WHERE id = 'hungerstation'`)
+      .get();
+    if (!existing) {
+      sqlite
+        .prepare(
+          `INSERT INTO delivery_partners (id, title, enabled, sort_order, created_at, updated_at)
+           VALUES ('hungerstation', 'HungerStation', 1, 0, ?, ?)`,
+        )
+        .run(now, now);
+    }
+  });
+
+  beforeEach(() => {
+    createdOrderIds = [];
+    promoId = null;
+    savedGlobalJwt = jwtToken;
+    jest.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    // Void open orders created in this describe.
+    for (const id of createdOrderIds) {
+      try {
+        await request(app.getHttpServer())
+          .post(`/api/orders/${id}/void`)
+          .set('Authorization', `Bearer ${promoToken || jwtToken}`)
+          .send({ reason: 'promo test cleanup' });
+      } catch {
+        // already paid/voided
+      }
+    }
+    createdOrderIds = [];
+
+    // Clear stamped FKs then remove promotions so later describes stay promo-free.
+    sqlite.exec(`
+      UPDATE orders SET
+        promotion_id = NULL,
+        promotion_name = NULL,
+        promotion_name_ar = NULL,
+        promotion_percent_bp = NULL
+      WHERE promotion_id IS NOT NULL;
+      DELETE FROM promotions;
+    `);
+    promoId = null;
+
+    jest.restoreAllMocks();
+
+    // Restore open day to the real current service day and the shared JWT.
+    const nowMs = Date.now();
+    sqlite.prepare("UPDATE day_openings SET status = 'closed' WHERE status = 'open'").run();
+    const row = sqlite.prepare('SELECT id FROM day_openings ORDER BY id LIMIT 1').get() as {
+      id: number;
+    };
+    sqlite
+      .prepare(
+        "UPDATE day_openings SET status = 'open', business_date = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(getServiceDayString(nowMs), Math.floor(nowMs / 1000), row.id);
+
+    jwtToken = savedGlobalJwt;
+    promoToken = savedGlobalJwt;
+  });
+
+  async function createPromo(percentBp = 1000): Promise<number> {
+    const res = await request(app.getHttpServer())
+      .post('/api/promotions')
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({
+        name: 'National Day',
+        nameAr: 'اليوم الوطني',
+        percentBp,
+        startBusinessDate: PROMO_START,
+        endBusinessDate: PROMO_END,
+      })
+      .expect(201);
+    promoId = res.body.id;
+    return res.body.id;
+  }
+
+  async function createOrder(body: Record<string, unknown> = { type: 'takeaway' }): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send(body)
+      .expect(201);
+    createdOrderIds.push(res.body.id);
+    return res.body;
+  }
+
+  async function getOrder(id: number): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .get(`/api/orders/${id}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .expect(200);
+    return res.body;
+  }
+
+  async function syncItems(
+    orderId: number,
+    updatedAt: number,
+    items: Array<{ itemId?: number; orderItemId?: number; qty: number }>,
+  ): Promise<any> {
+    const res = await request(app.getHttpServer())
+      .put(`/api/orders/${orderId}/items/sync`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ baseUpdatedAt: updatedAt, items })
+      .expect(200);
+    return res.body;
+  }
+
+  it('stamps Promotion on create for a covered service day (empty cart discount 0)', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    const order = await getOrder(created.id);
+
+    expect(order.promotionId).toBe(promoId);
+    expect(order.promotionName).toBe('National Day');
+    expect(order.promotionNameAr).toBe('اليوم الوطني');
+    expect(order.promotionPercentBp).toBe(1000);
+    expect(order.discountHalalas).toBe(0);
+    expect(order.totalHalalas).toBe(0);
+
+    const promoEvts = order.events.filter((e: any) => e.type === 'promotion_changed');
+    expect(promoEvts).toHaveLength(1);
+    expect(JSON.parse(promoEvts[0].payload)).toEqual({
+      fromPromotionId: null,
+      toPromotionId: promoId,
+      fromName: null,
+      toName: 'National Day',
+      fromPercentBp: null,
+      toPercentBp: 1000,
+      discountHalalas: 0,
+    });
+  });
+
+  it('Discount grows and shrinks with item sum via stamped percent', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+    expect(order.totalHalalas).toBe(10000);
+    expect(order.discountHalalas).toBe(
+      applyPromotionPercent(10000, order.promotionPercentBp).discountHalalas,
+    );
+    expect(order.discountHalalas).toBe(1000);
+    expect(order.promotionPercentBp).toBe(1000);
+
+    // Bump qty via orderItemId so the line grows in place.
+    const lineId = order.items[0].id;
+    order = await syncItems(order.id, order.updatedAt, [{ orderItemId: lineId, qty: 2 }]);
+    expect(order.totalHalalas).toBe(20000);
+    expect(order.discountHalalas).toBe(
+      applyPromotionPercent(20000, order.promotionPercentBp).discountHalalas,
+    );
+    expect(order.discountHalalas).toBe(2000);
+
+    order = await syncItems(order.id, order.updatedAt, [{ orderItemId: lineId, qty: 1 }]);
+    expect(order.totalHalalas).toBe(10000);
+    expect(order.discountHalalas).toBe(1000);
+  });
+
+  it('stamped percent does not live-refresh when the Promotion is edited', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+    expect(order.promotionPercentBp).toBe(1000);
+    expect(order.discountHalalas).toBe(1000);
+
+    await request(app.getHttpServer())
+      .patch(`/api/promotions/${promoId}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ percentBp: 1500 })
+      .expect(200);
+
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 2 }]);
+    expect(order.promotionPercentBp).toBe(1000);
+    expect(order.totalHalalas).toBe(20000);
+    expect(order.discountHalalas).toBe(applyPromotionPercent(20000, 1000).discountHalalas);
+    expect(order.discountHalalas).toBe(2000);
+  });
+
+  it('new order picks up the live percent after admin edit', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+
+    // First order stamps 10%
+    const first = await createOrder({ type: 'takeaway' });
+    const firstOrder = await getOrder(first.id);
+    expect(firstOrder.promotionPercentBp).toBe(1000);
+
+    await request(app.getHttpServer())
+      .patch(`/api/promotions/${promoId}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ percentBp: 1500 })
+      .expect(200);
+
+    const second = await createOrder({ type: 'takeaway' });
+    const secondOrder = await getOrder(second.id);
+    expect(secondOrder.promotionPercentBp).toBe(1500);
+    expect(secondOrder.promotionId).toBe(promoId);
+  });
+
+  it('uncovered service day leaves promotion fields null and discount 0', async () => {
+    await mockNowAndLogin(uncoveredNoonMs);
+    await createPromo(1000);
+    // Open day labeled uncovered — promo does not cover 2026-09-22
+    const created = await createOrder({ type: 'takeaway' });
+    const order = await getOrder(created.id);
+
+    expect(order.promotionId).toBeNull();
+    expect(order.promotionName).toBeNull();
+    expect(order.promotionNameAr).toBeNull();
+    expect(order.promotionPercentBp).toBeNull();
+    expect(order.discountHalalas).toBe(0);
+    expect(order.events.filter((e: any) => e.type === 'promotion_changed')).toHaveLength(0);
+  });
+
+  it('Story 11: 01:00 on 26 Sep is service day 25 and still stamps', async () => {
+    await mockNowAndLogin(story11Ms);
+    expect(getServiceDayString(story11Ms)).toBe(STORY11_SERVICE_DAY);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    const order = await getOrder(created.id);
+
+    expect(order.promotionId).toBe(promoId);
+    expect(order.promotionName).toBe('National Day');
+    expect(order.promotionPercentBp).toBe(1000);
+  });
+
+  it('partner set clears Promotion + Discount; items keep discount 0', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+    expect(order.discountHalalas).toBe(1000);
+    expect(order.promotionId).toBe(promoId);
+
+    const cleared = await request(app.getHttpServer())
+      .patch(`/api/orders/${order.id}/partner`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ baseUpdatedAt: order.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+
+    expect(cleared.body.promotionId).toBeNull();
+    expect(cleared.body.promotionName).toBeNull();
+    expect(cleared.body.promotionNameAr).toBeNull();
+    expect(cleared.body.promotionPercentBp).toBeNull();
+    expect(cleared.body.discountHalalas).toBe(0);
+    expect(cleared.body.deliveryPartnerId).toBe('hungerstation');
+
+    const promoEvts = cleared.body.events.filter((e: any) => e.type === 'promotion_changed');
+    // create stamp + clear
+    expect(promoEvts.length).toBeGreaterThanOrEqual(2);
+    const lastPromo = JSON.parse(promoEvts[promoEvts.length - 1].payload);
+    expect(lastPromo).toMatchObject({
+      toPromotionId: null,
+      toName: null,
+      toPercentBp: null,
+      discountHalalas: 0,
+    });
+
+    // Adding more items under a partner keeps Discount at 0
+    order = await syncItems(cleared.body.id, cleared.body.updatedAt, [
+      { itemId: PROMO_ITEM_ID, qty: 2 },
+    ]);
+    expect(order.promotionId).toBeNull();
+    expect(order.discountHalalas).toBe(0);
+    expect(order.totalHalalas).toBe(20000);
+  });
+
+  it('partner clear restamps the live Promotion percent', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+
+    // Bump live percent to 15% while order is stamped at 10%
+    await request(app.getHttpServer())
+      .patch(`/api/promotions/${promoId}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ percentBp: 1500 })
+      .expect(200);
+
+    const withPartner = await request(app.getHttpServer())
+      .patch(`/api/orders/${order.id}/partner`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ baseUpdatedAt: order.updatedAt, deliveryPartnerId: 'hungerstation' })
+      .expect(200);
+    expect(withPartner.body.promotionId).toBeNull();
+
+    const afterClear = await request(app.getHttpServer())
+      .patch(`/api/orders/${order.id}/partner`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ baseUpdatedAt: withPartner.body.updatedAt, deliveryPartnerId: null })
+      .expect(200);
+
+    expect(afterClear.body.deliveryPartnerId).toBeNull();
+    expect(afterClear.body.promotionId).toBe(promoId);
+    expect(afterClear.body.promotionPercentBp).toBe(1500);
+    expect(afterClear.body.totalHalalas).toBe(10000);
+    expect(afterClear.body.discountHalalas).toBe(
+      applyPromotionPercent(10000, 1500).discountHalalas,
+    );
+    expect(afterClear.body.discountHalalas).toBe(1500);
+  });
+
+  it('submit uses payable (total − discount), not gross', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+    expect(order.totalHalalas).toBe(10000);
+    expect(order.discountHalalas).toBe(1000);
+    const payable = order.totalHalalas - order.discountHalalas;
+    expect(payable).toBe(9000);
+
+    // Pay gross → submit 400
+    await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/payments`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ methodId: 'cash', amountHalalas: 10000 })
+      .expect(201);
+    const overRes = await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/submit`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({})
+      .expect(400);
+    expect(overRes.body.message).toContain('does not equal payable');
+    expect(overRes.body.message).toContain('Outstanding -1000');
+
+    // Correct down to payable
+    await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/payments`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({ methodId: 'cash', amountHalalas: -1000 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/orders/${order.id}/submit`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .send({})
+      .expect(201);
+  });
+
+  it('dine_in also stamps on a covered day', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+
+    // Ensure table 1 has no open order
+    const openOnTable = sqlite
+      .prepare(`SELECT id FROM orders WHERE table_id = 1 AND status = 'open'`)
+      .all() as Array<{ id: number }>;
+    for (const row of openOnTable) {
+      await request(app.getHttpServer())
+        .post(`/api/orders/${row.id}/void`)
+        .set('Authorization', `Bearer ${promoToken}`)
+        .send({ reason: 'free table for promo dine-in' });
+    }
+
+    const created = await createOrder({ type: 'dine_in', tableId: 1 });
+    const order = await getOrder(created.id);
+    expect(order.promotionId).toBe(promoId);
+    expect(order.promotionPercentBp).toBe(1000);
+    expect(order.discountHalalas).toBe(0);
+    expect(order.type).toBe('dine_in');
+  });
+
+  it('list/summary exposes promotion snapshot fields + discountHalalas', async () => {
+    await mockNowAndLogin(coveredNoonMs);
+    await createPromo(1000);
+    const created = await createOrder({ type: 'takeaway' });
+    let order = await getOrder(created.id);
+    order = await syncItems(order.id, order.updatedAt, [{ itemId: PROMO_ITEM_ID, qty: 1 }]);
+
+    const listRes = await request(app.getHttpServer())
+      .get(`/api/orders?date=${COVERED_DAY}`)
+      .set('Authorization', `Bearer ${promoToken}`)
+      .expect(200);
+
+    const summary = listRes.body.find((o: any) => o.id === order.id);
+    expect(summary).toBeDefined();
+    expect(summary.promotionId).toBe(promoId);
+    expect(summary.promotionName).toBe('National Day');
+    expect(summary.promotionNameAr).toBe('اليوم الوطني');
+    expect(summary.promotionPercentBp).toBe(1000);
+    expect(summary.discountHalalas).toBe(1000);
+    expect(summary.totalHalalas).toBe(10000);
   });
 });
