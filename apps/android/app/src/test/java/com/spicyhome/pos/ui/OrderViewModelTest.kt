@@ -779,6 +779,10 @@ class OrderViewModelTest {
             status = "open",
             subtotalHalalas = 2608L, vatHalalas = 392L, totalHalalas = 3000L,
             discountHalalas = 0L,
+            promotionId = null,
+            promotionName = null,
+            promotionNameAr = null,
+            promotionPercentBp = null,
             deliveryPartnerId = null,
             deliveryPartnerTitle = null,
             deliveryExternalRef = null,
@@ -820,6 +824,10 @@ class OrderViewModelTest {
             status = "paid",
             subtotalHalalas = 4000L, vatHalalas = 600L, totalHalalas = 4600L,
             discountHalalas = 0L,
+            promotionId = null,
+            promotionName = null,
+            promotionNameAr = null,
+            promotionPercentBp = null,
             deliveryPartnerId = null,
             deliveryPartnerTitle = null,
             deliveryExternalRef = null,
@@ -1815,6 +1823,119 @@ class OrderViewModelTest {
         updatedBy = null,
     )
 
+    // --- Promotion display totals (slice 9) ---
+
+    @Test
+    fun `hydrate with stamped Promotion exposes payable and label`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 100L, orderId = 1L, itemId = 10L,
+            itemName = "Kabsa", unitPriceHalalas = 10000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 10000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = OrderResponse(
+            id = 1L, orderNo = 100L, uuid = "uuid-1",
+            documentId = "INV26-1",
+            isStandardInvoice = false,
+            type = "dine_in", tableId = 5L, dayOpeningId = 1L,
+            status = "open",
+            subtotalHalalas = 8696L, vatHalalas = 1304L, totalHalalas = 10000L,
+            discountHalalas = 1000L,
+            promotionId = 7L,
+            promotionName = "National Day",
+            promotionNameAr = "اليوم الوطني",
+            promotionPercentBp = 1000L,
+            deliveryPartnerId = null,
+            deliveryPartnerTitle = null,
+            deliveryExternalRef = null,
+            notes = null,
+            createdAt = 1700000000L, updatedAt = 5000L,
+            createdBy = 1L, updatedBy = 1L,
+            items = listOf(oi),
+            events = emptyList(),
+            payments = emptyList(),
+        )
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+
+        val state = vm.uiState.value
+        assertThat(state.hasPromotion).isTrue()
+        assertThat(state.promotionDisplayLabel).isEqualTo("National Day 10%")
+        assertThat(state.displayDiscountHalalas).isEqualTo(1000L)
+        assertThat(state.displaySubtotalHalalas).isEqualTo(8696L)
+        assertThat(state.displayTotalHalalas).isEqualTo(10000L)
+        assertThat(state.displayPayableHalalas).isEqualTo(9000L)
+        // Post-Allowance VAT: decompose(9000 @ 15%) = 1174, not the line-sum 1304
+        assertThat(state.displayVatHalalas).isEqualTo(1174L)
+    }
+
+    @Test
+    fun `hydrate without Promotion hides Promotion rows and passes VAT through`() =
+        runTest(testDispatcher) {
+            val oi = OrderItemResponse(
+                id = 100L, orderId = 1L, itemId = 10L,
+                itemName = "Burger", unitPriceHalalas = 2300L, vatRateBp = 1500,
+                qty = 2, totalHalalas = 4600L, notes = null,
+                createdAt = 1700000000L, updatedAt = 1700000000L,
+                createdBy = 1L, updatedBy = 1L,
+            )
+            val order = createOrderResponse(1L, 100L, "open", listOf(oi))
+            val vm = createViewModel()
+            vm.hydrateFromOrder(order)
+
+            val state = vm.uiState.value
+            assertThat(state.hasPromotion).isFalse()
+            assertThat(state.promotionDisplayLabel).isNull()
+            assertThat(state.displayDiscountHalalas).isEqualTo(0L)
+            assertThat(state.displayTotalHalalas).isEqualTo(4600L)
+            assertThat(state.displayPayableHalalas).isEqualTo(4600L)
+            assertThat(state.displayVatHalalas).isEqualTo(600L)
+        }
+
+    @Test
+    fun `dirty cart falls back to item sums with no Promotion`() = runTest(testDispatcher) {
+        val oi = OrderItemResponse(
+            id = 100L, orderId = 1L, itemId = 10L,
+            itemName = "Kabsa", unitPriceHalalas = 10000L, vatRateBp = 1500,
+            qty = 1, totalHalalas = 10000L, notes = null,
+            createdAt = 1700000000L, updatedAt = 1700000000L,
+            createdBy = 1L, updatedBy = 1L,
+        )
+        val order = createOrderResponse(
+            1L, 100L, "open", listOf(oi),
+            discountHalalas = 1000L,
+            promotionId = 7L,
+            promotionName = "National Day",
+            promotionNameAr = "اليوم الوطني",
+            promotionPercentBp = 1000L,
+        )
+        val vm = createViewModel()
+        vm.hydrateFromOrder(order)
+        assertThat(vm.uiState.value.hasPromotion).isTrue()
+
+        vm.increaseQty(0)
+
+        val state = vm.uiState.value
+        assertThat(state.isDirty).isTrue()
+        assertThat(state.hasPromotion).isFalse()
+        assertThat(state.promotionDisplayLabel).isNull()
+        assertThat(state.displayPayableHalalas).isEqualTo(state.cartTotalHalalas)
+        assertThat(state.displayVatHalalas).isEqualTo(state.cartVatHalalas)
+    }
+
+    @Test
+    fun `pre-create display totals are cart sums with no Promotion`() = runTest(testDispatcher) {
+        val vm = createViewModel()
+        vm.addToCart(createItem(1, "Burger", 2300, 1500))
+
+        val state = vm.uiState.value
+        assertThat(state.hasPromotion).isFalse()
+        assertThat(state.promotionDisplayLabel).isNull()
+        assertThat(state.displayPayableHalalas).isEqualTo(2300L)
+        assertThat(state.displayTotalHalalas).isEqualTo(2300L)
+    }
+
     private fun createOrderResponse(
         id: Long,
         orderNo: Long,
@@ -1822,6 +1943,11 @@ class OrderViewModelTest {
         items: List<OrderItemResponse>,
         updatedAt: Long = 1700000000L,
         notes: String? = null,
+        discountHalalas: Long = 0L,
+        promotionId: Long? = null,
+        promotionName: String? = null,
+        promotionNameAr: String? = null,
+        promotionPercentBp: Long? = null,
     ): OrderResponse = OrderResponse(
         id = id,
         orderNo = orderNo,
@@ -1835,7 +1961,11 @@ class OrderViewModelTest {
         subtotalHalalas = items.sumOf { it.totalHalalas - (it.totalHalalas * it.vatRateBp / (10000 + it.vatRateBp)) },
         vatHalalas = items.sumOf { it.totalHalalas * it.vatRateBp / (10000 + it.vatRateBp) },
         totalHalalas = items.sumOf { it.totalHalalas },
-        discountHalalas = 0L,
+        discountHalalas = discountHalalas,
+        promotionId = promotionId,
+        promotionName = promotionName,
+        promotionNameAr = promotionNameAr,
+        promotionPercentBp = promotionPercentBp,
         deliveryPartnerId = null,
         deliveryPartnerTitle = null,
         deliveryExternalRef = null,

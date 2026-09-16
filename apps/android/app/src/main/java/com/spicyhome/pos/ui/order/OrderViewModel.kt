@@ -19,6 +19,8 @@ import com.spicyhome.pos.data.repository.MenuRepository
 import com.spicyhome.pos.data.repository.OrderRepository
 import com.spicyhome.pos.data.repository.TableRepository
 import com.spicyhome.pos.util.MoneyFormatter
+import com.spicyhome.pos.util.OrderTotals
+import com.spicyhome.pos.util.payableHalalas
 import io.sentry.Sentry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +167,76 @@ data class OrderUiState(
 
     val isCartEmpty: Boolean
         get() = cart.isEmpty()
+
+    // ── Promotion-aware display totals (slice 9) ──────────────────────────
+    // After hydrate with a clean cart these render the SERVER snapshot
+    // (payable when a Promotion is stamped). Pre-create and dirty carts keep
+    // the local item sums — percent math is never applied client-side.
+
+    /** Whether the hydrated order carries a stamped Promotion to display. */
+    val hasPromotion: Boolean
+        get() {
+            val order = currentOrder ?: return false
+            if (isDirty == true) return false
+            return OrderTotals.hasPromotion(order.promotionId, order.discountHalalas)
+        }
+
+    /** Stamped inclusive Discount, or 0 pre-create / while dirty. */
+    val displayDiscountHalalas: Long
+        get() {
+            val order = currentOrder ?: return 0L
+            if (isDirty == true) return 0L
+            return order.discountHalalas
+        }
+
+    /** "National Day 10%" label for the stamped Promotion, or null. */
+    val promotionDisplayLabel: String?
+        get() {
+            val order = currentOrder ?: return null
+            if (isDirty == true) return null
+            if (!OrderTotals.hasPromotion(order.promotionId, order.discountHalalas)) return null
+            val name = order.promotionName ?: return null
+            val percentBp = order.promotionPercentBp ?: return null
+            return OrderTotals.promotionLabel(name, percentBp)
+        }
+
+    /** Guest-facing total: payable after hydrate, cart sum otherwise. */
+    val displayPayableHalalas: Long
+        get() {
+            val order = currentOrder
+            if (order != null && isDirty != true) return order.payableHalalas()
+            return cartTotalHalalas
+        }
+
+    /** Gross total: server gross after hydrate, cart sum otherwise. */
+    val displayTotalHalalas: Long
+        get() {
+            val order = currentOrder
+            if (order != null && isDirty != true) return order.totalHalalas
+            return cartTotalHalalas
+        }
+
+    /** Subtotal: server line-sum excl after hydrate, cart subtotal otherwise. */
+    val displaySubtotalHalalas: Long
+        get() {
+            val order = currentOrder
+            if (order != null && isDirty != true) return order.subtotalHalalas
+            return cartSubtotalHalalas
+        }
+
+    /** VAT: post-Allowance after hydrate with a Discount, cart VAT otherwise. */
+    val displayVatHalalas: Long
+        get() {
+            val order = currentOrder
+            if (order != null && isDirty != true) {
+                return OrderTotals.postAllowanceVatHalalas(
+                    order.totalHalalas,
+                    order.discountHalalas,
+                    order.vatHalalas,
+                )
+            }
+            return cartVatHalalas
+        }
 }
 
 /**

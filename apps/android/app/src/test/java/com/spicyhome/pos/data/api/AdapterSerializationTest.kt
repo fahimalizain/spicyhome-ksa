@@ -447,8 +447,78 @@ class AdapterSerializationTest {
     }
 
     @Test
-    fun `OrderResponse rejects isStandardInvoice as number`() {
-        // Regression guard: server must never emit SQLite 0/1 for
+    fun `OrderResponse deserializes stamped Promotion snapshot`() {
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "takeaway",
+                "tableId": null,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 8696,
+                "vatHalalas": 1304,
+                "totalHalalas": 10000,
+                "discountHalalas": 1000,
+                "promotionId": 7,
+                "promotionName": "National Day",
+                "promotionNameAr": "اليوم الوطني",
+                "promotionPercentBp": 1000,
+                "documentId": "INV26-1",
+                "isStandardInvoice": false,
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1,
+                "items": [],
+                "events": [],
+                "payments": []
+            }
+        """.trimIndent()
+        val response = moshi.adapter(OrderResponse::class.java).fromJson(json)
+        assertThat(response).isNotNull()
+        assertThat(response!!.discountHalalas).isEqualTo(1000L)
+        assertThat(response.promotionId).isEqualTo(7L)
+        assertThat(response.promotionName).isEqualTo("National Day")
+        assertThat(response.promotionNameAr).isEqualTo("اليوم الوطني")
+        assertThat(response.promotionPercentBp).isEqualTo(1000L)
+    }
+
+    @Test
+    fun `OrderSummaryResponse Promotion snapshot defaults to null when absent`() {
+        val json = """
+            {
+                "id": 1,
+                "orderNo": 100,
+                "uuid": "abc-123",
+                "type": "dine_in",
+                "tableId": 5,
+                "dayOpeningId": 1,
+                "status": "open",
+                "subtotalHalalas": 4000,
+                "vatHalalas": 600,
+                "totalHalalas": 4600,
+                "discountHalalas": 0,
+                "documentId": "INV26-1",
+                "createdAt": 1700000000,
+                "updatedAt": 1700000000,
+                "createdBy": 1,
+                "updatedBy": 1,
+                "kitchenPrintedQty": 0,
+                "itemQtyTotal": 0
+            }
+        """.trimIndent()
+        val response = moshi.adapter(OrderSummaryResponse::class.java).fromJson(json)
+        assertThat(response).isNotNull()
+        assertThat(response!!.promotionId).isNull()
+        assertThat(response.promotionName).isNull()
+        assertThat(response.promotionNameAr).isNull()
+        assertThat(response.promotionPercentBp).isNull()
+    }
+
+    @Test
+    fun `OrderResponse rejects isStandardInvoice as number`() {        // Regression guard: server must never emit SQLite 0/1 for
         // isStandardInvoice — Moshi fails on boolean-typed field with a number.
         val json = """
             {

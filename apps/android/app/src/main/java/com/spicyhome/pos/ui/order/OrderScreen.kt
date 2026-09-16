@@ -766,7 +766,9 @@ private fun UnifiedCartPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Totals
+        // Totals: server snapshot after hydrate (payable when a Promotion is
+        // stamped), plain cart sums pre-create or while dirty. Percent math
+        // is never applied client-side.
         if (!state.isCartEmpty) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                 Divider(color = DarkSurfaceVariant)
@@ -777,7 +779,7 @@ private fun UnifiedCartPanel(
                 ) {
                     Text("Subtotal", color = OnDarkSecondary, fontSize = 14.sp)
                     Text(
-                        MoneyFormatter.halalasToSar(state.cartSubtotalHalalas),
+                        MoneyFormatter.halalasToSar(state.displaySubtotalHalalas),
                         color = OnDark,
                         fontSize = 14.sp,
                     )
@@ -788,10 +790,51 @@ private fun UnifiedCartPanel(
                 ) {
                     Text("VAT", color = OnDarkSecondary, fontSize = 14.sp)
                     Text(
-                        MoneyFormatter.halalasToSar(state.cartVatHalalas),
+                        MoneyFormatter.halalasToSar(state.displayVatHalalas),
                         color = OnDark,
                         fontSize = 14.sp,
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Total", color = OnDarkSecondary, fontSize = 14.sp)
+                    Text(
+                        MoneyFormatter.halalasToSar(state.displayTotalHalalas),
+                        color = OnDark,
+                        fontSize = 14.sp,
+                    )
+                }
+                val promotionLabel = state.promotionDisplayLabel
+                if (state.hasPromotion && promotionLabel != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            promotionLabel,
+                            color = Success,
+                            fontSize = 14.sp,
+                        )
+                        Text(
+                            "−" + MoneyFormatter.halalasToSar(state.displayDiscountHalalas),
+                            color = Success,
+                            fontSize = 14.sp,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Payable", color = OnDark, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            MoneyFormatter.halalasToSar(state.displayPayableHalalas),
+                            color = OnDark,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Divider(color = DarkSurfaceVariant)
@@ -806,7 +849,7 @@ private fun UnifiedCartPanel(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        MoneyFormatter.halalasToSar(state.cartTotalHalalas),
+                        MoneyFormatter.halalasToSar(state.displayPayableHalalas),
                         color = Accent,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
