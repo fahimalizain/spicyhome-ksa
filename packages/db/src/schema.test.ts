@@ -20,14 +20,14 @@ describe('schema — migrations', () => {
   });
 
   describe('journal idempotency', () => {
-    it('__drizzle_migrations has exactly 13 rows after apply', () => {
+    it('__drizzle_migrations has exactly 14 rows after apply', () => {
       const sqlite = new Database(':memory:');
       applyMigrations(sqlite, migrationsDir);
 
       const rows = sqlite.prepare('SELECT COUNT(*) as cnt FROM __drizzle_migrations').get() as {
         cnt: number;
       };
-      expect(rows.cnt).toBe(13);
+      expect(rows.cnt).toBe(14);
 
       sqlite.close();
     });
@@ -51,7 +51,7 @@ describe('schema — migrations', () => {
         }
       ).cnt;
       expect(after).toBe(before);
-      expect(after).toBe(13);
+      expect(after).toBe(14);
 
       sqlite.close();
     });
@@ -119,6 +119,7 @@ describe('schema — invariants', () => {
       'payment_methods',
       'order_payments',
       'delivery_partners',
+      'promotions',
     ];
 
     for (const table of expectedTables) {
@@ -390,6 +391,209 @@ describe('schema — invariants', () => {
       const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 802').get() as any;
       expect(row.delivery_partner_id).toBeNull();
       expect(row.delivery_external_ref).toBeNull();
+    });
+  });
+
+  describe('promotions', () => {
+    it('promotions table has expected columns (ADR 0009 / #191)', () => {
+      const info = sqlite.prepare('PRAGMA table_info(promotions)').all() as any[];
+      const cols = info.map((c: any) => c.name);
+      expect(cols).toEqual(
+        expect.arrayContaining([
+          'id',
+          'name',
+          'name_ar',
+          'percent_bp',
+          'start_business_date',
+          'end_business_date',
+          'enabled',
+          'created_at',
+          'updated_at',
+          'created_by',
+          'updated_by',
+        ]),
+      );
+
+      // id is integer autoincrement PK
+      const id = info.find((c: any) => c.name === 'id') as any;
+      expect(id.type.toLowerCase()).toBe('integer');
+      expect(id.pk).toBe(1);
+
+      // name / name_ar are NOT NULL text
+      const name = info.find((c: any) => c.name === 'name') as any;
+      expect(name.type.toLowerCase()).toBe('text');
+      expect(name.notnull).toBe(1);
+      const nameAr = info.find((c: any) => c.name === 'name_ar') as any;
+      expect(nameAr.type.toLowerCase()).toBe('text');
+      expect(nameAr.notnull).toBe(1);
+
+      // percent_bp is NOT NULL integer
+      const percentBp = info.find((c: any) => c.name === 'percent_bp') as any;
+      expect(percentBp.type.toLowerCase()).toBe('integer');
+      expect(percentBp.notnull).toBe(1);
+
+      // Business date window columns are NOT NULL text
+      const startDate = info.find((c: any) => c.name === 'start_business_date') as any;
+      expect(startDate.type.toLowerCase()).toBe('text');
+      expect(startDate.notnull).toBe(1);
+      const endDate = info.find((c: any) => c.name === 'end_business_date') as any;
+      expect(endDate.type.toLowerCase()).toBe('text');
+      expect(endDate.notnull).toBe(1);
+
+      // enabled is NOT NULL with default 1
+      const enabled = info.find((c: any) => c.name === 'enabled') as any;
+      expect(enabled.notnull).toBe(1);
+      expect(enabled.dflt_value).toBe('1');
+
+      // Audit quartet: timestamps NOT NULL, user FKs nullable
+      const createdAt = info.find((c: any) => c.name === 'created_at') as any;
+      expect(createdAt.notnull).toBe(1);
+      const updatedAt = info.find((c: any) => c.name === 'updated_at') as any;
+      expect(updatedAt.notnull).toBe(1);
+      const createdBy = info.find((c: any) => c.name === 'created_by') as any;
+      expect(createdBy.notnull).toBe(0);
+      const updatedBy = info.find((c: any) => c.name === 'updated_by') as any;
+      expect(updatedBy.notnull).toBe(0);
+    });
+
+    it('enabled defaults to 1 when omitted on insert', () => {
+      const now = Math.floor(Date.now() / 1000);
+      sqlite.exec(`
+        INSERT INTO promotions (name, name_ar, percent_bp, start_business_date, end_business_date, created_at, updated_at)
+        VALUES ('National Day', 'اليوم الوطني', 1000, '2026-09-23', '2026-09-24', ${now}, ${now})
+      `);
+      const row = sqlite
+        .prepare("SELECT * FROM promotions WHERE name = 'National Day'")
+        .get() as any;
+      expect(row.name_ar).toBe('اليوم الوطني');
+      expect(row.percent_bp).toBe(1000);
+      expect(row.start_business_date).toBe('2026-09-23');
+      expect(row.end_business_date).toBe('2026-09-24');
+      expect(row.enabled).toBe(1);
+    });
+
+    it('orders has four nullable promotion snapshot columns', () => {
+      const info = sqlite.prepare('PRAGMA table_info(orders)').all() as any[];
+
+      const promotionId = info.find((c: any) => c.name === 'promotion_id') as any;
+      expect(promotionId).toBeDefined();
+      expect(promotionId.type.toLowerCase()).toBe('integer');
+      expect(promotionId.notnull).toBe(0);
+
+      const promotionName = info.find((c: any) => c.name === 'promotion_name') as any;
+      expect(promotionName).toBeDefined();
+      expect(promotionName.type.toLowerCase()).toBe('text');
+      expect(promotionName.notnull).toBe(0);
+
+      const promotionNameAr = info.find((c: any) => c.name === 'promotion_name_ar') as any;
+      expect(promotionNameAr).toBeDefined();
+      expect(promotionNameAr.type.toLowerCase()).toBe('text');
+      expect(promotionNameAr.notnull).toBe(0);
+
+      const promotionPercentBp = info.find((c: any) => c.name === 'promotion_percent_bp') as any;
+      expect(promotionPercentBp).toBeDefined();
+      expect(promotionPercentBp.type.toLowerCase()).toBe('integer');
+      expect(promotionPercentBp.notnull).toBe(0);
+    });
+
+    it('idx_orders_promotion index exists on orders(promotion_id)', () => {
+      const row = sqlite
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_orders_promotion'",
+        )
+        .get();
+      expect(row).toBeDefined();
+    });
+
+    it('orders.promotion_id FK is enforced; known id round-trips with snapshot', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      // Ensure a promotion exists
+      let promo = sqlite
+        .prepare("SELECT id FROM promotions WHERE name = 'National Day'")
+        .get() as any;
+      if (!promo) {
+        sqlite.exec(`
+          INSERT INTO promotions (name, name_ar, percent_bp, start_business_date, end_business_date, created_at, updated_at)
+          VALUES ('National Day', 'اليوم الوطني', 1000, '2026-09-23', '2026-09-24', ${now}, ${now})
+        `);
+        promo = { id: (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id };
+      }
+
+      // Unknown promotion id must fail
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, promotion_id, created_at, updated_at)
+          VALUES (810, 'uuid-promo-fk', 'dine_in', ${doId}, 'open', 99999, ${now}, ${now})
+        `),
+      ).toThrow();
+
+      // Known promotion round-trips with stamped name/percent snapshot
+      sqlite.exec(`
+        INSERT INTO orders (
+          order_no, uuid, type, day_opening_id, status,
+          promotion_id, promotion_name, promotion_name_ar, promotion_percent_bp,
+          created_at, updated_at
+        ) VALUES (
+          811, 'uuid-promo-ok', 'dine_in', ${doId}, 'open',
+          ${promo.id}, 'National Day', 'اليوم الوطني', 1000,
+          ${now}, ${now}
+        )
+      `);
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 811').get() as any;
+      expect(row.promotion_id).toBe(promo.id);
+      expect(row.promotion_name).toBe('National Day');
+      expect(row.promotion_name_ar).toBe('اليوم الوطني');
+      expect(row.promotion_percent_bp).toBe(1000);
+    });
+
+    it('order insert without promotion still works (all four columns null)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+
+      expect(() =>
+        sqlite.exec(`
+          INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+          VALUES (812, 'uuid-promo-null', 'dine_in', ${doId}, 'open', ${now}, ${now})
+        `),
+      ).not.toThrow();
+
+      const row = sqlite.prepare('SELECT * FROM orders WHERE order_no = 812').get() as any;
+      expect(row.promotion_id).toBeNull();
+      expect(row.promotion_name).toBeNull();
+      expect(row.promotion_name_ar).toBeNull();
+      expect(row.promotion_percent_bp).toBeNull();
+    });
+
+    it('order_refunds.discount_halalas is NOT NULL default 0; omit stores 0', () => {
+      const info = sqlite.prepare('PRAGMA table_info(order_refunds)').all() as any[];
+      const col = info.find((c: any) => c.name === 'discount_halalas') as any;
+      expect(col).toBeDefined();
+      expect(col.type.toLowerCase()).toBe('integer');
+      expect(col.notnull).toBe(1);
+      expect(col.dflt_value).toBe('0');
+
+      const now = Math.floor(Date.now() / 1000);
+      const doId = (sqlite.prepare('SELECT id FROM day_openings LIMIT 1').get() as any).id;
+      const userId = (sqlite.prepare('SELECT id FROM users LIMIT 1').get() as any).id;
+
+      sqlite.exec(`
+        INSERT INTO orders (order_no, uuid, type, day_opening_id, status, created_at, updated_at)
+        VALUES (813, 'uuid-refund-disc', 'dine_in', ${doId}, 'paid', ${now}, ${now})
+      `);
+      const orderId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+
+      // Insert omitting discount_halalas — must default to 0
+      sqlite.exec(`
+        INSERT INTO order_refunds (order_id, user_id, method_id, method_title, zatca_payment_means_code, subtotal_halalas, vat_halalas, total_halalas, reason, created_at)
+        VALUES (${orderId}, ${userId}, 'cash', 'Cash', '10', 1000, 150, 1150, 'test', ${now})
+      `);
+      const refundId = (sqlite.prepare('SELECT last_insert_rowid() as id').get() as any).id;
+      const row = sqlite
+        .prepare('SELECT discount_halalas FROM order_refunds WHERE id = ?')
+        .get(refundId) as any;
+      expect(row.discount_halalas).toBe(0);
     });
   });
 
