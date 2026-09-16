@@ -1298,6 +1298,41 @@ export interface paths {
     patch: operations['DeliveryPartnersController_update'];
     trace?: never;
   };
+  '/promotions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all promotions (including disabled) */
+    get: operations['PromotionsController_list'];
+    put?: never;
+    /** Create a promotion (enabled date ranges must not overlap) */
+    post: operations['PromotionsController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/promotions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a promotion (name / nameAr / percentBp / dates / enabled; soft-disable only) */
+    patch: operations['PromotionsController_update'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3446,6 +3481,80 @@ export interface components {
        * @default 0
        */
       sortOrder: number;
+    };
+    PromotionResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example KSA National Day */
+      name: string;
+      /** @example اليوم الوطني */
+      nameAr: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp: number;
+      /** @example 2026-09-23 */
+      startBusinessDate: string;
+      /** @example 2026-09-25 */
+      endBusinessDate: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreatePromotionDto: {
+      /** @example KSA National Day */
+      name: string;
+      /** @example اليوم الوطني */
+      nameAr: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp: number;
+      /** @example 2026-09-23 */
+      startBusinessDate: string;
+      /** @example 2026-09-25 */
+      endBusinessDate: string;
+    };
+    UpdatePromotionDto: {
+      /** @example KSA National Day */
+      name?: string;
+      /** @example اليوم الوطني */
+      nameAr?: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp?: number;
+      /** @example 2026-09-23 */
+      startBusinessDate?: string;
+      /** @example 2026-09-25 */
+      endBusinessDate?: string;
+      /** @default true */
+      enabled: boolean;
     };
   };
   responses: never;
@@ -5604,6 +5713,77 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['DeliveryPartnerResponse'];
+        };
+      };
+    };
+  };
+  PromotionsController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of promotions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'][];
+        };
+      };
+    };
+  };
+  PromotionsController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePromotionDto'];
+      };
+    };
+    responses: {
+      /** @description Created promotion */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'];
+        };
+      };
+    };
+  };
+  PromotionsController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Promotion id */
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePromotionDto'];
+      };
+    };
+    responses: {
+      /** @description Updated promotion */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'];
         };
       };
     };
