@@ -30,3 +30,8 @@ apps/android/**/build/
 apps/android/.gradle/
 apps/android/.kotlin/
 apps/android/local.properties
+
+# Android distribution keystore (NEVER commit — see docs/android/apk-signing.md)
+apps/android/keystore/
+*.jks
+*.keystore

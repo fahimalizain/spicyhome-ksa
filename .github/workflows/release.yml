@@ -81,6 +81,27 @@ jobs:
           NEXT_VERSION=$(bash scripts/bump-version.sh date)
           echo "next_version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
 
+      # Fails the release fast when distribution signing secrets are missing —
+      # a debug-signed APK would force an uninstall on every tablet.
+      - name: Require Android distribution signing secrets
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for SECRET_NAME in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!SECRET_NAME:-}" ]; then
+              MISSING="$MISSING $SECRET_NAME"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing required GitHub secrets:$MISSING. Configure them in Settings > Secrets and variables > Actions (see docs/android/apk-signing.md)."
+            exit 1
+          fi
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
       - name: Run tests
         run: |
           bazel test //apps/server:test \
@@ -94,16 +115,82 @@ jobs:
             --action_env=ANDROID_HOME=$ANDROID_HOME \
             --action_env=JAVA_HOME=$JAVA_HOME
 
+      - name: Decode distribution keystore
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/spicyhome-upload.jks"
+          ls -lh "$RUNNER_TEMP/spicyhome-upload.jks"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
       - name: Build Android APK
         run: |
           bazel build //apps/android:apk \
-            --action_env=ANDROID_HOME=$ANDROID_HOME \
-            --action_env=JAVA_HOME=$JAVA_HOME \
-            --action_env=SENTRY_DSN=${{ secrets.SENTRY_ANDROID_DSN || '' }} \
-            --action_env=SENTRY_ENVIRONMENT=production
+            --action_env=ANDROID_HOME \
+            --action_env=JAVA_HOME \
+            --action_env=SENTRY_DSN \
+            --action_env=SENTRY_ENVIRONMENT \
+            --action_env=ANDROID_KEYSTORE_PATH \
+            --action_env=ANDROID_KEYSTORE_PASSWORD \
+            --action_env=ANDROID_KEY_ALIAS \
+            --action_env=ANDROID_KEY_PASSWORD
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_ANDROID_DSN || '' }}
           SENTRY_ENVIRONMENT: production
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/spicyhome-upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      # Refuse to ship an APK whose versionCode/versionName drifted from the
+      # bumped VERSION or that is signed with the ephemeral debug key.
+      - name: Verify APK versionCode, versionName and signer
+        run: |
+          set -euo pipefail
+          APK="$PWD/bazel-bin/apps/android/spicyhome-pos-debug.apk"
+          EXPECTED_VERSION="${{ steps.bump.outputs.next_version }}"
+          # YYYYMM * 10000 + DD * 100 + min(N, 99) — same formula as
+          # computeVersionCode in app/build.gradle.kts and
+          # AppVersion.toVersionCode() in the Android app.
+          IFS='.' read -r YM DD N <<< "$EXPECTED_VERSION"
+          N=$((10#$N > 99 ? 99 : 10#$N))
+          EXPECTED_CODE=$((10#$YM * 10000 + 10#$DD * 100 + 10#$N))
+          echo "Expected: versionName=$EXPECTED_VERSION versionCode=$EXPECTED_CODE"
+
+          AAPT2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -z "$AAPT2" ]; then
+            echo "::error::aapt2 not found under ANDROID_HOME/build-tools; cannot verify APK"
+            exit 1
+          fi
+          BADGING="$("$AAPT2" dump badging "$APK")"
+          VERSION_CODE="$(printf '%s\n' "$BADGING" | grep -o "versionCode='[0-9]*'" | head -1 | cut -d"'" -f2)"
+          VERSION_NAME="$(printf '%s\n' "$BADGING" | grep -o "versionName='[^']*'" | head -1 | cut -d"'" -f2)"
+          echo "APK: versionName=$VERSION_NAME versionCode=$VERSION_CODE"
+          if [ -z "$VERSION_CODE" ] || [ -z "$VERSION_NAME" ]; then
+            echo "::error::Could not parse badging output for $APK"
+            exit 1
+          fi
+          if [ "$VERSION_NAME" != "$EXPECTED_VERSION" ]; then
+            echo "::error::APK versionName '$VERSION_NAME' does not match expected '$EXPECTED_VERSION'"
+            exit 1
+          fi
+          if [ "$VERSION_CODE" != "$EXPECTED_CODE" ]; then
+            echo "::error::APK versionCode '$VERSION_CODE' does not match expected '$EXPECTED_CODE'"
+            exit 1
+          fi
+
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under ANDROID_HOME/build-tools; cannot verify signer"
+            exit 1
+          fi
+          CERTS="$("$APKSIGNER" verify --print-certs "$APK")"
+          echo "$CERTS"
+          if printf '%s\n' "$CERTS" | grep -q "CN=Android Debug"; then
+            echo "::error::APK is signed with the Android Debug key — refusing to release a debug-signed APK"
+            exit 1
+          fi
+          echo "OK: APK versionCode/versionName match the bump and signer is the distribution certificate."
 
       - name: Build package
         run: pnpm package:win7
@@ -200,6 +287,11 @@ jobs:
             release/spicyhome-pos-win7-v${{ steps.bump.outputs.next_version }}.zip
             release/spicyhome-pos-android-v${{ steps.bump.outputs.next_version }}.apk
           generate_release_notes: true
+
+      # Wipe the decoded keystore from the runner even on failure.
+      - name: Wipe distribution keystore from disk
+        if: always()
+        run: rm -f "$RUNNER_TEMP/spicyhome-upload.jks"
 
   # Reusable-workflow caller jobs cannot use continue-on-error (GitHub schema).
   # Sentry failures mark the workflow red after the product release job has

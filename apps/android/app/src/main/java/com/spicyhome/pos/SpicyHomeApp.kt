@@ -7,6 +7,10 @@ import com.spicyhome.pos.data.SessionManager
 import com.spicyhome.pos.data.api.ApiClientProvider
 import com.spicyhome.pos.data.api.SentryHttpBodyInterceptor
 import com.spicyhome.pos.data.realtime.RealtimeClient
+import com.spicyhome.pos.update.GitHubReleaseClient
+import com.spicyhome.pos.update.OkHttpApkDownloader
+import com.spicyhome.pos.update.SystemApkInstaller
+import com.spicyhome.pos.update.UpdateManager
 import io.sentry.SentryOptions
 import io.sentry.TypeCheckHint
 import io.sentry.android.core.SentryAndroid
@@ -20,6 +24,7 @@ import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
+import java.io.File
 
 class SpicyHomeApp : Application() {
 
@@ -35,6 +40,9 @@ class SpicyHomeApp : Application() {
     lateinit var realtimeClient: RealtimeClient
         private set
 
+    lateinit var updateManager: UpdateManager
+        private set
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -46,6 +54,14 @@ class SpicyHomeApp : Application() {
         sessionManager = SessionManager(preferencesManager, appScope)
         apiClientProvider = ApiClientProvider(onUnauthorized = sessionManager::onUnauthorized)
         realtimeClient = RealtimeClient(onAuthFailure = sessionManager::onUnauthorized)
+        updateManager = UpdateManager(
+            currentVersion = BuildConfig.VERSION_NAME,
+            releaseClient = GitHubReleaseClient(),
+            downloader = OkHttpApkDownloader(),
+            installer = SystemApkInstaller(this),
+            apkFile = File(cacheDir, "updates/update.apk"),
+            appScope = appScope,
+        )
 
         appScope.launch {
             combine(
