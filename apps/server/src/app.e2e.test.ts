@@ -444,3 +444,82 @@ describe('Orders (e2e)', () => {
     expect(res.body.totalSalesHalalas).toBeGreaterThan(0);
   });
 });
+
+describe('Promotions permissions (e2e)', () => {
+  it('cashier (staff role, manage_menu) can list and create promotions', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'cashier', pin: '1', clientType: 'pos' })
+      .expect(201);
+    const token = login.body.accessToken;
+
+    const list = await request(app.getHttpServer())
+      .get('/api/promotions')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(Array.isArray(list.body)).toBe(true);
+
+    const created = await request(app.getHttpServer())
+      .post('/api/promotions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Cashier Promo',
+        nameAr: 'عرض الكاشير',
+        percentBp: 1000,
+        startBusinessDate: '2027-01-01',
+        endBusinessDate: '2027-01-07',
+      })
+      .expect(201);
+    expect(created.body.name).toBe('Cashier Promo');
+    expect(created.body.enabled).toBe(true);
+    expect(created.body.canEdit).toBe(true);
+  });
+
+  it('user without manage_menu gets 403 on every promotions route', async () => {
+    // Fresh role: all permissions default to false, including manage_menu.
+    const roleRes = await request(app.getHttpServer())
+      .post('/api/auth/roles')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({ name: 'restricted' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/api/auth/users')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send({
+        username: 'restricted_user',
+        pin: '3',
+        name: 'Restricted',
+        roleId: roleRes.body.id,
+        androidLogin: false,
+      })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: 'restricted_user', pin: '3', clientType: 'pos' })
+      .expect(201);
+    const token = login.body.accessToken;
+
+    await request(app.getHttpServer())
+      .get('/api/promotions')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/promotions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Nope',
+        nameAr: 'لا',
+        percentBp: 1000,
+        startBusinessDate: '2027-02-01',
+        endBusinessDate: '2027-02-02',
+      })
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch('/api/promotions/1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Nope' })
+      .expect(403);
+  });
+});

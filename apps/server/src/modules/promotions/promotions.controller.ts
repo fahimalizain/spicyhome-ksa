@@ -27,7 +27,7 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Get()
-  @RequiresPermission('manage_settings')
+  @RequiresPermission('manage_menu')
   @ApiOperation({ summary: 'List all promotions (including disabled)' })
   @ApiOkResponse({ description: 'List of promotions', type: [PromotionResponse] })
   list() {
@@ -35,7 +35,7 @@ export class PromotionsController {
   }
 
   @Post()
-  @RequiresPermission('manage_settings')
+  @RequiresPermission('manage_menu')
   @ApiOperation({
     summary: 'Create a promotion (enabled date ranges must not overlap)',
   })
@@ -45,7 +45,7 @@ export class PromotionsController {
   }
 
   @Patch(':id')
-  @RequiresPermission('manage_settings')
+  @RequiresPermission('manage_menu')
   @ApiOperation({
     summary: 'Update a promotion (name / nameAr / percentBp / dates / enabled; soft-disable only)',
   })
