@@ -152,9 +152,9 @@ Update flow:
   3. Run npm install in the new release
   4. Stop the service
   5. Flip the "current" junction to the new release
-  6. Prune old releases (keep latest 2 by default)
-  7. Start the service
-  8. Health check
+  6. Start the service
+  7. Health check
+  8. Prune old releases (keep latest 2 by default)
 
 Rollback
 --------

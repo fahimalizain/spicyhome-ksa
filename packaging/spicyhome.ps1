@@ -914,9 +914,6 @@ function Invoke-Update {
     exit 1
   }
 
-  # Prune old releases
-  Prune-Releases $root $KeepReleases $latestVer
-
   # Refresh sticky scripts from new release
   $engineScriptDir = $script:EngineScriptDir
   Copy-StickyScripts $newReleaseDir $root $engineScriptDir
@@ -943,6 +940,10 @@ function Invoke-Update {
   }
 
   Write-Log "SUCCESS: Updated to v$latestVer."
+
+  # Prune old releases only after the new version is healthy. Recursive deletes
+  # of old node_modules trees are slow and must not extend service downtime.
+  Prune-Releases $root $KeepReleases $latestVer
 }
 
 # ============================================================================
