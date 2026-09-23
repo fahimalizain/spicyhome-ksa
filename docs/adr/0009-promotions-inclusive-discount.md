@@ -159,3 +159,33 @@ guest-facing storewide campaigns only.
 - CONTEXT.md — Promotion / Discount / Allowance vocabulary
 - `packages/shared/src/money.ts` — `applyPromotionPercent`, `decomposeVat`
 - ADR 0007 — Partner orders (attach/detach path; no Promotion mix)
+
+## Amendment 2026-09-23 — XML Allowance reconciles with line nets
+
+Decision 6's XML recipe derived the Allowance from
+`decomposeVat(gross).excl − decomposeVat(payable).excl` while deriving
+`TaxExclusive = Σ line nets − Allowance`. Per-unit decomposition rounds per
+line, so `Σ line nets ≠ decomposeVat(gross).excl` on multi-line/multi-qty
+tickets (order 2357: 113.88 vs 113.91). The 3-halala residue broke
+`TaxInclusive = TaxExclusive + VAT` (BR-CO-15) and ZATCA rejected the invoice
+with HTTP 400.
+
+The XML builder now anchors on the collected payable and plugs the Allowance
+as the residual of the line nets:
+
+```
+TaxExclusive = decomposeVat(payable, vatRateBp).priceExclHalalas
+Allowance    = Σ line nets − TaxExclusive      (BR-CO-13 / BR-S-08)
+VAT          = payable − TaxExclusive          (BR-CO-15)
+TaxInclusive = TaxExclusive + VAT = payable    (BR-CO-16)
+```
+
+When per-unit rounding would make the residual negative (sub-SAR prices ×
+high qty × tiny percent), the builder falls back to
+`TaxExclusive = Σ line nets` with zero Allowance.
+
+`applyPromotionPercent` and the payable-first Discount amount rule are
+unchanged; only XML emission uses the line-net residual, because only the XML
+must reconcile with `LineExtensionAmount` per ZATCA's document-total rules.
+QR tags 4/5 already emit payable and `decomposeVat(payable).vat`, which agree
+with the fixed totals. The canonical 100/10/90 identity is unaffected.

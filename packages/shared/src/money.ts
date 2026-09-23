@@ -138,6 +138,10 @@ export interface PromotionBreakdown {
  * Mixed 0% + 15% bills still pass vatRateBp = 1500 (whole Allowance on the
  * 15% pot). Documented in ADR 0009. Do not invent per-line allocation here.
  *
+ * Note: `allowanceHalalas` is the pure gross/payable view. The ZATCA XML
+ * builder derives its document Allowance as `Σ line nets − decompose(payable)`
+ * instead, so BR-CO-13/BR-CO-15 reconcile (ADR 0009 amendment 2026-09-23).
+ *
  * @param grossInclHalalas — VAT-inclusive gross in halalas (non-negative integer)
  * @param percentBp — Promotion percent in basis points, 0–10000 (0%–100%)
  * @param vatRateBp — VAT rate in basis points (default 1500 = 15%)

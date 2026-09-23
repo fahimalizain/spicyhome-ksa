@@ -209,12 +209,24 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
   let taxExclusiveAmount: number;
 
   if (discount > 0) {
-    const grossDecomp = decomposeVat(totalIncl, allowanceVatRateBp);
+    // ZATCA derives the taxable base from the line nets (BR-CO-13/BR-S-08), so
+    // anchor on the collected payable and plug the Allowance as the residual:
+    //   TaxExclusive = decomposeVat(payable)   → BR-CO-15 keeps Payable = base + VAT
+    //   Allowance    = Σ line nets − TaxExclusive
+    // Deriving the Allowance from decomposeVat(gross) instead leaks the
+    // per-line rounding residue (Σ per-unit decomposition ≠ decompose(gross))
+    // into the totals and rejects the invoice with BR-CO-15.
     const payableDecomp = decomposeVat(payableAmount, allowanceVatRateBp);
-    allowanceTotal = grossDecomp.priceExclHalalas - payableDecomp.priceExclHalalas;
-    postVat = payableDecomp.vatHalalas;
-    // TaxExclusive = line nets − Allowance (LineExtension stays totalExcl)
-    taxExclusiveAmount = totalExcl - allowanceTotal;
+    taxExclusiveAmount = payableDecomp.priceExclHalalas;
+    allowanceTotal = totalExcl - taxExclusiveAmount;
+    if (allowanceTotal < 0) {
+      // Degenerate per-unit rounding can push line nets above the post-discount
+      // base. Fall back to line nets as the taxable base (BR-CO-13) with no
+      // Allowance; VAT becomes the residual of the collected payable.
+      allowanceTotal = 0;
+      taxExclusiveAmount = totalExcl;
+    }
+    postVat = Math.max(0, payableAmount - taxExclusiveAmount);
   } else {
     allowanceTotal = 0;
     // Unpromoted: keep line-sum VAT (mixed-rate safe)
@@ -222,15 +234,19 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     taxExclusiveAmount = totalExcl;
   }
 
+  // BR-CO-15 invariant: TaxInclusive = TaxExclusive + VAT, always.
+  const taxInclusiveAmount = taxExclusiveAmount + postVat;
+
   // Group tax by rate, then adjust the standard (15%) pot for Allowance
   const taxGroups = groupTaxByRate(lines);
-  if (discount > 0 && allowanceTotal > 0) {
+  if (discount > 0) {
     if (allowanceVatRateBp > 0) {
       // Whole Allowance on the 15% pot; 0% pot unchanged if present
       taxGroups.standard.taxableAmount -= allowanceTotal;
       taxGroups.standard.vatAmount = postVat;
     } else {
       taxGroups.zeroRated.taxableAmount -= allowanceTotal;
+      taxGroups.zeroRated.vatAmount = postVat;
     }
   }
 
@@ -520,7 +536,7 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
 
   // ── Legal Monetary Total ──
   // LineExtensionAmount = Σ line nets (unchanged by Discount).
-  // TaxExclusive = line nets − Allowance; TaxInclusive/Payable = payable.
+  // TaxExclusive = line nets − Allowance; TaxInclusive/Payable = base + VAT.
   parts.push(`  <cac:LegalMonetaryTotal>`);
   parts.push(
     `    <cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(totalExcl)}</cbc:LineExtensionAmount>`,
@@ -529,14 +545,14 @@ export function buildUnsignedInvoiceXML(input: InvoiceXMLInput): string {
     `    <cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(taxExclusiveAmount)}</cbc:TaxExclusiveAmount>`,
   );
   parts.push(
-    `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:TaxInclusiveAmount>`,
+    `    <cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(taxInclusiveAmount)}</cbc:TaxInclusiveAmount>`,
   );
   parts.push(
     `    <cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowanceTotal)}</cbc:AllowanceTotalAmount>`,
   );
   parts.push(`    <cbc:PrepaidAmount currencyID="SAR">0.00</cbc:PrepaidAmount>`);
   parts.push(
-    `    <cbc:PayableAmount currencyID="SAR">${halalasToSar(payableAmount)}</cbc:PayableAmount>`,
+    `    <cbc:PayableAmount currencyID="SAR">${halalasToSar(taxInclusiveAmount)}</cbc:PayableAmount>`,
   );
   parts.push(`  </cac:LegalMonetaryTotal>`);
 
