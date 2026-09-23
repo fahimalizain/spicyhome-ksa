@@ -44,6 +44,7 @@ jobs:
         run: |
           bazel test //apps/server:test \
             //apps/pos:test \
+            //apps/web:test \
             //packages/shared:test \
             //packages/db:test \
             //packages/client-ts:test \

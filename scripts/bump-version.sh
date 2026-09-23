@@ -112,6 +112,7 @@ else
   for pkg in \
     "$ROOT_DIR/apps/server/package.json" \
     "$ROOT_DIR/apps/pos/package.json" \
+    "$ROOT_DIR/apps/web/package.json" \
     "$ROOT_DIR/packages/shared/package.json" \
     "$ROOT_DIR/packages/db/package.json" \
     "$ROOT_DIR/packages/api-spec/package.json" \
