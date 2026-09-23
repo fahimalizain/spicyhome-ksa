@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { eq, desc, and, ne, lte, gte } from 'drizzle-orm';
 import { promotions } from '@spicyhome/db';
-import { getServiceDayBoundsUnix } from '@spicyhome/shared';
+import { getServiceDayBoundsUnix, getServiceDayString } from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import { mapBools } from '../../common/bool-mapper.helper';
@@ -81,7 +81,11 @@ export class PromotionsService {
   }
 
   /**
-   * Update a promotion. Soft-disable via `enabled: false` is always allowed
+   * Update a promotion.
+   *
+   * Once the promotion has ended (current service day > endBusinessDate) it is
+   * read-only: every edit — including `enabled` toggles — is rejected (409).
+   * While it has not ended, soft-disable via `enabled: false` is always allowed
    * (no open-order guard — snapshots live on the order).
    *
    * If the resulting row is enabled, overlap is checked against other enabled rows.
@@ -100,6 +104,13 @@ export class PromotionsService {
   ): any {
     const existing = this.db.select().from(promotions).where(eq(promotions.id, id)).get();
     if (!existing) throw new NotFoundException('Promotion not found');
+
+    const today = getServiceDayString(Date.now());
+    if (today > existing.endBusinessDate) {
+      throw new ConflictException(
+        `Promotion "${existing.name}" ended on ${existing.endBusinessDate} and can no longer be edited`,
+      );
+    }
 
     const updates: Record<string, any> = { ...updateAuditFields(userId) };
 
