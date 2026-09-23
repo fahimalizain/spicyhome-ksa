@@ -42,6 +42,45 @@ fun computeVersionCode(version: String): Int {
     return yyyymm * 10000 + dd * 100 + n
 }
 
+// Optional -P overrides let CI pass the release version explicitly; without
+// them the date-based version from the VERSION file is used as before.
+val versionCodeOverride = providers.gradleProperty("versionCode").orNull
+val resolvedVersionCode: Int = versionCodeOverride?.let { raw ->
+    raw.trim().toIntOrNull()?.takeIf { it > 0 }
+        ?: throw GradleException("Invalid -PversionCode value \"$raw\": expected a positive integer.")
+} ?: computeVersionCode(appVersion)
+
+val versionNameOverride = providers.gradleProperty("versionName").orNull?.trim()
+val resolvedVersionName: String = versionNameOverride?.takeIf { it.isNotEmpty() } ?: appVersion
+
+// Release signing is driven by environment variables so CI can inject the
+// keystore without committing secrets. Blank values count as missing. The
+// signing config is created only when all inputs are present and the keystore
+// file exists; debug and local builds need none of this.
+fun getEnvVar(name: String): String? = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+
+val releaseKeystorePath = getEnvVar("SPICYHOME_ANDROID_KEYSTORE")
+val releaseKeystorePassword = getEnvVar("SPICYHOME_ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = getEnvVar("SPICYHOME_ANDROID_KEY_ALIAS")
+val releaseKeyPassword = getEnvVar("SPICYHOME_ANDROID_KEY_PASSWORD")
+val releaseKeystoreFile = releaseKeystorePath?.let { file(it) }
+
+/** Reason release signing cannot be used, or null when it is fully configured. */
+val releaseSigningProblem: String? = run {
+    val missing = listOf(
+        "SPICYHOME_ANDROID_KEYSTORE" to releaseKeystorePath,
+        "SPICYHOME_ANDROID_KEYSTORE_PASSWORD" to releaseKeystorePassword,
+        "SPICYHOME_ANDROID_KEY_ALIAS" to releaseKeyAlias,
+        "SPICYHOME_ANDROID_KEY_PASSWORD" to releaseKeyPassword,
+    ).filter { it.second == null }.map { it.first }
+
+    when {
+        missing.isNotEmpty() -> "missing environment variables: ${missing.joinToString(", ")}"
+        releaseKeystoreFile?.exists() != true -> "keystore file not found: $releaseKeystorePath"
+        else -> null
+    }
+}
+
 android {
     namespace = "com.spicyhome.pos"
     compileSdk = 36
@@ -50,8 +89,8 @@ android {
         applicationId = "com.spicyhome.pos"
         minSdk = 26
         targetSdk = 36
-        versionCode = computeVersionCode(appVersion)
-        versionName = appVersion
+        versionCode = resolvedVersionCode
+        versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Sentry auto-init reads these from the merged manifest (not BuildConfig).
@@ -62,11 +101,25 @@ android {
         manifestPlaceholders["sentryDebug"] = "false"
     }
 
+    // Created only when every signing input is available; otherwise the release
+    // build type has no signing config and release tasks fail fast below.
+    if (releaseSigningProblem == null) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             manifestPlaceholders["sentryDebug"] = "true"
         }
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -143,4 +196,34 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+// Fail fast with an actionable message when a release task runs without signing
+// configured. Only tasks whose name contains "Release" are affected, so debug
+// and local builds stay untouched.
+tasks.matching { it.name.contains("Release") }.configureEach {
+    val signingProblem = releaseSigningProblem
+    doFirst {
+        if (signingProblem != null) {
+            throw GradleException(
+                "Release signing is not configured: $signingProblem. " +
+                    "Set SPICYHOME_ANDROID_KEYSTORE, SPICYHOME_ANDROID_KEYSTORE_PASSWORD, " +
+                    "SPICYHOME_ANDROID_KEY_ALIAS and SPICYHOME_ANDROID_KEY_PASSWORD, " +
+                    "then retry (see docs/play-release.md)."
+            )
+        }
+    }
+}
+
+// CI reads the resolved version from here instead of duplicating the
+// version-code formula in shell. Runs without signing env vars.
+tasks.register("printVersionInfo") {
+    group = "help"
+    description = "Prints the resolved versionCode and versionName."
+    val resolvedCode = resolvedVersionCode
+    val resolvedName = resolvedVersionName
+    doLast {
+        println("VERSION_CODE=$resolvedCode")
+        println("VERSION_NAME=$resolvedName")
+    }
 }
