@@ -33,6 +33,7 @@ const ksaDay = {
   startBusinessDate: '2026-09-23',
   endBusinessDate: '2026-09-25',
   enabled: true,
+  canEdit: true,
 };
 
 const weekend = {
@@ -44,6 +45,7 @@ const weekend = {
   startBusinessDate: '2026-10-01',
   endBusinessDate: '2026-10-03',
   enabled: false,
+  canEdit: true,
 };
 
 function renderPage() {
@@ -193,6 +195,37 @@ describe('PromotionsPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('checkbox', { name: 'Enable KSA National Day' })).not.toBeChecked();
     });
+  });
+
+  it('ended promotion (canEdit false) is read-only: no dialog, disabled toggle, Ended label', async () => {
+    const ended = {
+      ...basePromo,
+      id: 3,
+      name: 'Ramadan Offer',
+      nameAr: 'عرض رمضان',
+      percentBp: 2000,
+      startBusinessDate: '2026-03-01',
+      endBusinessDate: '2026-03-30',
+      enabled: true,
+      canEdit: false,
+    };
+    mockListPromotions.mockResolvedValue([ksaDay, ended]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Ramadan Offer')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Ended')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Disable Ramadan Offer' })).toBeDisabled();
+
+    fireEvent.click(screen.getByText('Ramadan Offer'));
+    expect(screen.queryByRole('heading', { name: 'Edit Promotion' })).not.toBeInTheDocument();
+    expect(mockUpdatePromotion).not.toHaveBeenCalled();
+
+    // The live row stays editable.
+    expect(screen.getByRole('checkbox', { name: 'Disable KSA National Day' })).toBeEnabled();
+    fireEvent.click(screen.getByText('KSA National Day'));
+    expect(screen.getByRole('heading', { name: 'Edit Promotion' })).toBeInTheDocument();
   });
 
   it('409 overlap surfaces the server message in the dialog', async () => {

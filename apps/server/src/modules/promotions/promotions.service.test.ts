@@ -92,6 +92,8 @@ describe('PromotionsService', () => {
       expect(promo.endBusinessDate).toBe('2026-09-25');
       expect(promo.enabled).toBe(true);
       expect(typeof promo.enabled).toBe('boolean');
+      expect(promo.canEdit).toBe(true);
+      expect(typeof promo.canEdit).toBe('boolean');
       expect(promo.createdBy).toBe(1);
       expect(promo.updatedBy).toBe(1);
       expect(typeof promo.createdAt).toBe('number');
@@ -267,6 +269,25 @@ describe('PromotionsService', () => {
   });
 
   describe('list', () => {
+    it('marks ended promotions canEdit=false and live ones canEdit=true', () => {
+      const live = service.create(nationalDay, 1); // ends 2026-09-25
+      const ended = service.create(
+        {
+          ...nationalDay,
+          name: 'Old Sale',
+          startBusinessDate: '2026-09-01',
+          endBusinessDate: '2026-09-10',
+        },
+        1,
+      );
+      // 2026-09-20 12:00 Asia/Riyadh = 09:00 UTC — past 'Old Sale', inside 'live'.
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 8, 20, 9, 0, 0));
+
+      const rows = service.list();
+      expect(rows.find((r: any) => r.id === live.id).canEdit).toBe(true);
+      expect(rows.find((r: any) => r.id === ended.id).canEdit).toBe(false);
+    });
+
     it('includes disabled and sorts by startBusinessDate DESC then id DESC', () => {
       const a = service.create(
         {
@@ -323,6 +344,7 @@ describe('PromotionsService', () => {
       expect(updated.name).toBe('National Day Sale');
       expect(updated.percentBp).toBe(1500);
       expect(updated.enabled).toBe(true);
+      expect(updated.canEdit).toBe(true);
     });
 
     it('rejects shift dates onto another enabled row (409)', () => {
@@ -429,6 +451,7 @@ describe('PromotionsService', () => {
       const after = service.list().find((r: any) => r.id === promo.id);
       expect(after.name).toBe('KSA National Day');
       expect(after.enabled).toBe(true);
+      expect(after.canEdit).toBe(false);
       expect(after.percentBp).toBe(1000);
       expect(after.startBusinessDate).toBe('2026-09-23');
       expect(after.endBusinessDate).toBe('2026-09-25');

@@ -26,6 +26,10 @@ export class PromotionResponse {
   @ApiProperty({ example: true })
   enabled!: boolean;
 
+  /** False once the current service day has passed endBusinessDate (read-only). */
+  @ApiProperty({ example: true })
+  canEdit!: boolean;
+
   @ApiProperty({ ...ApiInt64, example: 1700000000 })
   createdAt!: number;
 

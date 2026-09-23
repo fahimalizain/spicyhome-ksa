@@ -214,14 +214,17 @@ export function PromotionsPage() {
         {promotions.map((p) => (
           <div
             key={p.id}
-            onClick={() => openEdit(p)}
+            onClick={p.canEdit ? () => openEdit(p) : undefined}
             aria-busy={togglingId === p.id}
-            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-700/50${togglingId === p.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
+            className={`flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 ${
+              p.canEdit ? 'cursor-pointer hover:bg-gray-700/50' : 'cursor-default'
+            }${togglingId === p.id ? ` ${ADMIN_ROW_BUSY_CLASS}` : ''}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <AdminRowEnabledCheckbox
                 checked={p.enabled}
-                disabled={togglingId === p.id}
+                disabled={!p.canEdit || togglingId === p.id}
+                title={p.canEdit ? undefined : 'Promotion has ended'}
                 ariaLabel={p.enabled ? `Disable ${p.name}` : `Enable ${p.name}`}
                 onToggle={() => toggleEnabled(p)}
               />
@@ -236,9 +239,15 @@ export function PromotionsPage() {
                 </span>
               </div>
             </div>
-            <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none shrink-0">
-              Edit
-            </span>
+            {p.canEdit ? (
+              <span className="touch-target text-xs text-brand-400 px-2 py-1 pointer-events-none shrink-0">
+                Edit
+              </span>
+            ) : (
+              <span className="touch-target text-xs text-gray-500 px-2 py-1 pointer-events-none shrink-0">
+                Ended
+              </span>
+            )}
           </div>
         ))}
       </div>

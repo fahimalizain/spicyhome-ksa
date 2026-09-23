@@ -30,7 +30,7 @@ export class PromotionsService {
       .from(promotions)
       .orderBy(desc(promotions.startBusinessDate), desc(promotions.id))
       .all()
-      .map((r) => mapBools(r, ['enabled']));
+      .map((r) => this.toResponse(r));
   }
 
   /**
@@ -77,7 +77,7 @@ export class PromotionsService {
       .where(eq(promotions.id, Number(result.lastInsertRowid)))
       .get()!;
 
-    return mapBools(created, ['enabled']);
+    return this.toResponse(created);
   }
 
   /**
@@ -105,8 +105,7 @@ export class PromotionsService {
     const existing = this.db.select().from(promotions).where(eq(promotions.id, id)).get();
     if (!existing) throw new NotFoundException('Promotion not found');
 
-    const today = getServiceDayString(Date.now());
-    if (today > existing.endBusinessDate) {
+    if (this.hasEnded(existing.endBusinessDate)) {
       throw new ConflictException(
         `Promotion "${existing.name}" ended on ${existing.endBusinessDate} and can no longer be edited`,
       );
@@ -155,7 +154,7 @@ export class PromotionsService {
     this.db.update(promotions).set(updates).where(eq(promotions.id, id)).run();
 
     const updated = this.db.select().from(promotions).where(eq(promotions.id, id)).get()!;
-    return mapBools(updated, ['enabled']);
+    return this.toResponse(updated);
   }
 
   /**
@@ -179,6 +178,21 @@ export class PromotionsService {
 
     if (!row) return null;
     return mapBools(row, ['enabled']);
+  }
+
+  /**
+   * A promotion is read-only once the current service day is past its
+   * inclusive end date.
+   */
+  private hasEnded(endBusinessDate: string): boolean {
+    return getServiceDayString(Date.now()) > endBusinessDate;
+  }
+
+  /** API shape: booleans mapped + derived `canEdit`. */
+  private toResponse(row: any): any {
+    const mapped = mapBools(row, ['enabled']);
+    mapped.canEdit = !this.hasEnded(mapped.endBusinessDate);
+    return mapped;
   }
 
   private trimRequired(value: string, field: string): string {
