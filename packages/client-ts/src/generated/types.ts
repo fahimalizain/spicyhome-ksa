@@ -3025,6 +3025,8 @@ export interface components {
       endBusinessDate: string;
       /** @example true */
       enabled: boolean;
+      /** @example true */
+      canEdit: boolean;
       /**
        * Format: int64
        * @example 1700000000

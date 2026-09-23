@@ -6593,6 +6593,10 @@
             "type": "boolean",
             "example": true
           },
+          "canEdit": {
+            "type": "boolean",
+            "example": true
+          },
           "createdAt": {
             "type": "integer",
             "format": "int64",
@@ -6624,6 +6628,7 @@
           "startBusinessDate",
           "endBusinessDate",
           "enabled",
+          "canEdit",
           "createdAt",
           "updatedAt",
           "createdBy",
