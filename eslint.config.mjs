@@ -81,9 +81,9 @@ export default tseslint.config(
     },
   },
 
-  // React (apps/pos)
+  // React (apps/pos, apps/web)
   {
-    files: ['apps/pos/**/*.{ts,tsx}'],
+    files: ['apps/pos/**/*.{ts,tsx}', 'apps/web/**/*.{ts,tsx}'],
     plugins: { react: reactPlugin },
     settings: { react: { version: '18' } },
     rules: {
