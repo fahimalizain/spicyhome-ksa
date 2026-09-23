@@ -349,10 +349,66 @@ describe('ZatcaReportingService', () => {
 
       // Verify credit note status is 'failed'
       const cn = sqlite
-        .prepare('SELECT status, reported_at FROM zatca_credit_notes WHERE id = ?')
+        .prepare(
+          'SELECT status, reported_at, http_status, clearance_errors FROM zatca_credit_notes WHERE id = ?',
+        )
         .get(creditNoteId) as any;
       expect(cn.status).toBe('failed');
       expect(cn.reported_at).toBeNull();
+      expect(cn.http_status).toBe(400);
+      expect(JSON.parse(cn.clearance_errors)).toEqual(['HTTP 400']);
+    });
+
+    it('persists ZATCA validation errors and warnings on failure', async () => {
+      const s = nextSeq();
+      const { invoiceId } = createOrderWithInvoice(s);
+
+      fakeHttp.responses.set('reporting', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          validationResults: {
+            infoMessages: [],
+            warningMessages: [
+              {
+                type: 'WARNING',
+                code: 'BR-KSA-F-13',
+                category: 'KSA',
+                message: 'Please recheck Other Seller/Buyer ID',
+                status: 'WARNING',
+              },
+            ],
+            errorMessages: [
+              {
+                type: 'ERROR',
+                code: 'BR-CO-15',
+                category: 'EN_16931',
+                message: 'Invoice total amount with VAT (BT-112)',
+                status: 'ERROR',
+              },
+            ],
+            status: 'ERROR',
+          },
+          reportingStatus: 'NOT_REPORTED',
+        }),
+      });
+
+      const result = await reportingService.retryInvoice();
+      expect(result.failed).toBeGreaterThanOrEqual(1);
+
+      const inv = sqlite
+        .prepare(
+          'SELECT status, http_status, clearance_errors, clearance_warnings FROM zatca_invoices WHERE id = ?',
+        )
+        .get(invoiceId) as any;
+      expect(inv.status).toBe('failed');
+      expect(inv.http_status).toBe(400);
+      expect(JSON.parse(inv.clearance_errors)).toEqual([
+        'ERROR: Invoice total amount with VAT (BT-112) (BR-CO-15)',
+      ]);
+      expect(JSON.parse(inv.clearance_warnings)).toEqual([
+        'WARNING: Please recheck Other Seller/Buyer ID (BR-KSA-F-13)',
+      ]);
     });
 
     it('marks invoice as failed when HTTP returns non-200', async () => {
@@ -369,10 +425,14 @@ describe('ZatcaReportingService', () => {
       expect(result.failed).toBeGreaterThanOrEqual(1);
 
       const inv = sqlite
-        .prepare('SELECT status, reported_at FROM zatca_invoices WHERE id = ?')
+        .prepare(
+          'SELECT status, reported_at, http_status, clearance_errors FROM zatca_invoices WHERE id = ?',
+        )
         .get(invoiceId) as any;
       expect(inv.status).toBe('failed');
       expect(inv.reported_at).toBeNull();
+      expect(inv.http_status).toBe(500);
+      expect(JSON.parse(inv.clearance_errors)).toEqual(['HTTP 500']);
     });
 
     it('handles 202 response as success', async () => {
