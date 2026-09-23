@@ -411,6 +411,42 @@ describe('ZatcaReportingService', () => {
       ]);
     });
 
+    it('persists transport failures from the queue', async () => {
+      const s = nextSeq();
+      const { invoiceId } = createOrderWithInvoice(s);
+
+      fakeHttp.nextError = new Error('socket hang up');
+
+      const result = await reportingService.retryInvoice();
+      expect(result.failed).toBeGreaterThanOrEqual(1);
+
+      const inv = sqlite
+        .prepare('SELECT status, http_status, clearance_errors FROM zatca_invoices WHERE id = ?')
+        .get(invoiceId) as any;
+      expect(inv.status).toBe('failed');
+      expect(inv.http_status).toBe(0);
+      expect(JSON.parse(inv.clearance_errors)).toEqual(['socket hang up']);
+    });
+
+    it('persists transport failures on single-document retry', async () => {
+      const s = nextSeq();
+      const { invoiceId } = createOrderWithInvoice(s);
+
+      fakeHttp.nextError = new Error('getaddrinfo ENOTFOUND gw-fatoora.zatca.gov.sa');
+
+      const result = await reportingService.retryReporting({ invoiceId });
+      expect(result.failed).toBe(1);
+
+      const inv = sqlite
+        .prepare('SELECT status, http_status, clearance_errors FROM zatca_invoices WHERE id = ?')
+        .get(invoiceId) as any;
+      expect(inv.status).toBe('failed');
+      expect(inv.http_status).toBe(0);
+      expect(JSON.parse(inv.clearance_errors)).toEqual([
+        'getaddrinfo ENOTFOUND gw-fatoora.zatca.gov.sa',
+      ]);
+    });
+
     it('marks invoice as failed when HTTP returns non-200', async () => {
       const s = nextSeq();
       const { invoiceId } = createOrderWithInvoice(s);

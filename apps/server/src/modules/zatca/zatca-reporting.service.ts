@@ -213,6 +213,7 @@ export class ZatcaReportingService implements OnModuleInit {
           }
         } catch (err: any) {
           this.logger.error(`Failed to report ${doc.kind} ICV=${doc.icv}: ${err.message}`);
+          this.recordTransportFailure(doc.kind, doc.id, err);
           failed++;
         }
       }
@@ -257,6 +258,7 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
     } catch (err: any) {
       this.logger.error(`Retry invoice ${invoiceId} failed: ${err.message}`);
+      this.recordTransportFailure('invoice', invoiceId, err);
       return { processed: 1, succeeded: 0, failed: 1 };
     }
   }
@@ -296,6 +298,7 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
     } catch (err: any) {
       this.logger.error(`Retry credit note ${creditNoteId} failed: ${err.message}`);
+      this.recordTransportFailure('credit_note', creditNoteId, err);
       return { processed: 1, succeeded: 0, failed: 1 };
     }
   }
@@ -416,6 +419,16 @@ export class ZatcaReportingService implements OnModuleInit {
     }
     if (errors.length === 0) errors = [`HTTP ${httpStatus}`];
     return { errors, warnings };
+  }
+
+  /**
+   * Persist a transport-level failure (DNS, timeout, socket error — no HTTP
+   * response) so silent worker failures are visible. Mirrors the clearance
+   * path: `http_status = 0` and the exception message as the error.
+   */
+  private recordTransportFailure(kind: DocumentKind, id: number, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.updateStatus(kind, id, 'failed', null, { httpStatus: 0, errors: [message] });
   }
 
   /**
