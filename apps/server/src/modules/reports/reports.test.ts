@@ -114,6 +114,10 @@ describe('ReportsService', () => {
         document_id TEXT NOT NULL DEFAULT '',
         delivery_partner_id TEXT,
         delivery_external_ref TEXT,
+        promotion_id INTEGER,
+        promotion_name TEXT,
+        promotion_name_ar TEXT,
+        promotion_percent_bp INTEGER,
         notes TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
@@ -194,6 +198,7 @@ describe('ReportsService', () => {
         subtotal_halalas INTEGER NOT NULL,
         vat_halalas INTEGER NOT NULL,
         total_halalas INTEGER NOT NULL,
+        discount_halalas INTEGER NOT NULL DEFAULT 0,
         reason TEXT,
         document_id TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
@@ -335,6 +340,29 @@ describe('ReportsService', () => {
       const cashTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'cash');
       expect(cardTotal.totalHalalas).toBe(5000);
       expect(cashTotal.totalHalalas).toBe(3250);
+    });
+
+    it('uses payable and post-Allowance VAT for promoted paid orders', async () => {
+      // Canonical 100.00 / 10% → sales 9000, VAT 1174 (ADR 0009 §9).
+      dayService.openDay({ openingCashHalalas: 0 }, 1);
+      const day = dayService.getOpenDay()!;
+
+      sqlite.exec(`
+        INSERT INTO orders (id, order_no, uuid, type, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, discount_halalas, created_at, updated_at, created_by)
+        VALUES (20, 20, 'promo-x', 'dine_in', ${day.id}, 'paid', 8696, 1304, 10000, 1000, ${now}, ${now}, 1);
+        INSERT INTO order_payments (order_id, method_id, method_title, zatca_payment_means_code, amount_halalas, created_at)
+        VALUES (20, 'cash', 'Cash', '10', 9000, ${now});
+      `);
+
+      const report: any = await service.getXReport();
+      expect(report.totalSalesHalalas).toBe(9000);
+      expect(report.totalVatHalalas).toBe(1174);
+      expect(report.paidOrderCount).toBe(1);
+      expect(report.salesByType.dine_in.totalHalalas).toBe(9000);
+      expect(report.salesByUser[0].totalHalalas).toBe(9000);
+      // Payment buckets stay on collected cash (already payable).
+      const cashTotal = report.paymentTotals.find((pt: any) => pt.methodId === 'cash');
+      expect(cashTotal.totalHalalas).toBe(9000);
     });
 
     it('computes sales by type', async () => {
@@ -586,6 +614,7 @@ describe('ReportsService', () => {
       dayOpeningId?: number;
       subtotalHalalas?: number;
       vatHalalas?: number;
+      discountHalalas?: number;
       orderNo?: number;
       tableId?: number | null;
       deliveryPartnerId?: string | null;
@@ -593,12 +622,12 @@ describe('ReportsService', () => {
       createdBy?: number | null;
     }) => {
       sqlite.exec(
-        `INSERT INTO orders (id, order_no, uuid, type, table_id, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, document_id, delivery_partner_id, notes, created_at, updated_at, created_by)
+        `INSERT INTO orders (id, order_no, uuid, type, table_id, day_opening_id, status, subtotal_halalas, vat_halalas, total_halalas, discount_halalas, document_id, delivery_partner_id, notes, created_at, updated_at, created_by)
          VALUES (${o.id}, ${o.orderNo ?? o.id}, 'uuid-${o.id}', '${o.type ?? 'dine_in'}', ${
            o.tableId === undefined ? 'NULL' : o.tableId
          }, ${o.dayOpeningId ?? dayId1}, '${o.status}', ${o.subtotalHalalas ?? 0}, ${
            o.vatHalalas ?? 0
-         }, ${o.totalHalalas}, '${o.documentId}', ${
+         }, ${o.totalHalalas}, ${o.discountHalalas ?? 0}, '${o.documentId}', ${
            o.deliveryPartnerId === undefined || o.deliveryPartnerId === null
              ? 'NULL'
              : `'${o.deliveryPartnerId}'`
@@ -794,6 +823,39 @@ describe('ReportsService', () => {
       const noCashier = result.rows[1];
       expect(noCashier.cashierUserId).toBeNull();
       expect(noCashier.cashierName).toBe('Unknown');
+    });
+
+    it('sale row uses payable and post-Allowance VAT when order has a Discount', () => {
+      // Canonical 100.00 / 10% → total 9000, vat 1174, excl 7826.
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        type: 'dine_in',
+        subtotalHalalas: 8696,
+        vatHalalas: 1304,
+        totalHalalas: 10000,
+        discountHalalas: 1000,
+        documentId: 'INV26-PROMO',
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 9000,
+        createdAt: D.startUnix + 300,
+        createdBy: 1,
+      });
+
+      const result = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(result.rows).toHaveLength(1);
+      const sale = result.rows[0];
+      expect(sale.totalHalalas).toBe(9000);
+      expect(sale.vatHalalas).toBe(1174);
+      expect(sale.subtotalHalalas).toBe(7826);
+      expect(result.footer.totalHalalas).toBe(9000);
+      expect(result.footer.vatHalalas).toBe(1174);
+      expect(result.footer.subtotalHalalas).toBe(7826);
     });
 
     it('returns a refund as a separate negative row sorted after its sale', () => {

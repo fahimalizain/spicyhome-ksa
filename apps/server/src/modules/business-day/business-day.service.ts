@@ -1,7 +1,11 @@
 import { Injectable, Inject, ConflictException, NotFoundException } from '@nestjs/common';
 import { eq, and, desc } from 'drizzle-orm';
 import { dayOpenings, orders } from '@spicyhome/db';
-import { getServiceDayString } from '@spicyhome/shared';
+import {
+  getServiceDayString,
+  orderPayableHalalas,
+  orderPostAllowanceVatHalalas,
+} from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { createAuditFields, updateAuditFields } from '../../common/audit-fields.helper';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -69,11 +73,13 @@ export class BusinessDayService {
       );
     }
 
-    // Compute totals from paid orders only
+    // Compute totals from paid orders only — payable + post-Allowance VAT
+    // (ADR 0009 §9). discount=0 leaves unpromoted fixtures unchanged.
     const paidOrders = this.db
       .select({
         totalHalalas: orders.totalHalalas,
         vatHalalas: orders.vatHalalas,
+        discountHalalas: orders.discountHalalas,
       })
       .from(orders)
       .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'paid')))
@@ -85,8 +91,15 @@ export class BusinessDayService {
       .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'voided')))
       .all().length;
 
-    const totalSalesHalalas = paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0);
-    const totalVatHalalas = paidOrders.reduce((sum, o) => sum + o.vatHalalas, 0);
+    const totalSalesHalalas = paidOrders.reduce(
+      (sum, o) => sum + orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0),
+      0,
+    );
+    const totalVatHalalas = paidOrders.reduce(
+      (sum, o) =>
+        sum + orderPostAllowanceVatHalalas(o.totalHalalas, o.discountHalalas ?? 0, o.vatHalalas),
+      0,
+    );
     const orderCount = paidOrders.length;
 
     this.db
@@ -112,18 +125,26 @@ export class BusinessDayService {
     const openDay = this.getOpenDay();
     if (!openDay) return null;
 
-    // Live X-report totals
+    // Live X-report totals — payable + post-Allowance VAT (ADR 0009 §9)
     const paidOrders = this.db
       .select({
         totalHalalas: orders.totalHalalas,
         vatHalalas: orders.vatHalalas,
+        discountHalalas: orders.discountHalalas,
       })
       .from(orders)
       .where(and(eq(orders.dayOpeningId, openDay.id), eq(orders.status, 'paid')))
       .all();
 
-    const liveSales = paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0);
-    const liveVat = paidOrders.reduce((sum, o) => sum + o.vatHalalas, 0);
+    const liveSales = paidOrders.reduce(
+      (sum, o) => sum + orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0),
+      0,
+    );
+    const liveVat = paidOrders.reduce(
+      (sum, o) =>
+        sum + orderPostAllowanceVatHalalas(o.totalHalalas, o.discountHalalas ?? 0, o.vatHalalas),
+      0,
+    );
     const liveCount = paidOrders.length;
 
     return {

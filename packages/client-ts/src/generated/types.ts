@@ -955,6 +955,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/promotions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List all promotions (including disabled) */
+    get: operations['PromotionsController_list'];
+    put?: never;
+    /** Create a promotion (enabled date ranges must not overlap) */
+    post: operations['PromotionsController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/promotions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a promotion (name / nameAr / percentBp / dates / enabled; soft-disable only) */
+    patch: operations['PromotionsController_update'];
+    trace?: never;
+  };
   '/settings': {
     parameters: {
       query?: never;
@@ -2047,6 +2082,28 @@ export interface components {
        */
       discountHalalas: number;
       /**
+       * Format: int64
+       * @description Stamped Promotion id when an enabled campaign covered the order create service day. Null when none.
+       * @example 1
+       */
+      promotionId: number | null;
+      /**
+       * @description Promotion name snapshot at attach time (does not live-refresh).
+       * @example National Day
+       */
+      promotionName: string | null;
+      /**
+       * @description Promotion Arabic name snapshot at attach time.
+       * @example اليوم الوطني
+       */
+      promotionNameAr: string | null;
+      /**
+       * Format: int64
+       * @description Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders.
+       * @example 1000
+       */
+      promotionPercentBp: number | null;
+      /**
        * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
        * @example hungerstation
        */
@@ -2312,6 +2369,28 @@ export interface components {
        * @example 0
        */
       discountHalalas: number;
+      /**
+       * Format: int64
+       * @description Stamped Promotion id when an enabled campaign covered the order create service day. Null when none.
+       * @example 1
+       */
+      promotionId: number | null;
+      /**
+       * @description Promotion name snapshot at attach time (does not live-refresh).
+       * @example National Day
+       */
+      promotionName: string | null;
+      /**
+       * @description Promotion Arabic name snapshot at attach time.
+       * @example اليوم الوطني
+       */
+      promotionNameAr: string | null;
+      /**
+       * Format: int64
+       * @description Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders.
+       * @example 1000
+       */
+      promotionPercentBp: number | null;
       /**
        * @description Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
        * @example hungerstation
@@ -2687,6 +2766,12 @@ export interface components {
        * @example 5000
        */
       totalHalalas: number;
+      /**
+       * Format: int64
+       * @description Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion.
+       * @example 0
+       */
+      discountHalalas: number;
       /** @example Customer changed mind */
       reason: string | null;
       /**
@@ -2918,6 +3003,80 @@ export interface components {
        * @enum {string}
        */
       environment?: 'sandbox' | 'simulation' | 'production';
+    };
+    PromotionResponse: {
+      /**
+       * Format: int64
+       * @example 1
+       */
+      id: number;
+      /** @example KSA National Day */
+      name: string;
+      /** @example اليوم الوطني */
+      nameAr: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp: number;
+      /** @example 2026-09-23 */
+      startBusinessDate: string;
+      /** @example 2026-09-25 */
+      endBusinessDate: string;
+      /** @example true */
+      enabled: boolean;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      createdAt: number;
+      /**
+       * Format: int64
+       * @example 1700000000
+       */
+      updatedAt: number;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      createdBy: number | null;
+      /**
+       * Format: int64
+       * @example 1
+       */
+      updatedBy: number | null;
+    };
+    CreatePromotionDto: {
+      /** @example KSA National Day */
+      name: string;
+      /** @example اليوم الوطني */
+      nameAr: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp: number;
+      /** @example 2026-09-23 */
+      startBusinessDate: string;
+      /** @example 2026-09-25 */
+      endBusinessDate: string;
+    };
+    UpdatePromotionDto: {
+      /** @example KSA National Day */
+      name?: string;
+      /** @example اليوم الوطني */
+      nameAr?: string;
+      /**
+       * Format: int32
+       * @example 1000
+       */
+      percentBp?: number;
+      /** @example 2026-09-23 */
+      startBusinessDate?: string;
+      /** @example 2026-09-25 */
+      endBusinessDate?: string;
+      /** @default true */
+      enabled: boolean;
     };
     SettingResponse: {
       /** @example restaurant_name */
@@ -5060,6 +5219,77 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  PromotionsController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of promotions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'][];
+        };
+      };
+    };
+  };
+  PromotionsController_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePromotionDto'];
+      };
+    };
+    responses: {
+      /** @description Created promotion */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'];
+        };
+      };
+    };
+  };
+  PromotionsController_update: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Promotion id */
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePromotionDto'];
+      };
+    };
+    responses: {
+      /** @description Updated promotion */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PromotionResponse'];
+        };
       };
     };
   };

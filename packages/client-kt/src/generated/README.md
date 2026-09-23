@@ -112,6 +112,9 @@ All URIs are relative to *http://localhost*
 | *PrintersApi* | [**printersControllerListWindowsQueues**](docs/PrintersApi.md#printerscontrollerlistwindowsqueues) | **GET** printers/windows-queues | List available Windows printer queue names |
 | *PrintersApi* | [**printersControllerTestPrint**](docs/PrintersApi.md#printerscontrollertestprint) | **POST** printers/{id}/test | Print a test ticket |
 | *PrintersApi* | [**printersControllerUpdate**](docs/PrintersApi.md#printerscontrollerupdate) | **PUT** printers/{id} | Update a printer |
+| *PromotionsApi* | [**promotionsControllerCreate**](docs/PromotionsApi.md#promotionscontrollercreate) | **POST** promotions | Create a promotion (enabled date ranges must not overlap) |
+| *PromotionsApi* | [**promotionsControllerList**](docs/PromotionsApi.md#promotionscontrollerlist) | **GET** promotions | List all promotions (including disabled) |
+| *PromotionsApi* | [**promotionsControllerUpdate**](docs/PromotionsApi.md#promotionscontrollerupdate) | **PATCH** promotions/{id} | Update a promotion (name / nameAr / percentBp / dates / enabled; soft-disable only) |
 | *ReportsApi* | [**reportsControllerGetItemWiseSales**](docs/ReportsApi.md#reportscontrollergetitemwisesales) | **GET** reports/item-wise | Item-wise sales (product mix) over a date range |
 | *ReportsApi* | [**reportsControllerGetSales**](docs/ReportsApi.md#reportscontrollergetsales) | **GET** reports/sales | Daily sales totals over a date range |
 | *ReportsApi* | [**reportsControllerGetSalesRegister**](docs/ReportsApi.md#reportscontrollergetsalesregister) | **GET** reports/sales-register | Sales register (day-book of invoices and refunds) over a date range |
@@ -156,6 +159,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.CreateOrderResponse](docs/CreateOrderResponse.md)
  - [com.spicyhome.client.models.CreatePaymentMethodDto](docs/CreatePaymentMethodDto.md)
  - [com.spicyhome.client.models.CreatePrinterDto](docs/CreatePrinterDto.md)
+ - [com.spicyhome.client.models.CreatePromotionDto](docs/CreatePromotionDto.md)
  - [com.spicyhome.client.models.CreateRefundDto](docs/CreateRefundDto.md)
  - [com.spicyhome.client.models.CreateRoleDto](docs/CreateRoleDto.md)
  - [com.spicyhome.client.models.CreateSubcategoryDto](docs/CreateSubcategoryDto.md)
@@ -184,6 +188,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.PrinterConfigDto](docs/PrinterConfigDto.md)
  - [com.spicyhome.client.models.PrinterResponse](docs/PrinterResponse.md)
  - [com.spicyhome.client.models.PrinterStatusResponse](docs/PrinterStatusResponse.md)
+ - [com.spicyhome.client.models.PromotionResponse](docs/PromotionResponse.md)
  - [com.spicyhome.client.models.RefundItemDto](docs/RefundItemDto.md)
  - [com.spicyhome.client.models.RefundItemResponse](docs/RefundItemResponse.md)
  - [com.spicyhome.client.models.RefundResponse](docs/RefundResponse.md)
@@ -211,6 +216,7 @@ All URIs are relative to *http://localhost*
  - [com.spicyhome.client.models.UpdateOrderStandardInvoiceDto](docs/UpdateOrderStandardInvoiceDto.md)
  - [com.spicyhome.client.models.UpdatePaymentMethodDto](docs/UpdatePaymentMethodDto.md)
  - [com.spicyhome.client.models.UpdatePrinterDto](docs/UpdatePrinterDto.md)
+ - [com.spicyhome.client.models.UpdatePromotionDto](docs/UpdatePromotionDto.md)
  - [com.spicyhome.client.models.UpdateRoleDto](docs/UpdateRoleDto.md)
  - [com.spicyhome.client.models.UpdateSubcategoryDto](docs/UpdateSubcategoryDto.md)
  - [com.spicyhome.client.models.UpdateTableDto](docs/UpdateTableDto.md)

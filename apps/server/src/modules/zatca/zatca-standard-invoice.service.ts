@@ -818,6 +818,7 @@ export class ZatcaStandardInvoiceService {
         seller,
         items: invItems,
         discountHalalas: order.discountHalalas || 0,
+        allowanceReason: order.promotionName ?? undefined,
         prevInvoiceHash,
         invoiceProfile: 'standard',
         buyer: this.getBuyerFromOrder(order),
@@ -844,15 +845,19 @@ export class ZatcaStandardInvoiceService {
         certForXml,
       );
 
-      // QR TLV
+      // QR TLV — tags 4/5: payable + post-Allowance VAT when promoted (ADR 0009)
       const timestampIso = `${issueDate}T${issueTime}`;
+      const payable = order.totalHalalas - (order.discountHalalas || 0);
+      const qrVat = order.discountHalalas
+        ? decomposeVat(payable, 1500).vatHalalas
+        : order.vatHalalas;
       const certSigB64 = extractCertSignature(certForXml);
       const tlvInput: TLVInput = {
         sellerName: seller.name,
         vatNumber: seller.vatNumber,
         timestamp: timestampIso,
-        totalHalalas: order.totalHalalas,
-        vatHalalas: order.vatHalalas,
+        totalHalalas: payable,
+        vatHalalas: qrVat,
         invoiceHashBase64: invoiceHashB64,
         signatureBase64: signatureB64,
         publicKeyBase64: extractPublicKeySpkiFromCert(certForXml),
@@ -1019,15 +1024,10 @@ export class ZatcaStandardInvoiceService {
       .where(eq(orderRefundItems.refundId, refundId))
       .all();
 
-    // Compute totals
-    let vatHalalas = 0;
-    let totalHalalas = 0;
-    for (const ri of refundItems) {
-      const lineTotal = ri.unitPriceHalalas * ri.qty;
-      totalHalalas += lineTotal;
-      const decomposed = decomposeVat(lineTotal, ri.vatRateBp);
-      vatHalalas += decomposed.vatHalalas;
-    }
+    // QR + stored credit-note totals: use refund header (payable /
+    // post-Allowance VAT when promoted — slice 6). Do not recompute from lines.
+    const totalHalalas = refund.totalHalalas;
+    const vatHalalas = refund.vatHalalas;
 
     // Determine attempt number
     const allAttempts = this.invoiceService.listCreditNotesByRefundId(refundId);
@@ -1079,6 +1079,8 @@ export class ZatcaStandardInvoiceService {
         issueTime,
         seller,
         items: invItems,
+        discountHalalas: refund.discountHalalas || 0,
+        allowanceReason: order.promotionName ?? undefined,
         prevInvoiceHash,
         invoiceProfile: 'standard',
         buyer: this.getBuyerFromOrder(order),

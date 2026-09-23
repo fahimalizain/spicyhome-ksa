@@ -2659,6 +2659,118 @@
         ]
       }
     },
+    "/promotions": {
+      "get": {
+        "operationId": "PromotionsController_list",
+        "summary": "List all promotions (including disabled)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of promotions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PromotionResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "promotions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "PromotionsController_create",
+        "summary": "Create a promotion (enabled date ranges must not overlap)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromotionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created promotion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "promotions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/promotions/{id}": {
+      "patch": {
+        "operationId": "PromotionsController_update",
+        "summary": "Update a promotion (name / nameAr / percentBp / dates / enabled; soft-disable only)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Promotion id",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromotionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated promotion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "promotions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/settings": {
       "get": {
         "operationId": "SettingsController_getAll",
@@ -3568,6 +3680,10 @@
     {
       "name": "delivery-partners",
       "description": "Delivery partner catalog"
+    },
+    {
+      "name": "promotions",
+      "description": "Dated percentage campaigns"
     }
   ],
   "servers": [],
@@ -4889,6 +5005,32 @@
             "format": "int64",
             "example": 0
           },
+          "promotionId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true,
+            "description": "Stamped Promotion id when an enabled campaign covered the order create service day. Null when none."
+          },
+          "promotionName": {
+            "type": "string",
+            "example": "National Day",
+            "nullable": true,
+            "description": "Promotion name snapshot at attach time (does not live-refresh)."
+          },
+          "promotionNameAr": {
+            "type": "string",
+            "example": "اليوم الوطني",
+            "nullable": true,
+            "description": "Promotion Arabic name snapshot at attach time."
+          },
+          "promotionPercentBp": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1000,
+            "nullable": true,
+            "description": "Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders."
+          },
           "deliveryPartnerId": {
             "type": "string",
             "example": "hungerstation",
@@ -4965,6 +5107,10 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "promotionId",
+          "promotionName",
+          "promotionNameAr",
+          "promotionPercentBp",
           "deliveryPartnerId",
           "deliveryPartnerTitle",
           "deliveryExternalRef",
@@ -5286,6 +5432,32 @@
             "format": "int64",
             "example": 0
           },
+          "promotionId": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true,
+            "description": "Stamped Promotion id when an enabled campaign covered the order create service day. Null when none."
+          },
+          "promotionName": {
+            "type": "string",
+            "example": "National Day",
+            "nullable": true,
+            "description": "Promotion name snapshot at attach time (does not live-refresh)."
+          },
+          "promotionNameAr": {
+            "type": "string",
+            "example": "اليوم الوطني",
+            "nullable": true,
+            "description": "Promotion Arabic name snapshot at attach time."
+          },
+          "promotionPercentBp": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1000,
+            "nullable": true,
+            "description": "Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders."
+          },
           "deliveryPartnerId": {
             "type": "string",
             "example": "hungerstation",
@@ -5382,6 +5554,10 @@
           "vatHalalas",
           "totalHalalas",
           "discountHalalas",
+          "promotionId",
+          "promotionName",
+          "promotionNameAr",
+          "promotionPercentBp",
           "deliveryPartnerId",
           "deliveryPartnerTitle",
           "deliveryExternalRef",
@@ -5903,6 +6079,12 @@
             "format": "int64",
             "example": 5000
           },
+          "discountHalalas": {
+            "type": "integer",
+            "format": "int64",
+            "example": 0,
+            "description": "Inclusive Discount share allocated to this refund (halalas). 0 when the order had no Promotion."
+          },
           "reason": {
             "type": "string",
             "example": "Customer changed mind",
@@ -5935,6 +6117,7 @@
           "subtotalHalalas",
           "vatHalalas",
           "totalHalalas",
+          "discountHalalas",
           "reason",
           "documentId",
           "createdAt",
@@ -6376,6 +6559,143 @@
           "country",
           "orgUnit"
         ]
+      },
+      "PromotionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "KSA National Day"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "اليوم الوطني"
+          },
+          "percentBp": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1000
+          },
+          "startBusinessDate": {
+            "type": "string",
+            "example": "2026-09-23"
+          },
+          "endBusinessDate": {
+            "type": "string",
+            "example": "2026-09-25"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1700000000
+          },
+          "createdBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nameAr",
+          "percentBp",
+          "startBusinessDate",
+          "endBusinessDate",
+          "enabled",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "updatedBy"
+        ]
+      },
+      "CreatePromotionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "KSA National Day"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "اليوم الوطني"
+          },
+          "percentBp": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1000,
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "startBusinessDate": {
+            "type": "string",
+            "example": "2026-09-23"
+          },
+          "endBusinessDate": {
+            "type": "string",
+            "example": "2026-09-25"
+          }
+        },
+        "required": [
+          "name",
+          "nameAr",
+          "percentBp",
+          "startBusinessDate",
+          "endBusinessDate"
+        ]
+      },
+      "UpdatePromotionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "KSA National Day"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "اليوم الوطني"
+          },
+          "percentBp": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1000,
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "startBusinessDate": {
+            "type": "string",
+            "example": "2026-09-23"
+          },
+          "endBusinessDate": {
+            "type": "string",
+            "example": "2026-09-25"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
       },
       "SettingResponse": {
         "type": "object",

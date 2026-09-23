@@ -5,9 +5,10 @@ import { PrintersModule } from '../printers/printers.module';
 import { OrderEventsService } from './order-events.service';
 import { DocumentIdService } from './document-id.allocator';
 import { ZatcaModule } from '../zatca/zatca.module';
+import { PromotionsModule } from '../promotions/promotions.module';
 
 @Module({
-  imports: [PrintersModule, forwardRef(() => ZatcaModule)],
+  imports: [PrintersModule, forwardRef(() => ZatcaModule), PromotionsModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrderEventsService, DocumentIdService],
   exports: [OrderEventsService, DocumentIdService],

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { halalasToSar, getServiceDayString, ALL_ORDER_STATUSES } from '@spicyhome/shared';
+import {
+  halalasToSar,
+  getServiceDayString,
+  ALL_ORDER_STATUSES,
+  orderPayableHalalas,
+  orderPostAllowanceVatHalalas,
+} from '@spicyhome/shared';
 import { client } from '../api';
 import { realtime } from '../realtime';
 import { usePermissions } from '../hooks/usePermissions';
@@ -311,7 +317,10 @@ export function OrdersPage() {
                       </span>
                     </div>
                     <span className="text-sm text-brand-400">
-                      {halalasToSar(order.totalHalalas)} SAR
+                      {halalasToSar(
+                        orderPayableHalalas(order.totalHalalas, order.discountHalalas ?? 0),
+                      )}{' '}
+                      SAR
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 mt-1 text-xs text-gray-400">
@@ -406,12 +415,46 @@ export function OrdersPage() {
               </div>
               <div className="flex justify-between text-gray-400">
                 <span>VAT</span>
-                <span>{halalasToSar(selectedOrder.vatHalalas)} SAR</span>
+                <span>
+                  {halalasToSar(
+                    orderPostAllowanceVatHalalas(
+                      selectedOrder.totalHalalas,
+                      selectedOrder.discountHalalas ?? 0,
+                      selectedOrder.vatHalalas,
+                    ),
+                  )}{' '}
+                  SAR
+                </span>
               </div>
               <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-gray-700">
                 <span>Total</span>
                 <span>{halalasToSar(selectedOrder.totalHalalas)} SAR</span>
               </div>
+              {selectedOrder.promotionId != null &&
+                (selectedOrder.discountHalalas ?? 0) > 0 &&
+                selectedOrder.promotionName != null &&
+                selectedOrder.promotionPercentBp != null && (
+                  <div className="flex justify-between text-green-400">
+                    <span>
+                      {selectedOrder.promotionName} {selectedOrder.promotionPercentBp / 100}%
+                    </span>
+                    <span>−{halalasToSar(selectedOrder.discountHalalas ?? 0)} SAR</span>
+                  </div>
+                )}
+              {selectedOrder.promotionId != null && (selectedOrder.discountHalalas ?? 0) > 0 && (
+                <div className="flex justify-between text-white font-bold text-base">
+                  <span>Payable</span>
+                  <span>
+                    {halalasToSar(
+                      orderPayableHalalas(
+                        selectedOrder.totalHalalas,
+                        selectedOrder.discountHalalas ?? 0,
+                      ),
+                    )}{' '}
+                    SAR
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Payments section */}

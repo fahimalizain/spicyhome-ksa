@@ -190,6 +190,13 @@ export const orders = sqliteTable(
     // The delivery app's order number for reconciliation (e.g. HungerStation
     // order ID). Free text, only meaningful alongside deliveryPartnerId.
     deliveryExternalRef: text('delivery_external_ref'),
+    // Promotion snapshot (ADR 0009 / #191). Nullable FK + stamped name/percent
+    // at attach time. Do not live-refresh when the promotions row is edited.
+    // discount_halalas (already on the table) is the VAT-inclusive Discount.
+    promotionId: integer('promotion_id').references(() => promotions.id),
+    promotionName: text('promotion_name'),
+    promotionNameAr: text('promotion_name_ar'),
+    promotionPercentBp: integer('promotion_percent_bp'),
     // Order-level notes ("Order notes" / "Remarks"). Free text, nullable —
     // same semantics as order_items.notes.
     notes: text('notes'),
@@ -203,6 +210,7 @@ export const orders = sqliteTable(
     idxOrdersStatus: index('idx_orders_status').on(t.status),
     idxOrdersType: index('idx_orders_type').on(t.type),
     idxOrdersDeliveryPartner: index('idx_orders_delivery_partner').on(t.deliveryPartnerId),
+    idxOrdersPromotion: index('idx_orders_promotion').on(t.promotionId),
   }),
 );
 
@@ -266,6 +274,10 @@ export const orderRefunds = sqliteTable('order_refunds', {
   subtotalHalalas: integer('subtotal_halalas').notNull(),
   vatHalalas: integer('vat_halalas').notNull(),
   totalHalalas: integer('total_halalas').notNull(),
+  // Allocated VAT-inclusive Discount for this refund (ADR 0009 / #191).
+  // Used by later proportional refund + credit-note slices. DEFAULT 0 so
+  // historical inserts that omit the column keep working.
+  discountHalalas: integer('discount_halalas').notNull().default(0),
   reason: text('reason'),
   documentId: text('document_id').notNull().unique(),
   createdAt: integer('created_at').notNull(),
@@ -412,6 +424,27 @@ export const deliveryPartners = sqliteTable('delivery_partners', {
   title: text('title').notNull(),
   enabled: integer('enabled').notNull().default(1), // 0/1, soft-disable only
   sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  createdBy: integer('created_by').references((): any => users.id),
+  updatedBy: integer('updated_by').references((): any => users.id),
+});
+
+// ── promotions ─────────────────────────────────────────────────────────────────
+//
+// Storewide percentage campaigns (ADR 0009 / #191). Integer autoincrement PK —
+// names are not unique identifiers (two disabled historical "National Day"
+// rows are fine). Overlap of enabled rows is an application rule, not a DB
+// constraint. Soft-disable only (enabled 0/1).
+
+export const promotions = sqliteTable('promotions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(), // English name (receipt / Order screen)
+  nameAr: text('name_ar').notNull(), // Arabic name — required at DB
+  percentBp: integer('percent_bp').notNull(), // 1000 = 10%. API validates 1–10000 later
+  startBusinessDate: text('start_business_date').notNull(), // Inclusive YYYY-MM-DD Business Date
+  endBusinessDate: text('end_business_date').notNull(), // Inclusive YYYY-MM-DD Business Date
+  enabled: integer('enabled').notNull().default(1), // 0/1, soft-disable only
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   createdBy: integer('created_by').references((): any => users.id),

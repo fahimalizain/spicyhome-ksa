@@ -14,7 +14,12 @@ import {
   tables,
   deliveryPartners,
 } from '@spicyhome/db';
-import { getServiceDayString, decomposeVat } from '@spicyhome/shared';
+import {
+  getServiceDayString,
+  decomposeVat,
+  orderPayableHalalas,
+  orderPostAllowanceVatHalalas,
+} from '@spicyhome/shared';
 import { DRIZZLE } from '../database/database.module';
 import { BusinessDayService } from '../business-day/business-day.service';
 import { PrintersService } from '../printers/printers.service';
@@ -161,15 +166,23 @@ export class ReportsService {
     const openOrders = allOrders.filter((o) => o.status === 'open');
     const voidedOrders = allOrders.filter((o) => o.status === 'voided');
 
-    const totalSalesHalalas = paidOrders.reduce((sum, o) => sum + o.totalHalalas, 0);
-    const totalVatHalalas = paidOrders.reduce((sum, o) => sum + o.vatHalalas, 0);
+    // Payable + post-Allowance VAT (ADR 0009 §9). Item-wise / category stay gross.
+    const totalSalesHalalas = paidOrders.reduce(
+      (sum, o) => sum + orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0),
+      0,
+    );
+    const totalVatHalalas = paidOrders.reduce(
+      (sum, o) =>
+        sum + orderPostAllowanceVatHalalas(o.totalHalalas, o.discountHalalas ?? 0, o.vatHalalas),
+      0,
+    );
 
     const salesByType: Record<string, { count: number; totalHalalas: number }> = {};
     for (const o of paidOrders) {
       const t = o.type;
       if (!salesByType[t]) salesByType[t] = { count: 0, totalHalalas: 0 };
       salesByType[t].count++;
-      salesByType[t].totalHalalas += o.totalHalalas;
+      salesByType[t].totalHalalas += orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0);
     }
 
     // Per-user sales
@@ -190,7 +203,10 @@ export class ReportsService {
         userId: uid!,
         userName: userMap.get(uid!) ?? 'Unknown',
         orderCount: userOrders.length,
-        totalHalalas: userOrders.reduce((sum, o) => sum + o.totalHalalas, 0),
+        totalHalalas: userOrders.reduce(
+          (sum, o) => sum + orderPayableHalalas(o.totalHalalas, o.discountHalalas ?? 0),
+          0,
+        ),
       };
     });
 
@@ -424,9 +440,9 @@ export class ReportsService {
               ? (partnerMap.get(order.deliveryPartnerId) ?? null)
               : null,
           deliveryExternalRef: order.deliveryExternalRef,
-          subtotalHalalas: order.subtotalHalalas,
-          vatHalalas: order.vatHalalas,
-          totalHalalas: order.totalHalalas,
+          // Sale rows: payable + post-Allowance VAT when a Discount applies.
+          // Subtotal excl. is re-derived from payable so row identity holds.
+          ...salesRegisterSaleAmounts(order),
           tenders: payments.map((p) => ({
             methodId: p.methodId,
             methodTitle: p.methodTitle,
@@ -822,4 +838,29 @@ export class ReportsService {
     await this.printersService.sendBuffer(receiptPrinter, buffer);
     return { success: true, message: 'X-report printed' };
   }
+}
+
+/**
+ * Sales-register sale-row money: payable + post-Allowance VAT when Discount > 0.
+ * Unpromoted orders keep the stored subtotal/vat/total (mixed-rate safe).
+ */
+function salesRegisterSaleAmounts(order: {
+  subtotalHalalas: number;
+  vatHalalas: number;
+  totalHalalas: number;
+  discountHalalas: number | null;
+}): { subtotalHalalas: number; vatHalalas: number; totalHalalas: number } {
+  const discount = order.discountHalalas ?? 0;
+  if (discount === 0) {
+    return {
+      subtotalHalalas: order.subtotalHalalas,
+      vatHalalas: order.vatHalalas,
+      totalHalalas: order.totalHalalas,
+    };
+  }
+  const totalHalalas = orderPayableHalalas(order.totalHalalas, discount);
+  const vatHalalas = orderPostAllowanceVatHalalas(order.totalHalalas, discount, order.vatHalalas);
+  // Re-derive excl. from payable so subtotal + vat = total on the row.
+  const subtotalHalalas = decomposeVat(totalHalalas, 1500).priceExclHalalas;
+  return { subtotalHalalas, vatHalalas, totalHalalas };
 }

@@ -4,7 +4,7 @@ import {
   SellerInfo,
   BuyerInfo,
 } from './zatca-xml-builder.service';
-import { ZATCA_INITIAL_PIH } from '@spicyhome/shared';
+import { ZATCA_INITIAL_PIH, decomposeVat, halalasToSar } from '@spicyhome/shared';
 
 describe('UBL XML Builder', () => {
   const defaultSeller: SellerInfo = {
@@ -512,17 +512,212 @@ describe('UBL XML Builder', () => {
     expect(xml).toContain('<cbc:ChargeIndicator>false</cbc:ChargeIndicator>');
   });
 
-  it('includes discount when provided', () => {
+  it('includes discount when provided as pre-tax Allowance', () => {
+    // baseInput: 2300×2 + 575 = 5175 incl. Discount 100 → payable 5075.
+    // Allowance is the residual of line nets over the post-discount base.
+    const grossIncl = 5175;
+    const discount = 100;
+    const payable = grossIncl - discount;
+    const lineNets =
+      decomposeVat(2300, 1500).priceExclHalalas * 2 + decomposeVat(575, 1500).priceExclHalalas;
+    const taxExclusive = decomposeVat(payable, 1500).priceExclHalalas;
+    const allowance = lineNets - taxExclusive;
+    const postVat = payable - taxExclusive;
+
     const input: InvoiceXMLInput = {
       ...baseInput,
-      discountHalalas: 100,
+      discountHalalas: discount,
     };
     const xml = buildUnsignedInvoiceXML(input);
+
     expect(xml).toContain(
-      '<cbc:AllowanceTotalAmount currencyID="SAR">1.00</cbc:AllowanceTotalAmount>',
+      `<cbc:AllowanceTotalAmount currencyID="SAR">${halalasToSar(allowance)}</cbc:AllowanceTotalAmount>`,
     );
-    // Payable should be total - discount
-    expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">50.75</cbc:PayableAmount>');
+    expect(xml).toContain(`<cbc:Amount currencyID="SAR">${halalasToSar(allowance)}</cbc:Amount>`);
+    expect(xml).toContain(
+      `<cbc:PayableAmount currencyID="SAR">${halalasToSar(payable)}</cbc:PayableAmount>`,
+    );
+    expect(xml).toContain(
+      `<cbc:TaxInclusiveAmount currencyID="SAR">${halalasToSar(payable)}</cbc:TaxInclusiveAmount>`,
+    );
+    expect(xml).toContain(
+      `<cbc:TaxExclusiveAmount currencyID="SAR">${halalasToSar(taxExclusive)}</cbc:TaxExclusiveAmount>`,
+    );
+    expect(xml).toContain(
+      `<cbc:LineExtensionAmount currencyID="SAR">${halalasToSar(lineNets)}</cbc:LineExtensionAmount>`,
+    );
+    // Header TaxAmount = post-Allowance VAT (first TaxTotal block)
+    const firstTaxTotal = xml.match(
+      /<cac:TaxTotal>\s*<cbc:TaxAmount currencyID="SAR">([^<]*)<\/cbc:TaxAmount>\s*<\/cac:TaxTotal>/,
+    );
+    expect(firstTaxTotal).not.toBeNull();
+    expect(firstTaxTotal![1]).toBe(halalasToSar(postVat));
+    // Amount-only AllowanceCharge — no BaseAmount / MultiplierFactorNumeric
+    expect(xml).not.toContain('BaseAmount');
+    expect(xml).not.toContain('MultiplierFactorNumeric');
+  });
+
+  it('emits canonical 100/10/90 pre-tax Allowance identity (ADR 0009)', () => {
+    // Gross 100.00 / Discount 10.00 / 15% VAT → payable 90.00, Allowance 8.70
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      items: [{ name: 'Plate', unitPriceHalalas: 10000, vatRateBp: 1500, qty: 1 }],
+      discountHalalas: 1000,
+      allowanceReason: 'National Day',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+
+    // LineExtensionAmount (BT-106) = Σ line nets = 86.96 — unchanged by Discount
+    expect(xml).toContain(
+      '<cbc:LineExtensionAmount currencyID="SAR">86.96</cbc:LineExtensionAmount>',
+    );
+    // Pre-tax Allowance amount-only
+    expect(xml).toContain('<cbc:Amount currencyID="SAR">8.70</cbc:Amount>');
+    expect(xml).toContain(
+      '<cbc:AllowanceTotalAmount currencyID="SAR">8.70</cbc:AllowanceTotalAmount>',
+    );
+    expect(xml).toContain(
+      '<cbc:TaxExclusiveAmount currencyID="SAR">78.26</cbc:TaxExclusiveAmount>',
+    );
+    expect(xml).toContain(
+      '<cbc:TaxInclusiveAmount currencyID="SAR">90.00</cbc:TaxInclusiveAmount>',
+    );
+    expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">90.00</cbc:PayableAmount>');
+    // Header TaxAmount = post-Allowance VAT 11.74
+    const firstTaxTotal = xml.match(
+      /<cac:TaxTotal>\s*<cbc:TaxAmount currencyID="SAR">([^<]*)<\/cbc:TaxAmount>\s*<\/cac:TaxTotal>/,
+    );
+    expect(firstTaxTotal).not.toBeNull();
+    expect(firstTaxTotal![1]).toBe('11.74');
+    // S/15 TaxSubtotal after Allowance
+    expect(xml).toContain('<cbc:TaxableAmount currencyID="SAR">78.26</cbc:TaxableAmount>');
+    expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">11.74</cbc:TaxAmount>');
+    // Reason = Promotion name
+    expect(xml).toContain('<cbc:AllowanceChargeReason>National Day</cbc:AllowanceChargeReason>');
+    // TaxCategory S / 15 on Allowance
+    const allowanceSection = xml.substring(
+      xml.indexOf('<cac:AllowanceCharge>'),
+      xml.indexOf('</cac:AllowanceCharge>') + '</cac:AllowanceCharge>'.length,
+    );
+    expect(allowanceSection).toContain('<cbc:ID>S</cbc:ID>');
+    expect(allowanceSection).toContain('<cbc:Percent>15.00</cbc:Percent>');
+    // No BaseAmount / MultiplierFactorNumeric
+    expect(xml).not.toContain('BaseAmount');
+    expect(xml).not.toContain('MultiplierFactorNumeric');
+  });
+
+  it('reconciles document totals for a multi-line promoted ticket (BR-CO-15)', () => {
+    // Regression: order 2357 — 5×15.00 + 4×14.00 = 131.00 incl, 10% promotion
+    // → payable 117.90. Per-unit decomposition gives line nets 113.88 while
+    // decomposeVat(131.00) gives 113.91; building the Allowance from the gross
+    // decomposition leaked 0.03 into TaxInclusive and failed BR-CO-15.
+    const input: InvoiceXMLInput = {
+      ...baseInput,
+      items: [
+        { name: 'Shanghai Hot Soup -Chicken', unitPriceHalalas: 1500, vatRateBp: 1500, qty: 5 },
+        { name: 'Sweet Corn Soup-Veg', unitPriceHalalas: 1400, vatRateBp: 1500, qty: 4 },
+      ],
+      discountHalalas: 1310,
+      allowanceReason: 'KSA National Day',
+    };
+    const xml = buildUnsignedInvoiceXML(input);
+
+    // LineExtension = Σ line nets = 113.88 (unchanged by Discount)
+    expect(xml).toContain(
+      '<cbc:LineExtensionAmount currencyID="SAR">113.88</cbc:LineExtensionAmount>',
+    );
+    // Allowance = 113.88 − TaxExclusive
+    expect(xml).toContain('<cbc:Amount currencyID="SAR">11.36</cbc:Amount>');
+    expect(xml).toContain(
+      '<cbc:AllowanceTotalAmount currencyID="SAR">11.36</cbc:AllowanceTotalAmount>',
+    );
+    expect(xml).toContain(
+      '<cbc:TaxExclusiveAmount currencyID="SAR">102.52</cbc:TaxExclusiveAmount>',
+    );
+    expect(xml).toContain(
+      '<cbc:TaxInclusiveAmount currencyID="SAR">117.90</cbc:TaxInclusiveAmount>',
+    );
+    expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">117.90</cbc:PayableAmount>');
+    // Header TaxAmount = post-Allowance VAT (117.90 − 102.52)
+    const firstTaxTotal = xml.match(
+      /<cac:TaxTotal>\s*<cbc:TaxAmount currencyID="SAR">([^<]*)<\/cbc:TaxAmount>\s*<\/cac:TaxTotal>/,
+    );
+    expect(firstTaxTotal).not.toBeNull();
+    expect(firstTaxTotal![1]).toBe('15.38');
+    // VAT breakdown taxable amount matches TaxExclusive
+    expect(xml).toContain('<cbc:TaxableAmount currencyID="SAR">102.52</cbc:TaxableAmount>');
+    expect(xml).toContain('<cbc:TaxAmount currencyID="SAR">15.38</cbc:TaxAmount>');
+  });
+
+  it('keeps BR-CO-15 (TaxInclusive = TaxExclusive + VAT) across a promoted-ticket sweep', () => {
+    const prices = [3, 27, 575, 1000, 1400, 1500, 2300, 7500, 9999, 12345];
+    const quantities = [1, 2, 3, 4, 5, 7, 10, 13, 100];
+    const discounts = [1, 2, 7, 50, 131, 999, 1234];
+
+    for (const price of prices) {
+      for (const qty of quantities) {
+        const gross = price * qty;
+        for (const discount of discounts) {
+          if (discount >= gross) continue;
+
+          const xml = buildUnsignedInvoiceXML({
+            ...baseInput,
+            items: [{ name: 'Item', unitPriceHalalas: price, vatRateBp: 1500, qty }],
+            discountHalalas: discount,
+          });
+
+          const lineNets = extractHalalas(xml, 'cbc:LineExtensionAmount');
+          const allowance = extractHalalas(xml, 'cbc:AllowanceTotalAmount');
+          const taxExclusive = extractHalalas(xml, 'cbc:TaxExclusiveAmount');
+          const taxInclusive = extractHalalas(xml, 'cbc:TaxInclusiveAmount');
+          const payable = extractHalalas(xml, 'cbc:PayableAmount');
+          const headerVat = extractHeaderVatHalalas(xml);
+
+          // BR-CO-13: line nets − Allowance = TaxExclusive
+          expect(taxExclusive).toBe(lineNets - allowance);
+          // BR-CO-15: TaxExclusive + VAT = TaxInclusive
+          expect(taxInclusive).toBe(taxExclusive + headerVat);
+          // BR-CO-16: Payable = TaxInclusive (Prepaid = 0)
+          expect(payable).toBe(taxInclusive);
+          // Allowance must never go negative
+          expect(allowance).toBeGreaterThanOrEqual(0);
+
+          if (allowance > 0) {
+            // BR-CO-17 (VAT = taxable × 15%, rounded) holds whenever an exact
+            // solution exists; otherwise TaxInclusive stays anchored to the
+            // collected payable and BR-CO-17 is a warning.
+            const exact = exactBaseFor(taxInclusive, 1500);
+            if (exact !== null) {
+              expect(taxExclusive).toBe(exact);
+              expect(headerVat).toBe(Math.round((taxExclusive * 1500) / 10000));
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('clamps the Allowance at zero when per-unit rounding outgrows a tiny discount', () => {
+    // 1000 × 0.27 SAR (per-unit VAT rounds up 0.48 halala each) with a
+    // 3-halala Discount: raw residual would be negative. Fall back to line
+    // nets as the taxable base and keep the totals reconciled.
+    const xml = buildUnsignedInvoiceXML({
+      ...baseInput,
+      items: [{ name: 'Bread', unitPriceHalalas: 27, vatRateBp: 1500, qty: 1000 }],
+      discountHalalas: 3,
+    });
+
+    expect(xml).toContain('<cbc:Amount currencyID="SAR">0.00</cbc:Amount>');
+    expect(xml).toContain(
+      '<cbc:AllowanceTotalAmount currencyID="SAR">0.00</cbc:AllowanceTotalAmount>',
+    );
+    const lineNets = extractHalalas(xml, 'cbc:LineExtensionAmount');
+    const taxExclusive = extractHalalas(xml, 'cbc:TaxExclusiveAmount');
+    const taxInclusive = extractHalalas(xml, 'cbc:TaxInclusiveAmount');
+    const payable = extractHalalas(xml, 'cbc:PayableAmount');
+    expect(taxExclusive).toBe(lineNets);
+    expect(taxInclusive).toBe(taxExclusive + extractHeaderVatHalalas(xml));
+    expect(payable).toBe(taxInclusive);
   });
 
   it('includes Signature placeholder', () => {
@@ -657,4 +852,29 @@ function extractNumericValue(xml: string, tagName: string): number | null {
   const match = xml.match(regex);
   if (match === null) return null;
   return parseFloat(match[1]);
+}
+
+function extractHalalas(xml: string, tagName: string): number {
+  const value = extractNumericValue(xml, tagName);
+  if (value === null) throw new Error(`Missing ${tagName}`);
+  return Math.round(value * 100);
+}
+
+function extractHeaderVatHalalas(xml: string): number {
+  const match = xml.match(
+    /<cac:TaxTotal>\s*<cbc:TaxAmount currencyID="SAR">([^<]*)<\/cbc:TaxAmount>\s*<\/cac:TaxTotal>/,
+  );
+  if (match === null) throw new Error('Missing header TaxTotal');
+  return Math.round(parseFloat(match[1]) * 100);
+}
+
+/**
+ * The unique taxable base B satisfying B + round(B × rate/10000) = payable —
+ * or null when no integer base reconciles the collected payable (BR-CO-17 is
+ * then a warning and the builder anchors TaxInclusive on the payable).
+ */
+function exactBaseFor(payableHalalas: number, rateBp: number): number | null {
+  const base = payableHalalas - Math.round((payableHalalas * rateBp) / (10000 + rateBp));
+  if (base < 0) return null;
+  return base + Math.round((base * rateBp) / 10000) === payableHalalas ? base : null;
 }

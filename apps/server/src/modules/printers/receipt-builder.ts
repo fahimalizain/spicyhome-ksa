@@ -64,14 +64,36 @@ export interface ReceiptOptions {
   items: ReceiptItem[];
   /** Line totals excluding VAT, integer halalas. */
   subtotalHalalas: number;
-  /** VAT amount, integer halalas. */
+  /**
+   * VAT amount, integer halalas.
+   * Tax invoice / open order: post-Allowance VAT (callers pass
+   * `orderPostAllowanceVatHalalas`). Credit note: already payable VAT from
+   * the refund header.
+   */
   vatHalalas: number;
-  /** Total including VAT, integer halalas. */
+  /**
+   * Total including VAT, integer halalas.
+   * Tax invoice / open order: gross item sum (`orders.total_halalas`); PAYABLE
+   * = total − discount. Credit note: already the note amount (payable) —
+   * do not subtract discount again for PAYABLE.
+   */
   totalHalalas: number;
   /** VAT rate in basis points — if set, shows "VAT (x.x%)"; if omitted shows "VAT". */
   vatRateBp?: number;
   /** Net payments already recorded (SUM order_payments.amount_halalas). Open order only. */
   paidHalalas?: number;
+  /**
+   * Inclusive Discount in halalas. When > 0, prints the Promotion line and
+   * PAYABLE. Tax invoice / open order: order snapshot. Credit note: allocated
+   * refund Discount (order name/percent still come from the order snapshot).
+   */
+  discountHalalas?: number;
+  /** Stamped Promotion English name (server snapshot — not live catalog). */
+  promotionName?: string;
+  /** Stamped Promotion Arabic name — printed on the next line when set. */
+  promotionNameAr?: string;
+  /** Stamped Promotion percent in basis points (1000 → "10%"). */
+  promotionPercentBp?: number;
   // Credit note extras
   /** Original invoice IRN for credit notes. */
   originalDocumentId?: string;
@@ -258,7 +280,14 @@ export class ReceiptBuilder {
 
     eb.separator();
 
-    // Totals
+    // Totals — VAT is post-Allowance when a Discount applies (callers pass it).
+    // Tax invoice / open order: totalHalalas = gross; PAYABLE = total − discount.
+    // Credit note: totalHalalas is already payable; PAYABLE reprints that amount.
+    const discountHalalas = opts.discountHalalas ?? 0;
+    const hasPromotion = discountHalalas > 0;
+    // Credit note headers already store payable; invoices/open slips store gross.
+    const payableHalalas = isCreditNote ? opts.totalHalalas : opts.totalHalalas - discountHalalas;
+
     eb.columnsWidth('SUBTOTAL (excl. VAT)', halalasToSar(opts.subtotalHalalas), 10);
     const vatLabel = opts.vatRateBp != null ? `VAT (${(opts.vatRateBp / 100).toFixed(1)}%)` : 'VAT';
     eb.columnsWidth(vatLabel, halalasToSar(opts.vatHalalas), 10);
@@ -266,6 +295,22 @@ export class ReceiptBuilder {
     eb.bold(true);
     eb.columnsWidth('TOTAL (incl. VAT)', halalasToSar(opts.totalHalalas), 10);
     eb.bold(false);
+
+    if (hasPromotion) {
+      const name = (opts.promotionName ?? 'Promotion').trim() || 'Promotion';
+      // percentBp 1000 → "10%"; no client-side math — print the stamped snapshot.
+      const percentLabel =
+        opts.promotionPercentBp != null ? ` ${opts.promotionPercentBp / 100}%` : '';
+      const promoLabel = `${name}${percentLabel}`;
+      // Discount shown as a negative money column (e.g. -10.00).
+      eb.columnsWidth(promoLabel, `-${halalasToSar(discountHalalas)}`, 10);
+      if (opts.promotionNameAr && opts.promotionNameAr.length > 0) {
+        this.writeArabicLine(eb, opts.promotionNameAr, arabic);
+      }
+      eb.bold(true);
+      eb.columnsWidth('PAYABLE', halalasToSar(payableHalalas), 10);
+      eb.bold(false);
+    }
 
     if (!isOpenOrder) {
       eb.text('Amount includes VAT');
@@ -278,9 +323,10 @@ export class ReceiptBuilder {
     // always printed (even when it equals the total) so the amount the guest
     // still owes is unambiguous; PAID only when payments have already been
     // recorded on the order (ADR 0006 — payment before food).
+    // Outstanding uses payable (gross − Discount), not pre-discount total.
     if (isOpenOrder) {
       const paidHalalas = opts.paidHalalas ?? 0;
-      const outstandingHalalas = opts.totalHalalas - paidHalalas;
+      const outstandingHalalas = payableHalalas - paidHalalas;
       if (paidHalalas > 0) {
         eb.columnsWidth('PAID', halalasToSar(paidHalalas), 10);
       }

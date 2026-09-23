@@ -111,3 +111,144 @@ export function vatRoundTripError(priceInclHalalas: number, vatRateBp: number): 
   const recomposed = computeVatInclusive(priceExclHalalas, vatRateBp);
   return Math.abs(priceInclHalalas - recomposed);
 }
+
+export interface PromotionBreakdown {
+  /** VAT-inclusive Discount in halalas. */
+  discountHalalas: number;
+  /** What the guest pays: grossIncl − discount. */
+  payableHalalas: number;
+  /** VAT-exclusive Allowance (ZATCA view) in halalas. */
+  allowanceHalalas: number;
+  /** Post-Allowance VAT in halalas (decomposed from payable). */
+  vatHalalas: number;
+}
+
+/**
+ * Apply a storewide percentage Promotion to a VAT-inclusive gross total.
+ *
+ * Amount rule (this is the one to keep — NOT round(gross × percent)):
+ *   payable = round(grossIncl × (10000 − percentBp) / 10000)
+ *   discount = grossIncl − payable
+ *
+ * Allowance / post-VAT are derived at `vatRateBp` (restaurant-normal 1500):
+ *   allowance = decomposeVat(gross, vatRateBp).priceExclHalalas
+ *             − decomposeVat(payable, vatRateBp).priceExclHalalas
+ *   vat = decomposeVat(payable, vatRateBp).vatHalalas
+ *
+ * Mixed 0% + 15% bills still pass vatRateBp = 1500 (whole Allowance on the
+ * 15% pot). Documented in ADR 0009. Do not invent per-line allocation here.
+ *
+ * Note: `allowanceHalalas` is the pure gross/payable view. The ZATCA XML
+ * builder derives its document Allowance as `Σ line nets − decompose(payable)`
+ * instead, so BR-CO-13/BR-CO-15 reconcile (ADR 0009 amendment 2026-09-23).
+ *
+ * @param grossInclHalalas — VAT-inclusive gross in halalas (non-negative integer)
+ * @param percentBp — Promotion percent in basis points, 0–10000 (0%–100%)
+ * @param vatRateBp — VAT rate in basis points (default 1500 = 15%)
+ */
+export function applyPromotionPercent(
+  grossInclHalalas: number,
+  percentBp: number,
+  vatRateBp: number = 1500,
+): PromotionBreakdown {
+  if (!Number.isInteger(grossInclHalalas) || grossInclHalalas < 0) {
+    throw new Error(
+      `applyPromotionPercent: grossInclHalalas must be a non-negative integer, got ${grossInclHalalas}`,
+    );
+  }
+  if (!Number.isInteger(percentBp) || percentBp < 0 || percentBp > BASIS_POINTS_PER_UNIT) {
+    throw new Error(
+      `applyPromotionPercent: percentBp must be an integer in [0, ${BASIS_POINTS_PER_UNIT}], got ${percentBp}`,
+    );
+  }
+  if (!Number.isInteger(vatRateBp) || vatRateBp < 0) {
+    throw new Error(
+      `applyPromotionPercent: vatRateBp must be a non-negative integer, got ${vatRateBp}`,
+    );
+  }
+
+  // payable-first: round the kept portion, then Discount is the residual.
+  // Do NOT use round(gross × percent) — that yields a different 1-halala
+  // trap on some amounts (e.g. 115 / 10% → 12 vs correct 11).
+  const payableHalalas = Math.round(
+    (grossInclHalalas * (BASIS_POINTS_PER_UNIT - percentBp)) / BASIS_POINTS_PER_UNIT,
+  );
+  const discountHalalas = grossInclHalalas - payableHalalas;
+
+  const grossDecomp = decomposeVat(grossInclHalalas, vatRateBp);
+  const payableDecomp = decomposeVat(payableHalalas, vatRateBp);
+  const allowanceHalalas = grossDecomp.priceExclHalalas - payableDecomp.priceExclHalalas;
+
+  return {
+    discountHalalas,
+    payableHalalas,
+    allowanceHalalas,
+    vatHalalas: payableDecomp.vatHalalas,
+  };
+}
+
+/**
+ * Guest-facing payable for an order: gross total minus inclusive Discount.
+ *
+ * Both arguments must be non-negative integers; discount must not exceed total.
+ * When discount is 0 this is a no-op (payable === total).
+ */
+export function orderPayableHalalas(totalHalalas: number, discountHalalas: number): number {
+  if (!Number.isInteger(totalHalalas) || totalHalalas < 0) {
+    throw new Error(
+      `orderPayableHalalas: totalHalalas must be a non-negative integer, got ${totalHalalas}`,
+    );
+  }
+  if (!Number.isInteger(discountHalalas) || discountHalalas < 0) {
+    throw new Error(
+      `orderPayableHalalas: discountHalalas must be a non-negative integer, got ${discountHalalas}`,
+    );
+  }
+  if (discountHalalas > totalHalalas) {
+    throw new Error(
+      `orderPayableHalalas: discountHalalas (${discountHalalas}) must not exceed totalHalalas (${totalHalalas})`,
+    );
+  }
+  return totalHalalas - discountHalalas;
+}
+
+/**
+ * Post-Allowance VAT for tax paper and reports.
+ *
+ * When discount is 0, return the stored line-sum VAT unchanged (mixed-rate safe).
+ * Otherwise re-decompose payable at 15% (restaurant-normal; ADR 0009 §10).
+ *
+ * Do not use this for credit-note headers: refunds already store post-Allowance
+ * VAT on `order_refunds.vat_halalas` (slice 6).
+ */
+export function orderPostAllowanceVatHalalas(
+  totalHalalas: number,
+  discountHalalas: number,
+  lineVatHalalas: number,
+): number {
+  if (!Number.isInteger(totalHalalas) || totalHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: totalHalalas must be a non-negative integer, got ${totalHalalas}`,
+    );
+  }
+  if (!Number.isInteger(discountHalalas) || discountHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: discountHalalas must be a non-negative integer, got ${discountHalalas}`,
+    );
+  }
+  if (!Number.isInteger(lineVatHalalas) || lineVatHalalas < 0) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: lineVatHalalas must be a non-negative integer, got ${lineVatHalalas}`,
+    );
+  }
+  if (discountHalalas > totalHalalas) {
+    throw new Error(
+      `orderPostAllowanceVatHalalas: discountHalalas (${discountHalalas}) must not exceed totalHalalas (${totalHalalas})`,
+    );
+  }
+  if (discountHalalas === 0) {
+    return lineVatHalalas;
+  }
+  const payable = totalHalalas - discountHalalas;
+  return decomposeVat(payable, 1500).vatHalalas;
+}

@@ -22,6 +22,9 @@ export type SubmitOrderDto = Schemas['SubmitOrderDto'];
 export type AddOrderPaymentDto = Schemas['AddOrderPaymentDto'];
 export type CreateDeliveryPartnerDto = Schemas['CreateDeliveryPartnerDto'];
 export type UpdateDeliveryPartnerDto = Schemas['UpdateDeliveryPartnerDto'];
+export type CreatePromotionDto = Schemas['CreatePromotionDto'];
+export type UpdatePromotionDto = Schemas['UpdatePromotionDto'];
+export type PromotionResponse = Schemas['PromotionResponse'];
 
 export type SyncOrderItemsDto = Schemas['SyncOrderItemsDto'];
 export type SyncOrderItemDto = Schemas['SyncOrderItemDto'];
@@ -580,6 +583,16 @@ export class SpicyHomeClient {
 
     update: (id: string, dto: Partial<UpdateDeliveryPartnerDto>) =>
       request<DeliveryPartnerResponse>(this.config, 'PATCH', `/delivery-partners/${id}`, dto),
+  };
+
+  promotions = {
+    list: () => request<PromotionResponse[]>(this.config, 'GET', '/promotions'),
+
+    create: (dto: CreatePromotionDto) =>
+      request<PromotionResponse>(this.config, 'POST', '/promotions', dto),
+
+    update: (id: number, dto: Partial<UpdatePromotionDto>) =>
+      request<PromotionResponse>(this.config, 'PATCH', `/promotions/${id}`, dto),
   };
 
   reports = {

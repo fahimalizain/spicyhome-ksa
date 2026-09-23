@@ -18,6 +18,7 @@ import { zatcaInvoices, zatcaCreditNotes } from '@spicyhome/db';
 import { DRIZZLE } from '../database/database.module';
 import { PrintersService } from '../printers/printers.service';
 import { ZatcaHttpService } from './zatca-http.service';
+import { extractMessage } from './zatca-clearance-classify';
 import { slugifyOrgUnit, zatcaKey } from '@spicyhome/shared';
 import type { ZATCAEnvironment } from '@spicyhome/shared';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -212,6 +213,7 @@ export class ZatcaReportingService implements OnModuleInit {
           }
         } catch (err: any) {
           this.logger.error(`Failed to report ${doc.kind} ICV=${doc.icv}: ${err.message}`);
+          this.recordTransportFailure(doc.kind, doc.id, err);
           failed++;
         }
       }
@@ -256,6 +258,7 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
     } catch (err: any) {
       this.logger.error(`Retry invoice ${invoiceId} failed: ${err.message}`);
+      this.recordTransportFailure('invoice', invoiceId, err);
       return { processed: 1, succeeded: 0, failed: 1 };
     }
   }
@@ -295,6 +298,7 @@ export class ZatcaReportingService implements OnModuleInit {
       return { processed: 1, succeeded: success ? 1 : 0, failed: success ? 0 : 1 };
     } catch (err: any) {
       this.logger.error(`Retry credit note ${creditNoteId} failed: ${err.message}`);
+      this.recordTransportFailure('credit_note', creditNoteId, err);
       return { processed: 1, succeeded: 0, failed: 1 };
     }
   }
@@ -335,7 +339,9 @@ export class ZatcaReportingService implements OnModuleInit {
 
     if (!cert || !secret) {
       this.logger.warn('No ZATCA credentials available for reporting');
-      this.updateStatus(doc.kind, doc.id, 'failed', null);
+      this.updateStatus(doc.kind, doc.id, 'failed', null, {
+        errors: ['No ZATCA credentials available for reporting'],
+      });
       return false;
     }
 
@@ -362,19 +368,67 @@ export class ZatcaReportingService implements OnModuleInit {
 
     if (response.status === 200 || response.status === 202) {
       // Success — mark as reported in the correct table
-      this.updateStatus(doc.kind, doc.id, 'reported', now);
+      const { warnings } = this.parseValidationMessages(response.status, response.body);
+      this.updateStatus(doc.kind, doc.id, 'reported', now, {
+        httpStatus: response.status,
+        errors: [],
+        warnings,
+      });
       this.logger.log(
         `${doc.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ICV=${doc.icv} reported successfully`,
       );
       return true;
     } else {
-      // Mark as failed
-      this.updateStatus(doc.kind, doc.id, 'failed', null);
+      // Mark as failed and persist the ZATCA rejection so it is diagnosable
+      // without replaying the request.
+      const { errors, warnings } = this.parseValidationMessages(response.status, response.body);
+      this.updateStatus(doc.kind, doc.id, 'failed', null, {
+        httpStatus: response.status,
+        errors,
+        warnings,
+      });
       this.logger.warn(
-        `${doc.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ICV=${doc.icv} reporting failed (${response.status}): ${response.body.slice(0, 200)}`,
+        `${doc.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ICV=${doc.icv} reporting failed (${response.status}): ${errors.join(' | ').slice(0, 300)}`,
       );
       return false;
     }
+  }
+
+  /**
+   * Extract ZATCA validation messages from a reporting response body.
+   * Falls back to `HTTP <status>` when the body carries no structured errors.
+   */
+  private parseValidationMessages(
+    httpStatus: number,
+    rawBody: string,
+  ): { errors: string[]; warnings: string[] } {
+    let errors: string[] = [];
+    let warnings: string[] = [];
+    try {
+      const json = JSON.parse(rawBody) as any;
+      if (Array.isArray(json?.validationResults?.errorMessages)) {
+        errors = json.validationResults.errorMessages.map(extractMessage);
+      } else if (Array.isArray(json?.errors)) {
+        errors = json.errors.map(extractMessage);
+      }
+      if (Array.isArray(json?.validationResults?.warningMessages)) {
+        warnings = json.validationResults.warningMessages.map(extractMessage);
+      }
+    } catch {
+      if (rawBody.trim()) errors = [rawBody.trim().slice(0, 500)];
+    }
+    if (errors.length === 0) errors = [`HTTP ${httpStatus}`];
+    return { errors, warnings };
+  }
+
+  /**
+   * Persist a transport-level failure (DNS, timeout, socket error — no HTTP
+   * response) so silent worker failures are visible. Mirrors the clearance
+   * path: `http_status = 0` and the exception message as the error.
+   */
+  private recordTransportFailure(kind: DocumentKind, id: number, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.updateStatus(kind, id, 'failed', null, { httpStatus: 0, errors: [message] });
   }
 
   /**
@@ -385,6 +439,7 @@ export class ZatcaReportingService implements OnModuleInit {
     id: number,
     status: string,
     reportedAt: number | null,
+    validation?: { httpStatus?: number | null; errors?: string[]; warnings?: string[] },
   ): void {
     const now = Math.floor(Date.now() / 1000);
     const setData: Record<string, any> = {
@@ -393,6 +448,15 @@ export class ZatcaReportingService implements OnModuleInit {
     };
     if (reportedAt !== null) {
       setData.reportedAt = reportedAt;
+    }
+    if (validation) {
+      setData.httpStatus = validation.httpStatus ?? null;
+      setData.clearanceErrors =
+        validation.errors && validation.errors.length ? JSON.stringify(validation.errors) : null;
+      setData.clearanceWarnings =
+        validation.warnings && validation.warnings.length
+          ? JSON.stringify(validation.warnings)
+          : null;
     }
 
     if (kind === 'invoice') {

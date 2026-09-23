@@ -27,8 +27,10 @@ import com.spicyhome.client.models.OrderResponse
 import com.spicyhome.client.models.OrderSummaryResponse
 import com.spicyhome.pos.ui.theme.*
 import com.spicyhome.pos.util.MoneyFormatter
+import com.spicyhome.pos.util.OrderTotals
 import com.spicyhome.pos.util.OrderTypeLabel
 import com.spicyhome.pos.util.RiyadhTimeFormatter
+import com.spicyhome.pos.util.payableHalalas
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -342,7 +344,7 @@ private fun OrderCard(order: OrderSummaryResponse, tableName: String?, onClick: 
                     )
                 }
                 Text(
-                    text = MoneyFormatter.halalasToSar(order.totalHalalas),
+                    text = MoneyFormatter.halalasToSar(order.payableHalalas()),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Accent,
@@ -464,6 +466,18 @@ private fun OrderDetailView(
                     Spacer(modifier = Modifier.height(8.dp))
                     Divider(color = DarkSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
+                    // Totals mirror the Order screen: server snapshot with the
+                    // stamped Promotion (display-only) and payable.
+                    val detailDiscount = order.discountHalalas
+                    val detailHasPromotion =
+                        OrderTotals.hasPromotion(order.promotionId, detailDiscount)
+                    val detailPayable = order.totalHalalas - detailDiscount
+                    val detailPromotionLabel =
+                        if (detailHasPromotion && order.promotionName != null && order.promotionPercentBp != null) {
+                            OrderTotals.promotionLabel(order.promotionName, order.promotionPercentBp)
+                        } else {
+                            null
+                        }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -481,7 +495,13 @@ private fun OrderDetailView(
                     ) {
                         Text("VAT", color = OnDarkSecondary, fontSize = 14.sp)
                         Text(
-                            MoneyFormatter.halalasToSar(order.vatHalalas),
+                            MoneyFormatter.halalasToSar(
+                                OrderTotals.postAllowanceVatHalalas(
+                                    order.totalHalalas,
+                                    detailDiscount,
+                                    order.vatHalalas,
+                                ),
+                            ),
                             color = OnDark,
                             fontSize = 14.sp,
                         )
@@ -493,10 +513,40 @@ private fun OrderDetailView(
                         Text("Total", color = OnDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text(
                             MoneyFormatter.halalasToSar(order.totalHalalas),
-                            color = Accent,
+                            color = if (detailHasPromotion) OnDark else Accent,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                         )
+                    }
+                    if (detailHasPromotion && detailPromotionLabel != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(detailPromotionLabel, color = Success, fontSize = 14.sp)
+                            Text(
+                                "−" + MoneyFormatter.halalasToSar(detailDiscount),
+                                color = Success,
+                                fontSize = 14.sp,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                "Payable",
+                                color = OnDark,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                MoneyFormatter.halalasToSar(detailPayable),
+                                color = Accent,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 }
             }

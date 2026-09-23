@@ -33,6 +33,10 @@ import com.squareup.moshi.JsonClass
  * @param vatHalalas 
  * @param totalHalalas 
  * @param discountHalalas 
+ * @param promotionId Stamped Promotion id when an enabled campaign covered the order create service day. Null when none.
+ * @param promotionName Promotion name snapshot at attach time (does not live-refresh).
+ * @param promotionNameAr Promotion Arabic name snapshot at attach time.
+ * @param promotionPercentBp Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders.
  * @param deliveryPartnerId Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null.
  * @param deliveryPartnerTitle Delivery partner title (joined from delivery_partners when a partner is set).
  * @param deliveryExternalRef Delivery app's order number for reconciliation (only meaningful alongside a partner).
@@ -81,6 +85,22 @@ data class OrderSummaryResponse (
 
     @Json(name = "discountHalalas")
     val discountHalalas: kotlin.Long,
+
+    /* Stamped Promotion id when an enabled campaign covered the order create service day. Null when none. */
+    @Json(name = "promotionId")
+    val promotionId: kotlin.Long?,
+
+    /* Promotion name snapshot at attach time (does not live-refresh). */
+    @Json(name = "promotionName")
+    val promotionName: kotlin.String?,
+
+    /* Promotion Arabic name snapshot at attach time. */
+    @Json(name = "promotionNameAr")
+    val promotionNameAr: kotlin.String?,
+
+    /* Promotion percent in basis points stamped at attach (1000 = 10%). Discount recomputes from this; admin edits do not rewrite open orders. */
+    @Json(name = "promotionPercentBp")
+    val promotionPercentBp: kotlin.Long?,
 
     /* Delivery partner slug, only set on takeaway orders. Walk-in takeaway and dine-in orders have null. */
     @Json(name = "deliveryPartnerId")
