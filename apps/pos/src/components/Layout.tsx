@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { clearToken, getMe, getToken } from '../api';
 import { realtime } from '../realtime';
 import { useOnScreenKeyboard } from './on-screen-keyboard/OnScreenKeyboardProvider';
+import { SystemClock } from './SystemClock';
 import type { MeResponse } from '@spicyhome/client-ts';
 
 export function Layout() {
@@ -62,7 +63,10 @@ function TopBar({ me, onLogout }: { me: MeResponse | null; onLogout: () => void 
           Reports
         </Link>
       </div>
-      <UserMenu me={me} onLogout={onLogout} />
+      <div className="flex items-center gap-6">
+        <SystemClock />
+        <UserMenu me={me} onLogout={onLogout} />
+      </div>
     </nav>
   );
 }
