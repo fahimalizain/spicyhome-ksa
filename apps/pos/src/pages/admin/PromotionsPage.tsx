@@ -204,6 +204,12 @@ export function PromotionsPage() {
         </div>
       )}
 
+      {!error && promotions.length === 0 && (
+        <div className="text-sm text-gray-500 py-8 text-center">
+          No promotions configured. Add one with New Promotion.
+        </div>
+      )}
+
       <div className="space-y-1">
         {promotions.map((p) => (
           <div

@@ -85,6 +85,16 @@ describe('PromotionsPage', () => {
     expect(screen.queryByLabelText('English name')).not.toBeInTheDocument();
   });
 
+  it('shows an empty-state message when there are no promotions', async () => {
+    mockListPromotions.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByText('No promotions configured. Add one with New Promotion.'),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('New: typing 10, names, dates → create called with percentBp: 1000 (not 10)', async () => {
     renderPage();
     await waitFor(() => {
