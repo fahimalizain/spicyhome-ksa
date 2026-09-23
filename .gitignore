@@ -30,3 +30,7 @@ apps/android/**/build/
 apps/android/.gradle/
 apps/android/.kotlin/
 apps/android/local.properties
+
+# Android signing material (never commit)
+*.jks
+*.keystore
