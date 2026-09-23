@@ -25,6 +25,7 @@ js_run_binary(
     name = "build",
     srcs = glob([
         "index.html",
+        "privacy/**/*.html",
         "src/**/*.ts",
         "src/**/*.tsx",
         "src/**/*.css",
@@ -56,6 +57,7 @@ js_run_devserver(
     name = "dev",
     data = glob([
         "index.html",
+        "privacy/**/*.html",
         "src/**/*.ts",
         "src/**/*.tsx",
         "src/**/*.css",
@@ -93,6 +95,7 @@ js_test(
     name = "test",
     data = glob([
         "index.html",
+        "privacy/**/*.html",
         "src/**/*.ts",
         "src/**/*.tsx",
         "src/**/*.css",

@@ -17,9 +17,9 @@ export default defineConfig({
     target: 'chrome109',
     outDir: 'dist',
     rollupOptions: {
-      // Slice 2 adds the privacy page entry here.
       input: {
         index: path.resolve(__dirname, 'index.html'),
+        privacy: path.resolve(__dirname, 'privacy/index.html'),
       },
     },
   },
