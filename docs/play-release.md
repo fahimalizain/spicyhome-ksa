@@ -121,22 +121,52 @@ With `status: draft` you can edit the notes in Play Console before rolling out.
 Go to **Actions → Deploy Android (Google Play) → Run workflow**, select branch
 `master`, and choose the inputs:
 
-| Input    | Options                          | Default      | Effect                                                                                           |
-| -------- | -------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
-| `track`  | `production`, `internal`, `beta` | `production` | Play track that receives the AAB                                                                 |
-| `status` | `draft`, `completed`             | `draft`      | `draft` uploads the AAB with no rollout; `completed` rolls the release out to the selected track |
+| Input    | Options                                   | Default | Effect                                                                                           |
+| -------- | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `track`  | `internal`, `alpha`, `beta`, `production` | `alpha` | Play track that receives the AAB (`alpha` is Play's first closed testing track)                  |
+| `status` | `draft`, `completed`                      | `draft` | `draft` uploads the AAB with no rollout; `completed` rolls the release out to the selected track |
 
 - **`draft`** (recommended for the first production release): the AAB is
   uploaded and visible in Play Console, but nothing reaches users until you
   review it and roll it out.
 - **`completed`**: the release is rolled out as part of the workflow run.
 
-For a first run, use `internal` + `draft` to prove signing, the service account,
-and the upload path end to end before touching production.
+For a first run, use `alpha` + `draft` (both are the defaults) to prove signing,
+the service account, and the upload path end to end; `internal` + `draft` is the
+quickest smoke test, because internal testing needs no tester group.
 
 The workflow warns (it does not fail) when run from a branch other than
 `master`. The AAB is built from the ref you select, so `VERSION` must already be
 committed there.
+
+### Closed testing (alpha)
+
+`alpha` is the workflow default and is Play's first closed testing track.
+`status` still defaults to `draft`, so nothing reaches testers until you roll the
+release out in Play Console.
+
+Testers are managed in Play Console, not by this workflow. Go to **Test and
+release → Testing → Closed testing** and attach a tester group (a Google Group
+or an email list). The workflow and the Play API can create and update the
+release, but they cannot manage testers — a release on a track with no testers
+cannot be installed by anyone.
+
+- Testers receive the build only after the release is rolled out
+  (`status: completed`); a `draft` release is invisible to them.
+- After a closed test is first published, Play's opt-in link can take several
+  hours before it becomes available to testers.
+- A recently created personal/individual developer account still needs at least
+  **12 testers opted in for 14 continuous days** in closed testing before
+  production access is granted (see step 6 above).
+- To promote a tested build, use Play Console's promote-release flow for that
+  bundle. Re-dispatching this workflow with `track: production` and the same
+  `VERSION` is refused, because the versionCode guard compares against the
+  highest versionCode on Play across **all** tracks, not just the target track.
+  A re-dispatch therefore needs a fresh `VERSION`
+  (`scripts/bump-version.sh date`), which produces a _different_ bundle than the
+  one that was tested.
+
+See Google's [tester setup guide](https://support.google.com/googleplay/android-developer/answer/9845334).
 
 ## Troubleshooting
 
@@ -156,6 +186,9 @@ committed there.
   re-run the workflow.
 - **`PLAY_SERVICE_ACCOUNT_JSON is not valid JSON`** — the secret does not hold
   the complete service-account key file. Replace it with the full JSON.
+- **A release on closed testing that no tester can install** — no tester group is
+  attached to the track, or the release is still a `draft`. See
+  [Closed testing (alpha)](#closed-testing-alpha).
 - **Sentry** — the optional `SENTRY_ANDROID_DSN` secret enables Sentry in the
   AAB when set, matching the APK release; without it the DSN is empty and Sentry
   stays off.

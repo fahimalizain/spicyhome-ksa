@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       track:
-        description: 'Play track to publish the AAB to'
+        description: 'Play track (alpha is the default closed testing track)'
         type: choice
         options:
-          - production
           - internal
+          - alpha
           - beta
-        default: production
+          - production
+        default: alpha
       status:
         description: 'Release status (draft = upload now, roll out manually in Play Console)'
         type: choice
