@@ -1,0 +1,336 @@
+name: Deploy Android (Google Play)
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Play track (alpha is the default closed testing track)'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+        default: alpha
+      status:
+        description: 'Release status (draft = upload now, roll out manually in Play Console)'
+        type: choice
+        options:
+          - draft
+          - completed
+        default: draft
+
+concurrency:
+  group: deploy-android
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Google Play
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TZ: Asia/Riyadh
+      PACKAGE_NAME: com.spicyhome.pos
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Warn when not on master
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" != "master" ]; then
+            echo "::warning::This workflow is running from '${GITHUB_REF_NAME}' instead of master. The AAB is built from this ref, not from master."
+          fi
+
+      - name: Validate required secrets
+        env:
+          SPICYHOME_ANDROID_KEYSTORE_BASE64: ${{ secrets.SPICYHOME_ANDROID_KEYSTORE_BASE64 }}
+          SPICYHOME_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SPICYHOME_ANDROID_KEYSTORE_PASSWORD }}
+          SPICYHOME_ANDROID_KEY_ALIAS: ${{ secrets.SPICYHOME_ANDROID_KEY_ALIAS }}
+          SPICYHOME_ANDROID_KEY_PASSWORD: ${{ secrets.SPICYHOME_ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            SPICYHOME_ANDROID_KEYSTORE_BASE64 \
+            SPICYHOME_ANDROID_KEYSTORE_PASSWORD \
+            SPICYHOME_ANDROID_KEY_ALIAS \
+            SPICYHOME_ANDROID_KEY_PASSWORD \
+            PLAY_SERVICE_ACCOUNT_JSON; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required repository secrets: ${missing[*]}. Add them under Settings > Secrets and variables > Actions and see docs/play-release.md."
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # Only dependency artifacts and the wrapper distribution are cached.
+      # Gradle's generated caches (transforms/, dependencies-accessors/,
+      # kotlin-dsl/) must never be cached: a workspace dir restored without its
+      # metadata.bin makes every later build fail hard (gradle/gradle#28974).
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-deps-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+
+      - name: Decode upload keystore
+        env:
+          SPICYHOME_ANDROID_KEYSTORE_BASE64: ${{ secrets.SPICYHOME_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SPICYHOME_ANDROID_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/spicyhome-upload.jks"; then
+            echo "::error::SPICYHOME_ANDROID_KEYSTORE_BASE64 is not valid base64 of a keystore. Re-encode the upload keystore with 'base64 -w0 < upload.jks' and see docs/play-release.md."
+            exit 1
+          fi
+          if [ ! -s "${RUNNER_TEMP}/spicyhome-upload.jks" ]; then
+            echo "::error::SPICYHOME_ANDROID_KEYSTORE_BASE64 is not valid base64 of a keystore (the decoded file is empty). Re-encode the upload keystore with 'base64 -w0 < upload.jks' and see docs/play-release.md."
+            exit 1
+          fi
+
+      - name: Validate keystore and alias
+        env:
+          SPICYHOME_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SPICYHOME_ANDROID_KEYSTORE_PASSWORD }}
+          SPICYHOME_ANDROID_KEY_ALIAS: ${{ secrets.SPICYHOME_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if ! keytool -list \
+            -keystore "${RUNNER_TEMP}/spicyhome-upload.jks" \
+            -storepass "$SPICYHOME_ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$SPICYHOME_ANDROID_KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::Cannot read the upload keystore. Check that SPICYHOME_ANDROID_KEYSTORE_BASE64, SPICYHOME_ANDROID_KEYSTORE_PASSWORD and SPICYHOME_ANDROID_KEY_ALIAS all match the same keystore (see docs/play-release.md)."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Play
+        id: gcp
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          token=""
+          if ! token="$(node scripts/play-access-token.mjs)"; then
+            echo "::error::Failed to mint a Google Play access token; see the diagnostics above. Check PLAY_SERVICE_ACCOUNT_JSON and docs/play-release.md."
+            exit 1
+          fi
+          if [ -z "$token" ]; then
+            echo "::error::The Google Play access token is empty. Check that PLAY_SERVICE_ACCOUNT_JSON holds a complete service-account key (see docs/play-release.md)."
+            exit 1
+          fi
+          echo "::add-mask::${token}"
+          echo "access_token=${token}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve version
+        id: version
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.gcp.outputs.access_token }}
+        run: |
+          set -euo pipefail
+
+          version_output="$(./gradlew :app:printVersionInfo -q --console=plain)"
+          version_code="$(printf '%s\n' "$version_output" | sed -n 's/^VERSION_CODE=//p' | tail -1)"
+          version_name="$(printf '%s\n' "$version_output" | sed -n 's/^VERSION_NAME=//p' | tail -1)"
+          if [ -z "$version_code" ] || [ -z "$version_name" ]; then
+            echo "::error::Could not read versionCode/versionName from :app:printVersionInfo. Output was:"
+            printf '%s\n' "$version_output"
+            exit 1
+          fi
+
+          api="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE_NAME}"
+
+          # Every Play API failure below goes through this helper, so the log
+          # always names the likely cause (missing Play Console permissions)
+          # instead of only a bare 'curl: (22)' error.
+          play_api_error() {
+            local context="$1"
+            local response="${2:-}"
+            echo "::error::${context} Check that the Play service account (PLAY_SERVICE_ACCOUNT_JSON) has release permissions for ${PACKAGE_NAME} in the Play Console, and see docs/play-release.md."
+            if [ -n "$response" ]; then
+              echo "Play API response body:"
+              printf '%s\n' "$response"
+            fi
+          }
+
+          edit_response=""
+          if ! edit_response="$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer ${PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${api}/edits")"; then
+            play_api_error "Could not open a Google Play edit for ${PACKAGE_NAME}." "$edit_response"
+            exit 1
+          fi
+          edit_id="$(printf '%s' "$edit_response" | jq -r '.id // empty' 2>/dev/null || true)"
+          if [ -z "$edit_id" ]; then
+            play_api_error "Google Play returned an edit without an id for ${PACKAGE_NAME}." "$edit_response"
+            exit 1
+          fi
+
+          bundles_response=""
+          if ! bundles_response="$(curl --silent --show-error --fail-with-body \
+            --header "Authorization: Bearer ${PLAY_ACCESS_TOKEN}" \
+            "${api}/edits/${edit_id}/bundles")"; then
+            play_api_error "Could not list existing bundles for ${PACKAGE_NAME}." "$bundles_response"
+            exit 1
+          fi
+          highest="$(printf '%s' "$bundles_response" | jq -r '[.bundles[]?.versionCode] | max // 0' 2>/dev/null || true)"
+
+          # Close the edit we opened for validation so the upload action can
+          # open its own edit. A stale edit would block the release.
+          delete_response=""
+          if ! delete_response="$(curl --silent --show-error --fail-with-body \
+            --request DELETE \
+            --header "Authorization: Bearer ${PLAY_ACCESS_TOKEN}" \
+            "${api}/edits/${edit_id}")"; then
+            play_api_error "Could not close (DELETE) the Google Play edit ${edit_id} for ${PACKAGE_NAME}." "$delete_response"
+            exit 1
+          fi
+
+          if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
+            echo "::error::versionCode '${version_code}' from :app:printVersionInfo is not an integer."
+            exit 1
+          fi
+          if ! [[ "$highest" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not read the highest versionCode already on Google Play for ${PACKAGE_NAME}. Check that the Play service account (PLAY_SERVICE_ACCOUNT_JSON) has release permissions and see docs/play-release.md."
+            exit 1
+          fi
+          echo "Play highest versionCode: ${highest}; this build: ${version_code} (${version_name})"
+          if [ "$version_code" -le "$highest" ]; then
+            echo "::error::VERSION ${version_name} maps to versionCode ${version_code}, which is not greater than ${highest} already on Google Play. Run scripts/bump-version.sh date, commit the bump, then re-run this workflow."
+            exit 1
+          fi
+
+          {
+            echo "code=${version_code}"
+            echo "name=${version_name}"
+            echo "highest=${highest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+
+          notes_dir="${RUNNER_TEMP}/whatsnew"
+          notes_file="${notes_dir}/whatsnew-en-US"
+          mkdir -p "$notes_dir"
+
+          version="$(tr -d '[:space:]' < "${GITHUB_WORKSPACE}/VERSION")"
+
+          # When deploying right after a release, the AAB contains the commits
+          # of that release, so the notes must describe the release itself, not
+          # only the commits after its tag. Exclude the tag matching VERSION
+          # when it exists and describe everything since the previous release.
+          baseline=""
+          if git rev-parse -q --verify "refs/tags/v${version}" > /dev/null 2>&1; then
+            baseline="$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude "v${version}" HEAD 2>/dev/null || true)"
+          else
+            baseline="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)"
+          fi
+
+          if [ -z "$baseline" ]; then
+            printf '%s\n' '- Initial release.' > "$notes_file"
+          else
+            # Conventional-commit subjects become bullet points; everything
+            # else (chores, docs) is noise for end users. The awk cap keeps the
+            # file within Play's 500-character limit for release notes.
+            git log --no-merges --pretty=format:'%s' "${baseline}..HEAD" 2>/dev/null \
+              | grep -E '^(feat|fix|perf)(\([^)]*\))?!?: ' \
+              | sed -E 's/^(feat|fix|perf)(\([^)]*\))?!?: /- /; s/ \(#[0-9]+\)$//' \
+              | awk '{ if (n + length($0) + 1 > 500) exit; print; n += length($0) + 1 }' \
+              > "$notes_file" || true
+          fi
+
+          # Never leave Play without release notes: fall back to a generic line
+          # when the repo has no matching commits or generation failed.
+          if [ ! -s "$notes_file" ]; then
+            printf '%s\n' '- Improvements and bug fixes.' > "$notes_file"
+          fi
+
+          echo "dir=${notes_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release AAB
+        run: |
+          set -euo pipefail
+          ./gradlew :app:bundleRelease --no-daemon --stacktrace \
+            "-PversionCode=${{ steps.version.outputs.code }}" \
+            "-PversionName=${{ steps.version.outputs.name }}"
+          if [ ! -f app/build/outputs/bundle/release/app-release.aab ]; then
+            echo "::error::Gradle finished but apps/android/app/build/outputs/bundle/release/app-release.aab was not produced. Check the Gradle output above."
+            exit 1
+          fi
+        env:
+          SPICYHOME_ANDROID_KEYSTORE: ${{ runner.temp }}/spicyhome-upload.jks
+          SPICYHOME_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SPICYHOME_ANDROID_KEYSTORE_PASSWORD }}
+          SPICYHOME_ANDROID_KEY_ALIAS: ${{ secrets.SPICYHOME_ANDROID_KEY_ALIAS }}
+          SPICYHOME_ANDROID_KEY_PASSWORD: ${{ secrets.SPICYHOME_ANDROID_KEY_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_ANDROID_DSN || '' }}
+          SENTRY_ENVIRONMENT: production
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.spicyhome.pos
+          releaseFiles: apps/android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ inputs.track }}
+          status: ${{ inputs.status }}
+          releaseName: ${{ steps.version.outputs.name }}
+          whatsNewDirectory: ${{ steps.notes.outputs.dir }}
+
+      - name: Deployment summary
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          PREVIOUS_VERSION_CODE: ${{ steps.version.outputs.highest }}
+          TRACK: ${{ inputs.track }}
+          STATUS: ${{ inputs.status }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## Android deployment to Google Play'
+            echo ''
+            echo '| Field | Value |'
+            echo '| --- | --- |'
+            echo "| Version name | ${VERSION_NAME} |"
+            echo "| Version code | ${VERSION_CODE} |"
+            echo "| Previous Play versionCode | ${PREVIOUS_VERSION_CODE} |"
+            echo "| Track | ${TRACK} |"
+            echo "| Status | ${STATUS} |"
+            echo "| Commit | ${COMMIT_SHA} |"
+          } >> "$GITHUB_STEP_SUMMARY"
