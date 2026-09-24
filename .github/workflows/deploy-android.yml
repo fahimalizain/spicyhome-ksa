@@ -160,10 +160,9 @@ jobs:
           set -euo pipefail
 
           version_output="$(./gradlew :app:printVersionInfo -q --console=plain)"
-          version_code="$(printf '%s\n' "$version_output" | sed -n 's/^VERSION_CODE=//p' | tail -1)"
           version_name="$(printf '%s\n' "$version_output" | sed -n 's/^VERSION_NAME=//p' | tail -1)"
-          if [ -z "$version_code" ] || [ -z "$version_name" ]; then
-            echo "::error::Could not read versionCode/versionName from :app:printVersionInfo. Output was:"
+          if [ -z "$version_name" ]; then
+            echo "::error::Could not read versionName from :app:printVersionInfo. Output was:"
             printf '%s\n' "$version_output"
             exit 1
           fi
@@ -219,17 +218,16 @@ jobs:
             exit 1
           fi
 
-          if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
-            echo "::error::versionCode '${version_code}' from :app:printVersionInfo is not an integer."
-            exit 1
-          fi
           if ! [[ "$highest" =~ ^[0-9]+$ ]]; then
             echo "::error::Could not read the highest versionCode already on Google Play for ${PACKAGE_NAME}. Check that the Play service account (PLAY_SERVICE_ACCOUNT_JSON) has release permissions and see docs/play-release.md."
             exit 1
           fi
+          # Google Play is the sole authority for release version codes: the
+          # next build is always one above the highest bundle already uploaded.
+          version_code=$(( highest + 1 ))
           echo "Play highest versionCode: ${highest}; this build: ${version_code} (${version_name})"
-          if [ "$version_code" -le "$highest" ]; then
-            echo "::error::VERSION ${version_name} maps to versionCode ${version_code}, which is not greater than ${highest} already on Google Play. Run scripts/bump-version.sh date, commit the bump, then re-run this workflow."
+          if [ "$version_code" -gt 2100000000 ]; then
+            echo "::error::Computed versionCode ${version_code} exceeds the Google Play maximum of 2100000000 (highest already on Play: ${highest}). See docs/play-release.md."
             exit 1
           fi
 

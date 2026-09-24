@@ -172,7 +172,11 @@ All PRs must pass CI (`.github/workflows/ci.yml`) before merge.
 - **Date-based versioning**: releases use `YYYYMM.DD.N` where `YYYYMM.DD` is the
   release date in Asia/Riyadh and `.N` is the same-day increment
   (starting at `.0`). Examples: `202607.23.0`, `202607.23.1`.
-- **`VERSION`** at the repository root is the single source of truth.
+- **`VERSION`** at the repository root is the single source of truth for the release version name.
+- **Android `versionCode` is not derived from `VERSION`** (do not reintroduce
+  the coupling): the Play deploy workflow computes it as (highest versionCode on
+  Google Play + 1), with Play as the sole authority; a new app starts at 1, and
+  the ceiling is 2,100,000,000. See `docs/play-release.md`.
 - `scripts/bump-version.sh` updates `VERSION`, `MODULE.bazel`, and all workspace
   `package.json` files to a new version. Run `scripts/bump-version.sh date` for
   an auto bump or `scripts/bump-version.sh 202607.23.1` for an explicit version.
