@@ -117,6 +117,28 @@ dependencies are declared in the app's `build.gradle.kts` with matching versions
 Setup → Login → Order (category tabs, items, cart, create/edit items) → Orders list
 ```
 
+### Play Store listing screenshots
+
+`store/screenshots/` holds the screenshots used for the **Google Play Store
+listing** (uploaded under the Play Console store listing → Tablet assets). They
+are captured from the real app on a physical tablet (Galaxy Tab A7, Android 12)
+at native **2000×1200 landscape** — the 1200 px short side clears Play's 1080 px
+minimum for promotion eligibility.
+
+| File                 | Screen                                                     |
+| -------------------- | ---------------------------------------------------------- |
+| `01-order-menu.png`  | Order screen: category tabs, subcategory chips, menu items |
+| `02-order-cart.png`  | Order screen: cart with VAT breakdown                      |
+| `03-tables.png`      | Tables screen with occupied tables                         |
+| `04-orders-list.png` | Today's orders list with status chips                      |
+| `05-login.png`       | Staff login screen                                         |
+
+To recapture: build and install the debug APK (`bazel build //apps/android:apk`),
+run the server locally, expose it to the tablet with
+`adb reverse tcp:3742 tcp:3742`, point the app at `http://localhost:3742`, sign
+in with an account that has `android_login`, populate a few orders, then
+`adb exec-out screencap -p > store/screenshots/<name>.png`.
+
 ### Key design decisions
 
 - **MVVM**: ViewModels with `StateFlow`, thin Repository wrappers around generated
