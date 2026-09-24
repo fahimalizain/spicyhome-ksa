@@ -104,6 +104,11 @@ telling you to run `scripts/bump-version.sh date`, commit the bump, and re-run.
 - The scheme saturates at `N = 99` (`min(N, 99)`), so a 100th same-day release
   cannot get a fresh code until the next day.
 
+The check is **app-wide, not per-track**: `edits.bundles.list` returns every
+bundle of the app, so a versionCode already used on `internal` or `alpha` also
+blocks a `production` deploy. The workflow **fails closed**: if Play's bundle
+list cannot be read, the run stops instead of assuming the code is free.
+
 ## Release notes
 
 Release notes are generated automatically from conventional-commit subjects
@@ -184,6 +189,11 @@ See Google's [tester setup guide](https://support.google.com/googleplay/android-
 - **`versionCode ... is not greater`** — Play already has a bundle with an equal
   or higher code. Run `scripts/bump-version.sh date`, commit the bump, and
   re-run the workflow.
+- **Play rejects the upload with `Version code ... has already been used`** —
+  Play refuses any versionCode already used for this app, and a code **can** be
+  consumed by an upload that was never rolled out. This is Play's own
+  bookkeeping acting as a backstop behind the workflow's pre-flight check. Run
+  `scripts/bump-version.sh date`, commit the bump, and re-run the workflow.
 - **`PLAY_SERVICE_ACCOUNT_JSON is not valid JSON`** — the secret does not hold
   the complete service-account key file. Replace it with the full JSON.
 - **A release on closed testing that no tester can install** — no tester group is

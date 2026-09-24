@@ -227,6 +227,7 @@ jobs:
             echo "::error::Could not read the highest versionCode already on Google Play for ${PACKAGE_NAME}. Check that the Play service account (PLAY_SERVICE_ACCOUNT_JSON) has release permissions and see docs/play-release.md."
             exit 1
           fi
+          echo "Play highest versionCode: ${highest}; this build: ${version_code} (${version_name})"
           if [ "$version_code" -le "$highest" ]; then
             echo "::error::VERSION ${version_name} maps to versionCode ${version_code}, which is not greater than ${highest} already on Google Play. Run scripts/bump-version.sh date, commit the bump, then re-run this workflow."
             exit 1
