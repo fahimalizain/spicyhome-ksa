@@ -85,29 +85,32 @@ key file contents (a single line is fine).
 
 ## Versioning
 
-`VERSION` at the repository root is the single source of truth (currently
-`202609.23.1`). `apps/android/app/build.gradle.kts` derives the Play
-`versionCode` from it:
+`VERSION` at the repository root remains the source of truth for the release
+version **name** (currently `202609.23.1`): it drives the AAB's `versionName`,
+release tags, and the Windows package. It no longer influences the Android
+`versionCode`.
 
-```text
-versionCode = YYYYMM * 10000 + DD * 100 + min(N, 99)
-```
+**Google Play is the sole authority for `versionCode`.** On every run the
+workflow reads the highest `versionCode` already on Play — via
+`edits.bundles.list`, app-wide across all tracks — and uses **that + 1**; there
+is no local counter and no formula. A brand-new app with no uploads therefore
+starts at `versionCode 1` (this app is at `1` now).
 
-For `202609.23.1` that is `202609 * 10000 + 23 * 100 + 1 = 2026092301`. The
-workflow reads the resolved pair from `./gradlew :app:printVersionInfo`, then
-queries the Play API for the highest `versionCode` already uploaded and
-**refuses to build/upload when the computed code is not strictly greater**,
-telling you to run `scripts/bump-version.sh date`, commit the bump, and re-run.
+Because the number is re-read from Play on every run, abandoned uploads do
+not cause collisions: a bundle that was uploaded but never released still
+counts, so the next run moves past it. Deploys no longer need
+`scripts/bump-version.sh date` — that script is still how release versions in
+`VERSION` get bumped for a release, but it is not a deploy prerequisite.
 
-- A same-day re-release bumps `.N`, which adds 1 to the `versionCode`.
-- A release on a new day bumps `DD`, which adds 100.
-- The scheme saturates at `N = 99` (`min(N, 99)`), so a 100th same-day release
-  cannot get a fresh code until the next day.
+Google Play's maximum `versionCode` is **2,100,000,000**. At +1 per release that
+is ~2.1 billion releases of headroom. If the computed code would exceed it, the
+workflow fails with an actionable error instead of letting Play reject the
+upload.
 
-The check is **app-wide, not per-track**: `edits.bundles.list` returns every
-bundle of the app, so a versionCode already used on `internal` or `alpha` also
-blocks a `production` deploy. The workflow **fails closed**: if Play's bundle
-list cannot be read, the run stops instead of assuming the code is free.
+The bundle list is **app-wide, not per-track**: `edits.bundles.list` returns
+every bundle of the app, so a versionCode already used on `internal` or `alpha`
+also counts for a `production` deploy. The workflow **fails closed**: if Play's
+bundle list cannot be read, the run stops instead of guessing a code.
 
 ## Release notes
 
@@ -164,12 +167,9 @@ cannot be installed by anyone.
   **12 testers opted in for 14 continuous days** in closed testing before
   production access is granted (see step 6 above).
 - To promote a tested build, use Play Console's promote-release flow for that
-  bundle. Re-dispatching this workflow with `track: production` and the same
-  `VERSION` is refused, because the versionCode guard compares against the
-  highest versionCode on Play across **all** tracks, not just the target track.
-  A re-dispatch therefore needs a fresh `VERSION`
-  (`scripts/bump-version.sh date`), which produces a _different_ bundle than the
-  one that was tested.
+  bundle rather than re-dispatching this workflow: the `versionCode` is always
+  (highest on Play + 1), so a re-dispatch produces a **new** `versionCode` and
+  therefore a _different_ bundle than the one that was tested.
 
 See Google's [tester setup guide](https://support.google.com/googleplay/android-developer/answer/9845334).
 
@@ -186,14 +186,15 @@ See Google's [tester setup guide](https://support.google.com/googleplay/android-
 - **`Cannot read the upload keystore`** — the base64 blob, store password, and
   alias do not all match the same keystore. Re-encode the file and re-check the
   secret values.
-- **`versionCode ... is not greater`** — Play already has a bundle with an equal
-  or higher code. Run `scripts/bump-version.sh date`, commit the bump, and
-  re-run the workflow.
+- **`Computed versionCode ... exceeds the Google Play maximum of 2100000000`** —
+  the ceiling has been reached and the numbering scheme must change (see
+  [Versioning](#versioning)).
 - **Play rejects the upload with `Version code ... has already been used`** —
-  Play refuses any versionCode already used for this app, and a code **can** be
-  consumed by an upload that was never rolled out. This is Play's own
-  bookkeeping acting as a backstop behind the workflow's pre-flight check. Run
-  `scripts/bump-version.sh date`, commit the bump, and re-run the workflow.
+  the workflow derives the code from Play's bundle list on every run and fails
+  closed rather than guessing, so if Play still rejects a code, something
+  consumed it that the bundle list does not show. Reconcile Play Console →
+  **App Bundle Explorer** (this is how this project recovered: the stray bundle
+  was deleted there) and re-run the workflow.
 - **`PLAY_SERVICE_ACCOUNT_JSON is not valid JSON`** — the secret does not hold
   the complete service-account key file. Replace it with the full JSON.
 - **A release on closed testing that no tester can install** — no tester group is
