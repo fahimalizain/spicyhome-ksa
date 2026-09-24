@@ -30,25 +30,14 @@ fun getLocalProperty(key: String, default: String = ""): String {
 val sentryDsn = getLocalProperty("SENTRY_DSN")
 val sentryEnvironment = getLocalProperty("SENTRY_ENVIRONMENT", "development")
 
-/** Derive a monotonic integer versionCode from a date-based version string.
- *  Format: YYYYMM.DD.N → YYYYMM * 10000 + DD * 100 + min(N, 99).
- *  Returns 1 if parsing fails. */
-fun computeVersionCode(version: String): Int {
-    val regex = Regex("""^(\d{6})\.(\d{2})\.(\d+)$""")
-    val match = regex.matchEntire(version) ?: return 1
-    val yyyymm = match.groupValues[1].toIntOrNull() ?: return 1
-    val dd = match.groupValues[2].toIntOrNull() ?: return 1
-    val n = match.groupValues[3].toIntOrNull()?.coerceAtMost(99) ?: return 1
-    return yyyymm * 10000 + dd * 100 + n
-}
-
-// Optional -P overrides let CI pass the release version explicitly; without
-// them the date-based version from the VERSION file is used as before.
+// Optional -P overrides let CI pass the release versionCode it computed from
+// Google Play. Play is the sole authority for release version codes, so local
+// builds default to 1 and VERSION only feeds versionName (and Sentry).
 val versionCodeOverride = providers.gradleProperty("versionCode").orNull
 val resolvedVersionCode: Int = versionCodeOverride?.let { raw ->
     raw.trim().toIntOrNull()?.takeIf { it > 0 }
         ?: throw GradleException("Invalid -PversionCode value \"$raw\": expected a positive integer.")
-} ?: computeVersionCode(appVersion)
+} ?: 1
 
 val versionNameOverride = providers.gradleProperty("versionName").orNull?.trim()
 val resolvedVersionName: String = versionNameOverride?.takeIf { it.isNotEmpty() } ?: appVersion
@@ -215,11 +204,12 @@ tasks.matching { it.name.contains("Release") }.configureEach {
     }
 }
 
-// CI reads the resolved version from here instead of duplicating the
-// version-code formula in shell. Runs without signing env vars.
+// CI reads only VERSION_NAME from here; the release versionCode is computed
+// from the version codes already on Google Play (see the deploy workflow).
+// The VERSION_CODE line is a local diagnostic and defaults to 1.
 tasks.register("printVersionInfo") {
     group = "help"
-    description = "Prints the resolved versionCode and versionName."
+    description = "Prints the local versionCode (1 unless -PversionCode is set) and the versionName from the VERSION file."
     val resolvedCode = resolvedVersionCode
     val resolvedName = resolvedVersionName
     doLast {
