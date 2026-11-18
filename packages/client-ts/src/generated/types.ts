@@ -3336,6 +3336,16 @@ export interface components {
       tenders: components['schemas']['SalesRegisterTenderDto'][];
       /**
        * Format: int64
+       * @example 2
+       */
+      createdByUserId: number | null;
+      /**
+       * @description users.name of the user who opened the parent order (orders.created_by), or "Unknown"
+       * @example Waiter
+       */
+      createdByName: string;
+      /**
+       * Format: int64
        * @example 1
        */
       cashierUserId: number | null;

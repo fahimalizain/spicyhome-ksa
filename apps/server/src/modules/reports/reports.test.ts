@@ -1265,9 +1265,13 @@ describe('ReportsService', () => {
       });
       expect(waiter.rows.map((r) => r.documentId)).toEqual(['INV-B', 'INV-C', 'REF-C']);
       // Sale 2 was paid by user 1, but the row belongs to creator user 2.
+      expect(waiter.rows[0].createdByUserId).toBe(2);
+      expect(waiter.rows[0].createdByName).toBe('Waiter');
       expect(waiter.rows[0].cashierUserId).toBe(1);
       // Refund 1 (REF-C) was issued by user 1 on user 2's order: the row still
       // follows the parent order creator, while the cashier column keeps user 1.
+      expect(waiter.rows[2].createdByUserId).toBe(2);
+      expect(waiter.rows[2].createdByName).toBe('Waiter');
       expect(waiter.rows[2].cashierUserId).toBe(1);
       expect(waiter.footer.saleCount).toBe(2);
       expect(waiter.footer.refundCount).toBe(1);
@@ -1280,6 +1284,13 @@ describe('ReportsService', () => {
         userId: 1,
       });
       expect(admin.rows.map((r) => r.documentId)).toEqual(['INV-A']);
+      expect(admin.rows[0].createdByUserId).toBe(1);
+      expect(admin.rows[0].createdByName).toBe('Admin');
+
+      // A NULL creator renders as Unknown and is only visible without a filter.
+      const legacy = all.rows.find((r) => r.documentId === 'INV-D')!;
+      expect(legacy.createdByUserId).toBeNull();
+      expect(legacy.createdByName).toBe('Unknown');
 
       const nobody = service.getSalesRegister({
         from: '2026-08-20',

@@ -206,6 +206,7 @@ export function SalesRegisterPage() {
             <th className={`${REPORT_TH} text-right`}>VAT</th>
             <th className={`${REPORT_TH} text-right`}>Total</th>
             <th className={REPORT_TH}>Tender</th>
+            <th className={REPORT_TH}>Opened by</th>
             <th className={REPORT_TH}>Cashier</th>
             <th className={REPORT_TH}>Notes</th>
           </tr>
@@ -246,13 +247,14 @@ export function SalesRegisterPage() {
                 </span>
               </td>
               <td className="px-3 py-2">{tenderSummary(row)}</td>
+              <td className="px-3 py-2">{row.createdByName}</td>
               <td className="px-3 py-2">{row.cashierName}</td>
               <td className="px-3 py-2">{row.notes ?? '—'}</td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={13} className="px-3 py-8 text-center text-gray-500">
+              <td colSpan={14} className="px-3 py-8 text-center text-gray-500">
                 No rows in this range.
               </td>
             </tr>
@@ -279,7 +281,7 @@ export function SalesRegisterPage() {
                   <SarAmount halalas={footer.totalHalalas} />
                 </span>
               </td>
-              <td className={REPORT_TF} colSpan={3} />
+              <td className={REPORT_TF} colSpan={4} />
             </tr>
           </tfoot>
         )}

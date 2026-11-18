@@ -49,6 +49,8 @@ function saleResponse(): SalesRegisterResponse {
         vatHalalas: 300,
         totalHalalas: 2300,
         tenders: [{ methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 }],
+        createdByUserId: 2,
+        createdByName: 'Waiter',
         cashierUserId: 1,
         cashierName: 'Admin',
         notes: null,
@@ -71,6 +73,8 @@ function saleResponse(): SalesRegisterResponse {
         vatHalalas: -300,
         totalHalalas: -2300,
         tenders: [{ methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 }],
+        createdByUserId: 2,
+        createdByName: 'Waiter',
         cashierUserId: 1,
         cashierName: 'Admin',
         notes: 'Refund of INV26-0001',
@@ -128,6 +132,11 @@ describe('SalesRegisterPage', () => {
     expect(screen.getAllByText('Refund').length).toBeGreaterThanOrEqual(1); // Kind badge
     expect(screen.getByLabelText('− SAR 23.00')).toBeInTheDocument();
     expect(screen.getByText('Refund of INV26-0001')).toBeInTheDocument();
+    // Opened by (parent order creator) and Cashier (payment/refund poster) are
+    // separate columns; both rows are opened by the waiter, paid by the admin.
+    expect(screen.getByRole('columnheader', { name: 'Opened by' })).toBeInTheDocument();
+    expect(screen.getAllByRole('cell', { name: 'Waiter' })).toHaveLength(2);
+    expect(screen.getAllByRole('cell', { name: 'Admin' })).toHaveLength(2);
   });
 
   it('shows sale/refund counts and signed totals in the footer', async () => {

@@ -83,6 +83,8 @@ export interface SalesRegisterRow {
   vatHalalas: number;
   totalHalalas: number;
   tenders: SalesRegisterTender[];
+  createdByUserId: number | null;
+  createdByName: string;
   cashierUserId: number | null;
   cashierName: string;
   notes: string | null;
@@ -456,6 +458,11 @@ export class ReportsService {
             methodTitle: p.methodTitle,
             amountHalalas: p.amountHalalas,
           })),
+          // Who opened the ticket (orders.created_by) — the "User" filter
+          // dimension, which differs from the cashier who posted the payment.
+          createdByUserId: order.createdBy,
+          createdByName:
+            order.createdBy != null ? (userMap.get(order.createdBy) ?? 'Unknown') : 'Unknown',
           cashierUserId: earliest.createdBy,
           cashierName:
             earliest.createdBy != null ? (userMap.get(earliest.createdBy) ?? 'Unknown') : 'Unknown',
@@ -502,6 +509,11 @@ export class ReportsService {
               amountHalalas: refund.totalHalalas,
             },
           ],
+          // Refund rows still report the parent order's creator (the "User"
+          // filter dimension); the refund issuer is `cashierUserId` below.
+          createdByUserId: order.createdBy,
+          createdByName:
+            order.createdBy != null ? (userMap.get(order.createdBy) ?? 'Unknown') : 'Unknown',
           cashierUserId: refund.userId,
           cashierName: userMap.get(refund.userId) ?? 'Unknown',
           notes: `Refund of ${order.documentId}`,

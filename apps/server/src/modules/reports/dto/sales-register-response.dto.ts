@@ -92,6 +92,16 @@ export class SalesRegisterRowDto {
   })
   tenders!: SalesRegisterTenderDto[];
 
+  @ApiProperty({ ...ApiInt64, example: 2, nullable: true })
+  createdByUserId!: number | null;
+
+  @ApiProperty({
+    example: 'Waiter',
+    description:
+      'users.name of the user who opened the parent order (orders.created_by), or "Unknown"',
+  })
+  createdByName!: string;
+
   @ApiProperty({ ...ApiInt64, example: 1, nullable: true })
   cashierUserId!: number | null;
 
