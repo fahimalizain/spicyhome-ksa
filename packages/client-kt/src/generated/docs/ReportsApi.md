@@ -118,8 +118,9 @@ val to : kotlin.String = to_example // kotlin.String | Business date (YYYY-MM-DD
 val type : kotlin.String = type_example // kotlin.String | Filter by parent order type: dine_in | takeaway. Omit → all types.
 val partner : kotlin.String = partner_example // kotlin.String | Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.
 val kind : kotlin.String = kind_example // kotlin.String | Filter by document kind: sale | refund. Omit → both.
+val userId : kotlin.Long = 789 // kotlin.Long | Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users.
 
-val result : SalesRegisterResponseDto = webService.reportsControllerGetSalesRegister(from, to, type, partner, kind)
+val result : SalesRegisterResponseDto = webService.reportsControllerGetSalesRegister(from, to, type, partner, kind, userId)
 ```
 
 ### Parameters
@@ -127,9 +128,10 @@ val result : SalesRegisterResponseDto = webService.reportsControllerGetSalesRegi
 | **to** | **kotlin.String**| Business date (YYYY-MM-DD Asia/Riyadh service-day label), inclusive end of the window. | |
 | **type** | **kotlin.String**| Filter by parent order type: dine_in | takeaway. Omit → all types. | [optional] |
 | **partner** | **kotlin.String**| Filter by delivery partner slug on the parent order; &#39;none&#39; for walk-in orders. Omit → all partners. | [optional] |
+| **kind** | **kotlin.String**| Filter by document kind: sale | refund. Omit → both. | [optional] |
 | Name | Type | Description  | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| **kind** | **kotlin.String**| Filter by document kind: sale | refund. Omit → both. | [optional] |
+| **userId** | **kotlin.Long**| Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users. | [optional] |
 
 ### Return type
 

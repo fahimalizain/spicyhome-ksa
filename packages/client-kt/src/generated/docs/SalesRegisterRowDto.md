@@ -21,6 +21,8 @@
 | **vatHalalas** | **kotlin.Long** | Sale: order VAT; refund: negative |  |
 | **totalHalalas** | **kotlin.Long** | Sale: order total; refund: negative |  |
 | **tenders** | [**kotlin.collections.List&lt;SalesRegisterTenderDto&gt;**](SalesRegisterTenderDto.md) | Sale: all order payments; refund: single entry with the refund method |  |
+| **createdByUserId** | **kotlin.Long** |  |  |
+| **createdByName** | **kotlin.String** | users.name of the user who opened the parent order (orders.created_by), or \&quot;Unknown\&quot; |  |
 | **cashierUserId** | **kotlin.Long** |  |  |
 | **cashierName** | **kotlin.String** | users.name, or \&quot;Unknown\&quot; when the user is gone |  |
 | **notes** | **kotlin.String** | Sale: order notes; refund: \&quot;Refund of &lt;parent document id&gt;\&quot; |  |

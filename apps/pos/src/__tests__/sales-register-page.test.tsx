@@ -6,6 +6,7 @@ import { SalesRegisterPage } from '../pages/SalesRegisterPage';
 import type { SalesRegisterResponse } from '@spicyhome/client-ts';
 
 const mockSalesRegister = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
@@ -14,6 +15,9 @@ vi.mock('../api', () => ({
     },
     deliveryPartners: {
       list: vi.fn().mockResolvedValue([]),
+    },
+    auth: {
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
     },
   },
   setToken: vi.fn(),
@@ -45,6 +49,8 @@ function saleResponse(): SalesRegisterResponse {
         vatHalalas: 300,
         totalHalalas: 2300,
         tenders: [{ methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 }],
+        createdByUserId: 2,
+        createdByName: 'Waiter',
         cashierUserId: 1,
         cashierName: 'Admin',
         notes: null,
@@ -67,6 +73,8 @@ function saleResponse(): SalesRegisterResponse {
         vatHalalas: -300,
         totalHalalas: -2300,
         tenders: [{ methodId: 'cash', methodTitle: 'Cash', amountHalalas: 2300 }],
+        createdByUserId: 2,
+        createdByName: 'Waiter',
         cashierUserId: 1,
         cashierName: 'Admin',
         notes: 'Refund of INV26-0001',
@@ -87,6 +95,7 @@ function renderPage() {
 describe('SalesRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
   });
 
   it('calls salesRegister with the current service day as from and to on mount', async () => {
@@ -102,6 +111,7 @@ describe('SalesRegisterPage', () => {
         type: undefined,
         partner: undefined,
         kind: undefined,
+        userId: undefined,
       });
     });
   });
@@ -122,6 +132,11 @@ describe('SalesRegisterPage', () => {
     expect(screen.getAllByText('Refund').length).toBeGreaterThanOrEqual(1); // Kind badge
     expect(screen.getByLabelText('− SAR 23.00')).toBeInTheDocument();
     expect(screen.getByText('Refund of INV26-0001')).toBeInTheDocument();
+    // Opened by (parent order creator) and Cashier (payment/refund poster) are
+    // separate columns; both rows are opened by the waiter, paid by the admin.
+    expect(screen.getByRole('columnheader', { name: 'Opened by' })).toBeInTheDocument();
+    expect(screen.getAllByRole('cell', { name: 'Waiter' })).toHaveLength(2);
+    expect(screen.getAllByRole('cell', { name: 'Admin' })).toHaveLength(2);
   });
 
   it('shows sale/refund counts and signed totals in the footer', async () => {
@@ -159,6 +174,7 @@ describe('SalesRegisterPage', () => {
         type: undefined,
         partner: undefined,
         kind: 'refund',
+        userId: undefined,
       });
     });
   });
@@ -182,6 +198,7 @@ describe('SalesRegisterPage', () => {
         type: 'takeaway',
         partner: undefined,
         kind: undefined,
+        userId: undefined,
       });
     });
 
@@ -198,6 +215,36 @@ describe('SalesRegisterPage', () => {
         type: 'takeaway',
         partner: 'none',
         kind: undefined,
+        userId: undefined,
+      });
+    });
+  });
+
+  it('sends the selected user as a numeric userId when the User filter changes', async () => {
+    mockSalesRegister.mockResolvedValue(saleResponse());
+    const today = getServiceDayString(Date.now());
+    mockListActiveUsers.mockResolvedValue([
+      { id: 1, username: 'admin', name: 'Admin' },
+      { id: 2, username: 'waiter', name: 'Waiter' },
+    ]);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('User')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Waiter' })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('User'), { target: { value: '2' } });
+
+    await waitFor(() => {
+      expect(mockSalesRegister).toHaveBeenLastCalledWith({
+        from: today,
+        to: today,
+        type: undefined,
+        partner: undefined,
+        kind: undefined,
+        userId: 2,
       });
     });
   });

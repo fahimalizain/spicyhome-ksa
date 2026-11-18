@@ -3336,6 +3336,16 @@ export interface components {
       tenders: components['schemas']['SalesRegisterTenderDto'][];
       /**
        * Format: int64
+       * @example 2
+       */
+      createdByUserId: number | null;
+      /**
+       * @description users.name of the user who opened the parent order (orders.created_by), or "Unknown"
+       * @example Waiter
+       */
+      createdByName: string;
+      /**
+       * Format: int64
        * @example 1
        */
       cashierUserId: number | null;
@@ -5571,6 +5581,8 @@ export interface operations {
         partner?: string;
         /** @description Filter by document kind: sale | refund. Omit → both. */
         kind?: string;
+        /** @description Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users. */
+        userId?: number;
       };
       header?: never;
       path?: never;

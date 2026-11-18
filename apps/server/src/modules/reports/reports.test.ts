@@ -1157,6 +1157,151 @@ describe('ReportsService', () => {
       expect(unknown.rows).toHaveLength(0);
     });
 
+    it('filters by userId on the parent order creator, including its refunds', () => {
+      sqlite.exec(
+        `INSERT INTO users (id, username, pin_hash, name, role_id, created_at, updated_at)
+         VALUES (2, 'waiter', 'x', 'Waiter', 1, ${now}, ${now})`,
+      );
+
+      insertOrder({
+        id: 1,
+        status: 'paid',
+        totalHalalas: 1000,
+        documentId: 'INV-A',
+        createdBy: 1,
+      });
+      insertPayment({
+        id: 1,
+        orderId: 1,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 1000,
+        createdAt: D.startUnix + 10,
+        createdBy: 1,
+      });
+
+      insertOrder({
+        id: 2,
+        status: 'paid',
+        subtotalHalalas: 2000,
+        vatHalalas: 0,
+        totalHalalas: 2000,
+        documentId: 'INV-B',
+        createdBy: 2,
+      });
+      // Paid by a different user than the one who opened the ticket — the
+      // filter follows the ticket opener (orders.created_by), not the cashier.
+      insertPayment({
+        id: 2,
+        orderId: 2,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 2000,
+        createdAt: D.startUnix + 20,
+        createdBy: 1,
+      });
+
+      insertOrder({
+        id: 3,
+        status: 'refunded',
+        subtotalHalalas: 3000,
+        vatHalalas: 0,
+        totalHalalas: 3000,
+        documentId: 'INV-C',
+        createdBy: 2,
+      });
+      insertPayment({
+        id: 3,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 3000,
+        createdAt: D.startUnix + 30,
+        createdBy: 1,
+      });
+      insertRefund({
+        id: 1,
+        orderId: 3,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        subtotalHalalas: 3000,
+        vatHalalas: 0,
+        totalHalalas: 3000,
+        documentId: 'REF-C',
+        createdAt: D.startUnix + 40,
+      });
+
+      // Legacy order without a creator is invisible to any userId filter.
+      insertOrder({
+        id: 4,
+        status: 'paid',
+        totalHalalas: 4000,
+        documentId: 'INV-D',
+        createdBy: null,
+      });
+      insertPayment({
+        id: 4,
+        orderId: 4,
+        methodId: 'cash',
+        methodTitle: 'Cash',
+        amountHalalas: 4000,
+        createdAt: D.startUnix + 50,
+        createdBy: 1,
+      });
+
+      const all = service.getSalesRegister({ from: '2026-08-20', to: '2026-08-20' });
+      expect(all.rows.map((r) => r.documentId)).toEqual([
+        'INV-A',
+        'INV-B',
+        'INV-C',
+        'REF-C',
+        'INV-D',
+      ]);
+
+      const waiter = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        userId: 2,
+      });
+      expect(waiter.rows.map((r) => r.documentId)).toEqual(['INV-B', 'INV-C', 'REF-C']);
+      // Sale 2 was paid by user 1, but the row belongs to creator user 2.
+      expect(waiter.rows[0].createdByUserId).toBe(2);
+      expect(waiter.rows[0].createdByName).toBe('Waiter');
+      expect(waiter.rows[0].cashierUserId).toBe(1);
+      // Refund 1 (REF-C) was issued by user 1 on user 2's order: the row still
+      // follows the parent order creator, while the cashier column keeps user 1.
+      expect(waiter.rows[2].createdByUserId).toBe(2);
+      expect(waiter.rows[2].createdByName).toBe('Waiter');
+      expect(waiter.rows[2].cashierUserId).toBe(1);
+      expect(waiter.footer.saleCount).toBe(2);
+      expect(waiter.footer.refundCount).toBe(1);
+      expect(waiter.footer.subtotalHalalas).toBe(2000 + 3000 - 3000);
+      expect(waiter.footer.totalHalalas).toBe(2000 + 3000 - 3000);
+
+      const admin = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        userId: 1,
+      });
+      expect(admin.rows.map((r) => r.documentId)).toEqual(['INV-A']);
+      expect(admin.rows[0].createdByUserId).toBe(1);
+      expect(admin.rows[0].createdByName).toBe('Admin');
+
+      // A NULL creator renders as Unknown and is only visible without a filter.
+      const legacy = all.rows.find((r) => r.documentId === 'INV-D')!;
+      expect(legacy.createdByUserId).toBeNull();
+      expect(legacy.createdByName).toBe('Unknown');
+
+      const nobody = service.getSalesRegister({
+        from: '2026-08-20',
+        to: '2026-08-20',
+        userId: 999,
+      });
+      expect(nobody.rows).toHaveLength(0);
+      expect(nobody.footer.saleCount).toBe(0);
+      expect(nobody.footer.totalHalalas).toBe(0);
+    });
+
     it('kind=refund returns only refund rows', () => {
       insertOrder({
         id: 1,

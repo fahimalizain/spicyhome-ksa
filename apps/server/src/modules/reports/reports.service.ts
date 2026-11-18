@@ -83,6 +83,8 @@ export interface SalesRegisterRow {
   vatHalalas: number;
   totalHalalas: number;
   tenders: SalesRegisterTender[];
+  createdByUserId: number | null;
+  createdByName: string;
   cashierUserId: number | null;
   cashierName: string;
   notes: string | null;
@@ -336,6 +338,10 @@ export class ReportsService {
    *   document id>"`. A later-refunded order keeps its sale row at pay time.
    * - Rows sort by `postedAt` ascending (day-book); ties: sale before refund,
    *   then `documentId`.
+   * - `userId` filters on the **parent order's** `orders.created_by` (the user
+   *   who opened the ticket), not on the posting user shown in `cashierName`.
+   *   Like `type`/`partner`, it applies to both the sale and the refund rows of
+   *   that order.
    */
   getSalesRegister(query: {
     from?: string;
@@ -343,6 +349,7 @@ export class ReportsService {
     type?: string;
     partner?: string;
     kind?: string;
+    userId?: number;
   }): SalesRegisterResponse {
     const { startUnix, endUnix } = parseReportPeriod(query.from, query.to);
 
@@ -354,11 +361,14 @@ export class ReportsService {
     }
 
     // Candidate parent orders: only paid/refunded orders can have produced a
-    // payment or a refund. Order-level filters (type / partner) apply to the
-    // parent order for both sales and refunds.
+    // payment or a refund. Order-level filters (type / partner / opener) apply
+    // to the parent order for both sales and refunds.
     const orderConditions: any[] = [inArray(orders.status, ['paid', 'refunded'])];
     if (query.type !== undefined) {
       orderConditions.push(eq(orders.type, query.type));
+    }
+    if (query.userId !== undefined) {
+      orderConditions.push(eq(orders.createdBy, query.userId));
     }
     if (query.partner === 'none') {
       orderConditions.push(isNull(orders.deliveryPartnerId));
@@ -448,6 +458,11 @@ export class ReportsService {
             methodTitle: p.methodTitle,
             amountHalalas: p.amountHalalas,
           })),
+          // Who opened the ticket (orders.created_by) — the "User" filter
+          // dimension, which differs from the cashier who posted the payment.
+          createdByUserId: order.createdBy,
+          createdByName:
+            order.createdBy != null ? (userMap.get(order.createdBy) ?? 'Unknown') : 'Unknown',
           cashierUserId: earliest.createdBy,
           cashierName:
             earliest.createdBy != null ? (userMap.get(earliest.createdBy) ?? 'Unknown') : 'Unknown',
@@ -494,6 +509,11 @@ export class ReportsService {
               amountHalalas: refund.totalHalalas,
             },
           ],
+          // Refund rows still report the parent order's creator (the "User"
+          // filter dimension); the refund issuer is `cashierUserId` below.
+          createdByUserId: order.createdBy,
+          createdByName:
+            order.createdBy != null ? (userMap.get(order.createdBy) ?? 'Unknown') : 'Unknown',
           cashierUserId: refund.userId,
           cashierName: userMap.get(refund.userId) ?? 'Unknown',
           notes: `Refund of ${order.documentId}`,

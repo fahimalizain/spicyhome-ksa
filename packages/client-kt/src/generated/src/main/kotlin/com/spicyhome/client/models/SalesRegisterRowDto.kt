@@ -40,6 +40,8 @@ import com.squareup.moshi.JsonClass
  * @param vatHalalas Sale: order VAT; refund: negative
  * @param totalHalalas Sale: order total; refund: negative
  * @param tenders Sale: all order payments; refund: single entry with the refund method
+ * @param createdByUserId 
+ * @param createdByName users.name of the user who opened the parent order (orders.created_by), or \"Unknown\"
  * @param cashierUserId 
  * @param cashierName users.name, or \"Unknown\" when the user is gone
  * @param notes Sale: order notes; refund: \"Refund of <parent document id>\"
@@ -107,6 +109,13 @@ data class SalesRegisterRowDto (
     /* Sale: all order payments; refund: single entry with the refund method */
     @Json(name = "tenders")
     val tenders: kotlin.collections.List<SalesRegisterTenderDto>,
+
+    @Json(name = "createdByUserId")
+    val createdByUserId: kotlin.Long?,
+
+    /* users.name of the user who opened the parent order (orders.created_by), or \"Unknown\" */
+    @Json(name = "createdByName")
+    val createdByName: kotlin.String,
 
     @Json(name = "cashierUserId")
     val cashierUserId: kotlin.Long?,

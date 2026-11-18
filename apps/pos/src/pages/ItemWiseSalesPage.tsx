@@ -124,17 +124,19 @@ export function ItemWiseSalesPage() {
           partner={partner}
           onPartnerChange={setPartner}
           partners={partners}
-          extra={{
-            id: 'item-wise-category',
-            label: 'Category',
-            value: category,
-            onChange: setCategory,
-            options: [
-              { value: '', label: 'All' },
-              { value: 'none', label: 'Uncategorized' },
-              ...categories.map((c) => ({ value: String(c.id), label: c.name })),
-            ],
-          }}
+          extras={[
+            {
+              id: 'item-wise-category',
+              label: 'Category',
+              value: category,
+              onChange: setCategory,
+              options: [
+                { value: '', label: 'All' },
+                { value: 'none', label: 'Uncategorized' },
+                ...categories.map((c) => ({ value: String(c.id), label: c.name })),
+              ],
+            },
+          ]}
         />
       </div>
 

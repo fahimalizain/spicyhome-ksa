@@ -53,10 +53,11 @@ interface ReportsApi {
      * @param type Filter by parent order type: dine_in | takeaway. Omit → all types. (optional)
      * @param partner Filter by delivery partner slug on the parent order; &#39;none&#39; for walk-in orders. Omit → all partners. (optional)
      * @param kind Filter by document kind: sale | refund. Omit → both. (optional)
+     * @param userId Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users. (optional)
      * @return [Call]<[SalesRegisterResponseDto]>
      */
     @GET("reports/sales-register")
-    fun reportsControllerGetSalesRegister(@Query("from") from: kotlin.String, @Query("to") to: kotlin.String, @Query("type") type: kotlin.String? = null, @Query("partner") partner: kotlin.String? = null, @Query("kind") kind: kotlin.String? = null): Call<SalesRegisterResponseDto>
+    fun reportsControllerGetSalesRegister(@Query("from") from: kotlin.String, @Query("to") to: kotlin.String, @Query("type") type: kotlin.String? = null, @Query("partner") partner: kotlin.String? = null, @Query("kind") kind: kotlin.String? = null, @Query("userId") userId: kotlin.Long? = null): Call<SalesRegisterResponseDto>
 
     /**
      * GET reports/vat
