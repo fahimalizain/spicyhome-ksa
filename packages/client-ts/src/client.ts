@@ -613,7 +613,8 @@ export class SpicyHomeClient {
     /**
      * Sales register (day-book of invoices and refunds) over a posting-time
      * service-day window. Omitted filters are not sent → no filter on that
-     * dimension; pass `partner: 'none'` for walk-in orders.
+     * dimension; pass `partner: 'none'` for walk-in orders. `userId` filters on
+     * the parent order creator (`orders.created_by`), not the posting user.
      */
     salesRegister: (params: {
       from: string;
@@ -621,14 +622,16 @@ export class SpicyHomeClient {
       type?: string;
       partner?: string;
       kind?: string;
+      userId?: number;
     }) =>
-      request<SalesRegisterResponse>(
-        this.config,
-        'GET',
-        '/reports/sales-register',
-        undefined,
-        params,
-      ),
+      request<SalesRegisterResponse>(this.config, 'GET', '/reports/sales-register', undefined, {
+        from: params.from,
+        to: params.to,
+        type: params.type,
+        partner: params.partner,
+        kind: params.kind,
+        userId: params.userId !== undefined ? String(params.userId) : undefined,
+      }),
 
     /**
      * Item-wise sales (product mix) over a posting-time service-day window.

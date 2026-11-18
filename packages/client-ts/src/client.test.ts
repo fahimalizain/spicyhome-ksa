@@ -353,10 +353,11 @@ describe('SpicyHomeClient reports filters', () => {
       type: 'takeaway',
       partner: 'none',
       kind: 'refund',
+      userId: 2,
     });
 
     expect(listUrl(fetchMock.mock.calls[0])).toBe(
-      '/reports/sales-register?from=2026-08-20&to=2026-08-20&type=takeaway&partner=none&kind=refund',
+      '/reports/sales-register?from=2026-08-20&to=2026-08-20&type=takeaway&partner=none&kind=refund&userId=2',
     );
   });
 

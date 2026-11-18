@@ -55,7 +55,8 @@ class ReportsApiTest : ShouldSpec() {
             //val type : kotlin.String = type_example // kotlin.String | Filter by parent order type: dine_in | takeaway. Omit → all types.
             //val partner : kotlin.String = partner_example // kotlin.String | Filter by delivery partner slug on the parent order; 'none' for walk-in orders. Omit → all partners.
             //val kind : kotlin.String = kind_example // kotlin.String | Filter by document kind: sale | refund. Omit → both.
-            //val result : SalesRegisterResponseDto = apiInstance.reportsControllerGetSalesRegister(from, to, type, partner, kind)
+            //val userId : kotlin.Long = 789 // kotlin.Long | Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users.
+            //val result : SalesRegisterResponseDto = apiInstance.reportsControllerGetSalesRegister(from, to, type, partner, kind, userId)
             //result shouldBe ("TODO")
         }
 

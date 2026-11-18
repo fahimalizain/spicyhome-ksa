@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
-/** A labelled <select> rendered after the shared filters (Kind / Category). */
+/** A labelled <select> rendered after the shared filters (Kind / User / Category). */
 export interface ReportFilterSelect {
   id: string;
   label: string;
@@ -22,8 +22,8 @@ interface ReportFiltersProps {
   onPartnerChange: (value: string) => void;
   /** All delivery partners (not just enabled) — historical slugs must be filterable. */
   partners: { id: string; title: string }[];
-  /** Page-specific filter (Kind for Sales Register, Category for Item-wise). */
-  extra?: ReportFilterSelect;
+  /** Page-specific filters (Kind + User for Sales Register, Category for Item-wise). */
+  extras?: ReportFilterSelect[];
   /** Optional extra controls (e.g. the live report spinner). */
   children?: ReactNode;
 }
@@ -49,7 +49,7 @@ export function ReportFilters(props: ReportFiltersProps) {
     partner,
     onPartnerChange,
     partners,
-    extra,
+    extras,
     children,
   } = props;
 
@@ -108,8 +108,8 @@ export function ReportFilters(props: ReportFiltersProps) {
             </option>
           ))}
         </select>
-        {extra && (
-          <>
+        {extras?.map((extra) => (
+          <Fragment key={extra.id}>
             <label htmlFor={extra.id} className="text-xs text-gray-400">
               {extra.label}
             </label>
@@ -125,8 +125,8 @@ export function ReportFilters(props: ReportFiltersProps) {
                 </option>
               ))}
             </select>
-          </>
-        )}
+          </Fragment>
+        ))}
         {children}
       </div>
       {rangeInvalid && (

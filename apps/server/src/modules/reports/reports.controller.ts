@@ -84,14 +84,22 @@ export class ReportsController {
     required: false,
     description: 'Filter by document kind: sale | refund. Omit → both.',
   })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    schema: { type: 'integer', format: 'int64' },
+    description:
+      'Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users.',
+  })
   getSalesRegister(
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('type') type?: string,
     @Query('partner') partner?: string,
     @Query('kind') kind?: string,
+    @Query('userId', new ParseIntPipe({ optional: true })) userId?: number,
   ) {
-    return this.reportsService.getSalesRegister({ from, to, type, partner, kind });
+    return this.reportsService.getSalesRegister({ from, to, type, partner, kind, userId });
   }
 
   @Get('item-wise')

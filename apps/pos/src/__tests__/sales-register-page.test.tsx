@@ -6,6 +6,7 @@ import { SalesRegisterPage } from '../pages/SalesRegisterPage';
 import type { SalesRegisterResponse } from '@spicyhome/client-ts';
 
 const mockSalesRegister = vi.fn();
+const mockListActiveUsers = vi.fn();
 
 vi.mock('../api', () => ({
   client: {
@@ -14,6 +15,9 @@ vi.mock('../api', () => ({
     },
     deliveryPartners: {
       list: vi.fn().mockResolvedValue([]),
+    },
+    auth: {
+      listActiveUsers: (...args: any[]) => mockListActiveUsers(...args),
     },
   },
   setToken: vi.fn(),
@@ -87,6 +91,7 @@ function renderPage() {
 describe('SalesRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListActiveUsers.mockResolvedValue([]);
   });
 
   it('calls salesRegister with the current service day as from and to on mount', async () => {
@@ -102,6 +107,7 @@ describe('SalesRegisterPage', () => {
         type: undefined,
         partner: undefined,
         kind: undefined,
+        userId: undefined,
       });
     });
   });
@@ -159,6 +165,7 @@ describe('SalesRegisterPage', () => {
         type: undefined,
         partner: undefined,
         kind: 'refund',
+        userId: undefined,
       });
     });
   });
@@ -182,6 +189,7 @@ describe('SalesRegisterPage', () => {
         type: 'takeaway',
         partner: undefined,
         kind: undefined,
+        userId: undefined,
       });
     });
 
@@ -198,6 +206,36 @@ describe('SalesRegisterPage', () => {
         type: 'takeaway',
         partner: 'none',
         kind: undefined,
+        userId: undefined,
+      });
+    });
+  });
+
+  it('sends the selected user as a numeric userId when the User filter changes', async () => {
+    mockSalesRegister.mockResolvedValue(saleResponse());
+    const today = getServiceDayString(Date.now());
+    mockListActiveUsers.mockResolvedValue([
+      { id: 1, username: 'admin', name: 'Admin' },
+      { id: 2, username: 'waiter', name: 'Waiter' },
+    ]);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('User')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Waiter' })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('User'), { target: { value: '2' } });
+
+    await waitFor(() => {
+      expect(mockSalesRegister).toHaveBeenLastCalledWith({
+        from: today,
+        to: today,
+        type: undefined,
+        partner: undefined,
+        kind: undefined,
+        userId: 2,
       });
     });
   });

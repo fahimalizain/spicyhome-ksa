@@ -5571,6 +5571,8 @@ export interface operations {
         partner?: string;
         /** @description Filter by document kind: sale | refund. Omit → both. */
         kind?: string;
+        /** @description Filter by the parent order creator (orders.created_by) — the user who opened the ticket. Not the posting user shown in cashierName. Omit → all users. */
+        userId?: number;
       };
       header?: never;
       path?: never;

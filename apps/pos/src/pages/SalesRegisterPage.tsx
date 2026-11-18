@@ -6,6 +6,7 @@ import type {
   SalesRegisterFooter,
   SalesRegisterResponse,
   SalesRegisterRow,
+  UserOptionResponse,
 } from '@spicyhome/client-ts';
 import { client } from '../api';
 import { formatOrderTypeLabel } from '../lib/order-type-label';
@@ -48,7 +49,11 @@ export function SalesRegisterPage() {
   const [type, setType] = useState('');
   const [partner, setPartner] = useState('');
   const [kind, setKind] = useState('');
+  // Creator filter ("User"): parent order's created_by — who opened the ticket,
+  // which can differ from the Cashier column (who posted the payment).
+  const [userId, setUserId] = useState('');
   const [partners, setPartners] = useState<DeliveryPartnerResponse[]>([]);
+  const [users, setUsers] = useState<UserOptionResponse[]>([]);
 
   // Full-page spinner only for the very first load; filter-driven reloads
   // keep the page chrome mounted and only spin the table area.
@@ -75,12 +80,31 @@ export function SalesRegisterPage() {
     };
   }, []);
 
+  // Active users for the "User" filter dropdown. Best-effort: failures leave
+  // only "All" (GET /auth/active-users needs no manage_users permission).
+  // Known limitation (same as the Orders list filter): inactive users are not
+  // listed, so their historical tickets cannot be isolated in this report.
+  useEffect(() => {
+    let cancelled = false;
+    client.auth
+      .listActiveUsers()
+      .then((u) => {
+        if (!cancelled) setUsers(u);
+      })
+      .catch(() => {
+        if (!cancelled) setUsers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const rangeInvalid = from === '' || to === '' || from > to;
 
   useEffect(() => {
     if (rangeInvalid) return;
     loadReport();
-  }, [from, to, type, partner, kind]);
+  }, [from, to, type, partner, kind, userId]);
 
   async function loadReport() {
     if (hasLoadedOnceRef.current) {
@@ -95,6 +119,7 @@ export function SalesRegisterPage() {
         type: type || undefined,
         partner: partner || undefined,
         kind: kind || undefined,
+        userId: userId ? Number(userId) : undefined,
       });
       setReport(res);
       setError('');
@@ -136,17 +161,32 @@ export function SalesRegisterPage() {
           partner={partner}
           onPartnerChange={setPartner}
           partners={partners}
-          extra={{
-            id: 'sales-register-kind',
-            label: 'Kind',
-            value: kind,
-            onChange: setKind,
-            options: [
-              { value: '', label: 'All' },
-              { value: 'sale', label: 'Sale' },
-              { value: 'refund', label: 'Refund' },
-            ],
-          }}
+          extras={[
+            {
+              id: 'sales-register-kind',
+              label: 'Kind',
+              value: kind,
+              onChange: setKind,
+              options: [
+                { value: '', label: 'All' },
+                { value: 'sale', label: 'Sale' },
+                { value: 'refund', label: 'Refund' },
+              ],
+            },
+            {
+              id: 'sales-register-user',
+              label: 'User',
+              value: userId,
+              onChange: setUserId,
+              options: [
+                { value: '', label: 'All' },
+                ...users.map((u) => ({
+                  value: String(u.id),
+                  label: u.name || u.username,
+                })),
+              ],
+            },
+          ]}
         />
       </div>
 
